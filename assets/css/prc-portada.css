@@ -1,0 +1,193 @@
+/* La portada pública (`[prc_home]`): héroe, entradilla con los filtros y un
+   bloque gris por estado con su rejilla de tarjetas.
+
+   Los tokens y los componentes comunes están en `prc-app.css` y aquí no se
+   tocan: esta hoja solo trae lo que no aparece en ninguna otra pantalla. */
+
+.prc-portada {
+  /* Los cuatro colores de rótulo medidos sobre el sitio que se sustituye, y
+     dos más para los dos estados que allí no tenían bloque propio. El amarillo
+     del original (#ff0 sobre gris claro, 1,1:1) no se copia: es ilegible. Los
+     seis están medidos contra el gris #dbdbdb del bloque y ninguno baja de
+     3:1, que es lo que pide un rótulo de 22px en negrita:
+
+       #0c71c3 → 3,64:1   #8a6800 → 3,73:1   #555555 → 5,38:1
+       #378407 → 3,40:1   #155724 → 6,27:1   #6b6b6b → 3,85:1  */
+  --prc-rot-open: var(--prc-c-azul-rotulo);
+  --prc-rot-amendment: #8a6800;
+  --prc-rot-upcoming: var(--prc-c-medio);
+  --prc-rot-closed: #378407;
+  --prc-rot-resolved: var(--prc-ok-texto);
+  --prc-rot-archived: #6b6b6b;
+}
+
+/* --- las bandas de ancho completo ---------------------------------------- */
+
+/* La banda ocupa la ventana entera y su contenido se vuelve a centrar sobre la
+   fila de siempre. El margen negativo cancela justo el relleno lateral del
+   lienzo, tanto cuando el aplicativo se pinta solo como dentro del tema. */
+.prc-banda { margin-inline: calc(50% - 50vw); }
+
+/* Relleno vertical [PROPUESTO]: el volcado solo midió el ancho. */
+.prc-banda > .prc-fila { padding: 18px 0 26px; }
+
+/* --- la entradilla y los filtros ----------------------------------------- */
+
+.prc-portada__intro { background: var(--prc-c-fondo-intro); }
+
+.prc-portada__entrada {
+  max-width: 62ch;
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+  color: var(--prc-c-texto);
+}
+
+/* Pestañas de verdad: cajas blancas contiguas, sin hueco ni radio, sobre el
+   fondo de la banda. Son enlaces, así que filtran sin JavaScript. */
+.prc-filtros { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 6px 0 0; }
+.prc-filtros__eje { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.prc-filtros__rotulo {
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--prc-c-texto);
+}
+
+.prc-filtros ul { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+
+.prc-filtros a {
+  display: block;
+  padding: 4px 14px;
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-texto);
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+}
+
+.prc-filtros li + li a { border-left: 1px solid var(--prc-c-fondo-intro); }
+.prc-filtros a:hover { color: var(--prc-c-titulo); }
+.prc-filtros a.is-activo { color: var(--prc-c-titulo); font-weight: 600; }
+.prc-filtros a:focus-visible { outline: 2px solid var(--prc-c-azul-rotulo); outline-offset: -2px; }
+
+/* --- un bloque por estado ------------------------------------------------ */
+
+/* Los bloques van pegados y comparten fondo: lo que los separa es su título,
+   como en el sitio que se sustituye. */
+.prc-bloque { background: var(--prc-c-fondo-bloque); }
+
+.prc-bloque__titulo {
+  margin: 0;
+  padding: 0 0 18px;
+  font-size: var(--prc-t-h3);
+  line-height: var(--prc-i-h3);
+  font-weight: var(--prc-p-h3);
+  color: var(--prc-c-titulo);
+}
+
+.prc-bloque__rotulo { font-weight: var(--prc-p-fuerte); text-transform: uppercase; }
+
+.prc-bloque--open .prc-bloque__rotulo { color: var(--prc-rot-open); }
+.prc-bloque--amendment .prc-bloque__rotulo { color: var(--prc-rot-amendment); }
+.prc-bloque--upcoming .prc-bloque__rotulo { color: var(--prc-rot-upcoming); }
+.prc-bloque--closed .prc-bloque__rotulo { color: var(--prc-rot-closed); }
+.prc-bloque--resolved .prc-bloque__rotulo { color: var(--prc-rot-resolved); }
+.prc-bloque--archived .prc-bloque__rotulo { color: var(--prc-rot-archived); }
+
+/* --- la rejilla de tarjetas ---------------------------------------------- */
+
+/* Cuatro columnas con hueco del 5,5 % en las dos direcciones: a 1176px de fila
+   son los 245,5px de tarjeta y los 64,7px de hueco medidos. El `auto-fill` las
+   va quitando solo al estrechar, sin un punto de ruptura por cada anchura. */
+.prc-rejilla {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  column-gap: var(--prc-hueco);
+  row-gap: var(--prc-hueco-px);
+  align-items: start;
+}
+
+/* La tarjeta no es una caja: ni borde, ni sombra, ni fondo propio. El efecto
+   de tarjeta lo da el marco blanco contra el gris del bloque. */
+.prc-proc {
+  display: block;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.prc-proc p { margin: 0; padding-bottom: 0; }
+.prc-proc__enlace { display: block; color: inherit; text-decoration: none; }
+.prc-proc__enlace:hover .prc-proc__titulo { color: var(--prc-c-azul-rotulo); }
+
+.prc-proc__enlace:focus-visible {
+  outline: 2px solid var(--prc-c-azul-rotulo);
+  outline-offset: 2px;
+}
+
+.prc-proc__marco { display: block; padding: 10px; background: var(--prc-c-fondo); }
+
+.prc-proc__banda {
+  display: block;
+  height: var(--prc-banda-tarjeta);
+  background: var(--prc-banda, #c9c9c9);
+}
+
+/* El título no se trunca: de una a seis líneas, como esté escrito. */
+.prc-proc__titulo {
+  display: block;
+  margin: 10px 0 0;
+  font-size: var(--prc-t-tarjeta);
+  line-height: var(--prc-i-tarjeta);
+  font-weight: 500;
+  color: var(--prc-c-titulo);
+}
+
+.prc-proc__estado {
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  font-variant: small-caps;
+  font-weight: 600;
+  color: var(--prc-e-etiqueta);
+}
+
+/* Los días que quedan y la marca del centro: esto el original no lo tiene, y
+   es lo que ahorra el viaje «portada → ficha → ver si ya lo pedí». */
+.prc-proc__plazo,
+.prc-proc__marca {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  color: var(--prc-c-medio);
+}
+
+/* El rojo medido del original (#e02b20) da 3,35:1 contra el gris del bloque y
+   esto es texto de 12px: se oscurece hasta 5,61:1 sin cambiar de tono. */
+.prc-proc__plazo--urgente { color: #a31910; font-weight: 600; }
+.prc-proc__marca { color: var(--prc-ok-texto); font-weight: 600; }
+
+.prc-app .prc-proc__plazo .material-symbols-outlined,
+.prc-app .prc-proc__marca .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 18px;
+  width: 18px;
+  flex: 0 0 18px;
+}
+
+/* En estrecho la fila deja de medirse en porcentaje y el hueco de la rejilla,
+   también: un 5,5 % de 340px no separa nada. */
+@media (max-width: 980px) {
+  .prc-rejilla { column-gap: 24px; row-gap: 36px; }
+  .prc-banda > .prc-fila { padding: 16px 0 22px; }
+}

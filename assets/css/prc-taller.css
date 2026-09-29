@@ -1,0 +1,264 @@
+/* El taller del gestor: la pantalla «Gestión de procedimientos».
+
+   Calco de la pantalla que se sustituye: título grande, banda de dos mitades
+   con el buscador a la izquierda y la leyenda de estados a la derecha, una
+   pestaña por curso, la línea de recuento y la tabla de dos niveles con su
+   paleta granate. Los tokens y los componentes comunes —fila, héroe, tabla
+   base, pastilla de estado, botón de icono, estado vacío— están en
+   `prc-app.css` y aquí no se repiten: esto es solo lo que esta pantalla
+   tiene y ninguna otra.
+
+   La paleta de la cabecera de dos niveles se declara aquí, en el ámbito de la
+   pantalla, porque hoy no la usa nadie más. Si el editor acaba pintando la
+   misma cabecera, sube a `prc-app.css` sin cambiar de nombre. */
+
+.prc-taller {
+  --prc-g1: #9a031e;      /* grupo «Detalles del procedimiento» */
+  --prc-g2: #5f0f40;      /* grupo «Fecha límite» */
+  --prc-g3: #321325;      /* grupo «Gestión» */
+  --prc-g1-sub: #daa3ad;  /* segunda fila de cabecera, bajo cada grupo */
+  --prc-g2-sub: #c4a7b9;
+  --prc-g3-sub: #b4a9af;
+  --prc-g-texto: #fff;
+}
+
+/* --- la banda de cabecera ------------------------------------------------ */
+
+/* Dos mitades con el hueco del 5,5 % de la fila. La ilustración del original
+   no se calca: es una imagen del sitio que se sustituye, no diseño. */
+.prc-taller__banda {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: var(--prc-hueco-px);
+  align-items: start;
+  padding: var(--prc-fila-relleno);
+}
+
+.prc-taller__izq { text-align: center; }
+.prc-taller__izq .prc-acciones { justify-content: center; }
+
+.prc-taller__nota {
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+  color: var(--prc-c-texto);
+  margin: 0;
+  padding: 10px 0;
+}
+
+@media (max-width: 991.98px) {
+  .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
+}
+
+/* --- el buscador de la tabla --------------------------------------------- */
+
+/* Los controles van en bloque y centrados, como en el original: el campo con
+   su ancho de siempre y el botón debajo. Filtra el servidor. */
+.prc-buscador { margin: 0; }
+
+.prc-buscador__campo,
+.prc-buscador__estado {
+  display: block;
+  margin: 0 auto 6px;
+  width: 177px;
+  max-width: 100%;
+  padding: 6px 10px;
+  font: 400 var(--prc-t-base)/normal var(--prc-fuente);
+  color: var(--prc-c-texto);
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-campo);
+}
+
+.prc-buscador__boton {
+  display: block;
+  margin: 0 auto;
+  padding: 6px 12px;
+  font: 400 var(--prc-t-base)/1.4 var(--prc-fuente);
+  color: var(--prc-c-fuerte);
+  background: #e6e6e6;
+  border: 0;
+  border-radius: var(--prc-radio);
+  cursor: pointer;
+}
+
+.prc-buscador__boton:hover { filter: brightness(.95); }
+.prc-buscador__campo:focus-visible,
+.prc-buscador__estado:focus-visible,
+.prc-buscador__boton:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
+.prc-buscador__quitar { display: inline-block; margin: 8px 0 0; font-size: var(--prc-t-menudo); }
+
+/* --- la leyenda de estados ----------------------------------------------- */
+
+.prc-leyenda {
+  border: 1px solid var(--prc-c-linea);
+  background: var(--prc-c-fondo-leyenda);
+  padding: 10px 14px;
+}
+
+.prc-leyenda__lista { list-style: none; margin: 0; padding: 0; }
+
+.prc-leyenda__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+}
+
+.prc-leyenda__item strong { font-weight: var(--prc-p-fuerte); }
+
+/* El color de cada estado, el mismo en la leyenda y en la tabla. Son siete y
+   no ocho: el estado se deriva de las fechas, así que «abierto con el plazo
+   vencido» y «cerrado con el plazo vivo» no pueden darse. Lo que queda de
+   aquellas dos entradas es el aviso de datos que no cuadran. */
+.prc-icono-estado { flex: 0 0 var(--prc-icono); color: var(--prc-c-tabla); }
+.prc-icono-estado--open { color: var(--prc-e-abierta); }
+.prc-icono-estado--closed { color: var(--prc-e-cerrada); }
+.prc-icono-estado--amendment { color: var(--prc-e-reclamacion); }
+.prc-icono-estado--resolved { color: var(--prc-e-pendiente); }
+.prc-icono-estado--upcoming { color: var(--prc-e-pendiente); }
+.prc-icono-estado--draft { color: var(--prc-e-borrador); }
+.prc-icono-estado--archived { color: var(--prc-e-historica); }
+.prc-icono-estado--aviso { color: var(--prc-avi-texto); }
+.prc-icono-azul { color: var(--prc-c-azul-tabla); }
+
+/* --- las pestañas por curso ---------------------------------------------- */
+
+.prc-cursos { margin: 6px 0 0; }
+
+.prc-cursos__lista {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--prc-c-linea-celda);
+}
+
+.prc-cursos__tab {
+  display: block;
+  padding: 8px 16px;
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+  font-weight: 400;
+  color: #495057;
+  text-align: center;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--prc-radio) var(--prc-radio) 0 0;
+  margin-bottom: -1px;
+}
+
+.prc-cursos__tab:hover { border-color: var(--prc-c-fondo-barra) var(--prc-c-fondo-barra) var(--prc-c-linea-celda); }
+.prc-cursos__tab:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: -2px; }
+
+.prc-cursos__tab--on {
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-titulo);
+  border-color: var(--prc-c-linea-celda) var(--prc-c-linea-celda) var(--prc-c-fondo);
+}
+
+/* --- la línea de recuento ------------------------------------------------ */
+
+.prc-recuento {
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+  color: var(--prc-c-texto);
+  margin: 0;
+  padding: 10px 0;
+}
+
+.prc-recuento strong { font-weight: var(--prc-p-fuerte); }
+
+/* --- la tabla de dos niveles --------------------------------------------- */
+
+/* Quince columnas apretadas no caben en un móvil: por debajo de 1000px la
+   caja se desplaza en horizontal, y por debajo de 720px `prc-app.css` la
+   convierte en tarjetas. */
+.prc-tabla--taller { min-width: 1000px; table-layout: fixed; }
+
+.prc-tabla--taller thead th {
+  font-size: var(--prc-t-tabla);
+  line-height: var(--prc-i-tabla);
+  font-weight: var(--prc-p-fuerte);
+  padding: 3px;
+  vertical-align: bottom;
+  white-space: normal;
+  border-color: rgba(255, 255, 255, .25);
+}
+
+/* Las seis van acotadas a la tabla del taller, y no sueltas por su clase, por
+   una razón de peso: el armazón pinta `.prc-tabla th { background: transparent }`,
+   que con su elemento pesa más que una clase suelta y dejaba la cabecera en
+   blanco. Con la tabla delante pesan más que él y la banda granate sale. */
+.prc-tabla--taller .prc-tabla__grupo { color: var(--prc-g-texto); }
+.prc-tabla--taller .prc-tabla__grupo--1 { background: var(--prc-g1); }
+.prc-tabla--taller .prc-tabla__grupo--2 { background: var(--prc-g2); }
+.prc-tabla--taller .prc-tabla__grupo--3 { background: var(--prc-g3); }
+
+/* La segunda fila lleva el texto en el granate oscuro del tercer grupo y no
+   en blanco: sobre el rosa del original, el blanco da 1,99:1 y este 8,39:1,
+   sin tocar la paleta que la gente reconoce. */
+.prc-tabla--taller .prc-th--a { background: var(--prc-g1-sub); color: var(--prc-g3); }
+.prc-tabla--taller .prc-th--b { background: var(--prc-g2-sub); color: var(--prc-g3); }
+.prc-tabla--taller .prc-th--c { background: var(--prc-g3-sub); color: var(--prc-g3); }
+.prc-th--centro { text-align: center; }
+.prc-th--color { width: 64px; }
+.prc-th--gestiona { width: 200px; }
+
+.prc-tabla--taller tbody th,
+.prc-tabla--taller tbody td {
+  font-size: var(--prc-t-tabla);
+  line-height: var(--prc-i-tabla);
+  font-weight: 400;
+  color: var(--prc-c-tabla);
+  border: 1px solid var(--prc-c-linea-celda);
+  /* 6px de alto en vez de los 3px del original: con filas de dos renglones,
+     3px hace que los de filas contiguas se toquen. */
+  padding: 6px 4px;
+  vertical-align: middle;
+  text-align: left;
+  white-space: normal;
+}
+
+.prc-tabla--taller .prc-celda-color,
+.prc-tabla--taller .prc-celda-num,
+.prc-tabla--taller .prc-celda-destinatario,
+.prc-tabla--taller .prc-celda-estado,
+.prc-tabla--taller .prc-celda-accion { text-align: center; }
+
+.prc-mini-color { display: block; width: 40px; height: 40px; margin: 0 auto; }
+
+/* Acotadas igual que las de la cabecera, y por lo mismo: sueltas las pisan
+   las reglas por elemento de `.prc-tabla--taller tbody td`, que van ahí
+   arriba y pesan más. */
+.prc-tabla--taller .prc-celda-num { font-weight: 500; }
+.prc-celda-titulo a { color: var(--prc-c-azul-tabla); }
+.prc-celda-estado .prc-state { white-space: normal; }
+.prc-celda-estado .prc-state__curso { display: inline-block; padding-top: 2px; }
+.prc-tabla--taller .prc-celda-fecha { white-space: nowrap; }
+
+.prc-ambitos { margin: 0; padding-left: 1.1em; }
+.prc-ambitos li { line-height: var(--prc-i-tabla); }
+
+/* En tarjetas, la fila deja de ser una rejilla: la cabecera está escondida y
+   cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
+   solo trata los `td`. */
+@media (max-width: 720px) {
+  .prc-tabla--taller { min-width: 0; table-layout: auto; }
+  .prc-tabla--taller tbody th { display: flex; gap: 12px; padding: 6px 0; border: 0; text-align: left; }
+  .prc-tabla--taller tbody th::before {
+    content: attr(data-rotulo);
+    flex: 0 0 8rem;
+    font-size: var(--prc-t-menudo);
+    font-weight: var(--prc-p-fuerte);
+    color: var(--prc-c-tenue);
+  }
+  .prc-tabla--taller tbody td { border: 0; text-align: left; }
+  .prc-tabla--taller .prc-celda-color,
+  .prc-tabla--taller .prc-celda-num,
+  .prc-tabla--taller .prc-celda-destinatario,
+  .prc-tabla--taller .prc-celda-estado,
+  .prc-tabla--taller .prc-celda-accion { text-align: left; }
+  .prc-mini-color { width: 100%; height: 10px; }
+}

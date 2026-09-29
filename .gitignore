@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+/vendor/
+
+# Material de análisis descargado de producción (tiene su propio .gitignore
+# con «*»; se repite aquí para que nadie lo versione por descuido: lleva datos
+# personales de las solicitudes)
+/.local/
+
+# Optional local wp-env overrides
+.wp-env.override.json
+
+# Configuración local de despliegue (plantilla versionada: .env.dist)
+.env
+
+# Build artifacts and caches
+artifacts/
+.phpunit.result.cache
+coverage.xml
+wp/
+
+# Logs and temporary files
+*.log
+*.tmp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE files
+/.idea/
+.vscode/
+
+# Local agent state. Las skills de .claude/skills/ SÍ se versionan, y como
+# **copia**: en Windows los enlaces simbólicos no funcionan salvo que estén
+# habilitados a mano, y `gh skill` tampoco enlaza, copia. Así el árbol es el
+# mismo en macOS, Linux y Windows.
+.omc/
+.playwright-mcp/
+.claude/*
+!.claude/skills/
+security-scans/
+
+# Capturas: se generan con `make capturas` y se publican en el PR, no aquí.
+/capturas/
+
+.prc-plugin-check/
+
+# Reglas privadas de check-public (en CI: secret PRC_PUBLIC_RULES).
+.check-public-rules

@@ -1,0 +1,223 @@
+# Recorre las pantallas con `make capturas` en cada push del PR y deja la
+# galería **en la descripción del PR**, entre marcadores: ahí es donde se lee el
+# PR, y no empuja la conversación hacia abajo con un comentario nuevo por
+# empujón.
+#
+# **Dónde viven las imágenes.** En ningún sitio del repositorio: no se
+# commitean con el código. Van a una rama `capturas`, con un directorio por PR
+# y **un solo commit huérfano** cada vez, así que esa rama pesa lo que pesan
+# las capturas vigentes y no arrastra su historia. Como el repositorio es
+# público, el comentario las enlaza por `raw.githubusercontent.com`, que GitHub
+# sirve como imagen sin parámetros ni permisos.
+#
+# Se miró si había algo más simple. Un artefacto no vale: se descarga en zip y
+# no se puede incrustar en un comentario. Una URL `data:` tampoco: el cuerpo de
+# un comentario tiene un tope de 65 KB y una captura pesa más que eso. Ser
+# público ahorra la autenticación de los enlaces, pero no el sitio donde
+# dejarlos: una rama es lo más simple que renderiza dentro del PR.
+
+name: Capturas
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+# Un empujón nuevo deja sin valor al anterior. Entre PR distintos, la
+# publicación se protege con --force-with-lease y reintenta.
+concurrency:
+  group: capturas-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  capturas:
+    runs-on: ${{ vars.PRC_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install npm dependencies
+        run: npm install
+
+      # PHP solo hace falta para `make bundle` dentro de la provisión.
+      - name: Preparar PHP (runners de GitHub)
+        if: runner.environment == 'github-hosted'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Start wp-env
+        run: npx wp-env start --update
+
+      # Sin tolerancia: con una provisión a medias las capturas mienten.
+      - name: Provision environment
+        run: make provision
+
+      - name: Install Chromium
+        run: |
+          if [ "${RUNNER_ENVIRONMENT}" = "github-hosted" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install chromium
+          fi
+
+      - name: Capturar las pantallas
+        run: make capturas
+
+      # A 256 colores una captura de interfaz no se distingue y pesa la mitad.
+      # Fichero a fichero: pngquant sale con 98/99 cuando decide no tocar uno,
+      # y eso no es un error.
+      - name: Optimizar las imágenes
+        if: ${{ !cancelled() && hashFiles('capturas/index.json') != '' }}
+        run: |
+          command -v pngquant > /dev/null || sudo apt-get install -y -qq pngquant > /dev/null
+          echo "antes:   $(du -sh capturas/img | cut -f1)"
+          for f in capturas/img/*.png; do
+            pngquant --force --ext .png --skip-if-larger --speed 1 -- "$f" || true
+          done
+          echo "después: $(du -sh capturas/img | cut -f1)"
+
+      - name: Guardar el informe como artefacto
+        if: ${{ !cancelled() && hashFiles('capturas/index.json') != '' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: capturas
+          path: capturas/
+          retention-days: 30
+
+      - name: Publicar las imágenes en la rama capturas
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork && hashFiles('capturas/index.json') != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          DEST="${RUNNER_TEMP}/rama-capturas"
+          for attempt in 1 2 3; do
+            rm -rf "${DEST}"
+            if git clone -q --depth 1 --branch capturas "${REPO_URL}" "${DEST}" 2>/dev/null; then
+              BASE="$(git -C "${DEST}" rev-parse HEAD)"
+            else
+              # La primera vez la rama no existe todavía: fallar aquí es normal.
+              mkdir -p "${DEST}" && git -C "${DEST}" init -q && BASE=""
+            fi
+            rm -rf "${DEST}/pr-${PR}"
+            mkdir -p "${DEST}/pr-${PR}"
+            cp -R "${GITHUB_WORKSPACE}/capturas/." "${DEST}/pr-${PR}/"
+            cd "${DEST}"
+            git checkout -q --orphan publicar
+            git add -A
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -m "capturas: PR #${PR} en ${SHA}"
+            if git push -q --force-with-lease="refs/heads/capturas:${BASE}" "${REPO_URL}" HEAD:refs/heads/capturas; then
+              exit 0
+            fi
+            # O la rama cambió bajo los pies —de eso va el lease— o la red del
+            # runner parpadeó. Sin esperar, los tres intentos se gastan en dos
+            # segundos y no dan tiempo a que se recupere nada.
+            echo "No se pudo publicar; reintento ${attempt} en $(( attempt * 5 ))s."
+            sleep $(( attempt * 5 ))
+            cd "${GITHUB_WORKSPACE}"
+          done
+          exit 1
+
+      - name: Poner la galería en el texto del PR
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork && hashFiles('capturas/index.json') != '' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- prc-capturas:inicio -->';
+            const fin = '<!-- prc-capturas:fin -->';
+            const pr = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+            const shots = JSON.parse(fs.readFileSync('capturas/index.json', 'utf8'));
+            const base = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/capturas/pr-${pr}/`;
+
+            // Una escena puede tener las dos pantallas: se juntan bajo un
+            // mismo desplegable, el ordenador arriba y el móvil debajo.
+            const image = (s) => {
+              const url = `${base}${s.img}`;
+              const width = s.screen === 'mobile' ? 240 : 760;
+              const warning = s.ok ? '' : `> ✗ **${s.error}**\n\n`;
+              return `${warning}<a href="${url}"><img src="${url}" width="${width}"></a>`;
+            };
+
+            const scenes = new Map();
+            for (const s of shots) {
+              const key = `${s.chapter}|${s.title}`;
+              if (!scenes.has(key)) scenes.set(key, { ...s, shots: [] });
+              scenes.get(key).shots.push(s);
+            }
+
+            let gallery = '';
+            let chapter = '';
+            for (const scene of scenes.values()) {
+              if (scene.chapter !== chapter) {
+                chapter = scene.chapter;
+                gallery += `\n### ${chapter}\n`;
+              }
+              const broken = scene.shots.some((s) => !s.ok);
+              const imgs = scene.shots
+                .map((s) => `**${s.screen === 'mobile' ? 'Móvil' : 'Ordenador'}**\n\n${image(s)}`)
+                .join('\n\n');
+              gallery += `\n<details${broken ? ' open' : ''}><summary><b>${scene.title}</b> — ${scene.note}</summary>\n\n${imgs}\n\n</details>\n`;
+            }
+
+            const failed = shots.filter((s) => !s.ok).length;
+            const ejecucion = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `## Capturas — \`${sha}\``,
+              '',
+              `${shots.length} capturas de ${scenes.size} pantallas; ${failed ? `**${failed} sin completar** (abiertas abajo)` : 'todas completadas'}. ` +
+                `El informe HTML está en el artefacto \`capturas\` de [esta ejecución](${ejecucion}).`,
+              gallery,
+            ].join('\n');
+
+            // Va en la descripción del PR, entre marcadores, y no en un
+            // comentario: así la galería está donde se lee el PR y no empuja
+            // la conversación hacia abajo en cada empujón.
+            //
+            // El texto se relee **justo antes** de escribirlo, y no se
+            // reaprovecha el que traía el evento del webhook: entre que el job empezó y
+            // acabó han pasado minutos, y la acción del Playground escribe en
+            // esa misma descripción —en su propio bloque de marcadores—. Sin
+            // releer, este paso se llevaría por delante lo que ella hubiera
+            // puesto.
+            const { data: actual } = await github.rest.pulls.get({
+              owner: context.repo.owner, repo: context.repo.repo, pull_number: pr,
+            });
+            const anterior = actual.body || '';
+            const bloque = `${marker}\n${body}\n${fin}`;
+            const entre = new RegExp(`${marker}[\\s\\S]*?${fin}`);
+            const nuevoTexto = entre.test(anterior)
+              ? anterior.replace(entre, bloque)
+              : `${anterior.trimEnd()}\n\n${bloque}\n`;
+
+            if (nuevoTexto !== anterior) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner, repo: context.repo.repo, pull_number: pr, body: nuevoTexto,
+              });
+            }
+
+      # En un runner propio los contenedores se quedarían corriendo entre
+      # ejecuciones, ocupando los puertos y arrastrando la base de datos de la
+      # anterior. Con `always()` también se limpia cuando el job falla, que es
+      # cuando más falta hace.
+      - name: Parar wp-env
+        if: always()
+        run: npx wp-env stop || true

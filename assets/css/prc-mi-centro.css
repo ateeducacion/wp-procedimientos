@@ -1,0 +1,131 @@
+/* «Mis solicitudes» del centro.
+   ==========================================================================
+
+   Lo propio de esta pantalla y nada más: la ayuda de ordenación, el
+   recuento, las cabeceras ordenables con su flecha y el convenio de celda
+   sin dato. La tabla, la cebra, los bordes y la piel densa vienen de
+   `prc-app.css` y no se tocan.
+
+   Todo cuelga de `.prc-mi-centro` para que ninguna regla de aquí se escape a
+   las demás pantallas mientras cada una estrena la suya. */
+
+.prc-mi-centro {
+
+  /* Falta en `prc-app.css`: el azul de enlace que alcanza AA sobre la fila
+     tintada. El `--prc-c-enlace` del sistema (#2ea3f2) se queda en 2,7 : 1 y
+     en la tabla es el único punto de entrada. Cuando el armazón declare un
+     `--prc-c-enlace-fuerte`, esta línea sobra. */
+  --prc-enlace-tabla: #0b6fb8;
+}
+
+/* --- la ayuda de ordenación y el recuento -------------------------------- */
+
+/* Las tres líneas van con `<br>`, no en párrafos: el hueco entre ellas es el
+   del interlineado, no el de párrafo. */
+.prc-mi-centro .prc-ayuda-orden,
+.prc-mi-centro .prc-recuento {
+  margin: 0;
+  padding: 0 0 14px;
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+}
+
+.prc-mi-centro .prc-ayuda-orden strong,
+.prc-mi-centro .prc-recuento strong { font-weight: var(--prc-p-fuerte); color: inherit; }
+
+/* --- las cabeceras ordenables -------------------------------------------- */
+
+/* El rótulo no es azul: es la cabecera de su columna. La flecha va en
+   `::after`, con caracteres y no con una imagen, y la elige `aria-sort`, que
+   es el mismo dato que lee quien navega con lector de pantalla. */
+.prc-mi-centro .prc-th--ordenable { cursor: pointer; }
+
+.prc-mi-centro .prc-th-enlace {
+  position: relative;
+  display: block;
+  padding-right: 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.prc-mi-centro .prc-th-enlace::after {
+  content: "\2195";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--prc-c-tenue);
+}
+
+.prc-mi-centro .prc-th[aria-sort="ascending"] .prc-th-enlace::after { content: "\25B2"; color: var(--prc-c-medio); }
+.prc-mi-centro .prc-th[aria-sort="descending"] .prc-th-enlace::after { content: "\25BC"; color: var(--prc-c-medio); }
+.prc-mi-centro .prc-th-enlace:hover { color: var(--prc-c-titulo); text-decoration: none; }
+
+/* --- las celdas ---------------------------------------------------------- */
+
+/* La primera celda de cada fila es un `th`: el nombre del procedimiento es
+   lo que identifica la fila, y así se lee antes que el dato de cada columna. */
+.prc-mi-centro .prc-celda--titulo {
+  font-weight: var(--prc-p-fuerte);
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;
+  background: transparent;
+  border: 1px solid var(--prc-c-linea-celda);
+}
+
+.prc-mi-centro .prc-celda--titulo a {
+  font-weight: var(--prc-p-fuerte);
+  color: var(--prc-enlace-tabla);
+  text-decoration: none;
+}
+
+.prc-mi-centro .prc-celda--titulo a:hover,
+.prc-mi-centro .prc-celda--titulo a:focus-visible { text-decoration: underline; }
+
+.prc-mi-centro .prc-celda--titulo .prc-state { display: inline-block; margin: 3px 0 0; }
+.prc-mi-centro .prc-celda--fecha { white-space: nowrap; }
+
+/* Sin dato: el «¿?» de siempre. `.prc-sindato` ya lo viste el armazón. */
+.prc-mi-centro .prc-sindato { white-space: nowrap; }
+
+.prc-mi-centro .prc-celda--revision .prc-state { display: inline-block; }
+
+.prc-mi-centro .prc-nota-revision {
+  display: block;
+  margin: 3px 0 0;
+  font-style: italic;
+  color: var(--prc-c-texto);
+}
+
+.prc-mi-centro .prc-ver-solicitud {
+  display: inline-block;
+  margin: 3px 0 0;
+  color: var(--prc-enlace-tabla);
+  text-decoration: underline;
+}
+
+/* --- la fila con la subsanación abierta ---------------------------------- */
+
+/* El plazo de subsanación es lo que más caro sale perder. Arriba va el aviso
+   y aquí el filete, del mismo tono: color y posición, nunca solo color. */
+.prc-mi-centro .prc-subsanar > :first-child { box-shadow: inset 3px 0 0 var(--prc-avi-texto); }
+
+/* --- en estrecho --------------------------------------------------------- */
+
+/* Por debajo de 720px el armazón pasa la tabla a tarjetas, pero solo conoce
+   los `td`. La primera celda es un `th` y necesita el mismo trato: bloque, y
+   de cabecera de la tarjeta. */
+@media (max-width: 720px) {
+
+  .prc-mi-centro .prc-tabla tbody th { display: block; width: auto; padding: 6px 0; border: 0; }
+
+  /* En tarjetas la fila deja de tener un borde izquierdo común: el filete
+     vuelve a ir celda a celda, que es lo que dibuja el costado de la tarjeta. */
+  .prc-mi-centro .prc-subsanar > * { box-shadow: inset 3px 0 0 var(--prc-avi-texto); }
+
+  .prc-mi-centro .prc-celda--titulo { font-size: var(--prc-t-base); }
+  .prc-mi-centro .prc-ayuda-orden { display: none; }
+}

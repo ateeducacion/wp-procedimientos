@@ -1,0 +1,327 @@
+/* Aplicativo de procedimientos: **la piel de formulario de la solicitud**.
+
+   Dos partes, y la frontera está marcada:
+
+     1. La retícula y las listas de opciones, que no saben qué se está
+        rellenando y valen para cualquier formulario del aplicativo. Van con
+        **una sola clase** a propósito: así cualquier piel las reajusta con su
+        modificador delante y gana sin pelear con el orden de carga.
+     2. La piel de la solicitud —etiqueta de 18px sobre control de 46px—, que
+        es una de las dos pieles de formulario del sitio que se sustituye y va
+        entera bajo `.prc-form--solicitud`. La otra, la del taller, la viste
+        `prc-alta.css` bajo `.prc-form--taller`: **cada piel se queda dentro de
+        su modificador** y así las dos conviven sin pisarse, cargue la hoja que
+        cargue primero.
+
+   Los tokens son los del sistema y viven en `prc-app.css`. Los que esta hoja
+   necesita y allí todavía no están se piden con su valor medido de respaldo
+   (`var(--token, valor)`): el día que el armazón los declare, mandan ellos y
+   aquí no hay que tocar nada. */
+
+/* ══ piel de formulario, reutilizable ═══════════════════════════════════ */
+
+/* --- retícula: doce columnas con hueco del 2 % --------------------------
+   Es la del original: una rejilla por bloque de campos, no una fila por par
+   de campos, así que un campo de tres columnas y otro de seis encajan sin
+   envolturas intermedias. */
+.prc-seccion__cuerpo {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: max-content;
+  gap: 0 var(--prc-form-hueco);
+}
+
+.prc-seccion__cuerpo > * { grid-column: span 12 / span 12; }
+
+.prc-campo--cuarto { grid-column: span 3 / span 3; }
+.prc-campo--tercio { grid-column: span 4 / span 4; }
+.prc-campo--medio { grid-column: span 6 / span 6; }
+.prc-campo--completo { grid-column: span 12 / span 12; }
+/* Detrás de los anchos: solo mueve el principio, el ancho se lo queda. */
+.prc-campo--abre-fila { grid-column-start: 1; }
+
+/* --- casillas y listas de opciones -------------------------------------- */
+.prc-opciones--vertical .prc-opcion { display: block; margin-bottom: 10px; }
+.prc-opciones--horizontal .prc-opcion { display: inline-block; padding-left: 0; margin-right: 12px; }
+
+.prc-opcion label {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 200;
+  line-height: 1.3;
+  color: var(--prc-c-texto);
+  text-align: left;
+  white-space: normal;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.prc-opcion input[type="checkbox"],
+.prc-opcion input[type="radio"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0 4px 0 0;
+  vertical-align: middle;
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-borde-campo);
+  appearance: none;
+}
+
+.prc-opcion input[type="radio"] { border-radius: 50%; }
+.prc-opcion input[type="checkbox"] { border-radius: var(--prc-radio-caja); }
+.prc-opcion input:checked { border-color: var(--prc-c-foco); }
+
+.prc-opcion input[type="checkbox"]:checked {
+  background-color: var(--prc-c-foco);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 9'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2' d='M1 4.5 4.5 8 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 9px;
+}
+
+.prc-opcion input[type="radio"]:checked::before {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 3px;
+  content: "";
+  background: var(--prc-c-foco);
+  border-radius: 50%;
+}
+
+.prc-opcion input[disabled]:checked { background-color: var(--prc-c-borde-campo); border-color: var(--prc-c-borde-campo); }
+.prc-opcion input:focus-visible { outline: 2px solid var(--prc-c-foco); outline-offset: 2px; }
+
+/* Dibujar la casilla a mano la borra en alto contraste: ahí manda la del
+   sistema, que es la que el modo sabe pintar. */
+@media (forced-colors: active) {
+  .prc-opcion input[type="checkbox"],
+  .prc-opcion input[type="radio"] { appearance: auto; }
+}
+
+/* --- estrecho -----------------------------------------------------------
+   El único punto de ruptura del formulario: por debajo, todo a ancho
+   completo. Va al final del bloque para pisar los anchos de arriba sin
+   `!important`. */
+@media only screen and (max-width: 600px) {
+  .prc-seccion__cuerpo > * { grid-column: 1 / span 12; }
+}
+
+/* ══ fin de la piel reutilizable ════════════════════════════════════════ */
+
+/* --- la caja de cada campo ----------------------------------------------
+   5px de relleno y ningún margen inferior: entre dos campos contiguos quedan
+   los 10px medidos. */
+.prc-form--solicitud .prc-campo {
+  min-width: 0;
+  padding: 5px;
+  margin: 0 5px;
+  text-align: left;
+}
+
+/* --- banda de sección ---------------------------------------------------
+   El filete de 2px encima del rótulo es lo que separa un bloque del
+   siguiente: no hay cajas, ni bordes, ni sombras. La banda beige maciza es la
+   del taller, no la de aquí. */
+.prc-form--solicitud .prc-seccion,
+.prc-solicitud-resumen {
+  margin: 15px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.prc-form--solicitud .prc-seccion__titulo,
+.prc-solicitud-resumen > .prc-seccion__titulo {
+  display: block;
+  width: auto;
+  height: auto;
+  padding: 12px 0 8px;
+  margin: 0 0 15px;
+  font: var(--prc-p-h3) var(--prc-t-h3) / var(--prc-i-h3) var(--prc-fuente);
+  color: var(--prc-c-fuerte);
+  text-transform: none;   /* los rótulos ya vienen en mayúsculas en el texto */
+  background: transparent;
+  border: none;
+  border-top: 2px solid var(--prc-c-linea-seccion);
+  border-radius: 0;
+}
+
+/* Sección sin rótulo visible: ni filete ni el aire de encima. */
+.prc-form--solicitud .prc-seccion--sin-titulo { margin-top: 0; }
+.prc-form--solicitud .prc-seccion--sin-linea > .prc-seccion__titulo { border-top-width: 0; }
+
+/* --- etiqueta, ayuda y error -------------------------------------------- */
+.prc-form--solicitud .prc-campo__etiqueta {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  padding: 0 0 5px;
+  margin: 0;
+  font: 500 18px / 23.8px var(--prc-fuente);
+  color: var(--prc-c-texto);
+  text-align: left;
+}
+
+.prc-form--solicitud .prc-campo__etiqueta--enunciado strong { font-weight: var(--prc-p-fuerte); }
+.prc-form--solicitud .prc-campo__obligatorio { font-weight: 300; color: var(--prc-c-obligatorio); }
+
+.prc-form--solicitud .prc-campo__ayuda {
+  max-width: 100%;
+  padding: 0;
+  margin-top: 6px;
+  font: 300 var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+  text-align: left;
+}
+
+.prc-form--solicitud .prc-campo__error {
+  padding: 0;
+  margin-top: 6px;
+  font: 500 var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-obligatorio);
+  text-align: left;
+}
+
+.prc-form.prc-form--solicitud .prc-campo--error .prc-control {
+  color: var(--prc-c-fuerte);
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-obligatorio);
+}
+
+/* --- el control --------------------------------------------------------- */
+/* Las dos clases del formulario delante, como en `prc-alta.css`: el armazón
+   pinta `.prc-form input[type="text"]`, y un atributo pesa lo que una clase,
+   así que con una sola clase la caja del original —46px de alto, sin radio y
+   con 10px de relleno— se la comía la del esqueleto. */
+.prc-form.prc-form--solicitud .prc-control {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--prc-alto-campo);
+  padding: 10px;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 200;
+  line-height: 1.3;
+  color: var(--prc-c-medio);
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-borde-campo);
+  border-radius: var(--prc-radio-caja);
+  outline: none;
+  box-shadow: none;
+}
+
+.prc-form.prc-form--solicitud textarea.prc-control { line-height: var(--prc-i-base); }
+.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-bloq-texto, #a1a1a1); font-style: normal; opacity: 1; }
+
+/* Al enfocar, el original solo cambia el borde. Con el teclado eso es poco
+   —un borde de 1px que pasa de gris a turquesa—, así que ahí va además el
+   contorno de siempre. */
+.prc-form.prc-form--solicitud .prc-control:focus {
+  color: var(--prc-c-medio);
+  background: var(--prc-c-fondo);
+  border-color: var(--prc-c-foco);
+  outline: none;
+  box-shadow: none;
+}
+
+.prc-form.prc-form--solicitud .prc-control:focus-visible { outline: 2px solid var(--prc-c-foco); outline-offset: 1px; }
+
+/* Bloqueado: **solo el color**. Mismo alto, mismo borde, mismo radio y el
+   fondo sigue blanco; lo que se aclara es el texto y el borde. Sin candado y
+   sin fondo gris, que es como está medido.
+
+   `#a1a1a1` sobre blanco da 2,5:1: quien despliegue lo sube redefiniendo
+   `--prc-c-bloq-texto` sin tocar esta hoja. */
+.prc-form.prc-form--solicitud .prc-control--bloqueado,
+.prc-form.prc-form--solicitud .prc-control[readonly],
+.prc-form.prc-form--solicitud .prc-control[disabled] {
+  color: var(--prc-c-bloq-texto, #a1a1a1);
+  background: var(--prc-c-fondo);
+  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+}
+
+/* --- bloque de texto fijo entre campos ---------------------------------- */
+.prc-form--solicitud .prc-nota {
+  display: block;
+  max-width: none;
+  padding: 5px;
+  margin: 0 5px;
+  font-size: 18px;
+  line-height: var(--prc-i-base);
+  color: var(--prc-c-texto);
+  overflow-wrap: break-word;
+}
+
+.prc-form--solicitud .prc-nota p { padding-bottom: 1em; margin: 0; }
+.prc-form--solicitud .prc-nota p:last-child { padding-bottom: 0; }
+
+/* --- botón de envío -----------------------------------------------------
+   El color medido es el del despliegue que se sustituye y queda como variable
+   (`--prc-envio-fondo`), no como token del sistema: blanco sobre `#5f9ea0` da
+   3,05:1, que llega para texto grande y no para texto normal. Quien despliegue
+   lo sube sin tocar esta hoja. */
+.prc-form--solicitud .prc-boton-enviar {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  width: auto;
+  height: auto;
+  padding: 12px 20px;
+  margin: 30px 0;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: normal;
+  color: #fff;
+  text-align: center;
+  text-shadow: none;
+  vertical-align: middle;
+  cursor: pointer;
+  background: var(--prc-envio-fondo, #5f9ea0);
+  border: 1px solid var(--prc-envio-fondo, #5f9ea0);
+  border-radius: var(--prc-radio-caja);
+  box-shadow: var(--prc-sombra-boton);
+}
+
+.prc-form--solicitud .prc-boton-enviar:hover,
+.prc-form--solicitud .prc-boton-enviar:active {
+  color: #fff;
+  background: var(--prc-envio-hover, #099);
+  border-color: var(--prc-envio-hover, #099);
+}
+
+.prc-form--solicitud .prc-boton-enviar:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
+.prc-form--solicitud .prc-boton-enviar[disabled] { cursor: not-allowed; opacity: .5; }
+
+/* --- aviso de protección de datos ---------------------------------------
+   La plantilla pinta la caja; **el texto es del despliegue** y llega por el
+   filtro del armazón. Aquí no hay ni una línea de texto legal (ADR-0009). */
+.prc-aviso-legal {
+  margin: 0 0 15px;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+}
+
+.prc-aviso-legal p { padding: 0; margin: 0 0 1em; }
+.prc-aviso-legal p:last-child { margin-bottom: 0; }
+.prc-aviso-legal ul,
+.prc-aviso-legal ol { padding-left: 1em; margin: 0 0 1em; }
+.prc-aviso-legal strong { font-weight: var(--prc-p-fuerte); }
+.prc-aviso-legal em { font-style: italic; }
+
+/* --- la tira de estado de la solicitud ----------------------------------
+   El estado de la solicitud y, cuando toca subsanar, el motivo y hasta
+   cuándo: encima del formulario que hay que corregir, y no en un correo. El
+   color y la caja son los del aviso del sistema; aquí solo se pone el icono
+   al lado del texto. */
+.prc-solicitud-estado { display: flex; gap: 10px; align-items: flex-start; }
+.prc-solicitud-estado .material-symbols-outlined { flex: 0 0 var(--prc-icono); }
+.prc-solicitud-estado__cuerpo { display: block; }
+.prc-solicitud-estado__estado { display: block; font-weight: var(--prc-p-fuerte); }
+
+.prc-solicitud-estado__fecha,
+.prc-solicitud-estado__nota,
+.prc-solicitud-estado__enlace { display: block; margin-top: 4px; }

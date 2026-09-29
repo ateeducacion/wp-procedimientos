@@ -1,0 +1,1105 @@
+/* Aplicativo de procedimientos: **los tokens, el armazón y los componentes
+   comunes**. Cabecera, menú, lienzo, títulos, avisos, botones, pastillas de
+   estado, tabla base y estado vacío: lo que aparece en más de una pantalla.
+   Lo que solo aparece en una va en la hoja de esa pantalla (`prc-portada.css`,
+   `prc-ficha.css`, `prc-taller.css`, `prc-mi-centro.css`, `prc-formulario.css`),
+   y todas se cargan juntas, esta primero.
+
+   Se monta encima de Bootstrap 5, que lo carga un snippet aparte
+   (`snippets/bootstrap5.php`). El aspecto lo pone esta hoja con Bootstrap y
+   sin él: el botón, el aviso y la pastilla del original son los de su
+   Bootstrap, que era otro, así que aquí se escriben enteros y `prc-sin-bootstrap`
+   solo queda para lo que la librería aporta de más. */
+
+:root {
+  /* Los tokens del sistema visual, medidos sobre el sitio que se sustituye.
+     Los nombres cortos de siempre —`--prc-pri`, `--prc-texto`, `--prc-r`—
+     siguen valiendo y están abajo como alias: lo que cambia es su valor.
+     Renombrarlos en toda la hoja y en las siete vistas no compraba nada. */
+
+  /* --- tipografía ------------------------------------------------------- */
+  --prc-fuente: "Open Sans", Arial, sans-serif;
+  --prc-fuente-hero: "Open Sans", Helvetica, Arial, sans-serif;
+  --prc-fuente-cifras: "Days One", "Open Sans", Arial, sans-serif;
+  --prc-fuente-iconos: "Material Symbols Outlined";
+
+  --prc-t-hero: 50px;
+  --prc-i-hero: 50px;
+  --prc-p-hero: 800;
+  --prc-t-h1: 30px;
+  --prc-i-h1: 30px;
+  --prc-p-h1: 500;
+  --prc-t-h2: 26px;
+  --prc-i-h2: 26px;
+  --prc-p-h2: 500;
+  --prc-t-h3: 22px;
+  --prc-i-h3: 22px;
+  --prc-p-h3: 500;
+  --prc-t-h5: 16px;
+  --prc-i-h5: 23.8px;
+  --prc-p-h5: 500;
+  --prc-t-base: 14px;
+  --prc-i-base: 23.8px;
+  --prc-p-base: 500;
+  --prc-t-tarjeta: 18px;
+  --prc-i-tarjeta: 18px;
+  --prc-t-tabla: 13px;
+  --prc-i-tabla: 15.6px;
+  --prc-t-cifra: 30px;
+  --prc-i-cifra: 30px;
+  --prc-t-menudo: 12px;
+  --prc-i-menudo: 17px;
+  --prc-t-micro: 12.6px;
+  --prc-t-meta: 9px;
+  --prc-p-fuerte: 700;
+
+  /* --- color de texto --------------------------------------------------- */
+  --prc-c-texto: #666;          /* cuerpo, leyenda, pestañas, menú */
+  --prc-c-titulo: #333;         /* títulos de pantalla y pestaña activa */
+  --prc-c-fuerte: #444;         /* título del procedimiento y cifras */
+  --prc-c-hero: #474747;        /* el título grande de portada y taller */
+  --prc-c-medio: #555;          /* cabeceras de tabla y valores escritos */
+  --prc-c-tabla: #212529;       /* celdas */
+  --prc-c-tenue: #888;          /* texto auxiliar */
+  --prc-c-sindato: #ccc;        /* la celda sin dato */
+
+  /* --- los azules -------------------------------------------------------
+     Son cuatro azules distintos y los cuatro se copian con nombre propio: no
+     hay «el azul del sitio», y unificarlos se notaría. */
+  --prc-c-enlace: #2ea3f2;      /* todo enlace */
+  --prc-c-azul: #007bff;        /* botón, filete, títulos de sección */
+  --prc-c-azul-hover: #0069d9;
+  --prc-c-azul-borde: #0062cc;
+  --prc-c-azul-tabla: #007acc;  /* iconos y enlaces dentro de la tabla */
+  --prc-c-azul-rotulo: #0c71c3; /* el rótulo «abierta» de la portada */
+
+  /* --- los cuatro tonos de aviso ----------------------------------------
+     Los del Bootstrap del sitio original, que NO son los de Bootstrap 5: la
+     5 cambió el informativo y el primario. Sin pisarlos no hay calco. */
+  --prc-info-fondo: #d1ecf1;
+  --prc-info-borde: #bee5eb;
+  --prc-info-texto: #0c5460;
+  --prc-ok-fondo: #d4edda;
+  --prc-ok-borde: #c3e6cb;
+  --prc-ok-texto: #155724;
+  --prc-avi-fondo: #fff3cd;
+  --prc-avi-borde: #ffeeba;
+  --prc-avi-texto: #856404;
+  --prc-mal-fondo: #f8d7da;
+  --prc-mal-borde: #f5c6cb;
+  --prc-mal-texto: #721c24;
+  --prc-gris-fondo: #e2e3e5;
+  --prc-gris-borde: #d6d8db;
+  --prc-gris-texto: #383d41;
+
+  /* --- fondos, líneas y bordes ------------------------------------------ */
+  --prc-c-fondo: #fff;
+  --prc-c-fondo-intro: #f6f6f6;   /* la banda de introducción de la portada */
+  --prc-c-fondo-bloque: #dbdbdb;  /* los bloques por estado de la portada */
+  --prc-c-fondo-barra: #f4f4f4;   /* barra de pestañas, buscador, hover */
+  --prc-c-fondo-leyenda: #f7f7f7;
+  --prc-c-fondo-banda: #f5f5dc;   /* la cabecera de sección del formulario */
+  --prc-c-fondo-accion: #f8f9fa;  /* botón de icono y botón secundario */
+  --prc-c-cebra: rgba(0, 0, 0, .05);
+  --prc-c-linea: #d9d9d9;
+  --prc-c-linea-tabla: #eee;      /* borde exterior de la tabla */
+  --prc-c-linea-celda: #dee2e6;
+  --prc-c-linea-th: #dad9c7;
+  --prc-c-linea-seccion: #e8e8e8;
+  --prc-c-linea-acceso: rgba(0, 0, 0, .125);
+  --prc-c-borde-campo: #ccc;
+  --prc-c-foco: #0cc;
+  --prc-c-obligatorio: #b94a48;
+
+  /* --- radios ------------------------------------------------------------
+     No hay un radio del sistema: hay cuatro, uno por familia de componente. */
+  --prc-radio: 4px;          /* botón, aviso, pastilla */
+  --prc-radio-caja: 0;       /* caja de pestañas, tabla, controles */
+  --prc-radio-campo: 5px;    /* buscador y campo de texto */
+  --prc-radio-casilla: 2px;
+
+  /* --- sombras -----------------------------------------------------------
+     Medido: las tarjetas y las tablas van planas. El efecto de tarjeta lo da
+     el blanco contra el gris del bloque, no una sombra. */
+  --prc-sombra: none;
+  --prc-sombra-boton: 0 1px 1px 0 #eee;
+  --prc-sombra-menu: 0 2px 8px rgba(0, 0, 0, .12);
+  --prc-sombra-foco: 0 0 5px 0 rgba(102, 175, 233, .6);
+
+  /* --- retícula ----------------------------------------------------------
+     Una sola fila, del 80 % del ancho con un máximo de 1200px: a 1470px de
+     ventana da los 1176px medidos. Todas las retículas interiores se expresan
+     en porcentaje de esa fila, con hueco del 5,5 %. */
+  --prc-fila-ancho: 80%;
+  --prc-fila-max: 1200px;
+  --prc-fila-relleno: 13px 0 7px;
+  --prc-seccion-relleno: 0 0 6px;
+  --prc-hueco: 5.5%;
+  --prc-hueco-px: 64.68px;
+  --prc-media: 555.66px;
+  --prc-cuarto: 262.5px;
+  --prc-proc-ancho: 20.875%;
+  --prc-ficha-izq: 57.8%;
+  --prc-ficha-der: 36.7%;
+  --prc-form-hueco: 2%;
+  --prc-ruptura-tema: 980px;
+  --prc-ruptura-form: 600px;
+
+  /* --- alturas y medidas de pieza ---------------------------------------- */
+  --prc-alto-campo: 46px;
+  --prc-alto-boton: 38px;
+  --prc-alto-pestana: 32px;
+  --prc-ancho-pestana: 129px;
+  --prc-banda-tarjeta: 50px;
+  --prc-cuenta-bloque: 58px;
+  --prc-cuenta-sep: 16px;
+  --prc-cuenta-ancho: 280px;
+  --prc-icono: 24px;
+
+  /* --- el color de cada estado ------------------------------------------
+     Los de los iconos de la leyenda, tal cual están medidos. Como color de
+     texto de una pastilla no valen —#aaa, #ffcc00 y #ff0000 no llegan al
+     4,5:1—, así que la pastilla usa los tonos de aviso de arriba, que son de
+     la misma familia y sí están medidos contra su fondo. */
+  --prc-e-abierta: #008000;
+  --prc-e-cerrada: #00f;
+  --prc-e-reclamacion: #00f;
+  --prc-e-pendiente: #00f;
+  --prc-e-borrador: #666;
+  --prc-e-historica: #aaa;
+  --prc-e-incoh-abierta: #f00;   /* abierta con el plazo vencido */
+  --prc-e-incoh-cerrada: #fc0;   /* cerrada con el plazo vivo */
+  --prc-e-etiqueta: #1a1a8c;     /* la etiqueta bajo la tarjeta de la portada */
+
+  /* --- el recuadro amarillo de «Solo administración» ---------------------
+     Los contrastes están medidos, no supuestos (fórmula de luminancia
+     relativa de la WCAG 2.1):
+
+       texto  #4a3a05 sobre fondo #fdf6dd → 10,22:1   (pide 4,5:1) ✔
+       marca  #ffffff sobre fondo #6b5200 →  7,42:1   (pide 4,5:1) ✔
+       borde  #a67c00 sobre la caja       →  3,52:1   (pide 3:1)   ✔
+       borde  #a67c00 sobre la página     →  3,59:1   (pide 3:1)   ✔
+
+     El amarillo no es el único indicador: la etiqueta «Solo administración»
+     va escrita dentro del recuadro. Es una convención del aplicativo nuevo,
+     no tiene equivalente en el original y no se revalora. */
+  --prc-adm-fondo: #fdf6dd;
+  --prc-adm-borde: #a67c00;
+  --prc-adm-texto: #4a3a05;
+  --prc-adm-marca: #6b5200;
+
+  /* --- los nombres de siempre, con el valor nuevo ------------------------ */
+  --prc-pri: var(--prc-c-azul);
+  --prc-pri-cont: var(--prc-info-fondo);
+  --prc-sup: var(--prc-c-fondo);
+  --prc-sup-2: var(--prc-c-fondo-barra);
+  --prc-fondo: var(--prc-c-fondo);
+  --prc-texto: var(--prc-c-texto);
+  --prc-texto-2: var(--prc-c-tenue);
+  --prc-pie-fondo: #05395c;
+  --prc-linea: var(--prc-c-linea);
+  --prc-ok: var(--prc-ok-texto);
+  --prc-ok-cont: var(--prc-ok-fondo);
+  --prc-esp: var(--prc-avi-texto);
+  --prc-esp-cont: var(--prc-avi-fondo);
+  --prc-mal: var(--prc-mal-texto);
+  --prc-mal-cont: var(--prc-mal-fondo);
+  --prc-inf: var(--prc-info-texto);
+  --prc-inf-cont: var(--prc-info-fondo);
+  --prc-e1: var(--prc-sombra);
+  --prc-e2: var(--prc-sombra-menu);
+  --prc-r: var(--prc-radio);
+  --prc-ancho: var(--prc-fila-max);
+}
+
+/* --- base ----------------------------------------------------------------
+   Las reglas del original, tal cual: cuerpo gris medio sobre blanco, enlaces
+   que no se subrayan nunca y 14px de aire bajo cada párrafo. Van dentro de
+   `:where()` para pesar lo mismo que un selector de elemento: así cualquier
+   clase del sistema les gana sin tener que subir la especificidad. */
+
+:where(.prc-app) a { color: var(--prc-c-enlace); text-decoration: none; }
+:where(.prc-app) a:hover { text-decoration: none; }
+:where(.prc-app) p { margin: 0; padding-bottom: 1em; }
+:where(.prc-app) p:last-of-type { padding-bottom: 0; }
+:where(.prc-app) strong { font-weight: var(--prc-p-fuerte); }
+
+/* El icono es un glifo con ligadura: sin la familia cargada se lee el nombre
+   del icono, así que todo icono que sea la única información lleva su
+   `aria-label` al lado. */
+.prc-app .material-symbols-outlined {
+  font-family: var(--prc-fuente-iconos);
+  font-size: var(--prc-icono);
+  line-height: var(--prc-icono);
+  display: inline-block;
+  width: var(--prc-icono);
+  font-weight: 400;
+  font-variation-settings: "opsz" 24, "wght" 400, "FILL" 0, "GRAD" 0;
+}
+
+/* La fila: la única retícula de la que cuelga todo. */
+.prc-fila {
+  width: var(--prc-fila-ancho);
+  max-width: var(--prc-fila-max);
+  margin-inline: auto;
+  padding: var(--prc-fila-relleno);
+}
+.prc-seccion { padding: var(--prc-seccion-relleno); }
+
+/* Por debajo del ancho del tema, la fila deja de medirse en porcentaje: un
+   80 % de 400px son márgenes de 40px que no le sobran a nadie. */
+@media (max-width: 980px) {
+  .prc-fila { width: auto; margin-inline: 16px; }
+}
+
+/* --- página plana -------------------------------------------------------- */
+
+/* La cabecera y el pie los pintamos nosotros, así que los del tema sobran, y
+   también el título de la entrada: lo repite nuestro `h1`. Solo en nuestras
+   páginas (`body.prc-app`, que pone Shell) y por selector, no por
+   `!important`: si un tema no trae estos elementos, no pasa nada.
+
+   Algunos temas los llaman `#main-header` y `#main-footer`, y con su maquetador
+   son plantillas propias (`.et-l--header`, `.et-l--footer`). Los temas de
+   bloques los sacan en `wp-block-template-part`, que NO cuelga de `body`, así
+   que aquí no vale el combinador `>`. */
+body.prc-app #main-header,
+body.prc-app #top-header,
+body.prc-app .et-l--header,
+body.prc-app .et-l--footer,
+body.prc-app #main-footer,
+body.prc-app .site-header,
+body.prc-app .site-footer,
+body.prc-app header.wp-block-template-part,
+body.prc-app footer.wp-block-template-part,
+body.prc-app .et_pb_title_container,
+body.prc-app .entry-title,
+body.prc-app .page-title,
+body.prc-app .wp-block-post-title {
+  display: none;
+}
+
+body.prc-app {
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+  background: var(--prc-c-fondo);
+  overflow-x: clip;
+}
+body.prc-app #page-container { padding-top: 0; }
+
+/* Hay temas que reservan la columna de la barra lateral aunque no haya ninguna
+   (`et_right_sidebar`): eso descentra el contenido, y con él la cabecera y las
+   pestañas de ancho completo, que se calculan contra su contenedor. */
+body.prc-app #main-content .container,
+body.prc-app #main-content #content-area,
+body.prc-app #main-content #left-area {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+}
+body.prc-app #main-content #sidebar { display: none; }
+/* Y la raya vertical que la separaba, que algunos temas dibujan con un
+   pseudoelemento absoluto y sobrevive a esconder la columna. */
+body.prc-app #main-content .container::before { display: none; }
+
+/* El tema mete el contenido en una columna estrecha con su propio relleno. La
+   cabecera, las pestañas y el pie son de ancho completo, así que rompen esa
+   columna y vuelven a centrarse por dentro (`--prc-ancho`).
+
+   `left: 50%` + `translateX(-50%)` y no márgenes negativos: los márgenes se
+   calculan contra el contenedor y fallan si el tema no lo tiene centrado. */
+body.prc-app .prc-top,
+body.prc-app .prc-tabs,
+body.prc-app .prc-hoja,
+body.prc-app .prc-pie {
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  max-width: 100vw;
+}
+
+/* El pie, abajo del todo: `sticky` con `top: 100vh` lo deja pegado al borde
+   inferior mientras sobre sitio, y baja con la página cuando el contenido es
+   largo. Con `sticky`, `left` ya no desplaza —marca el umbral de pegado—, así
+   que el ancho completo lo dan los márgenes negativos de siempre. */
+body.prc-app .prc-pie {
+  position: sticky;
+  top: 100vh;
+  left: auto;
+  transform: none;
+  width: auto;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+/* Sin la cabecera del tema, su hueco superior sobra. */
+body.prc-app .wp-site-blocks,
+body.prc-app .wp-site-blocks > main,
+body.prc-app main.wp-block-group,
+body.prc-app .site-main,
+body.prc-app #content,
+body.prc-app #main-content,
+body.prc-app .wp-site-blocks > *,
+body.prc-app .entry-content,
+body.prc-app .wp-block-post-content {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+body.prc-app .et_pb_row,
+body.prc-app .et_pb_section,
+body.prc-app .site-content,
+body.prc-app #et-main-area {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* El único `!important` del armazón, y con motivo: los temas de bloques le
+   escriben al `<main>` un `style="margin-top: …"` en la propia plantilla, y
+   contra un estilo en línea no gana ningún selector. */
+body.prc-app main { margin-top: 0 !important; margin-bottom: 0 !important; }
+body.prc-app main > .wp-block-group { padding-top: 0 !important; padding-bottom: 0 !important; }
+
+/* Una tabla más ancha que la pantalla —aunque vaya en su caja con scroll—
+   hacía crecer el viewport en el móvil. Va en <html>: en <body> no basta. */
+html:has(> body.prc-app) { overflow-x: clip; }
+
+/* --- cabecera ------------------------------------------------------------ */
+
+/* El `transform` de ancho completo crea una capa en la cabecera, en el menú y
+   en la hoja, así que entre ellas manda el orden del documento y no el
+   `z-index` de lo que llevan dentro: sin estas tres líneas, la hoja —que va
+   después— se pinta encima de los desplegables del menú, y el título de la
+   pantalla tapa «Gestión de procedimientos». Se ordenan a mano: la cabecera
+   por encima del menú, el menú por encima de la hoja. */
+.prc-top { z-index: 3; background: var(--prc-c-fondo); border-bottom: 1px solid #e5e5e5; }
+.prc-tabs { z-index: 2; }
+.prc-hoja { z-index: 1; }
+
+/* La cabecera, el menú y el pie son de ancho completo y se vuelven a centrar
+   por dentro sobre la misma fila que el contenido: 80 % con máximo, no un
+   `max-width` con relleno lateral, que dejaba el contenido 48px más estrecho
+   que la fila medida. */
+.prc-top-fila,
+.prc-tabs-fila,
+.prc-pie div {
+  width: var(--prc-fila-ancho);
+  max-width: var(--prc-fila-max);
+  margin-inline: auto;
+}
+
+.prc-top-fila {
+  padding: 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* El escudo de quien despliega. **Aquí no hay ninguno** (ADR-0009): el hueco
+   solo se pinta cuando el filtro `prc_chrome` trae un `owner`, y la imagen la
+   pone quien despliega desde su propio CSS con `--prc-logo: url(…)`. */
+.prc-logo {
+  display: block;
+  width: 104px;
+  height: 60px;
+  flex: 0 0 auto;
+  background: var(--prc-logo, none) center / contain no-repeat;
+}
+
+.prc-marca { line-height: 1.3; }
+.prc-marca small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--prc-texto-2);
+  max-width: 30ch;
+  border-left: 1px solid var(--prc-linea);
+  padding-left: 14px;
+}
+
+.prc-marca-app {
+  margin-left: 12px;
+  padding-left: 14px;
+  border-left: 1px solid var(--prc-linea);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--prc-pri);
+  text-decoration: none;
+}
+
+/* «Acceder», para quien mira la portada sin sesión. */
+.prc-entrar { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--prc-pri); }
+
+/* --- quién eres y con qué ámbito o centro -------------------------------- */
+
+/* Tres líneas —nombre, rol y ámbito o centro— y no una píldora: en un
+   aplicativo acotado por ámbito y por centro, saber con cuál se está mirando
+   es media respuesta a «¿por qué no veo este procedimiento?». El menú es un
+   `details` nativo: sin guion, y se cierra solo al navegar. */
+.prc-yo { margin-left: auto; position: relative; }
+.prc-yo > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 4px 6px;
+}
+.prc-yo > summary::-webkit-details-marker { display: none; }
+.prc-yo > summary:hover, .prc-yo[open] > summary { background: var(--prc-sup-2); }
+.prc-yo-ava {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--prc-sup-2);
+  color: var(--prc-texto);
+}
+.prc-yo-txt { display: flex; flex-direction: column; line-height: 1.25; text-align: left; }
+.prc-yo-n { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--prc-texto); }
+.prc-yo-r { font-size: 12.5px; color: var(--prc-texto-2); }
+.prc-yo-a { font-weight: 600; color: var(--prc-pri); }
+.prc-yo-a::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 1px; }
+.prc-yo-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 12rem;
+  padding: 6px;
+  background: var(--prc-sup);
+  border: 1px solid var(--prc-linea);
+  border-radius: 12px;
+  box-shadow: var(--prc-e2);
+  z-index: 30;
+  display: grid;
+}
+.prc-yo-menu a { padding: 10px 12px; border-radius: 8px; color: var(--prc-texto); text-decoration: none; font-size: 14px; }
+.prc-yo-menu a:hover { background: var(--prc-sup-2); color: var(--prc-pri); }
+
+/* --- el menú -------------------------------------------------------------
+
+   Cuatro entradas en mayúsculas grises —Inicio, Sus solicitudes, Administrar
+   y Ayuda— y las que tienen hijos los despliegan con un `details` nativo: sin
+   JavaScript (ADR-0022), con teclado y con un solo nivel, que es justo lo que
+   los tres niveles anidados del menú original no tenían. */
+
+.prc-tabs { background: var(--prc-c-fondo); border-bottom: 1px solid var(--prc-c-linea); }
+
+.prc-tabs-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  padding: 0;
+}
+
+.prc-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0;
+  margin-right: 28px;
+  font: 600 var(--prc-t-base)/1 var(--prc-fuente);
+  color: var(--prc-c-texto);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.prc-tab:hover { color: var(--prc-c-enlace); text-decoration: none; }
+.prc-tab-on { color: var(--prc-c-titulo); box-shadow: inset 0 -3px 0 var(--prc-c-enlace); }
+
+/* La entrada que despliega: el triángulo lo pinta el propio `summary`, que
+   por defecto trae un marcador que no se parece al del original. */
+.prc-tab-caja { position: relative; }
+.prc-tab-caja > summary { list-style: none; }
+.prc-tab-caja > summary::-webkit-details-marker { display: none; }
+.prc-tab-caja > summary::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-top-color: currentColor;
+  margin-top: 4px;
+}
+.prc-tab-caja[open] > summary::after { margin: 0 0 4px; border-top-color: transparent; border-bottom-color: currentColor; }
+
+.prc-desplegable {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 30;
+  display: grid;
+  min-width: 260px;
+  padding: 8px 0;
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-caja);
+  box-shadow: var(--prc-sombra-menu);
+}
+.prc-desplegable a {
+  padding: 8px 20px;
+  font: 500 var(--prc-t-base)/20px var(--prc-fuente);
+  color: var(--prc-c-texto);
+  text-decoration: none;
+}
+.prc-desplegable a:hover,
+.prc-desplegable a:focus { background: var(--prc-c-fondo-barra); color: var(--prc-c-titulo); }
+.prc-desplegable a[aria-current="page"] { background: var(--prc-c-fondo-barra); color: var(--prc-c-titulo); font-weight: 700; }
+
+/* El rótulo de grupo del desplegable: no es un enlace y no se puede pulsar. */
+.prc-desplegable-grupo {
+  margin: 0;
+  padding: 10px 20px 4px;
+  font: 700 var(--prc-t-menudo)/16px var(--prc-fuente);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--prc-c-tenue);
+}
+
+.prc-tab-n {
+  padding: .05em .5em;
+  border-radius: 999px;
+  background: var(--prc-esp-cont);
+  color: var(--prc-esp);
+  font-size: var(--prc-t-menudo);
+  font-weight: 700;
+}
+
+/* --- lienzo -------------------------------------------------------------- */
+
+.prc-hoja {
+  width: var(--prc-fila-ancho);
+  max-width: var(--prc-fila-max);
+  margin-inline: auto;
+  padding: 24px 0 44px;
+}
+
+/* Al romper la columna del tema, la hoja pasa a ser de ancho completo: el
+   centrado lo hace este relleno lateral, y el 10 % es la otra mitad del 80 %
+   de la fila. A 1470px de ventana deja los 1176px medidos. */
+body.prc-app .prc-hoja {
+  padding-left: max(16px, 10%, calc(50% - var(--prc-fila-max) / 2));
+  padding-right: max(16px, 10%, calc(50% - var(--prc-fila-max) / 2));
+}
+
+.prc-hoja .prc-tabs { margin: 0 0 28px; }
+
+/* Dos títulos, no un `h1` con variantes: el héroe de la portada y del taller
+   —grande, en mayúsculas y centrado— y el título corriente de las pantallas
+   de dentro, que va alineado a la izquierda y en caja normal. */
+.prc-hero {
+  font-family: var(--prc-fuente-hero);
+  font-size: var(--prc-t-hero);
+  line-height: var(--prc-i-hero);
+  font-weight: var(--prc-p-hero);
+  color: var(--prc-c-hero);
+  text-transform: uppercase;
+  text-align: center;
+  margin: 0;
+  padding: 0 0 10px;
+}
+
+.prc-h1 {
+  font-size: var(--prc-t-h1);
+  line-height: var(--prc-i-h1);
+  font-weight: var(--prc-p-h1);
+  color: var(--prc-c-titulo);
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+  margin: 0 0 20px;
+  padding: 0 0 10px;
+}
+
+.prc-sub {
+  font-size: var(--prc-t-h2);
+  line-height: var(--prc-i-h2);
+  font-weight: var(--prc-p-h2);
+  color: var(--prc-c-titulo);
+  margin: 0;
+  padding: 0 0 10px;
+  max-width: none;
+}
+
+/* La fila del título con su acción principal a la derecha. */
+.prc-h1-fila { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 0 4px; }
+.prc-h1-fila .prc-h1 { margin: 0; }
+.prc-h1-fila .prc-acciones { margin-left: auto; }
+
+.prc-acciones { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Dentro de una tabla, los botones de acción no se parten en varias líneas:
+   la columna es estrecha y dos iconos apilados se leen como dos filas. Que la
+   tabla se desplace en horizontal es lo que ya hace `.prc-tabla-caja`. */
+.prc-tabla td .prc-acciones { flex-wrap: nowrap; }
+.prc-tabla td .prc-acciones > * { flex: 0 0 auto; }
+
+/* --- pie ----------------------------------------------------------------- */
+
+.prc-pie { position: sticky; top: 100vh; background: var(--prc-pie-fondo); color: #fff; }
+
+.prc-pie div {
+  padding: 18px 0;
+  display: flex;
+  gap: 8px 24px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.prc-pie-quien { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: baseline; }
+.prc-pie-credito { color: rgba(255, 255, 255, .72); }
+.prc-pie-enlaces { display: flex; gap: 18px; flex-wrap: wrap; }
+.prc-pie a { color: #fff; text-decoration: underline; }
+.prc-pie a:hover { color: #fff; text-decoration: none; }
+
+/* --- el cartel de la ficha ------------------------------------------------ */
+
+/* La imagen que anuncia el procedimiento; `prc-ficha.css` le da su sitio. */
+.prc-ficha-cartel { display: block; max-width: 100%; height: auto; margin: 0 0 18px; border-radius: var(--prc-r); }
+
+/* --- el formulario -------------------------------------------------------- */
+
+.prc-form { max-width: 100%; }
+.prc-form label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 14px; }
+.prc-form input[type="text"],
+.prc-form input[type="url"],
+.prc-form input[type="email"],
+.prc-form input[type="date"],
+.prc-form input[type="number"],
+.prc-form input[type="search"],
+.prc-form select,
+.prc-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--prc-texto);
+  background: var(--prc-sup);
+  border: 1px solid #c3cad2;
+  border-radius: 8px;
+}
+.prc-form textarea { min-height: 8rem; line-height: 1.5; }
+.prc-form input::placeholder, .prc-form textarea::placeholder { color: #767676; font-style: italic; opacity: 1; }
+.prc-form small, .prc-form .prc-nota { display: block; margin-top: 4px; font-size: 12.5px; color: var(--prc-texto-2); max-width: 60ch; }
+
+/* --- la botonera ---------------------------------------------------------
+   Botones de icono: cuadrados, con el icono centrado y el texto solo para
+   lectores de pantalla. El bocadillo lo pone Bootstrap si está; si no, queda
+   el `title` del navegador. El tamaño no baja de 36 px porque es el objetivo
+   táctil mínimo que se puede acertar con el dedo. */
+.prc-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px;
+  line-height: 0;
+}
+.prc-icono svg { display: block; }
+
+/* Un procedimiento cerrado se abre entero, pero sin poder guardar. El
+   `fieldset` `disabled` ya apaga los controles; esto lo hace visible, porque
+   un botón apagado sin señal se lee como una avería. El borde no es el único
+   indicador: arriba hay un aviso escrito que dice por qué. */
+.prc-solo-lectura { margin: 0; padding: 0; border: 0; opacity: .72; }
+.prc-solo-lectura button,
+.prc-solo-lectura input,
+.prc-solo-lectura select,
+.prc-solo-lectura textarea { cursor: not-allowed; }
+
+/* Un anillo de foco visible en todo lo que se puede pulsar o escribir: sin él
+   no se sabe dónde está el cursor al navegar con el tabulador. */
+.prc-app a:focus-visible,
+.prc-app button:focus-visible,
+.prc-app input:focus-visible,
+.prc-app select:focus-visible,
+.prc-app textarea:focus-visible,
+.prc-app summary:focus-visible {
+  outline: 2px solid var(--prc-pri);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* --- tablas -------------------------------------------------------------- */
+
+/* Una sola tabla con dos pieles: la densa —la que se ve en el taller y en la
+   pantalla del centro— y la holgada. Sin pieles es la de hoy, que es la que
+   usan las cinco pantallas hasta que cada una estrene la suya.
+
+   Las reglas van por elemento y no por clase (`.prc-celda`, `.prc-th`) para
+   que valgan igual con el marcado de hoy y con el que traiga cada pantalla:
+   la clase se añade, no sustituye. */
+.prc-tabla-caja { overflow-x: auto; background: var(--prc-c-fondo); border: 0; box-shadow: none; }
+.prc-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 15px;
+  font-size: var(--prc-t-base);
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-linea-tabla);
+  border-radius: var(--prc-radio-caja);
+  box-shadow: none;
+}
+.prc-tabla th, .prc-tabla td { padding: 6px 10px; text-align: left; }
+.prc-tabla th {
+  font-weight: 700;
+  color: var(--prc-c-medio);
+  background: transparent;
+  border: 1px solid var(--prc-c-linea-th);
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.prc-tabla td {
+  font-weight: 400;
+  color: var(--prc-c-tabla);
+  border: 1px solid var(--prc-c-linea-celda);
+  vertical-align: top;
+}
+.prc-tabla tbody tr:nth-of-type(odd) > * { background: var(--prc-c-cebra); }
+.prc-tabla tbody tr:nth-of-type(even) > * { background: transparent; }
+
+.prc-tabla--densa { font-family: var(--prc-fuente); }
+.prc-tabla--densa th,
+.prc-tabla--densa td { font-size: var(--prc-t-tabla); line-height: var(--prc-i-tabla); padding: 3px; }
+.prc-tabla .prc-acciones { justify-content: flex-start; }
+.prc-tabla [hidden] { display: none !important; }
+
+/* En pantalla estrecha la tabla pasa a tarjetas: cada fila, un bloque, y cada
+   celda rotulada con el `data-rotulo` que pinta la pantalla. */
+@media (max-width: 720px) {
+  .prc-tabla-caja { border: 0; background: none; box-shadow: none; }
+  .prc-tabla, .prc-tabla tbody, .prc-tabla tr, .prc-tabla td { display: block; width: auto; }
+  .prc-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .prc-tabla tr {
+    margin-bottom: 12px;
+    padding: 6px 14px;
+    background: var(--prc-sup);
+    border: 1px solid var(--prc-linea);
+    border-radius: var(--prc-r);
+    box-shadow: var(--prc-e1);
+  }
+  .prc-tabla td { border-bottom: 0; padding: 6px 0; display: flex; gap: 12px; }
+  .prc-tabla td::before {
+    content: attr(data-rotulo);
+    flex: 0 0 8rem;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--prc-texto-2);
+  }
+  .prc-tabla td:empty { display: none; }
+}
+
+/* --- pastillas de estado ------------------------------------------------- */
+
+/* Los estados del procedimiento (`ProcedureMetaKeys::states()`), los de
+   revisión de una solicitud (`ApplicationMetaKeys::review_states()`) y el de
+   publicación comparten la pastilla: el color dice de qué va cada uno, y el
+   texto lo dice siempre. */
+.prc-state {
+  display: inline-block;
+  padding: .3em .72em;
+  border-radius: 999px;
+  font-size: var(--prc-t-menudo);
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--prc-gris-fondo);
+  color: var(--prc-gris-texto);
+}
+/* El curso, debajo y en cursiva, como en el original. */
+.prc-state__curso { font-style: italic; font-weight: 400; text-transform: none; }
+.prc-state-open { background: var(--prc-ok-cont); color: var(--prc-ok); }
+.prc-state-amendment { background: var(--prc-esp-cont); color: var(--prc-esp); }
+.prc-state-upcoming { background: var(--prc-inf-cont); color: var(--prc-inf); }
+.prc-state-closed { background: var(--prc-gris-fondo); color: var(--prc-gris-texto); }
+.prc-state-resolved { background: var(--prc-pri-cont); color: var(--prc-pri); }
+.prc-state-draft { background: var(--prc-gris-fondo); color: var(--prc-gris-texto); }
+.prc-state-archived { background: var(--prc-gris-fondo); color: var(--prc-gris-texto); }
+.prc-state-submitted { background: var(--prc-inf-cont); color: var(--prc-inf); }
+.prc-state-amend { background: var(--prc-esp-cont); color: var(--prc-esp); }
+.prc-state-admitted { background: var(--prc-ok-cont); color: var(--prc-ok); }
+.prc-state-excluded { background: var(--prc-mal-cont); color: var(--prc-mal); }
+.prc-state-publish { background: var(--prc-ok-cont); color: var(--prc-ok); }
+
+/* --- avisos -------------------------------------------------------------- */
+
+/* Geometría única y color por tono, con Bootstrap y sin él: los cuatro tonos
+   son los del original y no los de Bootstrap 5, que cambió el informativo.
+   `Assets::alert_class()` ya emite `prc-aviso prc-aviso-{tono}`. */
+.prc-aviso {
+  padding: 12px 20px;
+  margin: 0 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--prc-radio);
+  font-size: var(--prc-t-base);
+  line-height: var(--prc-i-base);
+}
+.prc-aviso-info { background: var(--prc-info-fondo); border-color: var(--prc-info-borde); color: var(--prc-info-texto); }
+.prc-aviso-success { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
+.prc-aviso-warning { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
+.prc-aviso-danger { background: var(--prc-mal-fondo); border-color: var(--prc-mal-borde); color: var(--prc-mal-texto); }
+
+/* La misma geometría sin color: la caja neutra que envuelve un bloque. */
+.prc-caja {
+  padding: 12px 20px;
+  margin: 0 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--prc-radio);
+}
+
+/* Lo que se dice cuando no hay nada que enseñar, y la celda sin dato. */
+.prc-vacio {
+  font: 500 var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+  padding: 0 0 14px;
+  margin: 0;
+}
+.prc-sindato { color: var(--prc-c-sindato); font-weight: 700; font-size: inherit; }
+
+/* --- botones ------------------------------------------------------------- */
+
+/* El aspecto lo ponemos nosotros, con Bootstrap y sin él: el botón del
+   original es el de su Bootstrap, no el de la 5, y `Assets::button_class()`
+   emite los dos vocabularios a la vez. Alto 38px = 24 de línea + 12 de
+   relleno + 2 de borde. */
+.prc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo-accion);
+  border: 1px solid var(--prc-c-fondo-accion);
+  border-radius: var(--prc-radio);
+  text-decoration: none;
+  cursor: pointer;
+}
+.prc-btn:hover { text-decoration: none; filter: brightness(.95); }
+.prc-btn:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
+.prc-btn .material-symbols-outlined { font-size: 24px; line-height: 24px; }
+
+.prc-btn-primary { color: #fff; background: var(--prc-c-azul); border-color: var(--prc-c-azul); }
+.prc-btn-primary:hover { color: #fff; background: var(--prc-c-azul-hover); border-color: var(--prc-c-azul-borde); filter: none; }
+
+/* El secundario: el mismo botón en blanco. No está en el original —allí la
+   acción secundaria era un enlace suelto— y se añade porque una pantalla con
+   dos botones azules no dice cuál es la acción principal. */
+.prc-btn--sec { color: var(--prc-c-azul); background: #fff; border-color: var(--prc-c-azul); }
+.prc-btn--sec:hover { color: #fff; background: var(--prc-c-azul); filter: none; }
+
+/* El botón de icono de una fila de tabla: en el original es una etiqueta
+   clara con el icono dentro, y el número va fuera, pegado. */
+.prc-accion {
+  display: inline-block;
+  padding: 2.4375px 3.9px;
+  margin: 0;
+  font: 700 9.75px/9.75px var(--prc-fuente);
+  text-align: center;
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo-accion);
+  border: 0;
+  border-radius: var(--prc-radio);
+  box-shadow: none;
+  text-decoration: none;
+}
+.prc-accion .material-symbols-outlined { font-size: 24px; line-height: 24px; width: 24px; }
+.prc-accion__contador { font-size: var(--prc-t-tabla); }
+
+/* Con Bootstrap: solo sus variables, y solo bajo `body.prc-app`. Fuera de
+   estas páginas Bootstrap sigue siendo el de siempre. `.btn-primary` no lee
+   `--bs-primary` —la 5.3 le escribe el color en `--bs-btn-bg`—, así que hay
+   que tocar las del botón. */
+body.prc-app {
+  --bs-primary: #007bff;
+  --bs-primary-rgb: 0, 123, 255;
+  --bs-link-color: #2ea3f2;
+  --bs-link-hover-color: #0c71c3;
+}
+body.prc-app .btn { border-radius: var(--prc-radio); min-height: var(--prc-alto-boton); font-weight: 400; }
+body.prc-app .btn-primary {
+  --bs-btn-bg: var(--prc-c-azul);
+  --bs-btn-border-color: var(--prc-c-azul);
+  --bs-btn-hover-bg: var(--prc-c-azul-hover);
+  --bs-btn-hover-border-color: var(--prc-c-azul-borde);
+  --bs-btn-active-bg: var(--prc-c-azul-hover);
+  --bs-btn-active-border-color: var(--prc-c-azul-borde);
+}
+body.prc-app .btn-light {
+  --bs-btn-bg: var(--prc-c-fondo-accion);
+  --bs-btn-border-color: var(--prc-c-fondo-accion);
+  --bs-btn-color: var(--prc-c-tabla);
+}
+/* La acción destructiva se distingue sin gritar: tonal, no roja rellena. */
+body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border-color: var(--prc-mal-cont); --bs-btn-color: var(--prc-mal); }
+.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); }
+
+/* El diálogo de confirmación (SweetAlert2) se pinta al final del `body`, así
+   que sus clases —`prc-app`, `prc-sin-bootstrap`— siguen valiendo y los
+   botones del diálogo son exactamente los mismos que los de la página. Con
+   `buttonsStyling: false` la librería no pone los suyos, y aquí solo queda
+   devolverles la separación que ella daba y darle al cuadro nuestro radio.
+   Si SweetAlert2 no llega, estas reglas no aplican a nada. */
+.swal2-popup { border-radius: var(--prc-r); font: inherit; }
+.swal2-popup .swal2-title { font-size: 20px; color: var(--prc-texto); }
+.swal2-popup .swal2-html-container { font-size: 15px; color: var(--prc-texto-2); }
+.swal2-popup .swal2-actions { gap: 8px; }
+
+/* Los botoncitos de una fila de tabla: abrir, ver, revisar. */
+.prc-mini { min-height: 36px; padding: 0 12px; font-size: 13px; }
+
+/* --- lo que solo ve la administración ------------------------------------ */
+
+/* Una convención del aplicativo, no un adorno de una pantalla: todo lo que
+   solo ve quien administra —desarchivar, por ejemplo (ADR-0023)— se pinta aquí
+   dentro y se reconoce sin leerlo. Lo pinta `Shell::admin_box()`, en un sitio,
+   para que cualquier pantalla futura lo reutilice. Los contrastes de estos
+   cuatro colores están calculados arriba, en la paleta. */
+.prc-solo-admin {
+  margin: 0 0 18px;
+  padding: 16px 18px 4px;
+  background: var(--prc-adm-fondo);
+  border: 1px solid var(--prc-adm-borde);
+  border-left-width: 5px;
+  border-radius: var(--prc-r);
+  color: var(--prc-adm-texto);
+}
+.prc-solo-admin + .prc-solo-admin { margin-top: 18px; }
+
+/* La etiqueta en texto, para quien no distingue el color. */
+.prc-solo-admin-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--prc-adm-marca);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.prc-solo-admin-marca svg { flex: 0 0 auto; }
+
+.prc-solo-admin-titulo { margin: 0 0 4px; font-size: 17px; font-weight: 700; color: var(--prc-adm-texto); }
+.prc-solo-admin-porque { margin: 0 0 14px; font-size: 13.5px; max-width: 70ch; color: var(--prc-adm-texto); }
+
+/* Dentro del recuadro el texto sigue siendo el oscuro sobre amarillo: si un
+   rótulo o una ayuda heredara el gris de fuera, se caería del 4,5:1.
+
+   La etiqueta «Solo administración» queda FUERA de esta regla: es un `<p>`,
+   así que `.prc-solo-admin p` (0,2,0) le ganaría a `.prc-solo-admin-marca`
+   (0,1,0) y la pintaría del marrón oscuro sobre su propio fondo marrón. Con el
+   `:not()` no la toca y se queda con su blanco sobre `--prc-adm-marca`. */
+.prc-solo-admin label,
+.prc-solo-admin small,
+.prc-solo-admin p:not(.prc-solo-admin-marca),
+.prc-solo-admin legend { color: var(--prc-adm-texto); }
+
+/* --- el aviso de que lo está editando otra persona ------------------------ */
+
+/* El aviso del bloqueo (`EditLock::render()`) sale de dos maneras y tiene que
+   verse igual en las dos: el servidor lo pinta como `<dialog open>` —sin
+   JavaScript, que es justo el motivo de haber elegido un `<dialog>` y no
+   SweetAlert2— y el Heartbeat lo abre con `showModal()` cuando el bloqueo se
+   pierde sin recargar. Sin estilo, un `<dialog open>` es un bloque
+   `position: absolute` sin capa ni sombreado, y la pantalla se le pinta encima:
+   el aviso está en el HTML y no se lee. */
+.prc-dialogo[open] {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 24px 26px;
+  overflow: auto;
+  border: 1px solid var(--prc-linea);
+  border-radius: var(--prc-r);
+  background: var(--prc-sup);
+  color: var(--prc-texto);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .28);
+}
+
+/* El sombreado del fondo lo pone el navegador en `::backdrop`, pero solo
+   cuando el diálogo se abrió con `showModal()`. El que llega abierto desde el
+   servidor no lo tiene, así que se le pinta a mano; `:not(:modal)` es
+   exactamente ese caso y evita oscurecer dos veces. */
+.prc-dialogo[open]:not(:modal) {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .28), 0 0 0 100vmax rgba(15, 23, 42, .55);
+}
+.prc-dialogo::backdrop { background: rgba(15, 23, 42, .55); }
+.prc-dialogo h2 { margin: 0 0 14px; font-size: 20px; line-height: 1.3; }
+.prc-dialogo p { margin: 0 0 12px; font-size: 14.5px; line-height: 1.55; }
+.prc-dialogo .prc-acciones { gap: 10px; margin: 18px 0 0; }
+
+/* --- móvil --------------------------------------------------------------- */
+
+/* A 400 px de ancho tiene que seguir siendo usable: es la pantalla desde la
+   que un equipo directivo mira si su solicitud ha sido admitida. */
+@media (max-width: 640px) {
+  .prc-top-fila,
+  .prc-tabs-fila,
+  .prc-pie div { width: auto; margin-inline: 16px; }
+  .prc-top-fila { padding: 11px 0; gap: 10px; flex-wrap: nowrap; }
+  .prc-marca { display: none; }
+  .prc-marca-app { margin-left: 0; padding-left: 0; border-left: 0; font-size: 16px; }
+  .prc-yo-txt { display: none; }
+  .prc-yo > summary { padding: 0; }
+  .prc-yo-ava { width: 40px; height: 40px; }
+  .prc-logo { width: 78px; height: 45px; }
+  .prc-tab { margin-right: 18px; padding: 10px 0; }
+  /* El desplegable, en columna: en una pantalla estrecha una capa flotante
+     tapa justo lo que se acaba de tocar. */
+  .prc-desplegable { position: static; border: 0; box-shadow: none; padding: 0 0 8px; min-width: 0; }
+  body.prc-app .prc-hoja { padding: 18px 16px 40px; }
+  .prc-hero { font-size: 32px; line-height: 34px; }
+  .prc-h1 { font-size: 24px; line-height: 26px; }
+  .prc-sub { font-size: 20px; line-height: 22px; }
+  .prc-h1-fila .prc-acciones { margin-left: 0; width: 100%; }
+  .prc-solo-admin { padding: 14px 14px 2px; }
+  /* En el móvil el pie no cabe: la pantalla es para el trabajo, y lo legal
+     está a un toque en cualquier otra página del sitio. */
+  .prc-pie { display: none; }
+}
+
+/* Etiqueta solo para lectores de pantalla. La trae WordPress y casi todos los
+   temas, pero el aplicativo no puede darla por hecha: sin ella los rótulos de
+   las casillas salen escritos en pantalla. */
+.prc-app .screen-reader-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Quien pide menos movimiento, menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  .prc-app * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}

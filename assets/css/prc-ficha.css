@@ -1,0 +1,449 @@
+/* La ficha de un procedimiento: **solo lo que aparece en esta pantalla**.
+
+   Los tokens, la fila, la caja neutra, los cuatro tonos de aviso, el botón y
+   las pastillas de estado están en `prc-app.css` y aquí no se tocan: lo que
+   esta hoja hace es montar encima la cabecera de dos columnas, el contador,
+   la caja resumen, las pestañas de contenido, la tarjeta de acceso y el pie.
+
+   Todas las medidas salen del sistema visual medido sobre el sitio que se
+   sustituye: la fila de 1176px, la cabecera repartida en 57,8 % / 5,5 % /
+   36,7 %, el contador de 280px de ancho con bloques de 58px y las pestañas de
+   129px. Lo que no estaba medido va dicho en su comentario. */
+
+/* --- la cabecera de dos columnas ----------------------------------------- */
+
+/* El orden del DOM es el que hace falta al colapsar: primero el título y la
+   resolución, después el contador. Así, en una pantalla estrecha, el contador
+   queda debajo del título y no encima. */
+.prc-ficha-cab {
+  display: grid;
+  grid-template-columns: var(--prc-ficha-izq) var(--prc-ficha-der);
+  column-gap: var(--prc-hueco);
+  align-items: start;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 980px) {
+  .prc-ficha-cab { grid-template-columns: 1fr; row-gap: 24px; }
+}
+
+/* El título del procedimiento NO es el título de la pantalla: es 30px de peso
+   800 en mayúsculas y centrado, y el dato se guarda en caja normal. No se
+   trunca: de una a seis líneas, las que haga falta. */
+.prc-titulo-proc {
+  font-family: var(--prc-fuente);
+  font-size: var(--prc-t-h1);
+  line-height: var(--prc-i-h1);
+  font-weight: var(--prc-p-hero);
+  color: var(--prc-c-fuerte);
+  letter-spacing: normal;
+  text-transform: uppercase;
+  text-align: center;
+  margin: 0;
+  padding: 0 0 10px;
+}
+
+.prc-ficha-cartel {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--prc-radio);
+  margin: 0 0 16px;
+}
+
+/* --- la resolución -------------------------------------------------------- */
+
+/* Hereda la geometría de `.prc-caja` y añade las mayúsculas, que afectan al
+   bloque entero. El cuerpo es 0.9em del de la página. */
+.prc-resolucion { text-transform: uppercase; }
+
+.prc-resolucion__texto,
+.prc-resolucion__doc {
+  font-size: var(--prc-t-micro);
+  line-height: normal;
+  margin: 0;
+  padding: 0;
+}
+
+.prc-resolucion__doc { margin-top: var(--prc-t-micro); }
+
+.prc-resolucion__doc a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--prc-c-enlace);
+  text-decoration: none;
+}
+
+/* Aquí sí se subraya al pasar: es un enlace a un documento dentro de un bloque
+   de texto, y sin subrayado no se distingue del resto del párrafo. */
+.prc-resolucion__doc a:hover,
+.prc-resolucion__doc a:focus-visible { text-decoration: underline; }
+
+.prc-promotor {
+  font-size: var(--prc-t-h5);
+  line-height: var(--prc-i-h5);
+  font-style: italic;
+  color: var(--prc-c-medio);
+  margin: 0;
+  padding: 0;
+}
+
+/* --- el contador regresivo ------------------------------------------------ */
+
+/* Cuatro bloques valor/rótulo separados por tres «:», centrados en la columna
+   derecha. Ancho total del grupo 280px; paso entre centros de bloque 73,9px,
+   de ahí los 58 + 16. El hueco es el mismo con contador, con aviso de plazo
+   vencido y sin nada: la página no da saltos. */
+.prc-cuenta-caja { text-align: center; }
+
+/* Encima de las cifras, y no debajo: cuatro números sin rótulo no dicen a qué
+   plazo cuentan, y con fase de subsanación eso importa. */
+.prc-cuenta__pie {
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  color: var(--prc-c-texto);
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.prc-cuenta {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.prc-cuenta__bloque { width: var(--prc-cuenta-bloque); text-align: center; }
+.prc-cuenta__sep { width: var(--prc-cuenta-sep); text-align: center; }
+
+.prc-cuenta__valor,
+.prc-cuenta__sep p {
+  font-family: var(--prc-fuente-cifras);
+  font-size: var(--prc-t-cifra);
+  line-height: var(--prc-i-cifra);
+  font-weight: 400;
+  color: var(--prc-c-fuerte);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  padding: 0;
+}
+
+.prc-cuenta__rotulo {
+  font-family: var(--prc-fuente);
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  font-weight: 500;
+  color: var(--prc-c-texto);
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+/* El plazo vencido ocupa el hueco del contador con la misma caja: en el
+   original el contador se quedaba en `000 : 00 : 00 : 00`, que no dice nada. */
+.prc-cuenta-vencida {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding: 12px 20px;
+}
+
+/* --- la caja resumen ------------------------------------------------------ */
+
+/* Es `alert-info`, la misma caja informativa del original: no cambia el peso
+   visual de la pantalla, solo lo que cuenta. */
+.prc-resumen {
+  display: block;
+  padding: 16px 20px;
+  margin: 0;
+}
+
+.prc-resumen__tit {
+  font-size: var(--prc-t-menudo);
+  line-height: 16px;
+  font-weight: var(--prc-p-fuerte);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--prc-info-texto);
+  opacity: .75;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+/* El estado, con su color y su icono. El color no es el único indicador: el
+   estado va escrito al lado, y el icono lleva `aria-hidden`. */
+.prc-resumen__estado {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--prc-t-base);
+  line-height: 20px;
+  font-weight: 600;
+  border: 1px solid;
+  border-radius: var(--prc-radio);
+  margin: 0 0 12px;
+  padding: 6px 10px;
+}
+
+.prc-resumen__estado .material-symbols-outlined {
+  font-size: 20px;
+  line-height: 20px;
+  width: 20px;
+}
+
+/* Los siete estados derivados (ADR-0013). Son siete y no los ocho de la
+   leyenda del original porque dos de aquellos eran contradicciones entre la
+   etiqueta escrita a mano y las fechas, y aquí el estado sale de las fechas.
+   Los tonos son los de aviso, que están medidos contra su fondo; los colores
+   crudos de los iconos del original (#aaa, #fc0, #f00) no llegan a 4,5:1 como
+   color de texto. */
+.prc-resumen__estado--open { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
+.prc-resumen__estado--amendment { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
+.prc-resumen__estado--upcoming,
+.prc-resumen__estado--resolved { background: var(--prc-info-fondo); border-color: var(--prc-info-borde); color: var(--prc-info-texto); }
+.prc-resumen__estado--closed,
+.prc-resumen__estado--draft,
+.prc-resumen__estado--archived { background: var(--prc-gris-fondo); border-color: var(--prc-gris-borde); color: var(--prc-gris-texto); }
+
+/* La fila sin dato no se pinta, así que la lista nunca dice «Subsanación: —».
+   `display: contents` en el `div` para que la pareja caiga en las dos columnas
+   de la retícula sin perder el agrupamiento del marcado. */
+.prc-resumen__datos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+  row-gap: 4px;
+  margin: 0 0 12px;
+}
+
+.prc-resumen__datos > div { display: contents; }
+.prc-resumen__datos dt { font-weight: var(--prc-p-fuerte); }
+.prc-resumen__datos dd { margin: 0; }
+.prc-resumen__datos a { color: var(--prc-info-texto); text-decoration: underline; }
+
+.prc-resumen__enlaces {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.prc-resumen__enlaces a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--prc-info-texto);
+  text-decoration: underline;
+}
+
+.prc-resumen__enlaces .material-symbols-outlined,
+.prc-resumen__mia .material-symbols-outlined {
+  font-size: 20px;
+  line-height: 20px;
+  width: 20px;
+  flex: 0 0 20px;
+}
+
+/* Lo que ahorra el viaje «ficha → mis solicitudes → volver». Solo lo ve quien
+   ha entrado con un centro detrás. */
+.prc-resumen__mia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  border-top: 1px solid var(--prc-info-borde);
+  margin: 0;
+  padding: 12px 0 0;
+}
+
+.prc-resumen__mia a { color: var(--prc-info-texto); text-decoration: underline; }
+
+/* --- las pestañas de contenido -------------------------------------------- */
+
+/* Caja de ancho completo con barra gris arriba y panel blanco. Las pestañas
+   son todas del mismo ancho aunque el rótulo mida distinto, la barra no se
+   reparte el ancho de la caja —sobra gris a la derecha— y la línea de debajo
+   cruza también por debajo de la pestaña activa. Todo eso está medido. */
+.prc-tabs-ficha {
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-caja);
+  margin: 0 0 24px;
+}
+
+.prc-tabs-ficha__barra {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  background: var(--prc-c-fondo-barra);
+  border-bottom: 1px solid var(--prc-c-linea);
+  margin: 0;
+  padding: 0;
+}
+
+.prc-tabs-ficha__barra a {
+  display: block;
+  width: var(--prc-ancho-pestana);
+  height: var(--prc-alto-pestana);
+  line-height: var(--prc-alto-pestana);
+  font-size: var(--prc-t-base);
+  font-weight: 600;
+  color: var(--prc-c-texto);
+  text-align: center;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prc-tabs-ficha__barra a[aria-selected="true"] {
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-titulo);
+}
+
+.prc-tabs-ficha__panel { padding: 24px; }
+.prc-tabs-ficha__panel + .prc-tabs-ficha__panel { border-top: 1px solid var(--prc-c-linea); }
+
+.prc-tabs-ficha__titulo {
+  font-size: var(--prc-t-h3);
+  line-height: var(--prc-i-h3);
+  font-weight: var(--prc-p-h3);
+  color: var(--prc-c-azul);
+  margin: 0;
+  padding: 0 0 10px;
+}
+
+/* Con el guion cargado, el rótulo del panel lo dice ya la pestaña: se queda
+   para quien navega con lector de pantalla. Se esconde DESDE el guion —la
+   clase la pone él— para que sin guion siga viéndose y los paneles se lean
+   como secciones seguidas. */
+.prc-tabs-ficha--js .prc-tabs-ficha__titulo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.prc-tabs-ficha--js .prc-tabs-ficha__panel + .prc-tabs-ficha__panel { border-top: 0; }
+
+/* --- la tarjeta de acceso -------------------------------------------------- */
+
+/* Tres columnas iguales de las que hoy se rellena una: es la retícula del
+   original, y la tarjeta mide 362px de ancho a 1176px de fila. */
+.prc-accesos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 991.98px) {
+  .prc-accesos { grid-template-columns: 1fr; }
+}
+
+.prc-acceso {
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-linea-acceso);
+  border-radius: var(--prc-radio);
+  box-shadow: var(--prc-sombra);
+  padding: 20px;
+}
+
+/* El rótulo de la tarjeta es una caja informativa, no un titular suelto. */
+.prc-acceso__rotulo {
+  font-size: var(--prc-t-h5);
+  line-height: var(--prc-i-h5);
+  font-weight: var(--prc-p-h5);
+  background: var(--prc-info-fondo);
+  border: 1px solid var(--prc-info-borde);
+  border-radius: var(--prc-radio);
+  color: var(--prc-info-texto);
+  margin: 0 0 16px;
+  padding: 12px 20px;
+}
+
+/* A quién se dirige, en grande y centrado: en el original es la línea que
+   distingue una tarjeta de acceso de la de al lado. */
+.prc-acceso__cifra {
+  font-family: var(--prc-fuente-cifras);
+  font-size: var(--prc-t-h2);
+  line-height: var(--prc-i-h2);
+  font-weight: var(--prc-p-fuerte);
+  color: var(--prc-c-azul);
+  text-align: center;
+  margin: 0;
+  padding: 0 0 10px;
+}
+
+.prc-acceso__texto { margin: 0; padding: 0 0 16px; }
+.prc-acceso__accion { margin: 0; padding: 0; }
+
+/* El botón de consulta —«Ver mi solicitud», cuando el plazo ya cerró— va en
+   blanco con el contorno azul: una pantalla con el botón principal relleno y
+   este también relleno no dice cuál es la acción que se espera.
+
+   Va con el contenedor delante a propósito: la hoja del armazón se imprime
+   ANTES que Bootstrap, así que un `.prc-btn--sec` a secas pierde contra el
+   `.btn` de la librería, que pinta el fondo desde sus propias variables. */
+.prc-acceso__accion .prc-btn--sec {
+  color: var(--prc-c-azul);
+  background: var(--prc-c-fondo);
+  border-color: var(--prc-c-azul);
+}
+
+.prc-acceso__accion .prc-btn--sec:hover,
+.prc-acceso__accion .prc-btn--sec:focus-visible {
+  color: #fff;
+  background: var(--prc-c-azul);
+  border-color: var(--prc-c-azul-borde);
+}
+
+/* --- el filete y el pie ---------------------------------------------------- */
+
+/* El original escribe `border: 1px dashed`, que dibuja un rectángulo punteado
+   de 2px en vez de una línea. Aquí es `border-top`, y hay que anular además el
+   `opacity: .25` que Bootstrap 5 le pone al `<hr>`. */
+.prc-filete {
+  border: 0;
+  border-top: 1px dashed var(--prc-c-azul);
+  opacity: 1;
+  margin: 0 0 12px;
+}
+
+.prc-ficha-pie {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.prc-ficha-meta {
+  font-size: var(--prc-t-meta);
+  line-height: normal;
+  text-align: right;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- estrecho -------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .prc-titulo-proc { font-size: 24px; line-height: 26px; }
+  /* Las pestañas de ancho fijo no caben: pasan a repartirse la fila. */
+  .prc-tabs-ficha__barra a { width: auto; flex: 1 1 auto; padding: 0 12px; }
+  .prc-tabs-ficha__panel { padding: 16px; }
+  .prc-ficha-pie { justify-content: flex-start; }
+  .prc-ficha-meta { text-align: left; }
+}

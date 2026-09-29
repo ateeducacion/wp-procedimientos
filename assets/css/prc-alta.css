@@ -1,0 +1,378 @@
+/* El alta de un procedimiento y los paneles del taller.
+
+   Dos pantallas con la misma piel: la de crear —que en el sitio que se
+   sustituye es un formulario de ciento dieciocho campos con ciento diez
+   escondidos— y los cinco paneles del taller. De aquel formulario se copia lo
+   que la gente reconoce: la banda beige de cada sección, la retícula de doce
+   columnas con canal del 2 %, el árbol de casillas del ámbito, los tres
+   correos y la paleta de color de cabecera. No se copian ni el campo de
+   identificador interno ni el desplegable de estado: el primero es el `ID` del
+   post y el segundo, un campo obligatorio con un solo valor válido, que aquí
+   es lo que las fechas digan (ADR-0013).
+
+   Los tokens y los componentes comunes están en `prc-app.css`, que carga
+   delante. Los que esta hoja necesita y allí todavía no están se piden con su
+   valor medido como respaldo (`var(--token, valor)`): el día que el armazón
+   los declare, mandan ellos y aquí no hay que tocar nada. */
+
+/* --- la piel de formulario del taller -----------------------------------
+   Etiqueta de 15px sobre control de 14px, que es la segunda de las dos pieles
+   de formulario del sitio original (la otra, la de la solicitud, la viste
+   `prc-formulario.css`). */
+
+.prc-form.prc-form--taller .prc-campo {
+  margin: 0 0 20px;
+  padding: 0;
+  text-align: left;
+}
+
+.prc-form.prc-form--taller .prc-campo__etiqueta {
+  display: block;
+  margin: 0;
+  padding: 0 0 3px;
+  font: 400 15px/23.8px var(--prc-fuente);
+  color: var(--prc-c-etiqueta, #3f4b5b);
+}
+
+/* El asterisco: `#b94a48` y no el rojo puro del original, que es el que peor
+   contrasta con el texto que lleva al lado. */
+.prc-campo__obligatorio {
+  font-weight: 700;
+  color: var(--prc-c-obligatorio);
+  text-decoration: none;
+  border: 0;
+  cursor: help;
+}
+
+/* La ayuda del campo va visible y referenciada con `aria-describedby`: en el
+   original vive en un `<span>` que solo se abre con el ratón, y el nodo al que
+   apunta `aria-describedby` está en `display:none`. */
+.prc-form.prc-form--taller .prc-campo__ayuda {
+  margin: 6px 0 0;
+  padding: 0;
+  font: 400 12px/1.5 var(--prc-fuente);
+  color: var(--prc-c-texto);
+  max-width: 60ch;
+}
+
+/* Dos clases y no una: el armazón todavía trae un bloque antiguo
+   (`.prc-form input[type="text"]`, de 44px y radio 8px) que por el selector de
+   atributo pesa más que un modificador suelto. Cuando ese bloque se retire,
+   aquí sobra la primera clase. */
+.prc-form.prc-form--taller .prc-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--prc-alto-campo-alta, 39px);
+  padding: 10px;
+  font: 400 14px/18.2px var(--prc-fuente);
+  color: var(--prc-c-medio);
+  background: var(--prc-c-fondo);
+  border: 1px solid var(--prc-c-campo-borde, #bfc3c8);
+  border-radius: var(--prc-radio-campo);
+  box-shadow: none;
+}
+
+.prc-form.prc-form--taller select.prc-control {
+  min-height: 35px;
+  padding: 6px 10px;
+  border-radius: var(--prc-radio);
+}
+
+.prc-form.prc-form--taller textarea.prc-control {
+  min-height: 0;
+  line-height: 1.5;
+}
+
+.prc-form.prc-form--taller .prc-control:focus {
+  border-color: var(--prc-c-foco-campo, #66afe9);
+  box-shadow: var(--prc-sombra-foco);
+  outline: none;
+}
+
+/* Un campo que el estado cierra se distingue solo por el color: mismo alto,
+   mismo borde, mismo radio, fondo blanco. Ni candado ni fondo gris. */
+.prc-form.prc-form--taller .prc-control[readonly],
+.prc-form.prc-form--taller .prc-control:disabled {
+  color: var(--prc-c-bloq-texto, #a1a1a1);
+  background: var(--prc-c-fondo);
+  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+}
+
+.prc-form.prc-form--taller .prc-control::placeholder {
+  color: var(--prc-c-bloq-texto, #a1a1a1);
+  font-style: normal;
+  opacity: 1;
+}
+
+/* Las casillas son las de la lista de opciones reutilizable de
+   `prc-formulario.css` (`.prc-opcion`): aquí solo cambia el rótulo, que en el
+   taller es de 13px sobre #444 y no de 16px sobre el gris del cuerpo. */
+.prc-form.prc-form--taller .prc-opcion label {
+  font: 400 13px/16.9px var(--prc-fuente);
+  color: var(--prc-c-fuerte);
+}
+
+/* --- la banda de sección ------------------------------------------------
+   Beige macizo, 18px en negrita y en mayúsculas por CSS (escritas, un lector
+   de pantalla las deletrea), con filete de 2px solo arriba. */
+
+.prc-seccion-campos {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.prc-seccion-campos > .prc-seccion__titulo {
+  display: block;
+  float: none;
+  width: 100%;
+  box-sizing: border-box;
+  height: auto;
+  margin: 30px 0;
+  padding: 10px;
+  font: 700 18px/18px var(--prc-fuente);
+  text-transform: uppercase;
+  color: var(--prc-c-tenue);
+  background: var(--prc-c-fondo-banda);
+  border: 0;
+  border-top: 2px solid var(--prc-c-linea-seccion);
+  border-radius: 0;
+}
+
+/* Por qué este bloque está apagado, junto al bloque y no solo arriba. */
+.prc-seccion__bloqueo {
+  margin: -18px 0 18px;
+  padding: 0;
+  font: 400 13px/20px var(--prc-fuente);
+  color: var(--prc-c-tenue);
+}
+
+.prc-intro {
+  margin: 0 0 18px;
+  padding: 0;
+  max-width: 72ch;
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-texto);
+}
+
+/* La retícula de doce columnas con canal del 2 % y el punto de ruptura de
+   600px están en la piel reutilizable de `prc-formulario.css`
+   (`.prc-seccion__cuerpo`, `.prc-campo--cuarto|tercio|medio|completo`): aquí
+   solo va lo que el alta añade encima.
+
+   Las dos secciones del medio comparten fila, y la banda de cada una ocupa
+   solo su mitad, como en el original. */
+.prc-form__mitades {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 var(--prc-form-hueco);
+}
+
+@media (min-width: 992px) {
+  .prc-form__mitades { grid-template-columns: 1fr 1fr; }
+}
+
+/* --- el árbol de ámbitos ------------------------------------------------
+   Sangría de 20px por nivel, guía vertical de 1px y el triángulo de plegar a
+   la izquierda de la casilla, como el original. Lo que cambia es el mecanismo:
+   allí es JavaScript sobre `display:none`; aquí, una casilla sin `name` —no se
+   envía— y una regla de `:has()`. Sin JavaScript se pliega igual, y donde
+   `:has()` no llegue el árbol se queda abierto, que es el fallo bueno. */
+
+.prc-arbol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.prc-arbol--rama {
+  margin-left: 20px;
+  padding-left: 0;
+  border-left: 1px solid var(--prc-c-linea-tabla);
+}
+
+.prc-arbol__nodo { margin-bottom: 5px; }
+
+.prc-arbol__fila {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* El interruptor de plegado: invisible pero enfocable y con nombre. */
+.prc-arbol__pliegue {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.prc-arbol__tri,
+.prc-arbol__hueco {
+  flex: 0 0 15px;
+  width: 15px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--prc-c-texto);
+}
+
+.prc-arbol__tri { cursor: pointer; }
+.prc-arbol__tri::before { content: "\25B6"; }
+.prc-arbol__pliegue:checked + .prc-arbol__tri::before { content: "\25BC"; }
+
+.prc-arbol__pliegue:focus-visible + .prc-arbol__tri {
+  outline: 2px solid var(--prc-c-azul);
+  outline-offset: 2px;
+}
+
+.prc-arbol__nodo:has(> .prc-arbol__fila > .prc-arbol__pliegue:not(:checked)) > .prc-arbol--rama {
+  display: none;
+}
+
+/* --- la paleta de color de cabecera -------------------------------------
+   Diez muestras de lista cerrada en vez de las cuarenta y nueve del original
+   —seis de ellas fotografías—, y la elegida se ve elegida: allí el marcado
+   servido no distingue ninguna. */
+
+.prc-paleta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 34px));
+  gap: 8px;
+  max-width: 440px;
+  margin: 0 0 4px;
+}
+
+.prc-muestra {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border: 1px solid var(--prc-c-linea-acceso);
+  border-radius: var(--prc-radio);
+  background: var(--prc-muestra, var(--prc-c-fondo-bloque));
+  cursor: pointer;
+}
+
+/* El radio se estira sobre la muestra entera: el objetivo de clic es el
+   cuadrado de color, no un punto de 16px al lado. Transparente, no escondido:
+   sigue recibiendo el foco y lo dibuja el `outline` de la muestra. */
+.prc-paleta .prc-muestra input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.prc-muestra:has(input:checked) {
+  outline: 3px solid var(--prc-c-titulo);
+  outline-offset: 2px;
+}
+
+.prc-muestra:has(input:focus-visible) {
+  outline: 3px solid var(--prc-c-azul);
+  outline-offset: 2px;
+}
+
+/* El nombre del color, para quien no lo ve. */
+.prc-muestra__nombre {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- el botón de enviar -------------------------------------------------
+   42,5px de alto con 30px de aire arriba y abajo. Lo que no se copia es el
+   `outline: none` del foco: allí el botón de crear no se ve al enfocarlo. */
+
+.prc-acciones--pie { margin: 0; padding: 0; }
+
+.prc-btn.prc-envio {
+  display: inline-block;
+  min-height: var(--prc-alto-envio, 42.5px);
+  margin: 30px 0;
+  padding: 10px 20px;
+  font: 400 15px/normal var(--prc-fuente);
+  text-align: center;
+  color: #fff;
+  background: var(--prc-c-azul-alta, #006ece);
+  border: 1px solid var(--prc-c-azul-alta-bd, #579af6);
+  border-radius: var(--prc-radio);
+  box-shadow: var(--prc-sombra-boton);
+}
+
+.prc-btn.prc-envio:hover,
+.prc-btn.prc-envio:active {
+  color: var(--prc-c-fuerte);
+  background: #efefef;
+  border-color: var(--prc-c-borde-campo);
+}
+
+.prc-btn.prc-envio:disabled {
+  color: var(--prc-c-bloq-texto, #a1a1a1);
+  background: var(--prc-c-fondo-accion);
+  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+  cursor: not-allowed;
+}
+
+/* --- los paneles del taller ---------------------------------------------- */
+
+.prc-pregunta > .prc-seccion__titulo { margin-top: 20px; }
+
+.prc-banda-tabla {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+
+/* La tabla densa y su recuento vienen de `prc-app.css` y de `prc-taller.css`.
+   Lo único que cambia aquí es el relleno: con 13px sobre 15,6px y filas de dos
+   líneas, los 3px medidos pegan los renglones de filas contiguas. */
+.prc-panel-solicitudes .prc-th,
+.prc-panel-solicitudes .prc-celda { padding: 6px 8px; vertical-align: top; }
+
+.prc-panel-solicitudes .prc-th { font-weight: 700; color: var(--prc-c-medio); vertical-align: bottom; }
+
+.prc-revision__abrir {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: var(--prc-t-tabla);
+  font-weight: 700;
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo-accion);
+  border-radius: var(--prc-radio);
+  cursor: pointer;
+}
+
+.prc-revision[open] .prc-revision__abrir { margin-bottom: 8px; }
+
+.prc-revision__form { min-width: 16rem; }
+.prc-revision__form .prc-btn.prc-envio { margin: 10px 0 0; }
+
+.prc-respuestas {
+  margin: 0 0 8px;
+  font-size: var(--prc-t-tabla);
+  line-height: var(--prc-i-tabla);
+}
+
+.prc-respuestas dt {
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--prc-c-medio);
+}
+
+.prc-respuestas dd { margin: 0; }

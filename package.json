@@ -1,0 +1,23 @@
+{
+  "devDependencies": {
+    "@erseco/code-snippets-client": "0.1.7",
+    "@vitest/coverage-v8": "^5.0.2",
+    "@wordpress/env": "^11.14.0",
+    "bootstrap": "5.3.8",
+    "bootstrap-icons": "1.13.1",
+    "jsdom": "^26.1.0",
+    "playwright": "^1.49.0",
+    "sweetalert2": "11.26.25",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "scripts": {
+    "wp-env": "wp-env",
+    "test:browser": "node tests/browser/confirmacion.js",
+    "test:js": "vitest run",
+    "snippets": "wp-code-snippets --env-file .env"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}

@@ -56,7 +56,7 @@ jobs:
       # Fijada al SHA y no a `@trunk`: una etiqueta movible es código de otro
       # que puede cambiar debajo sin que nadie lo revise.
       - name: Publicar el enlace en el PR
-        uses: WordPress/action-wp-playground-pr-preview@5e92f5e3c80d06126f22e83e4bb21221fbbd3e7f
+        uses: WordPress/action-wp-playground-pr-preview@07d56d39d84ecfcdae2e7ddf9dd83e5e6dde769a
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           blueprint: ${{ steps.bp.outputs.json }}

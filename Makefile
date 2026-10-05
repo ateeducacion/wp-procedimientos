@@ -279,22 +279,12 @@ capturas: start-if-not-running ## Captura las pantallas en capturas/informe.html
 
 skills-sync: ## Iguala .claude/skills/ con las canónicas de .agents/skills/
 	@rm -rf .claude/skills
-	@mkdir -p .claude/skills
-	@for d in .agents/skills/*/; do cp -R "$$d" ".claude/skills/$$(basename $$d)"; done
-	@echo "Skills sincronizadas: $$(ls -1 .claude/skills | wc -l | tr -d ' ')"
+	@cp -R .agents/skills .claude/skills
+	@echo "Skills sincronizadas: $$(ls -d .claude/skills/*/ | wc -l | tr -d ' ')"
 
 check-skills: ## Comprueba que las dos copias de las skills son iguales
-	@salida=0; \
-	for d in .agents/skills/*/ .claude/skills/*/; do \
-		n=$$(basename "$$d"); \
-		if [ ! -d ".agents/skills/$$n" ] || [ ! -d ".claude/skills/$$n" ]; then \
-			echo "Skills: $$n está en una carpeta y no en la otra."; salida=1; \
-		elif ! diff -r ".agents/skills/$$n" ".claude/skills/$$n" > /dev/null 2>&1; then \
-			echo "Skills: $$n no coincide entre .agents/ y .claude/."; salida=1; \
-		fi; \
-	done; \
-	if [ "$$salida" != "0" ]; then echo "Ejecute: make skills-sync"; exit 1; fi; \
-	echo "Skills: las dos copias coinciden."
+	@diff -rq .agents/skills .claude/skills || { echo "Ejecute: make skills-sync"; exit 1; }
+	@echo "Skills: las dos copias coinciden."
 
 # ─── WordPress Playground (local, sin Docker) ─────────────────────────────────
 

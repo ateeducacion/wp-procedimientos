@@ -174,6 +174,24 @@ coverage: ## Mide la cobertura de src/Prc (reinicia wp-env con Xdebug)
 	[ -n "$$CI" ] || $(WP_ENV) start > /dev/null; \
 	exit $$ESTADO
 
+# Perfil de rendimiento con PHP-SPX. wp-env solo instala SPX si se arranca con
+# --spx, así que se reinicia con él (la primera vez construye la imagen). Se
+# deja puesto: así la interfaz de SPX, con sus gráficos de llama, sigue
+# abierta en http://localhost:8698/?SPX_KEY=dev&SPX_UI_URI=/ — y solo cuesta
+# algo en las peticiones que lo piden. Se quita con `npx @wordpress/env start`.
+# Mide el código que hay en la rama: rehace el bundle y lo sincroniza antes.
+#
+#   make profile                       guarda artifacts/profile/<rama>.json
+#   make profile LABEL=antes RUNS=10   con otra etiqueta y más repeticiones
+#   make profile-compare A=main B=mi-rama
+profile: check-docker bundle ## Perfil de rendimiento con SPX (admite LABEL=... y RUNS=...)
+	@$(WP_ENV) start --spx > /dev/null
+	@$(MAKE) --no-print-directory sync-snippets > /dev/null
+	@RUNS="$(RUNS)" node scripts/profile.mjs $(LABEL)
+
+profile-compare: ## Compara dos perfiles guardados (A=... B=...)
+	@node scripts/profile.mjs compare $(A) $(B)
+
 # ─── Lint y calidad de código ─────────────────────────────────────────────────
 
 lint: ## Comprueba el estilo del código con PHPCS

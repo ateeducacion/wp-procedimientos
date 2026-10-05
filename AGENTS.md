@@ -144,6 +144,7 @@ Ni una capa más. Si crees que hace falta otra, escribe la ADR primero.
 | Cambio en `assets/js/` | `make test-js` (Vitest y jsdom, sin wp-env; cobertura en `artifacts/coverage-js/`) |
 | Cambio en una confirmación o en `assets/js/prc-app.js` | `make test-browser` (los tres escalones: SweetAlert2, `confirm()` y sin JavaScript) |
 | Ver la cobertura | `make coverage` (reinicia wp-env con Xdebug) |
+| Medir el rendimiento o comparar dos ramas | `make profile` y `make profile-compare A=main B=mi-rama` (SPX; skill `profiler`) |
 | Entorno raro | `make clean` |
 | Empezar de cero | `make destroy && make up` |
 | Probar sin Docker | `make playground` |
@@ -441,7 +442,7 @@ su origen en [`.agents/skills/README.md`](.agents/skills/README.md)—:
 | Seguridad | `security-audit`, `wp-plugin-security`, `github-actions-hardening` |
 | WordPress | `wp-plugin-development`, `wp-performance`, `wp-wpcli-and-ops`, `wp-project-triage`, `wp-playground`, `blueprint` |
 | Pruebas | `playwright-cli` |
-| Propia | `changelog` — el bloque de versión y `make release` |
+| Propias | `changelog` — el bloque de versión y `make release`; `profiler` — rendimiento con SPX |
 
 Skills propias: créalas en `.agents/skills/<nombre>/` y ejecuta
 `make skills-sync`. Las de terceros, instálalas solo para Copilot y sincroniza

@@ -39,7 +39,9 @@ const ROOT = resolve( dirname( fileURLToPath( import.meta.url ) ), '..' );
 const RULES = [
 	{
 		name: 'rutas locales de quien desarrolla',
-		pattern: /\/Users\/|\/home\/[a-z]/,
+		// `/home/user/` es el marcador genérico de los ejemplos (lo trae alguna
+		// skill de terceros, que va verbatim): no dice de quién es el portátil.
+		pattern: /\/Users\/|\/home\/(?!user\/)[a-z]/,
 		advice: 'Una ruta absoluta de un portátil no le sirve a nadie más y dice quién eres.',
 	},
 ];

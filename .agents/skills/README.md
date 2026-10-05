@@ -84,6 +84,7 @@ Las tres se leen juntas con la política de permisos de la casa: toda decisión 
 | Skill | Léela antes de |
 |---|---|
 | `changelog` | Abrir un bloque de versión en `CHANGELOG.md` y publicar con `make release` |
+| `profiler` | Medir el rendimiento con `make profile` y comparar dos ramas con `make profile-compare` |
 
 Esta sí es de la casa, así que se mantiene aquí y no se actualiza desde ningún
 upstream. Está adaptada de otro aplicativo del equipo: se conserva el método

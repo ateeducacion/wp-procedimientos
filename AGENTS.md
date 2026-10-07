@@ -12,8 +12,9 @@ apuntan aquí.
 **Procedimientos** es el repositorio de trabajo de un aplicativo que gestiona
 convocatorias —proyectos, programas, redes, concursos— a las que un centro
 educativo se inscribe a través de su equipo directivo. En producción se activa
-con **Code Snippets**, **Members** y **WPFront User Role Editor**; dónde, lo
-dice el `.env` y **no el repositorio**
+con **Code Snippets** y **WPFront User Role Editor** —este, para ver los roles y
+suplantar a alguien al probar; los roles y sus capacidades salen del código—;
+dónde, lo dice el `.env` y **no el repositorio**
 ([ADR-0009](docs/adr/ADR-0009-el-repositorio-se-publica-sin-nada-de-nadie.md)).
 El dominio son dos CPT —`prc_procedure`, `prc_application`— y dos taxonomías
 —`prc_area`, `prc_course`—. El diseño entero está en la
@@ -411,7 +412,7 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
 ## Referencia de herramientas
 
 - `make help` y el `Makefile` son la referencia de targets.
-- wp-env: **Code Snippets + Members + WPFront User Role Editor + SQL Buddy**
+- wp-env: **Code Snippets + WPFront User Role Editor + SQL Buddy**
   (ningún gestor de formularios). Puertos `8698` / `8699`.
 - El destino en producción **puede ser un subsitio de un multisitio**, a
   diferencia del entorno local, que es un sitio único. Cualquier cosa que

@@ -7,7 +7,7 @@
 Entorno de desarrollo del aplicativo de **procedimientos** (convocatorias
 —proyectos, programas, redes, concursos— a las que un centro educativo se
 inscribe a través de su equipo directivo): WordPress + **Code Snippets** +
-**Members** + **WPFront User Role Editor**, con el dominio en dos tipos de
+**WPFront User Role Editor**, con el dominio en dos tipos de
 contenido —`prc_procedure`, `prc_application`— y el código modular de
 `src/Prc/` empaquetado en un único snippet con `make bundle`.
 
@@ -271,8 +271,7 @@ No edites a mano `snippets/*.bundle.php`: se regenera.
 | Plugin | Uso |
 |--------|-----|
 | Code Snippets | Ejecuta el bundle y los snippets auxiliares |
-| Members | Ver y ajustar `prc_manager`, `prc_school_head` y las capacidades `prc_*` del administrador |
-| WPFront User Role Editor | Los mismos roles y el cambio de usuario para probar |
+| WPFront User Role Editor | Ver `prc_manager`, `prc_school_head` y las capacidades `prc_*`, y cambiar de usuario para probar |
 | SQL Buddy | Inspección de datos en local |
 
 **El gestor de formularios no se instala en el entorno.** En producción

@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<phpmd-baseline>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="scripts/lib/snippet-sync.php"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="scripts/lib/snippet-sync.php"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="scripts/seed-demo.php"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="scripts/setup-pages.php"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="of"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="validate_answers"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="validate"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="validate"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="sync"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="sync"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="snippets/prc-procedimientos-app.bundle.php" method="sync"/>
+  <violation rule="PHPMD\Rule\Design\TooManyPublicMethods" file="snippets/prc-procedimientos-app.bundle.php"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="snippets/prc-procedimientos-app.bundle.php"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="resolve_area_assignment"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="scope_assignment_state"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="map_meta_cap"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="model"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="values"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="question"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="question"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="render"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/prc-procedimientos-app.bundle.php" method="render"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="snippets/prc-procedimientos-app.bundle.php" method="render"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="snippets/roles-and-profiles.php"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="snippets/roles-and-profiles.php"/>
+  <violation rule="PHPMD\Rule\Design\TooManyPublicMethods" file="src/Prc/Access/ProcedureAccess.php"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="src/Prc/Access/ProcedureAccess.php"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Access/ProcedureAccess.php" method="resolve_area_assignment"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Access/ProcedureAccess.php" method="scope_assignment_state"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Access/ProcedureAccess.php" method="map_meta_cap"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/Admin/Settings.php" method="render"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Admin/Settings.php" method="render"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="src/Prc/Admin/Settings.php" method="render"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/Centre/CentreCatalogueSync.php" method="sync"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Centre/CentreCatalogueSync.php" method="sync"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveMethodLength" file="src/Prc/Centre/CentreCatalogueSync.php" method="sync"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/Domain/ProcedureInput.php" method="validate"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Domain/ProcedureInput.php" method="validate"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/Domain/ProcedureQuestions.php" method="validate_answers"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/Domain/ProcedureState.php" method="of"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="src/Prc/PublicFront/ApplicationFiles.php"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/PublicFront/ApplyForm.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/ApplyForm.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/ApplyForm.php" method="model"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/Home.php" method="model"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="src/Prc/PublicFront/ProcedureEditor.php"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/PublicFront/ProcedureEditor.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/ProcedureEditor.php" method="handle"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/ProcedureEditor.php" method="values"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="src/Prc/PublicFront/Shell.php"/>
+  <violation rule="PHPMD\Rule\CyclomaticComplexity" file="src/Prc/PublicFront/View/ApplyFormView.php" method="question"/>
+  <violation rule="PHPMD\Rule\Design\NPathComplexity" file="src/Prc/PublicFront/View/ApplyFormView.php" method="question"/>
+  <violation rule="PHPMD\Rule\Design\ExcessiveClassComplexity" file="src/Prc/PublicFront/View/ProcedureEditorView.php"/>
+</phpmd-baseline>

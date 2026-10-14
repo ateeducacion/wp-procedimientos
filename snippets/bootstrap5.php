@@ -44,9 +44,9 @@ if ( ! function_exists( 'prc_bootstrap5_versions' ) ) {
 				'sri' => 'sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI',
 			),
 			'bootstrap-icons' => array(
-				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css',
-				'ver' => '1.13.1',
-				'sri' => 'sha384-CK2SzKma4jA5H/MXDUU7i1TqZlCFaD4T01vtyDFvPlD97JQyS+IsSh1nI2EFbpyk',
+				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.2/font/bootstrap-icons.min.css',
+				'ver' => '1.13.2',
+				'sri' => 'sha384-nWN3KqaaVcbEsCjLSV+2jMjh62Iny/+mN3srM8TZeM8N6aj7eDl5wwYggjAJ4/sJ',
 			),
 		);
 	}

@@ -126,7 +126,7 @@ Dos snippets sueltos, fuera del bundle, con `Priority: 20`:
 
 | Snippet | Qué carga | Dónde |
 |---|---|---|
-| `snippets/bootstrap5.php` | Bootstrap 5.3.8 y bootstrap-icons 1.13.1 | solo en las páginas de `Shell::SLUGS` y en el `single` de `prc_procedure`; antes retira los handles `bootstrap-css`, `bootstrap-js` y `popper-js` que deja el fragmento global |
+| `snippets/bootstrap5.php` | Bootstrap 5.3.8 y bootstrap-icons 1.13.2 | solo en las páginas de `Shell::SLUGS` y en el `single` de `prc_procedure`; antes retira los handles `bootstrap-css`, `bootstrap-js` y `popper-js` que deja el fragmento global |
 | `snippets/sweetalert.php` | SweetAlert2 11.26.25 (`all`, estilos dentro: un fichero, un hash) | las mismas pantallas, para las confirmaciones ([ADR-0007](ADR-0007-borrar-es-enviar-a-la-papelera.md)) |
 
 El resto del sitio se queda con su Bootstrap 4 y a nadie se le cambia el

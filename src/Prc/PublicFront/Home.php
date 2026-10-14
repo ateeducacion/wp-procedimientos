@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
@@ -392,13 +393,13 @@ final class Home {
 		if ( ! is_user_logged_in() ) {
 			return array();
 		}
-		$centro = Applications::centre_of( get_current_user_id() );
-		if ( '' === (string) $centro['code'] ) {
+		$codes = array_keys( CentreScope::codes_for( get_current_user_id() ) );
+		if ( array() === $codes ) {
 			return array();
 		}
 
 		$suyas = array();
-		foreach ( Applications::for_centre( (string) $centro['code'] ) as $solicitud ) {
+		foreach ( Applications::for_centre( $codes ) as $solicitud ) {
 			$suyas[ (int) $solicitud->post_parent ] = true;
 		}
 		return $suyas;

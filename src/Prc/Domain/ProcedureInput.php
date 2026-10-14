@@ -46,6 +46,7 @@ final class ProcedureInput {
 		$color        = self::text( $raw, 'header_color' );
 		$audience     = ProcedureMetaKeys::in_list( $raw['audience'] ?? '', ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
 		$ownership    = self::ownership( $raw['ownership'] ?? array() );
+		$kinds        = self::centre_kinds( $raw['centre_kinds'] ?? array() );
 		$urls         = array();
 
 		if ( '' === $title ) {
@@ -115,6 +116,9 @@ final class ProcedureInput {
 		if ( array() === $ownership ) {
 			$errors[] = 'ownership';
 		}
+		if ( array() === $kinds ) {
+			$errors[] = 'centre_kinds';
+		}
 		$errors = array_values( array_unique( $errors ) );
 
 		return array(
@@ -134,6 +138,7 @@ final class ProcedureInput {
 					'header_color'         => $color,
 					'audience'             => $audience,
 					'ownership'            => $ownership,
+					'centre_kinds'         => $kinds,
 					'requires_coordinator' => ! empty( $raw['requires_coordinator'] ),
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
@@ -167,6 +172,7 @@ final class ProcedureInput {
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
+			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
 		);
 
 		$faltan = array();
@@ -256,6 +262,27 @@ final class ProcedureInput {
 	 * @return string[]
 	 */
 	public static function ownership( $raw ): array {
+		return self::keys_of( $raw, ProcedureMetaKeys::ownerships() );
+	}
+
+	/**
+	 * Keep only the centre kinds of the closed list, in list order.
+	 *
+	 * @param mixed $raw Raw value: an array or a comma-separated string.
+	 * @return string[]
+	 */
+	public static function centre_kinds( $raw ): array {
+		return self::keys_of( $raw, ProcedureMetaKeys::centre_kinds() );
+	}
+
+	/**
+	 * The keys of a closed list that the raw value names, in list order.
+	 *
+	 * @param mixed                 $raw  Raw value: an array or a comma-separated string.
+	 * @param array<string, string> $vocabulary Closed list, slug => label.
+	 * @return string[]
+	 */
+	private static function keys_of( $raw, array $vocabulary ): array {
 		if ( is_string( $raw ) ) {
 			$raw = explode( ',', $raw );
 		}
@@ -263,7 +290,7 @@ final class ProcedureInput {
 			return array();
 		}
 		$raw = array_map( 'trim', array_map( 'strval', array_filter( $raw, 'is_scalar' ) ) );
-		return array_values( array_intersect( array_keys( ProcedureMetaKeys::ownerships() ), $raw ) );
+		return array_values( array_intersect( array_keys( $vocabulary ), $raw ) );
 	}
 
 	/**

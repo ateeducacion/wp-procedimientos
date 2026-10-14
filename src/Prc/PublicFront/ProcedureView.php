@@ -305,12 +305,15 @@ final class ProcedureView {
 		if ( $user_id <= 0 || ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) || ! class_exists( Applications::class ) ) {
 			return array();
 		}
-		$code = CentreScope::code_for( $user_id );
+		// El primer código con el que el procedimiento deja solicitar: el de
+		// la agrupación de escuelas rurales solo si no admite el del centro.
+		$code = ApplyForm::chosen( $user_id, $post_id, '' );
+		$code = '' !== $code ? $code : CentreScope::code_for( $user_id );
 		if ( '' === $code ) {
 			return array();
 		}
 
-		$url   = Shell::url( 'apply', array( Shell::ARG_PROCEDURE => $post_id ) );
+		$url   = ApplyForm::url_for_code( $post_id, $code );
 		$vacia = array(
 			'has'   => false,
 			'state' => '',

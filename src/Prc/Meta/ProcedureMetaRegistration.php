@@ -85,6 +85,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_ownership' ),
 			),
+			ProcedureMetaKeys::CENTRE_KINDS         => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_centre_kinds' ),
+			),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
@@ -256,6 +260,16 @@ final class ProcedureMetaRegistration {
 	 */
 	public static function sanitize_ownership( $value ): array {
 		return ProcedureInput::ownership( $value );
+	}
+
+	/**
+	 * The centre kinds of the closed list, and none other.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string[]
+	 */
+	public static function sanitize_centre_kinds( $value ): array {
+		return ProcedureInput::centre_kinds( $value );
 	}
 
 	/**

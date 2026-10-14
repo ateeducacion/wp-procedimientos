@@ -87,6 +87,14 @@ final class ProcedureMetaKeys {
 	public const OWNERSHIP = 'prc_ownership';
 
 	/**
+	 * Con qué códigos se puede solicitar: lista de {@see centre_kinds()}.
+	 *
+	 * Vacía en los procedimientos anteriores a la ADR-0031: entonces valen
+	 * todas, como hasta ahora.
+	 */
+	public const CENTRE_KINDS = 'prc_centre_kinds';
+
+	/**
 	 * Si la solicitud pide una persona coordinadora.
 	 */
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
@@ -124,6 +132,9 @@ final class ProcedureMetaKeys {
 	public const OWNERSHIP_PUBLIC  = 'public';
 	public const OWNERSHIP_PRIVATE = 'private';
 
+	public const KIND_SCHOOL      = 'school';
+	public const KIND_RURAL_GROUP = 'rural_group';
+
 	/**
 	 * El color de quien no eligió ninguno.
 	 */
@@ -152,6 +163,7 @@ final class ProcedureMetaKeys {
 			self::HEADER_COLOR,
 			self::AUDIENCE,
 			self::OWNERSHIP,
+			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
 			self::QUESTIONS,
 			self::COMMITMENTS,
@@ -203,6 +215,21 @@ final class ProcedureMetaKeys {
 		return array(
 			self::OWNERSHIP_PUBLIC  => 'Centros públicos',
 			self::OWNERSHIP_PRIVATE => 'Centros privados y concertados',
+		);
+	}
+
+	/**
+	 * Closed vocabulary of the kinds of code a school may apply with.
+	 *
+	 * Quien dirige un centro y coordina una agrupación de escuelas rurales
+	 * tiene dos códigos; el procedimiento dice cuáles admite (ADR-0031).
+	 *
+	 * @return array<string, string> slug => etiqueta.
+	 */
+	public static function centre_kinds(): array {
+		return array(
+			self::KIND_SCHOOL      => 'Cada centro educativo, con su código',
+			self::KIND_RURAL_GROUP => 'Agrupaciones de escuelas rurales, como colectivo',
 		);
 	}
 

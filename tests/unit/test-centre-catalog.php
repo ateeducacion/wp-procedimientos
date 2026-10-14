@@ -97,8 +97,9 @@ class Test_Centre_Catalog extends WP_UnitTestCase {
 
 		$todos = CentreCatalog::all();
 		$this->assertCount( 3, $todos );
-		$this->assertSame( array( 'code', 'name', 'ownership' ), array_keys( $todos[0] ) );
+		$this->assertSame( array( 'code', 'name', 'ownership', 'kind' ), array_keys( $todos[0] ) );
 		$this->assertSame( 'public', $todos[2]['ownership'], 'sin titularidad, público' );
+		$this->assertSame( 'school', $todos[2]['kind'], 'sin clase, un centro' );
 	}
 
 	/**
@@ -130,6 +131,7 @@ class Test_Centre_Catalog extends WP_UnitTestCase {
 					'code'      => 'C0001',
 					'name'      => 'Uno',
 					'ownership' => 'public',
+					'kind'      => 'school',
 				),
 			),
 			CentreCatalog::all()

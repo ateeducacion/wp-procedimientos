@@ -73,3 +73,4 @@ versión global del aplicativo.
 | [ADR-0028](ADR-0028-los-adjuntos-de-una-solicitud-son-ficheros-privados.md) | Los adjuntos de una solicitud son ficheros privados, no medios de WordPress | Propuesta | 2026-09-19 |
 | [ADR-0029](ADR-0029-el-catalogo-de-centros-es-externo-y-se-cachea-localmente.md) | El catálogo de centros educativos es un dato maestro externo y se cachea localmente | Aceptada | 2026-09-20 |
 | [ADR-0030](ADR-0030-editor-y-ambitos-jerarquicos.md) | Editor y ámbitos organizativos jerárquicos | Propuesta | 2026-09-20 |
+| [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md) | Quien coordina una agrupación de escuelas rurales solicita por su centro o por la agrupación | Propuesta | 2026-10-14 |

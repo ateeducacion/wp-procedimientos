@@ -86,6 +86,7 @@ final class ApplyFormView {
 		ob_start();
 		echo self::head( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		echo self::choices( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::status_card( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 
 		if ( true === $m['can_submit'] ) {
@@ -125,6 +126,58 @@ final class ApplyFormView {
 		<?php endif; ?>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * On behalf of which code: only when the person has more than one the procedure takes.
+	 *
+	 * Enlaces y no un desplegable: cada código tiene su propia solicitud, así
+	 * que elegir es ir a otra pantalla, y un enlace funciona sin JavaScript
+	 * (ADR-0031).
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function choices( array $m ): string {
+		$choices = (array) ( $m['choices'] ?? array() );
+		if ( count( $choices ) < 2 ) {
+			return '';
+		}
+		$actual = (string) $m['centre']['code'];
+
+		ob_start();
+		?>
+		<nav class="prc-seccion" aria-labelledby="prc-apply-centre">
+			<h3 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h3>
+			<div class="prc-seccion__cuerpo">
+				<p class="prc-campo__ayuda">Su cuenta tiene más de un código y este procedimiento admite los dos. Cada uno tiene su propia solicitud: elija con cuál quiere verla o presentarla.</p>
+				<ul class="prc-opciones prc-opciones--vertical">
+					<?php foreach ( $choices as $code => $rotulo ) : ?>
+						<li class="prc-opcion">
+							<?php if ( (string) $code === $actual ) : ?>
+								<strong aria-current="page"><?php echo esc_html( (string) $rotulo ); ?></strong>
+							<?php else : ?>
+								<a href="<?php echo esc_url( ApplyForm::url_for_code( (int) $m['procedure_id'], (string) $code ) ); ?>"><?php echo esc_html( (string) $rotulo ); ?></a>
+							<?php endif; ?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+		</nav>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The help under the locked school code: it depends on whether there is a choice.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function centre_help( array $m ): string {
+		return count( (array) ( $m['choices'] ?? array() ) ) > 1
+			? 'Es uno de los códigos de su cuenta: para solicitar con el otro, elíjalo arriba.'
+			: 'El centro es el de su cuenta: no se puede cambiar desde aquí.';
 	}
 
 	/**
@@ -209,7 +262,7 @@ final class ApplyFormView {
 			'Código',
 			(string) $centro['code'],
 			3,
-			'El centro es el de su cuenta: no se puede cambiar desde aquí.'
+			self::centre_help( $m )
 		) . self::locked(
 			'prc-centre',
 			'Denominación',
@@ -247,6 +300,7 @@ final class ApplyFormView {
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
 
 			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 

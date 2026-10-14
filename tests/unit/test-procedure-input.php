@@ -35,6 +35,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 				'header_color'         => 'verde',
 				'audience'             => 'schools',
 				'ownership'            => array( 'public', 'private' ),
+				'centre_kinds'         => array( 'school' ),
 				'requires_coordinator' => '1',
 				'commitments'          => ' El centro se compromete a… ',
 			),
@@ -77,7 +78,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$r = ProcedureInput::validate( array() );
 
 		$this->assertFalse( $r['ok'] );
-		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'ownership' ), $r['errors'] );
+		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'ownership', 'centre_kinds' ), $r['errors'] );
 
 		$r = ProcedureInput::validate(
 			array(
@@ -86,6 +87,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 				'course'         => 3,
 				'contact_emails' => 'ambito@example.org',
 				'ownership'      => 'public',
+				'centre_kinds'   => 'school',
 			)
 		);
 		$this->assertTrue( $r['ok'], 'sin fechas es un procedimiento próximo, y se guarda' );
@@ -267,6 +269,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 				'course'               => '3',
 				'contact_emails'       => 'ambito@example.org',
 				'ownership'            => array( 'public' ),
+				'centre_kinds'         => array( 'school' ),
 				'opens_at'             => null,
 				'commitments'          => 12,
 				'requires_coordinator' => '',

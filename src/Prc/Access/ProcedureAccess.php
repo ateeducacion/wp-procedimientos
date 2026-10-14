@@ -9,6 +9,7 @@
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -624,36 +625,66 @@ final class ProcedureAccess {
 	 * Whether the user may apply on behalf of a school, and to this procedure.
 	 *
 	 * Quién, no cuándo: el plazo lo mira la pantalla con el estado. Con
-	 * procedimiento se comprueba además que esté publicado y que se dirija a
-	 * centros de la titularidad de este, si el catálogo lo conoce; un centro
-	 * que no está en el catálogo solicita igual, porque el catálogo puede ir
-	 * por detrás de la realidad.
+	 * procedimiento, lo que dice {@see apply_codes()}; con código, además, que
+	 * sea uno de esos: un código que no es de la cuenta no sirve nunca.
 	 *
-	 * @param int $user_id User ID.
-	 * @param int $post_id Procedure ID (0 = just the capability and the school).
+	 * @param int    $user_id User ID.
+	 * @param int    $post_id Procedure ID (0 = just the capability and the school).
+	 * @param string $code    Code to apply with; empty for any of the person's.
 	 * @return bool
 	 */
-	public static function can_apply( int $user_id, int $post_id = 0 ): bool {
+	public static function can_apply( int $user_id, int $post_id = 0, string $code = '' ): bool {
 		if ( $user_id <= 0 || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code = CentreScope::code_for( $user_id );
-		if ( '' === $code ) {
-			return false;
-		}
-		if ( $post_id <= 0 ) {
-			return true;
-		}
+		$codes = $post_id > 0 ? self::apply_codes( $user_id, $post_id ) : CentreScope::codes_for( $user_id );
+		return '' === $code ? array() !== $codes : isset( $codes[ $code ] );
+	}
+
+	/**
+	 * The codes of a person that this procedure takes, school first.
+	 *
+	 * Tiene que estar publicado, admitir la clase del código —centro o
+	 * agrupación de escuelas rurales, ADR-0031; sin la meta, todas— y
+	 * dirigirse a la titularidad del centro, si el catálogo lo conoce: un
+	 * centro que no está en el catálogo solicita igual, porque el catálogo
+	 * puede ir por detrás de la realidad.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return array<string, string> Code => kind, as CentreScope::codes_for().
+	 */
+	public static function apply_codes( int $user_id, int $post_id ): array {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
-			return false;
+			return array();
 		}
-		$centro = CentreCatalog::find( $code );
-		if ( array() === $centro ) {
-			return true;
-		}
+		$kinds     = self::centre_kinds( $post_id );
 		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
 		$ownership = is_array( $ownership ) ? $ownership : array();
-		return array() === $ownership || in_array( $centro['ownership'], $ownership, true );
+
+		$out = array();
+		foreach ( CentreScope::codes_for( $user_id ) as $code => $kind ) {
+			$centro = CentreCatalog::find( $code );
+			if ( ! in_array( $kind, $kinds, true ) ) {
+				continue;
+			}
+			if ( array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
+				continue;
+			}
+			$out[ $code ] = $kind;
+		}
+		return $out;
+	}
+
+	/**
+	 * The centre kinds a procedure takes; every kind when it says none.
+	 *
+	 * @param int $post_id Procedure ID.
+	 * @return string[]
+	 */
+	public static function centre_kinds( int $post_id ): array {
+		$kinds = ProcedureInput::centre_kinds( get_post_meta( $post_id, ProcedureMetaKeys::CENTRE_KINDS, true ) );
+		return array() === $kinds ? array_keys( ProcedureMetaKeys::centre_kinds() ) : $kinds;
 	}
 
 	/**
@@ -673,9 +704,8 @@ final class ProcedureAccess {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code  = CentreScope::code_for( $user_id );
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
-		return '' !== $code && $code === $owner;
+		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
 	}
 
 	/**

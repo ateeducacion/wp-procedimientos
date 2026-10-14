@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureState;
@@ -26,6 +27,12 @@ use Prc\PublicFront\View\ApplyFormView;
  * editar la que hay. Cuándo se puede presentar o editar lo dice el estado del
  * procedimiento ({@see window()}), y en subsanación solo edita el centro al
  * que se le pidió (ADR-0020).
+ *
+ * Quien dirige un centro y coordina una agrupación de escuelas rurales tiene
+ * dos códigos (ADR-0031). Si el procedimiento admite uno solo, se solicita con
+ * ese sin preguntar; si admite los dos, la pantalla deja elegir, y cada código
+ * tiene su propia solicitud. Elegir no es teclear: el código que llega en la
+ * URL o en el POST tiene que ser uno de los de la cuenta.
  */
 final class ApplyForm {
 
@@ -42,6 +49,11 @@ final class ApplyForm {
 	public const ARG_NOTICE = 'aviso';
 
 	/**
+	 * Query arg carrying which of the person's codes the application is for.
+	 */
+	public const ARG_CENTRE = 'centro';
+
+	/**
 	 * The field that says this POST is ours.
 	 */
 	public const FIELD_OP = 'prc_apply_op';
@@ -49,6 +61,7 @@ final class ApplyForm {
 	public const OP_APPLY = 'apply';
 
 	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
+	public const FIELD_CENTRE      = 'prc_apply_centre';
 	public const FIELD_POSITION    = 'prc_position';
 	public const FIELD_COORD_NAME  = 'prc_coordinator_name';
 	public const FIELD_COORD_EMAIL = 'prc_coordinator_email';
@@ -103,6 +116,43 @@ final class ApplyForm {
 	}
 
 	/**
+	 * URL of the application of one procedure made with one of the person's codes.
+	 *
+	 * El código de centro no lleva nada en la URL: es el de siempre. Solo el de
+	 * la agrupación de escuelas rurales necesita decirse.
+	 *
+	 * @param int                  $procedure_id Procedure post ID.
+	 * @param string               $code         Code the application is for.
+	 * @param array<string, mixed> $args         Extra query arguments.
+	 * @return string
+	 */
+	public static function url_for_code( int $procedure_id, string $code, array $args = array() ): string {
+		if ( '' !== $code && CentreScope::code_for() !== $code ) {
+			$args[ self::ARG_CENTRE ] = $code;
+		}
+		return self::url( $procedure_id, $args );
+	}
+
+	/**
+	 * Which of the person's codes the screen works with.
+	 *
+	 * El pedido, si el procedimiento lo admite; si no, el primero que admite,
+	 * y con eso el código del centro va antes que el de la agrupación.
+	 *
+	 * @param int    $user_id      User ID.
+	 * @param int    $procedure_id Procedure post ID.
+	 * @param string $wanted       Code asked for; empty for none.
+	 * @return string Empty when the procedure takes none of them.
+	 */
+	public static function chosen( int $user_id, int $procedure_id, string $wanted ): string {
+		$codes = ProcedureAccess::apply_codes( $user_id, $procedure_id );
+		if ( '' !== $wanted && isset( $codes[ $wanted ] ) ) {
+			return $wanted;
+		}
+		return array() === $codes ? '' : (string) array_key_first( $codes );
+	}
+
+	/**
 	 * Whether a school may submit or edit its application right now, and why not.
 	 *
 	 * La tabla de la SDD, en código: abierto se presenta o se edita; en
@@ -151,12 +201,15 @@ final class ApplyForm {
 		$procedure_id = absint( wp_unslash( $_POST[ self::FIELD_PROCEDURE ] ?? 0 ) );
 		$user_id      = get_current_user_id();
 
-		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id ) ) {
-			self::$rejected = self::why_not_allowed( $user_id, $procedure_id );
+		// Un código que no llega se elige como en la pantalla; uno que llega
+		// tiene que ser de la cuenta y admitido, o no se guarda nada.
+		$pedido = self::field( self::FIELD_CENTRE );
+		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $pedido ) ) {
+			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
 		}
-		$centro    = Applications::centre_of( $user_id );
-		$existente = Applications::find( $procedure_id, $centro['code'] );
+		$code      = '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' );
+		$existente = Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : ''
@@ -185,7 +238,7 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'] );
+		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code );
 		if ( $id <= 0 ) {
 			self::$rejected = 'No se ha podido guardar la solicitud. Vuelva a intentarlo.';
 			return;
@@ -202,7 +255,7 @@ final class ApplyForm {
 			self::$rejected = 'No se ha podido guardar el documento que adjuntó, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
 		}
-		Shell::leave( self::url( $procedure_id, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
+		Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
 	}
 
 	/**
@@ -258,19 +311,29 @@ final class ApplyForm {
 	/**
 	 * Why this person cannot apply to this procedure, in words.
 	 *
-	 * @param int $user_id      User ID.
-	 * @param int $procedure_id Procedure post ID.
+	 * @param int    $user_id      User ID.
+	 * @param int    $procedure_id Procedure post ID.
+	 * @param string $code         Code asked for; empty for none.
 	 * @return string
 	 */
-	private static function why_not_allowed( int $user_id, int $procedure_id ): string {
+	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
 			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 		}
-		if ( '' === Applications::centre_of( $user_id )['code'] ) {
+		$suyos = CentreScope::codes_for( $user_id );
+		if ( array() === $suyos ) {
 			return 'Su cuenta no tiene centro asignado, así que no puede presentar solicitudes. El código de centro lo pone quien administra el aplicativo.';
+		}
+		if ( '' !== $code && ! isset( $suyos[ $code ] ) ) {
+			return 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.';
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
 			return 'Ese procedimiento no existe o todavía no está publicado.';
+		}
+		$admite = ProcedureAccess::centre_kinds( $procedure_id );
+		if ( array() === array_intersect( $suyos, $admite ) ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
+			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
 		}
 		return 'Este procedimiento no se dirige a centros de la titularidad del suyo.';
 	}
@@ -303,6 +366,9 @@ final class ApplyForm {
 				'name'      => '',
 				'ownership' => '',
 			),
+			// Con qué códigos de la cuenta se puede solicitar a este
+			// procedimiento: código => rótulo. Con más de uno, se elige.
+			'choices'         => array(),
 			// Quien entra, para la cabecera de solo lectura: sale de la cuenta
 			// y no se guarda en la solicitud (ADR-0016).
 			'applicant'       => array(
@@ -339,7 +405,7 @@ final class ApplyForm {
 			'email' => (string) $quien->user_email,
 		);
 		$m['centre']    = Applications::centre_of( $user_id );
-		if ( '' === $m['centre']['code'] ) {
+		if ( array() === CentreScope::codes_for( $user_id ) ) {
 			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
 			return $m;
 		}
@@ -368,6 +434,11 @@ final class ApplyForm {
 		$m['final_list_url']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL, true );
 		$m['spec']            = Applications::spec( $procedure_id );
 
+		// Sin ningún código admitido se queda el del centro, para decir por qué.
+		$code         = self::chosen( $user_id, $procedure_id, self::wanted() );
+		$m['centre']  = Applications::centre_of( $user_id, $code );
+		$m['choices'] = self::choices( $user_id, $procedure_id );
+
 		$existente = Applications::find( $procedure_id, $m['centre']['code'] );
 		if ( null !== $existente ) {
 			$meta             = Applications::meta( $existente );
@@ -387,7 +458,7 @@ final class ApplyForm {
 
 		// Primero quién, luego cuándo: la titularidad cierra la puerta aunque el
 		// plazo esté abierto, y se dice.
-		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id ) ) {
+		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
 			$m['why'] = self::why_not_allowed( $user_id, $procedure_id );
 		} else {
 			$m['why'] = self::window( (string) $m['state'], (string) ( $m['application']['state'] ?? '' ) );
@@ -405,6 +476,36 @@ final class ApplyForm {
 			);
 
 		return $m;
+	}
+
+	/**
+	 * The code the screen was asked for: the URL's, or the one a refused submit carried.
+	 *
+	 * @return string
+	 */
+	private static function wanted(): string {
+		if ( '' !== self::$rejected ) {
+			return self::field( self::FIELD_CENTRE );
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige cuál de los códigos de la cuenta se enseña; chosen() descarta cualquier otro.
+		return sanitize_text_field( wp_unslash( (string) ( $_GET[ self::ARG_CENTRE ] ?? '' ) ) );
+	}
+
+	/**
+	 * The person's codes this procedure takes, as the screen names them.
+	 *
+	 * @param int $user_id      User ID.
+	 * @param int $procedure_id Procedure post ID.
+	 * @return array<string, string> Code => label.
+	 */
+	private static function choices( int $user_id, int $procedure_id ): array {
+		$out = array();
+		foreach ( ProcedureAccess::apply_codes( $user_id, $procedure_id ) as $code => $kind ) {
+			$centro       = Applications::centre_of( $user_id, $code );
+			$out[ $code ] = ( '' !== $centro['name'] ? $centro['name'] . ' (' . $code . ')' : $code )
+				. ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ? ', como agrupación de escuelas rurales' : '' );
+		}
+		return $out;
 	}
 
 	/**

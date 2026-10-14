@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
@@ -153,7 +154,8 @@ final class MyCentre {
 			return $m;
 		}
 
-		$solicitudes = Applications::for_centre( $m['centre']['code'] );
+		// Con las de la agrupación de escuelas rurales que coordine (ADR-0031).
+		$solicitudes = Applications::for_centre( array_keys( CentreScope::codes_for( $user_id ) ) );
 		// Cada fila lee el título, la ficha y las fechas de su procedimiento:
 		// se cargan todos de una vez, con sus metas, y no dos consultas por fila.
 		_prime_post_caches( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_parent' ) ) ), false, true );
@@ -189,7 +191,7 @@ final class MyCentre {
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplyForm::url( $procedure_id ),
+			'url'          => ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),

@@ -10,7 +10,10 @@ namespace Prc\Domain;
 use Prc\Meta\ProcedureMetaKeys;
 
 /**
- * El catálogo de centros: código, nombre y titularidad.
+ * El catálogo de centros: código, nombre, titularidad y clase.
+ *
+ * La clase dice si el código es de un centro o de una agrupación de escuelas
+ * rurales (ADR-0031); sin decirlo, es un centro.
  *
  * El catálogo real es de quien despliega y no se versiona (ADR-0017): el
  * aplicativo lo **pregunta** con el filtro `prc_centres` y, si nadie
@@ -28,7 +31,7 @@ final class CentreCatalog {
 	/**
 	 * Every school, normalised.
 	 *
-	 * @return array<int, array{code:string, name:string, ownership:string}>
+	 * @return array<int, array{code:string, name:string, ownership:string, kind:string}>
 	 */
 	public static function all(): array {
 		/**
@@ -37,7 +40,7 @@ final class CentreCatalog {
 		 * Quien despliega contesta desde un fragmento de código suelto; en el
 		 * entorno local contesta el mu-plugin con una docena inventada.
 		 *
-		 * @param array<int, array<string, mixed>> $centres Schools as {code, name, ownership}.
+		 * @param array<int, array<string, mixed>> $centres Schools as {code, name, ownership, kind}.
 		 */
 		$default = class_exists( '\Prc\Centre\CentreCatalogue' ) ? \Prc\Centre\CentreCatalogue::for_domain() : array();
 		if ( empty( $default ) ) {
@@ -63,6 +66,7 @@ final class CentreCatalog {
 				'code'      => $code,
 				'name'      => isset( $item['name'] ) && is_scalar( $item['name'] ) ? trim( (string) $item['name'] ) : '',
 				'ownership' => ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				'kind'      => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
 			);
 		}
 		return $out;
@@ -72,7 +76,7 @@ final class CentreCatalog {
 	 * One school by its code.
 	 *
 	 * @param string $code School code.
-	 * @return array{code:string, name:string, ownership:string}|array{} Empty when it is not in the catalogue.
+	 * @return array{code:string, name:string, ownership:string, kind:string}|array{} Empty when it is not in the catalogue.
 	 */
 	public static function find( string $code ): array {
 		$code = trim( $code );
@@ -91,7 +95,7 @@ final class CentreCatalog {
 	 * Schools whose code starts with, or whose name contains, the query.
 	 *
 	 * @param string $q Query.
-	 * @return array<int, array{code:string, name:string, ownership:string}> At most SEARCH_LIMIT.
+	 * @return array<int, array{code:string, name:string, ownership:string, kind:string}> At most SEARCH_LIMIT.
 	 */
 	public static function search( string $q ): array {
 		$q = self::fold( $q );

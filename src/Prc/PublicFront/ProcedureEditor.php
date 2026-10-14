@@ -494,6 +494,19 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * The centre kinds the «Datos» form starts with.
+	 *
+	 * Uno nuevo empieza solo con centros: admitir agrupaciones de escuelas
+	 * rurales como colectivo es una decisión, no un descuido (ADR-0031).
+	 *
+	 * @param int $procedure_id Procedure post ID, 0 for a new one.
+	 * @return string[]
+	 */
+	private static function centre_kinds_value( int $procedure_id ): array {
+		return $procedure_id > 0 ? ProcedureAccess::centre_kinds( $procedure_id ) : array( ProcedureMetaKeys::KIND_SCHOOL );
+	}
+
+	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
 	 * @return array<string, mixed>
@@ -503,7 +516,9 @@ final class ProcedureEditor {
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::ownership() se queda solo con lo que está en ella.
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
-		$coordina    = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::centre_kinds() se queda solo con lo que está en ella.
+		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$coordina = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- identificadores de término: ProcedureInput::term_ids() se queda solo con los enteros positivos.
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.
@@ -523,6 +538,7 @@ final class ProcedureEditor {
 			'header_color'         => self::field( ProcedureMetaKeys::HEADER_COLOR ),
 			'audience'             => self::field( ProcedureMetaKeys::AUDIENCE ),
 			'ownership'            => $titularidad,
+			'centre_kinds'         => $clases,
 			'requires_coordinator' => $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
 		);
@@ -569,6 +585,7 @@ final class ProcedureEditor {
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
 					'ownership'            => get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ),
+					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				)
@@ -597,6 +614,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::HEADER_COLOR         => $limpio['header_color'],
 			ProcedureMetaKeys::AUDIENCE             => $limpio['audience'],
 			ProcedureMetaKeys::OWNERSHIP            => $limpio['ownership'],
+			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
 		);
@@ -876,6 +894,7 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'    => ProcedureMetaKeys::ownerships(),
+			'centre_kinds'  => ProcedureMetaKeys::centre_kinds(),
 			'audiences'     => ProcedureMetaKeys::audiences(),
 			'header_colors' => ProcedureMetaKeys::header_colors(),
 			'questions'     => array(),
@@ -1031,6 +1050,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
 				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
 				: array_keys( ProcedureMetaKeys::ownerships() ),
+			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
@@ -1057,13 +1077,16 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::HEADER_COLOR    => 'header_color',
 			ProcedureMetaKeys::AUDIENCE        => 'audience',
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
+			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
 		);
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se repinta lo tecleado; el nonce lo comprobó handle().
-		$enviados = array_keys( (array) $_POST );
+		$enviados                 = array_keys( (array) $_POST );
+		$tecleado['ownership']    = ProcedureInput::ownership( $tecleado['ownership'] );
+		$tecleado['centre_kinds'] = ProcedureInput::centre_kinds( $tecleado['centre_kinds'] );
 		foreach ( $mapa as $campo => $clave ) {
 			if ( in_array( $campo, $enviados, true ) ) {
-				$valor              = 'ownership' === $clave ? ProcedureInput::ownership( $tecleado[ $clave ] ) : $tecleado[ $clave ];
+				$valor              = $tecleado[ $clave ];
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
 		}

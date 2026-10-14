@@ -104,6 +104,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureMetaKeys::CLOSES_AT       => '2026-10-15',
 				ProcedureMetaKeys::CONTACT_EMAILS  => array( 'ambito@example.org' ),
 				ProcedureMetaKeys::OWNERSHIP       => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				ProcedureMetaKeys::CENTRE_KINDS    => array( ProcedureMetaKeys::KIND_SCHOOL ),
 			),
 			$cambios
 		);

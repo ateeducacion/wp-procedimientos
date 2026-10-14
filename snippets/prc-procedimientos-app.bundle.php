@@ -116,6 +116,14 @@ final class ProcedureMetaKeys {
 
 
 
+
+
+
+	public const CENTRE_KINDS = 'prc_centre_kinds';
+
+
+
+
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
 
@@ -151,6 +159,9 @@ final class ProcedureMetaKeys {
 	public const OWNERSHIP_PUBLIC  = 'public';
 	public const OWNERSHIP_PRIVATE = 'private';
 
+	public const KIND_SCHOOL      = 'school';
+	public const KIND_RURAL_GROUP = 'rural_group';
+
 
 
 
@@ -179,6 +190,7 @@ final class ProcedureMetaKeys {
 			self::HEADER_COLOR,
 			self::AUDIENCE,
 			self::OWNERSHIP,
+			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
 			self::QUESTIONS,
 			self::COMMITMENTS,
@@ -230,6 +242,21 @@ final class ProcedureMetaKeys {
 		return array(
 			self::OWNERSHIP_PUBLIC  => 'Centros públicos',
 			self::OWNERSHIP_PRIVATE => 'Centros privados y concertados',
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function centre_kinds(): array {
+		return array(
+			self::KIND_SCHOOL      => 'Cada centro educativo, con su código',
+			self::KIND_RURAL_GROUP => 'Agrupaciones de escuelas rurales, como colectivo',
 		);
 	}
 
@@ -1153,6 +1180,7 @@ final class ProcedureInput {
 		$color        = self::text( $raw, 'header_color' );
 		$audience     = ProcedureMetaKeys::in_list( $raw['audience'] ?? '', ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
 		$ownership    = self::ownership( $raw['ownership'] ?? array() );
+		$kinds        = self::centre_kinds( $raw['centre_kinds'] ?? array() );
 		$urls         = array();
 
 		if ( '' === $title ) {
@@ -1222,6 +1250,9 @@ final class ProcedureInput {
 		if ( array() === $ownership ) {
 			$errors[] = 'ownership';
 		}
+		if ( array() === $kinds ) {
+			$errors[] = 'centre_kinds';
+		}
 		$errors = array_values( array_unique( $errors ) );
 
 		return array(
@@ -1241,6 +1272,7 @@ final class ProcedureInput {
 					'header_color'         => $color,
 					'audience'             => $audience,
 					'ownership'            => $ownership,
+					'centre_kinds'         => $kinds,
 					'requires_coordinator' => ! empty( $raw['requires_coordinator'] ),
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
@@ -1274,6 +1306,7 @@ final class ProcedureInput {
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
+			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
 		);
 
 		$faltan = array();
@@ -1363,6 +1396,27 @@ final class ProcedureInput {
 
 
 	public static function ownership( $raw ): array {
+		return self::keys_of( $raw, ProcedureMetaKeys::ownerships() );
+	}
+
+
+
+
+
+
+
+	public static function centre_kinds( $raw ): array {
+		return self::keys_of( $raw, ProcedureMetaKeys::centre_kinds() );
+	}
+
+
+
+
+
+
+
+
+	private static function keys_of( $raw, array $vocabulary ): array {
 		if ( is_string( $raw ) ) {
 			$raw = explode( ',', $raw );
 		}
@@ -1370,7 +1424,7 @@ final class ProcedureInput {
 			return array();
 		}
 		$raw = array_map( 'trim', array_map( 'strval', array_filter( $raw, 'is_scalar' ) ) );
-		return array_values( array_intersect( array_keys( ProcedureMetaKeys::ownerships() ), $raw ) );
+		return array_values( array_intersect( array_keys( $vocabulary ), $raw ) );
 	}
 
 
@@ -2161,6 +2215,9 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+
+
+
 final class CentreCatalog {
 
 
@@ -2206,6 +2263,7 @@ final class CentreCatalog {
 				'code'      => $code,
 				'name'      => isset( $item['name'] ) && is_scalar( $item['name'] ) ? trim( (string) $item['name'] ) : '',
 				'ownership' => ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				'kind'      => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
 			);
 		}
 		return $out;
@@ -2288,6 +2346,9 @@ final class CentreCatalog {
 
 namespace Prc\Access;
 
+use Prc\Domain\CentreCatalog;
+use Prc\Meta\ProcedureMetaKeys;
+
 
 
 
@@ -2303,6 +2364,12 @@ final class CentreScope {
 
 
 	public const META_KEY = 'prc_centre_code';
+
+
+
+
+
+	public const GROUP_META_KEY = 'prc_rural_group_code';
 
 
 
@@ -2326,10 +2393,68 @@ final class CentreScope {
 
 
 	public static function code_for( int $user_id = 0 ): string {
+		return self::read( $user_id, self::meta_key() );
+	}
+
+
+
+
+
+
+	public static function group_meta_key(): string {
+
+
+
+
+
+		$key = apply_filters( 'prc_rural_group_code_meta_key', self::GROUP_META_KEY );
+		return is_string( $key ) ? trim( $key ) : '';
+	}
+
+
+
+
+
+
+
+	public static function group_code_for( int $user_id = 0 ): string {
+		return self::read( $user_id, self::group_meta_key() );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function codes_for( int $user_id = 0 ): array {
+		$out  = array();
+		$code = self::code_for( $user_id );
+		if ( '' !== $code ) {
+			$out[ $code ] = (string) ( CentreCatalog::find( $code )['kind'] ?? ProcedureMetaKeys::KIND_SCHOOL );
+		}
+		$group = self::group_code_for( $user_id );
+		if ( '' !== $group && ! isset( $out[ $group ] ) ) {
+			$out[ $group ] = ProcedureMetaKeys::KIND_RURAL_GROUP;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function read( int $user_id, string $key ): string {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
 		}
-		$key = self::meta_key();
 		if ( $user_id <= 0 || '' === $key ) {
 			return '';
 		}
@@ -2363,6 +2488,7 @@ final class CentreScope {
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -2986,28 +3112,58 @@ final class ProcedureAccess {
 
 
 
-
-	public static function can_apply( int $user_id, int $post_id = 0 ): bool {
+	public static function can_apply( int $user_id, int $post_id = 0, string $code = '' ): bool {
 		if ( $user_id <= 0 || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code = CentreScope::code_for( $user_id );
-		if ( '' === $code ) {
-			return false;
-		}
-		if ( $post_id <= 0 ) {
-			return true;
-		}
+		$codes = $post_id > 0 ? self::apply_codes( $user_id, $post_id ) : CentreScope::codes_for( $user_id );
+		return '' === $code ? array() !== $codes : isset( $codes[ $code ] );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function apply_codes( int $user_id, int $post_id ): array {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
-			return false;
+			return array();
 		}
-		$centro = CentreCatalog::find( $code );
-		if ( array() === $centro ) {
-			return true;
-		}
+		$kinds     = self::centre_kinds( $post_id );
 		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
 		$ownership = is_array( $ownership ) ? $ownership : array();
-		return array() === $ownership || in_array( $centro['ownership'], $ownership, true );
+
+		$out = array();
+		foreach ( CentreScope::codes_for( $user_id ) as $code => $kind ) {
+			$centro = CentreCatalog::find( $code );
+			if ( ! in_array( $kind, $kinds, true ) ) {
+				continue;
+			}
+			if ( array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
+				continue;
+			}
+			$out[ $code ] = $kind;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function centre_kinds( int $post_id ): array {
+		$kinds = ProcedureInput::centre_kinds( get_post_meta( $post_id, ProcedureMetaKeys::CENTRE_KINDS, true ) );
+		return array() === $kinds ? array_keys( ProcedureMetaKeys::centre_kinds() ) : $kinds;
 	}
 
 
@@ -3027,9 +3183,8 @@ final class ProcedureAccess {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code  = CentreScope::code_for( $user_id );
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
-		return '' !== $code && $code === $owner;
+		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
 	}
 
 
@@ -3293,6 +3448,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_ownership' ),
 			),
+			ProcedureMetaKeys::CENTRE_KINDS         => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_centre_kinds' ),
+			),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
@@ -3464,6 +3623,16 @@ final class ProcedureMetaRegistration {
 
 	public static function sanitize_ownership( $value ): array {
 		return ProcedureInput::ownership( $value );
+	}
+
+
+
+
+
+
+
+	public static function sanitize_centre_kinds( $value ): array {
+		return ProcedureInput::centre_kinds( $value );
 	}
 
 
@@ -6154,9 +6323,12 @@ final class Applications {
 
 
 
-	public static function for_centre( string $centre_code ): array {
-		$centre_code = trim( $centre_code );
-		if ( '' === $centre_code ) {
+
+
+
+	public static function for_centre( $centre_code ): array {
+		$centre_code = array_values( array_filter( array_map( 'trim', array_map( 'strval', (array) $centre_code ) ) ) );
+		if ( array() === $centre_code ) {
 			return array();
 		}
 		$posts = get_posts(
@@ -6168,6 +6340,7 @@ final class Applications {
 				'order'            => 'DESC',
 				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, 
 				'meta_value'       => $centre_code, 
+				'meta_compare'     => 'IN',
 				'suppress_filters' => false,
 			)
 		);
@@ -6251,8 +6424,16 @@ final class Applications {
 
 
 
-	public static function centre_of( int $user_id = 0 ): array {
-		$code   = CentreScope::code_for( $user_id );
+
+
+
+
+	public static function centre_of( int $user_id = 0, string $code = '' ): array {
+		if ( '' === $code ) {
+			$code = CentreScope::code_for( $user_id );
+		} elseif ( ! isset( CentreScope::codes_for( $user_id )[ $code ] ) ) {
+			$code = '';
+		}
 		$centro = '' !== $code ? CentreCatalog::find( $code ) : array();
 		return array(
 			'code'      => $code,
@@ -6277,11 +6458,12 @@ final class Applications {
 
 
 
-	public static function save( int $procedure_id, int $user_id, array $data ): int {
+
+	public static function save( int $procedure_id, int $user_id, array $data, string $code = '' ): int {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
-		$centro = self::centre_of( $user_id );
+		$centro = self::centre_of( $user_id, $code );
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}
@@ -7451,6 +7633,7 @@ final class HomeView {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
@@ -7836,13 +8019,13 @@ final class Home {
 		if ( ! is_user_logged_in() ) {
 			return array();
 		}
-		$centro = Applications::centre_of( get_current_user_id() );
-		if ( '' === (string) $centro['code'] ) {
+		$codes = array_keys( CentreScope::codes_for( get_current_user_id() ) );
+		if ( array() === $codes ) {
 			return array();
 		}
 
 		$suyas = array();
-		foreach ( Applications::for_centre( (string) $centro['code'] ) as $solicitud ) {
+		foreach ( Applications::for_centre( $codes ) as $solicitud ) {
 			$suyas[ (int) $solicitud->post_parent ] = true;
 		}
 		return $suyas;
@@ -8848,12 +9031,15 @@ final class ProcedureView {
 		if ( $user_id <= 0 || ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) || ! class_exists( Applications::class ) ) {
 			return array();
 		}
-		$code = CentreScope::code_for( $user_id );
+
+
+		$code = ApplyForm::chosen( $user_id, $post_id, '' );
+		$code = '' !== $code ? $code : CentreScope::code_for( $user_id );
 		if ( '' === $code ) {
 			return array();
 		}
 
-		$url   = Shell::url( 'apply', array( Shell::ARG_PROCEDURE => $post_id ) );
+		$url   = ApplyForm::url_for_code( $post_id, $code );
 		$vacia = array(
 			'has'   => false,
 			'state' => '',
@@ -10497,6 +10683,22 @@ final class ProcedureEditorView {
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
 				</fieldset>
 			</div>
+			<div class="prc-campo prc-campo--medio">
+				<fieldset>
+					<legend class="prc-campo__etiqueta">Con qué códigos se solicita <?php echo self::obl(); ?></legend>
+					<div class="prc-opciones prc-opciones--vertical">
+						<?php foreach ( (array) $m['centre_kinds'] as $clave => $rotulo ) : ?>
+							<div class="prc-opcion">
+								<input type="checkbox" id="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"
+									name="<?php echo esc_attr( ProcedureMetaKeys::CENTRE_KINDS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>"
+									<?php checked( in_array( $clave, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ); ?> />
+								<label for="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
+							</div>
+						<?php endforeach; ?>
+					</div>
+					<p class="prc-campo__ayuda">Quien dirige un centro y coordina una agrupación de escuelas rurales tiene los dos códigos. Con una sola casilla, solicita con ese código sin preguntarle; con las dos, elige, y cada código lleva su propia solicitud.</p>
+				</fieldset>
+			</div>
 			<?php if ( ! $nuevo ) : ?>
 				<div class="prc-campo prc-campo--completo">
 					<label class="prc-campo__etiqueta" for="prc-description">Descripción</label>
@@ -11733,12 +11935,27 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
+	private static function centre_kinds_value( int $procedure_id ): array {
+		return $procedure_id > 0 ? ProcedureAccess::centre_kinds( $procedure_id ) : array( ProcedureMetaKeys::KIND_SCHOOL );
+	}
+
+
+
+
+
+
 	private static function submitted_data(): array {
 
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
 
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
-		$coordina    = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
+
+		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$coordina = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
 
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 
@@ -11758,6 +11975,7 @@ final class ProcedureEditor {
 			'header_color'         => self::field( ProcedureMetaKeys::HEADER_COLOR ),
 			'audience'             => self::field( ProcedureMetaKeys::AUDIENCE ),
 			'ownership'            => $titularidad,
+			'centre_kinds'         => $clases,
 			'requires_coordinator' => $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
 		);
@@ -11804,6 +12022,7 @@ final class ProcedureEditor {
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
 					'ownership'            => get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ),
+					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				)
@@ -11832,6 +12051,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::HEADER_COLOR         => $limpio['header_color'],
 			ProcedureMetaKeys::AUDIENCE             => $limpio['audience'],
 			ProcedureMetaKeys::OWNERSHIP            => $limpio['ownership'],
+			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
 		);
@@ -12111,6 +12331,7 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'    => ProcedureMetaKeys::ownerships(),
+			'centre_kinds'  => ProcedureMetaKeys::centre_kinds(),
 			'audiences'     => ProcedureMetaKeys::audiences(),
 			'header_colors' => ProcedureMetaKeys::header_colors(),
 			'questions'     => array(),
@@ -12266,6 +12487,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
 				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
 				: array_keys( ProcedureMetaKeys::ownerships() ),
+			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
@@ -12292,13 +12514,16 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::HEADER_COLOR    => 'header_color',
 			ProcedureMetaKeys::AUDIENCE        => 'audience',
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
+			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
 		);
 
-		$enviados = array_keys( (array) $_POST );
+		$enviados                 = array_keys( (array) $_POST );
+		$tecleado['ownership']    = ProcedureInput::ownership( $tecleado['ownership'] );
+		$tecleado['centre_kinds'] = ProcedureInput::centre_kinds( $tecleado['centre_kinds'] );
 		foreach ( $mapa as $campo => $clave ) {
 			if ( in_array( $campo, $enviados, true ) ) {
-				$valor              = 'ownership' === $clave ? ProcedureInput::ownership( $tecleado[ $clave ] ) : $tecleado[ $clave ];
+				$valor              = $tecleado[ $clave ];
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
 		}
@@ -12580,6 +12805,7 @@ final class ApplyFormView {
 		ob_start();
 		echo self::head( $m ); 
 		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] ); 
+		echo self::choices( $m ); 
 		echo self::status_card( $m ); 
 
 		if ( true === $m['can_submit'] ) {
@@ -12619,6 +12845,58 @@ final class ApplyFormView {
 		<?php endif; ?>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function choices( array $m ): string {
+		$choices = (array) ( $m['choices'] ?? array() );
+		if ( count( $choices ) < 2 ) {
+			return '';
+		}
+		$actual = (string) $m['centre']['code'];
+
+		ob_start();
+		?>
+		<nav class="prc-seccion" aria-labelledby="prc-apply-centre">
+			<h3 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h3>
+			<div class="prc-seccion__cuerpo">
+				<p class="prc-campo__ayuda">Su cuenta tiene más de un código y este procedimiento admite los dos. Cada uno tiene su propia solicitud: elija con cuál quiere verla o presentarla.</p>
+				<ul class="prc-opciones prc-opciones--vertical">
+					<?php foreach ( $choices as $code => $rotulo ) : ?>
+						<li class="prc-opcion">
+							<?php if ( (string) $code === $actual ) : ?>
+								<strong aria-current="page"><?php echo esc_html( (string) $rotulo ); ?></strong>
+							<?php else : ?>
+								<a href="<?php echo esc_url( ApplyForm::url_for_code( (int) $m['procedure_id'], (string) $code ) ); ?>"><?php echo esc_html( (string) $rotulo ); ?></a>
+							<?php endif; ?>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			</div>
+		</nav>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function centre_help( array $m ): string {
+		return count( (array) ( $m['choices'] ?? array() ) ) > 1
+			? 'Es uno de los códigos de su cuenta: para solicitar con el otro, elíjalo arriba.'
+			: 'El centro es el de su cuenta: no se puede cambiar desde aquí.';
 	}
 
 
@@ -12703,7 +12981,7 @@ final class ApplyFormView {
 			'Código',
 			(string) $centro['code'],
 			3,
-			'El centro es el de su cuenta: no se puede cambiar desde aquí.'
+			self::centre_help( $m )
 		) . self::locked(
 			'prc-centre',
 			'Denominación',
@@ -12741,6 +13019,7 @@ final class ApplyFormView {
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
 
 			<?php echo self::privacy(); ?>
 
@@ -13076,6 +13355,7 @@ final class ApplyFormView {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureState;
@@ -13083,6 +13363,12 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
+
+
+
+
+
+
 
 
 
@@ -13113,11 +13399,17 @@ final class ApplyForm {
 
 
 
+	public const ARG_CENTRE = 'centro';
+
+
+
+
 	public const FIELD_OP = 'prc_apply_op';
 
 	public const OP_APPLY = 'apply';
 
 	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
+	public const FIELD_CENTRE      = 'prc_apply_centre';
 	public const FIELD_POSITION    = 'prc_position';
 	public const FIELD_COORD_NAME  = 'prc_coordinator_name';
 	public const FIELD_COORD_EMAIL = 'prc_coordinator_email';
@@ -13182,6 +13474,43 @@ final class ApplyForm {
 
 
 
+	public static function url_for_code( int $procedure_id, string $code, array $args = array() ): string {
+		if ( '' !== $code && CentreScope::code_for() !== $code ) {
+			$args[ self::ARG_CENTRE ] = $code;
+		}
+		return self::url( $procedure_id, $args );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function chosen( int $user_id, int $procedure_id, string $wanted ): string {
+		$codes = ProcedureAccess::apply_codes( $user_id, $procedure_id );
+		if ( '' !== $wanted && isset( $codes[ $wanted ] ) ) {
+			return $wanted;
+		}
+		return array() === $codes ? '' : (string) array_key_first( $codes );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 
 	public static function window( string $state, string $review_state ): string {
 		if ( ProcedureState::accepts_applications( $state ) ) {
@@ -13220,12 +13549,15 @@ final class ApplyForm {
 		$procedure_id = absint( wp_unslash( $_POST[ self::FIELD_PROCEDURE ] ?? 0 ) );
 		$user_id      = get_current_user_id();
 
-		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id ) ) {
-			self::$rejected = self::why_not_allowed( $user_id, $procedure_id );
+
+
+		$pedido = self::field( self::FIELD_CENTRE );
+		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $pedido ) ) {
+			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
 		}
-		$centro    = Applications::centre_of( $user_id );
-		$existente = Applications::find( $procedure_id, $centro['code'] );
+		$code      = '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' );
+		$existente = Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : ''
@@ -13254,7 +13586,7 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'] );
+		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code );
 		if ( $id <= 0 ) {
 			self::$rejected = 'No se ha podido guardar la solicitud. Vuelva a intentarlo.';
 			return;
@@ -13271,7 +13603,7 @@ final class ApplyForm {
 			self::$rejected = 'No se ha podido guardar el documento que adjuntó, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
 		}
-		Shell::leave( self::url( $procedure_id, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
+		Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
 	}
 
 
@@ -13331,15 +13663,25 @@ final class ApplyForm {
 
 
 
-	private static function why_not_allowed( int $user_id, int $procedure_id ): string {
+
+	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
 			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 		}
-		if ( '' === Applications::centre_of( $user_id )['code'] ) {
+		$suyos = CentreScope::codes_for( $user_id );
+		if ( array() === $suyos ) {
 			return 'Su cuenta no tiene centro asignado, así que no puede presentar solicitudes. El código de centro lo pone quien administra el aplicativo.';
+		}
+		if ( '' !== $code && ! isset( $suyos[ $code ] ) ) {
+			return 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.';
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
 			return 'Ese procedimiento no existe o todavía no está publicado.';
+		}
+		$admite = ProcedureAccess::centre_kinds( $procedure_id );
+		if ( array() === array_intersect( $suyos, $admite ) ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
+			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
 		}
 		return 'Este procedimiento no se dirige a centros de la titularidad del suyo.';
 	}
@@ -13372,6 +13714,9 @@ final class ApplyForm {
 				'name'      => '',
 				'ownership' => '',
 			),
+
+
+			'choices'         => array(),
 
 
 			'applicant'       => array(
@@ -13408,7 +13753,7 @@ final class ApplyForm {
 			'email' => (string) $quien->user_email,
 		);
 		$m['centre']    = Applications::centre_of( $user_id );
-		if ( '' === $m['centre']['code'] ) {
+		if ( array() === CentreScope::codes_for( $user_id ) ) {
 			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
 			return $m;
 		}
@@ -13437,6 +13782,11 @@ final class ApplyForm {
 		$m['final_list_url']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL, true );
 		$m['spec']            = Applications::spec( $procedure_id );
 
+
+		$code         = self::chosen( $user_id, $procedure_id, self::wanted() );
+		$m['centre']  = Applications::centre_of( $user_id, $code );
+		$m['choices'] = self::choices( $user_id, $procedure_id );
+
 		$existente = Applications::find( $procedure_id, $m['centre']['code'] );
 		if ( null !== $existente ) {
 			$meta             = Applications::meta( $existente );
@@ -13456,7 +13806,7 @@ final class ApplyForm {
 
 
 
-		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id ) ) {
+		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
 			$m['why'] = self::why_not_allowed( $user_id, $procedure_id );
 		} else {
 			$m['why'] = self::window( (string) $m['state'], (string) ( $m['application']['state'] ?? '' ) );
@@ -13474,6 +13824,36 @@ final class ApplyForm {
 			);
 
 		return $m;
+	}
+
+
+
+
+
+
+	private static function wanted(): string {
+		if ( '' !== self::$rejected ) {
+			return self::field( self::FIELD_CENTRE );
+		}
+
+		return sanitize_text_field( wp_unslash( (string) ( $_GET[ self::ARG_CENTRE ] ?? '' ) ) );
+	}
+
+
+
+
+
+
+
+
+	private static function choices( int $user_id, int $procedure_id ): array {
+		$out = array();
+		foreach ( ProcedureAccess::apply_codes( $user_id, $procedure_id ) as $code => $kind ) {
+			$centro       = Applications::centre_of( $user_id, $code );
+			$out[ $code ] = ( '' !== $centro['name'] ? $centro['name'] . ' (' . $code . ')' : $code )
+				. ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ? ', como agrupación de escuelas rurales' : '' );
+		}
+		return $out;
 	}
 
 
@@ -13719,6 +14099,7 @@ final class MyCentreView {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
@@ -13865,7 +14246,8 @@ final class MyCentre {
 			return $m;
 		}
 
-		$solicitudes = Applications::for_centre( $m['centre']['code'] );
+
+		$solicitudes = Applications::for_centre( array_keys( CentreScope::codes_for( $user_id ) ) );
 
 
 		_prime_post_caches( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_parent' ) ) ), false, true );
@@ -13901,7 +14283,7 @@ final class MyCentre {
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplyForm::url( $procedure_id ),
+			'url'          => ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),

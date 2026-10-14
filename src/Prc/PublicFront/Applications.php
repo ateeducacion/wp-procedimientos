@@ -101,14 +101,17 @@ final class Applications {
 	}
 
 	/**
-	 * Every application of one school, newest first.
+	 * Every application of one school, or of several, newest first.
 	 *
-	 * @param string $centre_code School code.
+	 * Varios: los de quien dirige un centro y coordina una agrupación de
+	 * escuelas rurales (ADR-0031).
+	 *
+	 * @param string|string[] $centre_code School code, or codes.
 	 * @return \WP_Post[]
 	 */
-	public static function for_centre( string $centre_code ): array {
-		$centre_code = trim( $centre_code );
-		if ( '' === $centre_code ) {
+	public static function for_centre( $centre_code ): array {
+		$centre_code = array_values( array_filter( array_map( 'trim', array_map( 'strval', (array) $centre_code ) ) ) );
+		if ( array() === $centre_code ) {
 			return array();
 		}
 		$posts = get_posts(
@@ -120,6 +123,7 @@ final class Applications {
 				'order'            => 'DESC',
 				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- las solicitudes de un centro se buscan por su código.
 				'meta_value'       => $centre_code, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_compare'     => 'IN',
 				'suppress_filters' => false,
 			)
 		);
@@ -200,11 +204,19 @@ final class Applications {
 	 * Un código que no está en el catálogo solicita igual, con el nombre en
 	 * blanco: el catálogo puede ir por detrás de la realidad.
 	 *
-	 * @param int $user_id User ID (0 = current).
+	 * Con código, el de la agrupación de escuelas rurales que coordina, si es
+	 * suyo; uno que no es de la cuenta no se devuelve nunca (ADR-0031).
+	 *
+	 * @param int    $user_id User ID (0 = current).
+	 * @param string $code    One of the person's codes; empty for the school.
 	 * @return array{code:string, name:string, ownership:string} Empty code when the person has none.
 	 */
-	public static function centre_of( int $user_id = 0 ): array {
-		$code   = CentreScope::code_for( $user_id );
+	public static function centre_of( int $user_id = 0, string $code = '' ): array {
+		if ( '' === $code ) {
+			$code = CentreScope::code_for( $user_id );
+		} elseif ( ! isset( CentreScope::codes_for( $user_id )[ $code ] ) ) {
+			$code = '';
+		}
 		$centro = '' !== $code ? CentreCatalog::find( $code ) : array();
 		return array(
 			'code'      => $code,
@@ -227,13 +239,14 @@ final class Applications {
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param int                  $user_id      Who submits.
 	 * @param array<string, mixed> $data         Validated core: position, coordinator, answers.
+	 * @param string               $code         One of the person's codes; empty for the school.
 	 * @return int Application post ID, 0 on failure.
 	 */
-	public static function save( int $procedure_id, int $user_id, array $data ): int {
+	public static function save( int $procedure_id, int $user_id, array $data, string $code = '' ): int {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
-		$centro = self::centre_of( $user_id );
+		$centro = self::centre_of( $user_id, $code );
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}

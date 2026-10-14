@@ -349,6 +349,22 @@ final class ProcedureEditorView {
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
 				</fieldset>
 			</div>
+			<div class="prc-campo prc-campo--medio">
+				<fieldset>
+					<legend class="prc-campo__etiqueta">Con qué códigos se solicita <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
+					<div class="prc-opciones prc-opciones--vertical">
+						<?php foreach ( (array) $m['centre_kinds'] as $clave => $rotulo ) : ?>
+							<div class="prc-opcion">
+								<input type="checkbox" id="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"
+									name="<?php echo esc_attr( ProcedureMetaKeys::CENTRE_KINDS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>"
+									<?php checked( in_array( $clave, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ); ?> />
+								<label for="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
+							</div>
+						<?php endforeach; ?>
+					</div>
+					<p class="prc-campo__ayuda">Quien dirige un centro y coordina una agrupación de escuelas rurales tiene los dos códigos. Con una sola casilla, solicita con ese código sin preguntarle; con las dos, elige, y cada código lleva su propia solicitud.</p>
+				</fieldset>
+			</div>
 			<?php if ( ! $nuevo ) : ?>
 				<div class="prc-campo prc-campo--completo">
 					<label class="prc-campo__etiqueta" for="prc-description">Descripción</label>

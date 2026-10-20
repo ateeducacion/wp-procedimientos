@@ -55,50 +55,6 @@ HDR;
 
 $header = str_replace( '{{VERSION}}', $prc_version[1], $header );
 
-$body = '';
-foreach ( $order as $rel ) {
-	$path = $src_dir . '/' . $rel;
-	if ( ! is_readable( $path ) ) {
-		fwrite( STDERR, "Missing: {$path}\n" );
-		exit( 1 );
-	}
-	$code = file_get_contents( $path );
-	if ( false === $code ) {
-		fwrite( STDERR, "Cannot read {$path}\n" );
-		exit( 1 );
-	}
-	// Strip opening PHP tag from each unit.
-	$code = preg_replace( '/^\s*<\?php\s*/', '', $code );
-	// Code Snippets re-evaluates an active snippet when it is saved. PHP wants
-	// `namespace` first, so the guard goes right after the first one. It checks
-	// a constant, not class_exists( App ): parentless classes are early-bound
-	// while the eval()'d code compiles, so App would already exist on the first
-	// pass and the bundle would return before booting anything.
-	if ( $rel === $order[0] ) {
-		$code = preg_replace(
-			'/^namespace [^;]+;/m',
-			"$0\n\n// La guarda de acceso directo va AQUÍ y no en la cabecera: antes de un\n// `namespace` no puede haber ninguna sentencia, y el bundle empieza por el\n// suyo. Code Snippets evalúa este código, no lo incluye, así que no hay\n// acceso directo que valga; va igual por si el fichero acaba servido.\ndefined( 'ABSPATH' ) || exit;\n\n// Code Snippets vuelve a evaluar un snippet activo al guardarlo: si el\n// bundle ya se cargó hay que salir, o el segundo eval() muere redeclarando\n// clases. Una constante, porque class_exists() ya es cierto al compilar.\nif ( \\defined( 'PRC_BUNDLE_LOADED' ) ) {\n\treturn;\n}\n\\define( 'PRC_BUNDLE_LOADED', true );",
-			(string) $code,
-			1,
-			$n
-		);
-		if ( 1 !== $n ) {
-			fwrite( STDERR, "First unit must start with a namespace: {$rel}\n" );
-			exit( 1 );
-		}
-	}
-	$body .= "\n// ---- src/Prc/{$rel} ----\n";
-	$body .= trim( $code ) . "\n";
-}
-
-// Los assets viajan dentro del bundle: en producción no hay repositorio en
-// disco ni URL de plugin, así que un `src` registrado daría 404 y el aplicativo
-// se vería sin hoja de estilos. Véase src/Prc/PublicFront/Assets.php.
-// La lista sale del directorio y no de aquí: escrita a mano, un fichero nuevo se
-// olvida, `Assets::contents()` devuelve cadena vacía y el guion sencillamente no
-// sale en la página, sin error que lo delate. El orden de este mapa da igual: es
-// una búsqueda por ruta, y quien decide en qué orden se cargan es
-// `Assets::register_assets()`.
 /**
  * Strip every comment from the bundled body, keeping its line structure.
  *
@@ -117,10 +73,10 @@ foreach ( $order as $rel ) {
  * de un error, y la guarda del empaquetador —que el primer fichero abra con su
  * `namespace`— se sigue viendo donde estaba.
  *
- * **La cabecera no pasa por aquí.** Es un docblock y la leen dos cosas:
- * `prc_parse_snippet_header()` al sincronizar —de ahí salen el nombre, el
- * ámbito y la prioridad del snippet— y `make release`, que busca su
- * `@version`. Sin ella el snippet no se puede publicar.
+ * **La cabecera no pasa por aquí.** Es un docblock y la leen dos cosas: la
+ * sincronización con Code Snippets —de ahí salen el nombre, el ámbito y la
+ * prioridad del snippet— y `make release`, que busca su `@version`. Sin ella el
+ * snippet no se puede publicar.
  *
  * @param string $code Concatenated body of the bundle.
  * @return string The same code without comments.
@@ -161,6 +117,50 @@ function prc_strip_comments( string $code ): string {
 	return $out;
 }
 
+$body = '';
+foreach ( $order as $rel ) {
+	$path = $src_dir . '/' . $rel;
+	if ( ! is_readable( $path ) ) {
+		fwrite( STDERR, "Missing: {$path}\n" );
+		exit( 1 );
+	}
+	$code = file_get_contents( $path );
+	if ( false === $code ) {
+		fwrite( STDERR, "Cannot read {$path}\n" );
+		exit( 1 );
+	}
+	// Strip opening PHP tag from each unit.
+	$code = preg_replace( '/^\s*<\?php\s*/', '', $code );
+	// Code Snippets re-evaluates an active snippet when it is saved. PHP wants
+	// `namespace` first, so the guard goes right after the first one. It checks
+	// a constant, not class_exists( App ): parentless classes are early-bound
+	// while the eval()'d code compiles, so App would already exist on the first
+	// pass and the bundle would return before booting anything.
+	if ( $order[0] === $rel ) {
+		$code = preg_replace(
+			'/^namespace [^;]+;/m',
+			"$0\n\n// La guarda de acceso directo va AQUÍ y no en la cabecera: antes de un\n// `namespace` no puede haber ninguna sentencia, y el bundle empieza por el\n// suyo. Code Snippets evalúa este código, no lo incluye, así que no hay\n// acceso directo que valga; va igual por si el fichero acaba servido.\ndefined( 'ABSPATH' ) || exit;\n\n// Code Snippets vuelve a evaluar un snippet activo al guardarlo: si el\n// bundle ya se cargó hay que salir, o el segundo eval() muere redeclarando\n// clases. Una constante, porque class_exists() ya es cierto al compilar.\nif ( \\defined( 'PRC_BUNDLE_LOADED' ) ) {\n\treturn;\n}\n\\define( 'PRC_BUNDLE_LOADED', true );",
+			(string) $code,
+			1,
+			$n
+		);
+		if ( 1 !== $n ) {
+			fwrite( STDERR, "First unit must start with a namespace: {$rel}\n" );
+			exit( 1 );
+		}
+	}
+	$body .= "\n// ---- src/Prc/{$rel} ----\n";
+	$body .= trim( $code ) . "\n";
+}
+
+// Los assets viajan dentro del bundle: en producción no hay repositorio en
+// disco ni URL de plugin, así que un `src` registrado daría 404 y el aplicativo
+// se vería sin hoja de estilos. Véase src/Prc/PublicFront/Assets.php.
+// La lista sale del directorio y no de aquí: escrita a mano, un fichero nuevo se
+// olvida, `Assets::contents()` devuelve cadena vacía y el guion sencillamente no
+// sale en la página, sin error que lo delate. El orden de este mapa da igual: es
+// una búsqueda por ruta, y quien decide en qué orden se cargan es
+// `Assets::register_assets()`.
 $assets = array();
 foreach ( array( 'css', 'js' ) as $tipo ) {
 	$encontrados = glob( $root . '/assets/' . $tipo . '/*.' . $tipo );

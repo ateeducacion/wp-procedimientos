@@ -86,6 +86,18 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un día contado desde hoy, para que el procedimiento siga en plazo
+	 * cuando corra el test: con fechas fijas, en cuanto pasa el cierre el
+	 * panel «Datos» se bloquea y los tests de guardar dejan de probar nada.
+	 *
+	 * @param string $relative Offset for strtotime(), e.g. '+10 days'.
+	 * @return string Y-m-d.
+	 */
+	private function dia( string $relative ): string {
+		return gmdate( 'Y-m-d', strtotime( $relative ) );
+	}
+
+	/**
 	 * Los campos del panel «Datos» que pasan la validación.
 	 *
 	 * @param int|int[]            $area    Term ID(s) of prc_area.
@@ -100,8 +112,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::FIELD_DESCRIPTION => '<p>Una red de centros.</p>',
 				ProcedureEditor::FIELD_AREA        => array_map( 'strval', (array) $area ),
 				ProcedureEditor::FIELD_COURSE      => (string) $curso,
-				ProcedureMetaKeys::OPENS_AT        => '2026-10-01',
-				ProcedureMetaKeys::CLOSES_AT       => '2026-10-15',
+				ProcedureMetaKeys::OPENS_AT        => $this->dia( '+10 days' ),
+				ProcedureMetaKeys::CLOSES_AT       => $this->dia( '+24 days' ),
 				ProcedureMetaKeys::CONTACT_EMAILS  => array( 'ambito@example.org' ),
 				ProcedureMetaKeys::OWNERSHIP       => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
 				ProcedureMetaKeys::CENTRE_KINDS    => array( ProcedureMetaKeys::KIND_SCHOOL ),
@@ -263,7 +275,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( $uid, (int) $creados[0]->post_author );
 		$this->assertSame( array( $area ), ProcedureAccess::post_areas( $id ) );
 		$this->assertSame( array( $curso ), wp_get_post_terms( $id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ) );
-		$this->assertSame( '2026-10-01', get_post_meta( $id, ProcedureMetaKeys::OPENS_AT, true ) );
+		$this->assertSame( $this->dia( '+10 days' ), get_post_meta( $id, ProcedureMetaKeys::OPENS_AT, true ) );
 		$this->assertSame( array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ), get_post_meta( $id, ProcedureMetaKeys::OWNERSHIP, true ) );
 
 		$this->assertSame( (string) $id, $this->query_arg( (string) $url, ProcedureEditor::ARG_PROCEDURE ), 'y abre su taller' );
@@ -330,8 +342,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				$curso,
 				array(
 					ProcedureEditor::FIELD_TITLE       => 'Red de prueba 2027',
-					ProcedureMetaKeys::AMEND_OPENS_AT  => '2026-10-20',
-					ProcedureMetaKeys::AMEND_CLOSES_AT => '2026-10-25',
+					ProcedureMetaKeys::AMEND_OPENS_AT  => $this->dia( '+29 days' ),
+					ProcedureMetaKeys::AMEND_CLOSES_AT => $this->dia( '+34 days' ),
 					ProcedureMetaKeys::CONTACT_EMAILS  => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
 					ProcedureMetaKeys::REQUIRES_COORDINATOR => '1',
 					ProcedureMetaKeys::COMMITMENTS     => 'El centro se compromete.',
@@ -345,8 +357,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'Red de prueba 2027', get_the_title( $procedimiento ) );
 		$this->assertSame( '<p>Una red de centros.</p>', get_post_field( 'post_content', $procedimiento ) );
 		$this->assertSame( array( $curso ), wp_get_post_terms( $procedimiento, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ) );
-		$this->assertSame( '2026-10-15', get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
-		$this->assertSame( '2026-10-25', get_post_meta( $procedimiento, ProcedureMetaKeys::AMEND_CLOSES_AT, true ) );
+		$this->assertSame( $this->dia( '+24 days' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
+		$this->assertSame( $this->dia( '+34 days' ), get_post_meta( $procedimiento, ProcedureMetaKeys::AMEND_CLOSES_AT, true ) );
 		$this->assertSame(
 			array( 'ambito@example.org', 'segundo@example.org' ),
 			get_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, true ),
@@ -581,7 +593,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 					$this->course(),
 					array(
 						ProcedureEditor::FIELD_TITLE      => 'Nombre nuevo',
-						ProcedureMetaKeys::AMEND_OPENS_AT => '2026-10-10',
+						ProcedureMetaKeys::AMEND_OPENS_AT => $this->dia( '+19 days' ),
 					)
 				)
 			)
@@ -594,7 +606,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'error', $m['flash']['tipo'] );
 		$this->assertStringContainsString( 'subsanación', $m['flash']['texto'] );
 		$this->assertSame( 'Nombre nuevo', $m['values'][ ProcedureEditor::FIELD_TITLE ], 'lo tecleado vuelve' );
-		$this->assertSame( '2026-10-10', $m['values'][ ProcedureMetaKeys::AMEND_OPENS_AT ] );
+		$this->assertSame( $this->dia( '+19 days' ), $m['values'][ ProcedureMetaKeys::AMEND_OPENS_AT ] );
 	}
 
 	// ─── Preguntas ─────────────────────────────────────────────────────────

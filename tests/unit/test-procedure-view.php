@@ -123,16 +123,20 @@ class Test_Procedure_View extends WP_UnitTestCase {
 	 * El estado, las fechas, el ámbito, el curso y los enlaces que existen.
 	 */
 	public function test_the_model_says_the_state_the_dates_and_the_links() {
-		$area          = $this->area( 'Área de prueba' );
-		$curso         = $this->course( '2026-2027' );
-		$procedimiento = $this->procedure(
+		// El plazo de subsanación, los días 2 a 6 del mes que viene: en el futuro
+		// cualquier día que se corran los tests, para que el estado siga siendo
+		// «abierto» y el intervalo caiga siempre dentro de un mismo mes.
+		$mes_subsanacion = gmdate( 'Y-m', strtotime( 'first day of +1 month' ) );
+		$area            = $this->area( 'Área de prueba' );
+		$curso           = $this->course( '2026-2027' );
+		$procedimiento   = $this->procedure(
 			$this->administrator(),
 			array( $area ),
 			array_merge(
 				$this->abierto(),
 				array(
-					ProcedureMetaKeys::AMEND_OPENS_AT  => '2026-11-02',
-					ProcedureMetaKeys::AMEND_CLOSES_AT => '2026-11-06',
+					ProcedureMetaKeys::AMEND_OPENS_AT  => $mes_subsanacion . '-02',
+					ProcedureMetaKeys::AMEND_CLOSES_AT => $mes_subsanacion . '-06',
 					ProcedureMetaKeys::CONTACT_EMAILS  => array( 'contacto@example.org', 'segundo@example.org' ),
 					ProcedureMetaKeys::HEADER_COLOR    => 'granate',
 					ProcedureMetaKeys::REQUIRES_COORDINATOR => true,
@@ -159,7 +163,10 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Del ', $m['dates'] );
 		// El nombre del mes lo pone el idioma del sitio, que en los tests es el
 		// de la instalación: lo que se afirma aquí es la forma del intervalo.
-		$this->assertMatchesRegularExpression( '/^Del 2 al 6 de \S+ de 2026$/u', $m['amend_dates'] );
+		$this->assertMatchesRegularExpression(
+			'/^Del 2 al 6 de \S+ de ' . gmdate( 'Y', strtotime( $mes_subsanacion . '-02' ) ) . '$/u',
+			$m['amend_dates']
+		);
 		$this->assertSame( 'Área de prueba', $m['areas'] );
 		$this->assertSame( '2026-2027', $m['courses'] );
 		$this->assertSame( array( 'contacto@example.org', 'segundo@example.org' ), $m['contact_emails'] );

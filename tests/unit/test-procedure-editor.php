@@ -1144,7 +1144,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Centro de prueba', $html );
 		$this->assertStringContainsString( '<dd>B</dd>', $html, 'la respuesta sale en la revisión' );
 		// En pantalla, el día se escribe como en el resto del aplicativo.
-		$this->assertStringContainsString( 'data-rotulo="Fecha">' . gmdate( 'd-m-Y' ) . '</td>', $html );
+		$this->assertStringContainsString( 'data-rotulo="Fecha">' . current_time( 'd-m-Y' ) . '</td>', $html );
 		$this->assertStringContainsString( 'Guardar la revisión', $html );
 		$this->assertStringContainsString( 'Exportar a CSV', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_EXPORT . '"', $html );

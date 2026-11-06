@@ -1036,12 +1036,35 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function publish_panel( array $m ): string {
-		$op = ProcedureEditor::OP_PUBLISH;
+		$op    = ProcedureEditor::OP_PUBLISH;
+		$state = (string) $m['state'];
+		$stage = ProcedureMetaKeys::STATE_DRAFT === $state
+			? 0
+			: ( ProcedureMetaKeys::STATE_ARCHIVED === $state ? 4 : ( ProcedureMetaKeys::STATE_RESOLVED === $state ? 3 : ( ProcedureMetaKeys::STATE_CLOSED === $state ? 2 : 1 ) ) );
+		$steps = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array( 'Pendiente de documentación', 'El plazo de solicitud terminó. Falta publicar el listado definitivo para resolverlo.' ),
+			array( 'Cerrado', 'El listado definitivo ya está publicado. Cuando termine la gestión, puede marcarlo como histórico.' ),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
 
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
+			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
+				<?php foreach ( $steps as $index => $step ) : ?>
+					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
+						<h3><?php echo esc_html( $step[0] ); ?>
+						<?php
+						if ( $index === $stage ) :
+							?>
+							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
+						<p><?php echo esc_html( $step[1] ); ?></p>
+					</li>
+				<?php endforeach; ?>
+			</ol>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				El estado sale de las fechas y de los enlaces: no hay nada que marcar a mano. Con el listado definitivo enlazado pasa a «Resuelto».

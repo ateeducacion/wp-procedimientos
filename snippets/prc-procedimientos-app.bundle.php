@@ -11599,12 +11599,35 @@ final class ProcedureEditorView {
 
 
 	private static function publish_panel( array $m ): string {
-		$op = ProcedureEditor::OP_PUBLISH;
+		$op    = ProcedureEditor::OP_PUBLISH;
+		$state = (string) $m['state'];
+		$stage = ProcedureMetaKeys::STATE_DRAFT === $state
+			? 0
+			: ( ProcedureMetaKeys::STATE_ARCHIVED === $state ? 4 : ( ProcedureMetaKeys::STATE_RESOLVED === $state ? 3 : ( ProcedureMetaKeys::STATE_CLOSED === $state ? 2 : 1 ) ) );
+		$steps = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array( 'Pendiente de documentación', 'El plazo de solicitud terminó. Falta publicar el listado definitivo para resolverlo.' ),
+			array( 'Cerrado', 'El listado definitivo ya está publicado. Cuando termine la gestión, puede marcarlo como histórico.' ),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
 
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
+			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
+				<?php foreach ( $steps as $index => $step ) : ?>
+					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
+						<h3><?php echo esc_html( $step[0] ); ?>
+						<?php
+						if ( $index === $stage ) :
+							?>
+							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
+						<p><?php echo esc_html( $step[1] ); ?></p>
+					</li>
+				<?php endforeach; ?>
+			</ol>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); ?>
 				El estado sale de las fechas y de los enlaces: no hay nada que marcar a mano. Con el listado definitivo enlazado pasa a «Resuelto».
@@ -18181,6 +18204,18 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   margin: 0;
   padding: 10px 0;
 }
+
+/* El estado del procedimiento se presenta como etapas ordenadas, con texto además de color. */
+.prc-ciclo-publicacion { list-style: none; margin: 0 0 24px; padding: 0 0 0 12px; }
+.prc-ciclo-publicacion__paso { position: relative; margin: 0; padding: 0 0 18px 24px; border-left: 2px solid var(--prc-c-linea); }
+.prc-ciclo-publicacion__paso::before { position: absolute; top: 3px; left: -7px; width: 10px; height: 10px; border: 2px solid var(--prc-c-linea); border-radius: 50%; background: var(--prc-c-fondo); content: ""; }
+.prc-ciclo-publicacion__paso--completado { border-color: var(--prc-ok-texto); }
+.prc-ciclo-publicacion__paso--completado::before { border-color: var(--prc-ok-texto); background: var(--prc-ok-texto); }
+.prc-ciclo-publicacion__paso--actual::before { border-color: var(--prc-c-azul-borde); background: var(--prc-c-fondo); box-shadow: 0 0 0 3px var(--prc-info-borde); }
+.prc-ciclo-publicacion__paso:last-child { border-left-color: transparent; padding-bottom: 0; }
+.prc-ciclo-publicacion__paso h3 { margin: 0; font-size: var(--prc-t-base); }
+.prc-ciclo-publicacion__paso p { margin: 4px 0 0; }
+.prc-ciclo-publicacion__actual { display: inline-block; margin-left: 6px; font-size: var(--prc-t-menudo); font-weight: 400; }
 
 @media (max-width: 991.98px) {
   .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }

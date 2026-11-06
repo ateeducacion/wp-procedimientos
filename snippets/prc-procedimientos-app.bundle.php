@@ -47,6 +47,7 @@ if ( \defined( 'PRC_BUNDLE_LOADED' ) ) {
 
 
 
+if ( ! class_exists( 'Prc\Meta\ProcedureMetaKeys', false ) ) {
 final class ProcedureMetaKeys {
 
 
@@ -349,6 +350,8 @@ final class ProcedureMetaKeys {
 	}
 }
 
+}
+
 
 
 
@@ -369,6 +372,7 @@ namespace Prc\Meta;
 
 
 
+if ( ! class_exists( 'Prc\Meta\ApplicationMetaKeys', false ) ) {
 final class ApplicationMetaKeys {
 
 
@@ -485,6 +489,8 @@ final class ApplicationMetaKeys {
 	}
 }
 
+}
+
 
 
 
@@ -515,6 +521,7 @@ namespace Prc\Domain;
 
 
 
+if ( ! class_exists( 'Prc\Domain\DateRange', false ) ) {
 final class DateRange {
 
 
@@ -605,6 +612,8 @@ final class DateRange {
 	}
 }
 
+}
+
 
 
 
@@ -627,6 +636,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Domain\ProcedureState', false ) ) {
 final class ProcedureState {
 
 
@@ -822,6 +832,8 @@ final class ProcedureState {
 	}
 }
 
+}
+
 
 
 
@@ -847,6 +859,7 @@ namespace Prc\Domain;
 
 
 
+if ( ! class_exists( 'Prc\Domain\ProcedureQuestions', false ) ) {
 final class ProcedureQuestions {
 
 
@@ -1132,6 +1145,8 @@ final class ProcedureQuestions {
 	}
 }
 
+}
+
 
 
 
@@ -1153,6 +1168,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Domain\ProcedureInput', false ) ) {
 final class ProcedureInput {
 
 
@@ -1477,6 +1493,8 @@ final class ProcedureInput {
 	}
 }
 
+}
+
 
 
 
@@ -1499,6 +1517,7 @@ use Prc\Meta\ApplicationMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Domain\ApplicationInput', false ) ) {
 final class ApplicationInput {
 
 
@@ -1607,6 +1626,8 @@ final class ApplicationInput {
 	}
 }
 
+}
+
 
 
 
@@ -1625,6 +1646,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Centre\CentreCatalogue', false ) ) {
 final class CentreCatalogue {
 
 	public const OPTION_CATALOGUE = 'prc_centres_catalogue';
@@ -1779,6 +1801,8 @@ final class CentreCatalogue {
 	}
 }
 
+}
+
 
 
 
@@ -1797,6 +1821,7 @@ use RuntimeException;
 
 
 
+if ( ! class_exists( 'Prc\Centre\CentreCatalogueSync', false ) ) {
 final class CentreCatalogueSync {
 
 	public const OPTION_MANIFEST_URL = 'prc_centres_manifest_url';
@@ -2195,6 +2220,8 @@ final class CentreCatalogueSync {
 	}
 }
 
+}
+
 
 
 
@@ -2218,6 +2245,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Domain\CentreCatalog', false ) ) {
 final class CentreCatalog {
 
 
@@ -2337,6 +2365,8 @@ final class CentreCatalog {
 	}
 }
 
+}
+
 
 
 
@@ -2358,6 +2388,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+if ( ! class_exists( 'Prc\Access\CentreScope', false ) ) {
 final class CentreScope {
 
 
@@ -2477,6 +2508,8 @@ final class CentreScope {
 	}
 }
 
+}
+
 
 
 
@@ -2510,6 +2543,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\Access\ProcedureAccess', false ) ) {
 final class ProcedureAccess {
 
 
@@ -3361,6 +3395,8 @@ final class ProcedureAccess {
 	}
 }
 
+}
+
 
 
 
@@ -3382,6 +3418,7 @@ use Prc\PostType\ProcedurePostType;
 
 
 
+if ( ! class_exists( 'Prc\Meta\ProcedureMetaRegistration', false ) ) {
 final class ProcedureMetaRegistration {
 
 
@@ -3665,6 +3702,8 @@ final class ProcedureMetaRegistration {
 	}
 }
 
+}
+
 
 
 
@@ -3686,6 +3725,7 @@ use Prc\PostType\ApplicationPostType;
 
 
 
+if ( ! class_exists( 'Prc\Meta\ApplicationMetaRegistration', false ) ) {
 final class ApplicationMetaRegistration {
 
 
@@ -3869,6 +3909,8 @@ final class ApplicationMetaRegistration {
 	}
 }
 
+}
+
 
 
 
@@ -3885,6 +3927,7 @@ namespace Prc\PostType;
 
 
 
+if ( ! class_exists( 'Prc\PostType\ProcedurePostType', false ) ) {
 final class ProcedurePostType {
 
 	public const POST_TYPE = 'prc_procedure';
@@ -4057,6 +4100,8 @@ final class ProcedurePostType {
 	}
 }
 
+}
+
 
 
 
@@ -4078,6 +4123,7 @@ namespace Prc\PostType;
 
 
 
+if ( ! class_exists( 'Prc\PostType\ApplicationPostType', false ) ) {
 final class ApplicationPostType {
 
 	public const POST_TYPE = 'prc_application';
@@ -4129,6 +4175,8 @@ final class ApplicationPostType {
 	}
 }
 
+}
+
 
 
 
@@ -4151,6 +4199,7 @@ use Prc\PostType\ProcedurePostType;
 
 
 
+if ( ! class_exists( 'Prc\Taxonomy\ProcedureTaxonomies', false ) ) {
 final class ProcedureTaxonomies {
 
 
@@ -4414,6 +4463,8 @@ final class ProcedureTaxonomies {
 	}
 }
 
+}
+
 
 
 
@@ -4436,6 +4487,7 @@ namespace Prc\PublicFront;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\Assets', false ) ) {
 final class Assets {
 
 
@@ -4712,6 +4764,8 @@ final class Assets {
 	}
 }
 
+}
+
 
 
 
@@ -4726,6 +4780,7 @@ namespace Prc\PublicFront;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\ExitSignal', false ) ) {
 final class ExitSignal extends \RuntimeException {
 
 
@@ -4744,6 +4799,8 @@ final class ExitSignal extends \RuntimeException {
 		parent::__construct( '' === $url ? 'Salida sin redirección' : 'Redirección a ' . $url );
 		$this->url = $url;
 	}
+}
+
 }
 
 
@@ -4777,6 +4834,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\Shell', false ) ) {
 final class Shell {
 
 
@@ -5758,6 +5816,8 @@ final class Shell {
 	}
 }
 
+}
+
 
 
 
@@ -5793,6 +5853,7 @@ use Prc\Access\ProcedureAccess;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\EditLock', false ) ) {
 final class EditLock {
 
 
@@ -6093,6 +6154,8 @@ final class EditLock {
 	}
 }
 
+}
+
 
 
 
@@ -6114,6 +6177,7 @@ use Prc\PublicFront\Shell;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\PanelParts', false ) ) {
 final class PanelParts {
 
 
@@ -6215,6 +6279,8 @@ final class PanelParts {
 	}
 }
 
+}
+
 
 
 
@@ -6245,6 +6311,7 @@ use Prc\PostType\ProcedurePostType;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\Applications', false ) ) {
 final class Applications {
 
 
@@ -6744,6 +6811,8 @@ final class Applications {
 	}
 }
 
+}
+
 
 
 
@@ -6782,6 +6851,7 @@ use Prc\PostType\ApplicationPostType;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\ApplicationFiles', false ) ) {
 final class ApplicationFiles {
 
 
@@ -7472,6 +7542,8 @@ final class ApplicationFiles {
 	}
 }
 
+}
+
 
 
 
@@ -7494,6 +7566,7 @@ use Prc\PublicFront\Shell;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\HomeView', false ) ) {
 final class HomeView {
 
 
@@ -7624,6 +7697,8 @@ final class HomeView {
 	}
 }
 
+}
+
 
 
 
@@ -7654,6 +7729,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\Home', false ) ) {
 final class Home {
 
 	public const SHORTCODE = 'prc_home';
@@ -8145,6 +8221,8 @@ final class Home {
 	}
 }
 
+}
+
 
 
 
@@ -8171,6 +8249,7 @@ use Prc\PublicFront\Assets;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\ProcedureChrome', false ) ) {
 final class ProcedureChrome {
 
 
@@ -8724,6 +8803,8 @@ final class ProcedureChrome {
 	}
 }
 
+}
+
 
 
 
@@ -8759,6 +8840,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\ProcedureView', false ) ) {
 final class ProcedureView {
 
 
@@ -9250,6 +9332,8 @@ final class ProcedureView {
 	}
 }
 
+}
+
 
 
 
@@ -9272,6 +9356,7 @@ use Prc\PublicFront\Workspace;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\WorkspaceView', false ) ) {
 final class WorkspaceView {
 
 
@@ -9657,6 +9742,8 @@ final class WorkspaceView {
 	}
 }
 
+}
+
 
 
 
@@ -9689,6 +9776,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\Workspace', false ) ) {
 final class Workspace {
 
 	public const SHORTCODE = 'prc_workspace';
@@ -10332,6 +10420,8 @@ final class Workspace {
 	}
 }
 
+}
+
 
 
 
@@ -10357,6 +10447,7 @@ use Prc\PublicFront\Shell;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\ProcedureEditorView', false ) ) {
 final class ProcedureEditorView {
 
 
@@ -11435,6 +11526,8 @@ final class ProcedureEditorView {
 	}
 }
 
+}
+
 
 
 
@@ -11470,6 +11563,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\ProcedureEditor', false ) ) {
 final class ProcedureEditor {
 
 	public const SHORTCODE = 'prc_editor';
@@ -12717,6 +12811,8 @@ final class ProcedureEditor {
 	}
 }
 
+}
+
 
 
 
@@ -12751,6 +12847,7 @@ use Prc\PublicFront\Shell;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\ApplyFormView', false ) ) {
 final class ApplyFormView {
 
 
@@ -13346,6 +13443,8 @@ final class ApplyFormView {
 	}
 }
 
+}
+
 
 
 
@@ -13382,6 +13481,7 @@ use Prc\PublicFront\View\ApplyFormView;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\ApplyForm', false ) ) {
 final class ApplyForm {
 
 	public const SHORTCODE = 'prc_apply';
@@ -13891,6 +13991,8 @@ final class ApplyForm {
 	}
 }
 
+}
+
 
 
 
@@ -13911,6 +14013,7 @@ use Prc\PublicFront\Shell;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\View\MyCentreView', false ) ) {
 final class MyCentreView {
 
 
@@ -14090,6 +14193,8 @@ final class MyCentreView {
 	}
 }
 
+}
+
 
 
 
@@ -14119,6 +14224,7 @@ use Prc\PublicFront\View\MyCentreView;
 
 
 
+if ( ! class_exists( 'Prc\PublicFront\MyCentre', false ) ) {
 final class MyCentre {
 
 	public const SHORTCODE = 'prc_mine';
@@ -14434,6 +14540,8 @@ final class MyCentre {
 	}
 }
 
+}
+
 
 
 
@@ -14458,6 +14566,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\Admin\ProcedureAdmin', false ) ) {
 final class ProcedureAdmin {
 
 
@@ -14613,6 +14722,8 @@ final class ProcedureAdmin {
 	}
 }
 
+}
+
 
 
 
@@ -14638,6 +14749,7 @@ use RuntimeException;
 
 
 
+if ( ! class_exists( 'Prc\Admin\Settings', false ) ) {
 final class Settings {
 
 
@@ -14954,6 +15066,8 @@ final class Settings {
 	}
 }
 
+}
+
 
 
 
@@ -14992,6 +15106,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+if ( ! class_exists( 'Prc\App', false ) ) {
 final class App {
 
 
@@ -15084,6 +15199,8 @@ final class App {
 		}
 		return $padre . '/' . $slug;
 	}
+}
+
 }
 
 

@@ -1173,7 +1173,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'Publicar el procedimiento', $html );
 		$this->assertStringContainsString( 'aria-current="step"', $html );
-		$this->assertStringContainsString( 'Borrador <span', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Borrador\s*<span[^>]*>Etapa actual/s', $html );
 
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
@@ -1184,7 +1184,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );
 		$this->assertStringContainsString( 'histórico', $html );
-		$this->assertStringContainsString( 'Histórico <span', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
@@ -1207,17 +1207,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 		$panel = ProcedureEditor::PANEL_PUBLISH;
-		$this->assertStringContainsString( 'Publicado <span', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+		$this->assertMatchesRegularExpression( '/<h3>Publicado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 
 		update_post_meta( $procedure, ProcedureMetaKeys::OPENS_AT, $this->dia( '-10 days' ) );
 		update_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, $this->dia( '-1 day' ) );
-		$this->assertStringContainsString( 'Pendiente de documentación <span', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+		$this->assertMatchesRegularExpression( '/<h3>Pendiente de documentación\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 
 		update_post_meta( $procedure, ProcedureMetaKeys::FINAL_LIST_URL, 'https://example.org/listado.pdf' );
-		$this->assertStringContainsString( 'Cerrado <span', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+		$this->assertMatchesRegularExpression( '/<h3>Cerrado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 
 		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );
-		$this->assertStringContainsString( 'Histórico <span', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 	}
 
 	/**

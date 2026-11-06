@@ -443,8 +443,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
-		$this->assertStringContainsString( 'Personas coordinadoras que se piden', $html );
-		$this->assertStringContainsString( 'value="10"', $html );
+		$this->assertStringNotContainsString( 'Personas coordinadoras que se piden', $html, 'la configuración de la solicitud aparece en el taller después del alta' );
 		foreach ( ProcedureMetaKeys::audiences() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}

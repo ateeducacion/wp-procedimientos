@@ -259,7 +259,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 			ApplicationInput::why( array( 'accept', 'answer:q1' ), $preguntas )
 		);
 		$this->assertSame(
-			'Revise el nombre de la persona coordinadora, el correo de la persona coordinadora y la respuesta a «Modalidad».',
+			'Revise el nombre de cada persona coordinadora, el correo de cada persona coordinadora y la respuesta a «Modalidad».',
 			ApplicationInput::why( array( 'coordinator_name', 'coordinator_email', 'answer:q1', 'answer:q1' ), $preguntas )
 		);
 		$this->assertSame( 'No se ha podido presentar la solicitud.', ApplicationInput::why( array( 'answer:q1' ) ), 'sin las preguntas no se sabe cuál es' );

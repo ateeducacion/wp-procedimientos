@@ -1115,7 +1115,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		foreach ( array( 'Datos', 'Preguntas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
+		foreach ( array( 'Datos', 'Preguntas', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -1213,5 +1213,75 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A scoped manager may only extend an existing delivery close after questions lock. */
+	public function test_delivery_closes_can_be_extended_without_reopening_questions() {
+		$procedure_close           = $this->dia( '-1 day' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria final',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-30 days' ),
+			'closes_at' => $procedure_close,
+		);
+		list( , $uid, $procedure ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array( $question ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( '-30 days' ),
+				ProcedureMetaKeys::CLOSES_AT => $procedure_close,
+			)
+		);
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedure, ProcedureState::GROUP_QUESTIONS ) );
+		$new_close = $this->dia( '+30 days' );
+		$redirect  = $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $new_close ) ) );
+
+		$this->assertNotNull( $redirect );
+		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Guardar nuevos cierres', $html );
+		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
+		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertSame( $new_close, $after[0]['closes_at'] );
+		$after[0]['closes_at'] = $before[0]['closes_at'];
+		$this->assertSame( $before, $after, 'no cambió rótulo, apertura, obligatoriedad ni respuesta' );
+	}
+
+	/** Invalid or shorter dates reject the entire update; arbitrary keys are ignored. */
+	public function test_delivery_close_updates_reject_shorten_and_invalid_dates() {
+		$current_close             = $this->dia( '+10 days' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-1 day' ),
+			'closes_at' => $current_close,
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		foreach ( array( $this->dia( '+9 days' ), '2026-02-30' ) as $date ) {
+			$this->assertNull(
+				$this->submit(
+					$uid,
+					ProcedureEditor::OP_DELIVERY_DATES,
+					$procedure,
+					0,
+					array(
+						ProcedureEditor::FIELD_DELIVERY_CLOSES => array(
+							'q1'   => $date,
+							'q999' => '2027-01-01',
+						),
+					)
+				)
+			);
+			$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		}
 	}
 }

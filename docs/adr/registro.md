@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -76,3 +76,4 @@ versión global del aplicativo.
 | [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md) | Quien coordina una agrupación de escuelas rurales solicita por su centro o por la agrupación | Propuesta | 2026-10-14 |
 | [ADR-0032](ADR-0032-el-bundle-protege-cada-declaracion-de-clase.md) | El bundle protege cada declaración de clase | Propuesta | 2026-11-06 |
 | [ADR-0033](ADR-0033-los-documentos-pueden-tener-un-plazo-de-entrega-propio.md) | Los documentos pueden tener un plazo de entrega propio | Propuesta | 2026-11-06 |
+| [ADR-0034](ADR-0034-ampliar-el-cierre-de-entregas-sin-editar-las-preguntas.md) | Ampliar el cierre de entregas sin editar las preguntas | Propuesta | 2026-11-06 |

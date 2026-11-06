@@ -1180,6 +1180,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Crear un procedimiento', $html );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
+		// El sistema no marca como histórico un borrador: primero se publica.
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );

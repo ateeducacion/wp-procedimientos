@@ -135,6 +135,10 @@ final class ProcedureMetaKeys {
 	public const COORDINATOR_COUNT_MAX = 10;
 
 
+	public const CUSTOM_CSS = 'prc_custom_css';
+	public const CUSTOM_JS  = 'prc_custom_js';
+
+
 
 
 	public const QUESTIONS = 'prc_questions';
@@ -206,6 +210,8 @@ final class ProcedureMetaKeys {
 			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
 			self::COORDINATOR_COUNT,
+			self::CUSTOM_CSS,
+			self::CUSTOM_JS,
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,
@@ -2943,6 +2949,20 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
+	public static function can_edit_custom_js( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && user_can( $user_id, 'unfiltered_html' ) && self::can_edit( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
 	public static function can_edit_all_areas( int $user_id = 0 ): bool {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -3659,6 +3679,15 @@ final class ProcedureMetaRegistration {
 				'type'     => 'integer',
 				'sanitize' => array( self::class, 'sanitize_coordinator_count' ),
 			),
+			ProcedureMetaKeys::CUSTOM_CSS           => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_custom_code' ),
+			),
+			ProcedureMetaKeys::CUSTOM_JS            => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_custom_code' ),
+				'auth'     => array( self::class, 'auth_custom_js' ),
+			),
 			ProcedureMetaKeys::QUESTIONS            => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
@@ -3745,6 +3774,30 @@ final class ProcedureMetaRegistration {
 	public static function auth_archived( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 		return ProcedureAccess::can_toggle_archived( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function auth_custom_js( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
+		unset( $allowed, $meta_key );
+		return ProcedureAccess::can_edit_custom_js( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+	public static function sanitize_custom_code( $value ): string {
+		return is_string( $value ) ? wp_check_invalid_utf8( $value ) : '';
 	}
 
 
@@ -9122,7 +9175,31 @@ final class ProcedureView {
 
 
 	public static function register(): void {
+		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_custom_code' ) );
 		add_action( 'template_redirect', array( self::class, 'render' ), self::PRIORITY );
+	}
+
+
+	public static function enqueue_custom_code(): void {
+		if ( ! is_singular( ProcedurePostType::POST_TYPE ) ) {
+			return;
+		}
+		$post_id = (int) get_queried_object_id();
+		if ( $post_id <= 0 || 'publish' !== get_post_status( $post_id ) ) {
+			return;
+		}
+		$css = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_CSS, true );
+		$js  = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_JS, true );
+		if ( '' === $css && '' === $js ) {
+			return;
+		}
+		Assets::enqueue();
+		if ( '' !== $css ) {
+			wp_add_inline_style( 'prc-app', str_replace( '<', '\\3C ', $css ) );
+		}
+		if ( '' !== $js ) {
+			wp_add_inline_script( 'prc-app', str_ireplace( '</script', '<\\/script', $js ), 'after' );
+		}
 	}
 
 
@@ -10781,6 +10858,9 @@ final class ProcedureEditorView {
 			echo self::deliveries_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
 			echo self::publish_panel( $m ); 
+		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
+
+			echo self::custom_code_panel( $m );
 		} else {
 			echo self::data_panel( $m ); 
 		}
@@ -11896,6 +11976,36 @@ final class ProcedureEditorView {
 
 
 
+	private static function custom_code_panel( array $m ): string {
+		$op = ProcedureEditor::OP_CUSTOM_CODE;
+		ob_start();
+		?>
+		<section class="prc-seccion-campos">
+			<h2 class="prc-seccion__titulo">Código adicional</h2>
+			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento. El JavaScript se ejecuta en esa ficha y solo puede editarlo una persona administradora con permiso para HTML sin filtrar.</p>
+			<form class="prc-form prc-form--taller" method="post" action="">
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<p><label for="prc-custom-css">CSS</label><textarea id="prc-custom-css" name="prc_custom_css" rows="14" spellcheck="false"<?php disabled( empty( $m['can_edit'] ) ); ?>><?php echo esc_textarea( (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ) ); ?></textarea></p>
+				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
+					<p><label for="prc-custom-js">JavaScript (solo administración)</label><textarea id="prc-custom-js" name="prc_custom_js" rows="14" spellcheck="false"><?php echo esc_textarea( (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ) ); ?></textarea></p>
+				<?php else : ?>
+					<p>El campo JavaScript solo está disponible para administración con permiso de HTML sin filtrar.</p>
+				<?php endif; ?>
+				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
+			</form>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
 
 
 
@@ -11999,6 +12109,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -12044,6 +12155,7 @@ final class ProcedureEditor {
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
+	public const PANEL_CODE         = 'codigo';
 
 	public const OP_REVIEW              = 'review';
 	public const OP_EXPORT              = 'export';
@@ -12053,6 +12165,7 @@ final class ProcedureEditor {
 	public const OP_ARCHIVE             = 'archive';
 	public const OP_UNARCHIVE           = 'unarchive';
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
+	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -12106,6 +12219,7 @@ final class ProcedureEditor {
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
 		self::OP_DELIVERY_DATES,
+		self::OP_CUSTOM_CODE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
@@ -12127,6 +12241,7 @@ final class ProcedureEditor {
 		'preguntas'    => 'Preguntas guardadas.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
+		'codigo'       => 'Código adicional guardado.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -12208,6 +12323,7 @@ final class ProcedureEditor {
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PUBLISH      => 'Publicación',
+			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
@@ -12287,6 +12403,30 @@ final class ProcedureEditor {
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			self::$rejected = 'Ese procedimiento ya no existe.';
+			return;
+		}
+		if ( self::OP_CUSTOM_CODE === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+
+
+			$css = isset( $_POST['prc_custom_css'] ) && is_string( $_POST['prc_custom_css'] ) ? ProcedureMetaRegistration::sanitize_custom_code( wp_unslash( $_POST['prc_custom_css'] ) ) : null;
+			if ( ! is_string( $css ) ) {
+				self::$rejected = 'El CSS no tiene un formato válido.';
+				return;
+			}
+			update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS, $css );
+
+
+			$js = isset( $_POST['prc_custom_js'] ) && is_string( $_POST['prc_custom_js'] ) ? ProcedureMetaRegistration::sanitize_custom_code( wp_unslash( $_POST['prc_custom_js'] ) ) : null;
+
+			if ( is_string( $js ) && ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
+				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
+			}
+			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
 		if ( self::OP_DELIVERY_DATES === $op ) {
@@ -13026,6 +13166,7 @@ final class ProcedureEditor {
 			'groups'                  => array(),
 			'state_notice'            => '',
 			'can_review'              => false,
+			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
@@ -13115,14 +13256,15 @@ final class ProcedureEditor {
 		$procedure_id = (int) $procedimiento->ID;
 		$paneles      = self::panels( $procedure_id );
 
-		$m['procedure_id'] = $procedure_id;
-		$m['title']        = (string) $procedimiento->post_title;
-		$m['panels']       = $paneles;
-		$m['panel']        = isset( $paneles[ $pedido ] ) ? $pedido : self::PANEL_DATA;
-		$m['flash']        = self::flash( $hecho );
-		$m['can_edit']     = ProcedureAccess::can_edit( $user_id, $procedure_id );
-		$m['can_review']   = ProcedureAccess::can_review( $user_id, $procedure_id );
-		$m['archived']     = ProcedureAccess::is_archived( $procedure_id );
+		$m['procedure_id']       = $procedure_id;
+		$m['title']              = (string) $procedimiento->post_title;
+		$m['panels']             = $paneles;
+		$m['panel']              = isset( $paneles[ $pedido ] ) ? $pedido : self::PANEL_DATA;
+		$m['flash']              = self::flash( $hecho );
+		$m['can_edit']           = ProcedureAccess::can_edit( $user_id, $procedure_id );
+		$m['can_edit_custom_js'] = ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id );
+		$m['can_review']         = ProcedureAccess::can_review( $user_id, $procedure_id );
+		$m['archived']           = ProcedureAccess::is_archived( $procedure_id );
 
 
 
@@ -13226,6 +13368,8 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
+			ProcedureMetaKeys::CUSTOM_CSS           => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS ),
+			ProcedureMetaKeys::CUSTOM_JS            => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),

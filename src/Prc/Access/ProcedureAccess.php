@@ -288,6 +288,20 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Whether a user may save JavaScript for a procedure.
+	 *
+	 * `unfiltered_html` stays required because the snippet executes on a public page;
+	 * WordPress removes it from site administrators on multisite installations.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return bool
+	 */
+	public static function can_edit_custom_js( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && user_can( $user_id, 'unfiltered_html' ) && self::can_edit( $user_id, $post_id );
+	}
+
+	/**
 	 * Whether the user works across every ámbito (administración).
 	 *
 	 * @param int $user_id User ID (0 = current).

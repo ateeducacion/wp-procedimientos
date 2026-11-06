@@ -97,6 +97,15 @@ final class ProcedureMetaRegistration {
 				'type'     => 'integer',
 				'sanitize' => array( self::class, 'sanitize_coordinator_count' ),
 			),
+			ProcedureMetaKeys::CUSTOM_CSS           => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_custom_code' ),
+			),
+			ProcedureMetaKeys::CUSTOM_JS            => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_custom_code' ),
+				'auth'     => array( self::class, 'auth_custom_js' ),
+			),
 			ProcedureMetaKeys::QUESTIONS            => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
@@ -183,6 +192,30 @@ final class ProcedureMetaRegistration {
 	public static function auth_archived( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 		return ProcedureAccess::can_toggle_archived( $user_id, $post_id );
+	}
+
+	/**
+	 * Only trusted administrators may save executable JavaScript.
+	 *
+	 * @param bool   $allowed  Current permission.
+	 * @param string $meta_key Meta key.
+	 * @param int    $post_id  Post ID.
+	 * @param int    $user_id  User ID.
+	 * @return bool
+	 */
+	public static function auth_custom_js( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
+		unset( $allowed, $meta_key );
+		return ProcedureAccess::can_edit_custom_js( $user_id, $post_id );
+	}
+
+	/**
+	 * Preserve code syntax while rejecting invalid UTF-8 and non-text input.
+	 *
+	 * @param mixed $value Raw code.
+	 * @return string
+	 */
+	public static function sanitize_custom_code( $value ): string {
+		return is_string( $value ) ? wp_check_invalid_utf8( $value ) : '';
 	}
 
 	/**

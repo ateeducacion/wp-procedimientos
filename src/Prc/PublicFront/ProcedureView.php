@@ -46,7 +46,31 @@ final class ProcedureView {
 	 * @return void
 	 */
 	public static function register(): void {
+		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_custom_code' ) );
 		add_action( 'template_redirect', array( self::class, 'render' ), self::PRIORITY );
+	}
+
+	/** Enqueue a procedure's saved code only on its public single page. */
+	public static function enqueue_custom_code(): void {
+		if ( ! is_singular( ProcedurePostType::POST_TYPE ) ) {
+			return;
+		}
+		$post_id = (int) get_queried_object_id();
+		if ( $post_id <= 0 || 'publish' !== get_post_status( $post_id ) ) {
+			return;
+		}
+		$css = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_CSS, true );
+		$js  = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_JS, true );
+		if ( '' === $css && '' === $js ) {
+			return;
+		}
+		Assets::enqueue();
+		if ( '' !== $css ) {
+			wp_add_inline_style( 'prc-app', str_replace( '<', '\\3C ', $css ) );
+		}
+		if ( '' !== $js ) {
+			wp_add_inline_script( 'prc-app', str_ireplace( '</script', '<\\/script', $js ), 'after' );
+		}
 	}
 
 	/**

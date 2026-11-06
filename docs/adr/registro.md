@@ -74,3 +74,5 @@ versión global del aplicativo.
 | [ADR-0029](ADR-0029-el-catalogo-de-centros-es-externo-y-se-cachea-localmente.md) | El catálogo de centros educativos es un dato maestro externo y se cachea localmente | Aceptada | 2026-09-20 |
 | [ADR-0030](ADR-0030-editor-y-ambitos-jerarquicos.md) | Editor y ámbitos organizativos jerárquicos | Propuesta | 2026-09-20 |
 | [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md) | Quien coordina una agrupación de escuelas rurales solicita por su centro o por la agrupación | Propuesta | 2026-10-14 |
+
+| [ADR-0032](ADR-0032-el-bundle-protege-cada-declaracion-de-clase.md) | El bundle protege cada declaración de clase | Propuesta | 2026-11-06 |

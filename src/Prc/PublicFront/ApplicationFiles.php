@@ -340,7 +340,12 @@ final class ApplicationFiles {
 		}
 
 		$antes = self::descriptors( $application_id );
-		update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) );
+		if ( ! update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) ) ) {
+			foreach ( $nuevos as $descriptor ) {
+				self::erase( $descriptor );
+			}
+			return false;
+		}
 
 		// Y ahora, con el descriptor nuevo ya guardado, el fichero al que
 		// ninguno apunta.

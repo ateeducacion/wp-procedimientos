@@ -185,7 +185,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Las cinco pestañas, la que se pide en la URL y sus recuentos.
+	 * Las pestañas, la que se pide en la URL y sus recuentos.
 	 */
 	public function test_the_five_panels_and_the_one_asked_for() {
 		list( , $uid, $procedimiento ) = $this->mio(
@@ -208,6 +208,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_QUESTIONS,
 				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_APPLICATIONS,
+				ProcedureEditor::PANEL_DELIVERIES,
 				ProcedureEditor::PANEL_PUBLISH,
 			),
 			array_keys( $m['panels'] )
@@ -215,6 +216,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
+		$this->assertSame( 0, $m['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
 		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_LINKS ]['count'] );
 		$this->assertSame( $procedimiento, $m['procedure_id'] );
 		$this->assertSame( (string) get_permalink( $procedimiento ), $m['view_url'] );

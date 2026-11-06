@@ -12,6 +12,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\View\MyCentreView;
 
@@ -177,7 +178,7 @@ final class MyCentre {
 		$procedure_id = (int) $application->post_parent;
 		$meta         = Applications::meta( (int) $application->ID );
 		$autor        = get_userdata( (int) $application->post_author );
-		$coord        = (array) $meta[ ApplicationMetaKeys::COORDINATOR ];
+		$coord        = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$revision     = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 		$opciones     = self::options( $procedure_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] );
 		$cierre       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
@@ -197,7 +198,7 @@ final class MyCentre {
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => (string) ( $coord['name'] ?? '' ),
+			'coordinator'  => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,

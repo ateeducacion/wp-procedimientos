@@ -343,13 +343,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				$area,
 				$curso,
 				array(
-					ProcedureEditor::FIELD_TITLE       => 'Red de prueba 2027',
-					ProcedureMetaKeys::AMEND_OPENS_AT  => $this->dia( '+29 days' ),
-					ProcedureMetaKeys::AMEND_CLOSES_AT => $this->dia( '+34 days' ),
-					ProcedureMetaKeys::CONTACT_EMAILS  => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
-					ProcedureMetaKeys::REQUIRES_COORDINATOR => '1',
-					ProcedureMetaKeys::COMMITMENTS     => 'El centro se compromete.',
-					ProcedureMetaKeys::OWNERSHIP       => array( 'public', 'private', 'inventada' ),
+					ProcedureEditor::FIELD_TITLE         => 'Red de prueba 2027',
+					ProcedureMetaKeys::AMEND_OPENS_AT    => $this->dia( '+29 days' ),
+					ProcedureMetaKeys::AMEND_CLOSES_AT   => $this->dia( '+34 days' ),
+					ProcedureMetaKeys::CONTACT_EMAILS    => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
+					ProcedureMetaKeys::COORDINATOR_COUNT => '2',
+					ProcedureMetaKeys::COMMITMENTS       => 'El centro se compromete.',
+					ProcedureMetaKeys::OWNERSHIP         => array( 'public', 'private', 'inventada' ),
 				)
 			)
 		);
@@ -366,7 +366,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			get_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 			'tres campos, dos escritos'
 		);
-		$this->assertTrue( (bool) get_post_meta( $procedimiento, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) );
+		$this->assertSame( 2, (int) get_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 		$this->assertSame( 'El centro se compromete.', get_post_meta( $procedimiento, ProcedureMetaKeys::COMMITMENTS, true ) );
 		$this->assertSame( array( 'public', 'private' ), get_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, true ), 'solo la lista cerrada' );
 	}
@@ -443,6 +443,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
+		$this->assertStringContainsString( 'Personas coordinadoras que se piden', $html );
+		$this->assertStringContainsString( 'value="10"', $html );
 		foreach ( ProcedureMetaKeys::audiences() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}

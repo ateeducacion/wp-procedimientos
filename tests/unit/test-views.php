@@ -289,7 +289,7 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( '2026-2027', $html );
 		$this->assertStringContainsString( 'Inscripción', $html );
 		$this->assertStringContainsString( 'Subsanación', $html );
-		$this->assertStringContainsString( 'Pide una persona coordinadora', $html );
+		$this->assertStringContainsString( 'Pide 1 persona coordinadora', $html );
 		$this->assertStringContainsString( 'mailto:contacto@example.org', $html );
 		$this->assertStringContainsString( 'prc-resumen__enlaces', $html );
 		$this->assertStringContainsString( 'Listado definitivo de admitidos', $html );

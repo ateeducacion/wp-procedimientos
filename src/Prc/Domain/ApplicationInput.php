@@ -27,7 +27,7 @@ final class ApplicationInput {
 	 *
 	 * @param array<string, mixed> $raw       Raw fields.
 	 * @param array<string, mixed> $procedure What the procedure asks for:
-	 *                                        `requires_coordinator` (bool), `commitments` (string)
+	 *                                        `coordinator_count` (int), `commitments` (string)
 	 *                                        and `questions` (normalised list).
 	 * @return array{ok:bool, errors:string[], data:array<string, mixed>}
 	 */
@@ -40,19 +40,28 @@ final class ApplicationInput {
 			$position = '';
 		}
 
-		$coordinator = array(
-			'name'  => '',
-			'email' => '',
-		);
-		if ( ! empty( $procedure['requires_coordinator'] ) ) {
-			$coordinator['name']  = self::text( $raw, 'coordinator_name' );
-			$coordinator['email'] = strtolower( self::text( $raw, 'coordinator_email' ) );
+		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
+		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
+			$raw_coordinators[] = array(
+				'name'  => $raw['coordinator_name'] ?? '',
+				'email' => $raw['coordinator_email'] ?? '',
+			);
+		}
+		$coordinators = array();
+		for ( $i = 0; $i < $count; ++$i ) {
+			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
+			$coordinator     = array(
+				'name'  => self::text( $raw_coordinator, 'name' ),
+				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
+			);
 			if ( '' === $coordinator['name'] ) {
 				$errors[] = 'coordinator_name';
 			}
 			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
 				$errors[] = 'coordinator_email';
 			}
+			$coordinators[] = $coordinator;
 		}
 
 		// La casilla de compromisos solo existe cuando hay compromisos que aceptar.
@@ -72,7 +81,7 @@ final class ApplicationInput {
 			'errors' => $errors,
 			'data'   => array(
 				'position'    => $position,
-				'coordinator' => $coordinator,
+				'coordinator' => $coordinators,
 				'accept'      => $accepted,
 				'answers'     => $respuesta['data'],
 			),
@@ -89,8 +98,8 @@ final class ApplicationInput {
 	public static function why( array $errors, array $questions = array() ): string {
 		$textos = array(
 			'position'          => 'el cargo',
-			'coordinator_name'  => 'el nombre de la persona coordinadora',
-			'coordinator_email' => 'el correo de la persona coordinadora',
+			'coordinator_name'  => 'el nombre de cada persona coordinadora',
+			'coordinator_email' => 'el correo de cada persona coordinadora',
 			'accept'            => 'la aceptación de los compromisos',
 		);
 		foreach ( $questions as $pregunta ) {

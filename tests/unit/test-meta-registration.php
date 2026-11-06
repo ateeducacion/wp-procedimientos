@@ -290,13 +290,15 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 	}
 
 	/**
-	 * La persona coordinadora son dos campos y nada más.
+	 * Las personas coordinadoras se guardan como una lista de dos campos.
 	 */
 	public function test_the_coordinator_is_a_name_and_an_email() {
 		$this->assertSame(
 			array(
-				'name'  => 'Ana Pérez',
-				'email' => 'ana@example.org',
+				array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				),
 			),
 			ApplicationMetaRegistration::sanitize_coordinator(
 				array(
@@ -307,12 +309,26 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame(
-			array(
-				'name'  => '',
-				'email' => '',
-			),
+			array(),
 			ApplicationMetaRegistration::sanitize_coordinator( 'no es una persona' )
 		);
+		$this->assertCount(
+			2,
+			ApplicationMetaRegistration::sanitize_coordinator(
+				array(
+					array(
+						'name'  => 'Ana',
+						'email' => 'ana@example.org',
+					),
+					array(
+						'name'  => 'Luis',
+						'email' => 'luis@example.org',
+					),
+				)
+			)
+		);
+		$this->assertSame( 10, ProcedureMetaRegistration::sanitize_coordinator_count( 99 ) );
+		$this->assertSame( 0, ProcedureMetaRegistration::sanitize_coordinator_count( '-1' ) );
 	}
 
 	/**

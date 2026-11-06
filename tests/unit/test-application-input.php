@@ -68,8 +68,10 @@ class Test_Application_Input extends WP_UnitTestCase {
 		$this->assertSame( 'head', $r['data']['position'] );
 		$this->assertSame(
 			array(
-				'name'  => 'Ana Pérez',
-				'email' => 'ana@example.org',
+				array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				),
 			),
 			$r['data']['coordinator']
 		);
@@ -120,12 +122,64 @@ class Test_Application_Input extends WP_UnitTestCase {
 		);
 		$this->assertTrue( $r['ok'] );
 		$this->assertSame(
-			array(
-				'name'  => '',
-				'email' => '',
-			),
+			array(),
 			$r['data']['coordinator'],
 			'lo que no se pide no se guarda'
+		);
+	}
+
+	/** A procedure can request no coordinators or several, and validates every requested row. */
+	public function test_multiple_coordinators_are_validated_as_a_list() {
+		$procedure = $this->procedimiento( array( 'coordinator_count' => 2 ) );
+		$valid     = ApplicationInput::validate(
+			array(
+				'position'     => 'head',
+				'coordinators' => array(
+					array(
+						'name'  => 'Ana Pérez',
+						'email' => 'ANA@example.org',
+					),
+					array(
+						'name'  => 'Luis Díaz',
+						'email' => 'luis@example.org',
+					),
+				),
+				'accept'       => '1',
+				'answers'      => array( 'q1' => 'A' ),
+			),
+			$procedure
+		);
+		$this->assertTrue( $valid['ok'], implode( ', ', $valid['errors'] ) );
+		$this->assertSame( 'ana@example.org', $valid['data']['coordinator'][0]['email'] );
+		$this->assertSame( 'Luis Díaz', $valid['data']['coordinator'][1]['name'] );
+
+		$invalid = ApplicationInput::validate(
+			array(
+				'position'     => 'head',
+				'coordinators' => array(
+					array(
+						'name'  => 'Ana',
+						'email' => 'ana@example.org',
+					),
+				),
+				'accept'       => '1',
+				'answers'      => array( 'q1' => 'A' ),
+			),
+			$procedure
+		);
+		$this->assertContains( 'coordinator_name', $invalid['errors'], 'se exige la segunda persona' );
+		$this->assertSame(
+			array(),
+			ApplicationInput::validate(
+				array( 'position' => 'head' ),
+				$this->procedimiento(
+					array(
+						'coordinator_count'    => 0,
+						'requires_coordinator' => false,
+						'commitments'          => '',
+					)
+				)
+			)['data']['coordinator']
 		);
 	}
 

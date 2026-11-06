@@ -640,13 +640,13 @@ final class ProcedureEditorView {
 		ob_start();
 		?>
 		<div class="prc-campo">
-			<div class="prc-opcion">
-				<input type="checkbox" id="prc-coordinator"
-					name="<?php echo esc_attr( ProcedureMetaKeys::REQUIRES_COORDINATOR ); ?>" value="1"
-					<?php checked( '' !== (string) $v[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] ); ?> />
-				<label for="prc-coordinator">La solicitud pide una persona coordinadora</label>
-			</div>
-			<p class="prc-campo__ayuda">Nombre y correo de quien coordina en el centro.</p>
+			<label class="prc-campo__etiqueta" for="prc-coordinator-count">Personas coordinadoras que se piden</label>
+			<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>">
+				<?php for ( $count = 0; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) : ?>
+					<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ], $count ); ?>><?php echo esc_html( 0 === $count ? 'Ninguna' : sprintf( '%d %s', $count, 1 === $count ? 'persona' : 'personas' ) ); ?></option>
+				<?php endfor; ?>
+			</select>
+			<p class="prc-campo__ayuda">El centro rellenará estos datos en su solicitud. Se pueden pedir de cero a diez personas.</p>
 		</div>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>

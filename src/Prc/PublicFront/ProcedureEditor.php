@@ -541,23 +541,26 @@ final class ProcedureEditor {
 	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
+	 * @param int $procedure_id Existing procedure, or 0 on creation.
 	 * @return array<string, mixed>
 	 */
-	private static function submitted_data(): array {
+	private static function submitted_data( int $procedure_id = 0 ): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::ownership() se queda solo con lo que está en ella.
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::centre_kinds() se queda solo con lo que está en ella.
 		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
-		$coordina = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
+		$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
+			? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
+			: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- identificadores de término: ProcedureInput::term_ids() se queda solo con los enteros positivos.
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		return array(
+		$datos                      = array(
 			'title'                => self::field( self::FIELD_TITLE ),
 			'description'          => $descripcion,
 			'areas'                => $ambitos,
@@ -571,9 +574,11 @@ final class ProcedureEditor {
 			'audience'             => self::field( ProcedureMetaKeys::AUDIENCE ),
 			'ownership'            => $titularidad,
 			'centre_kinds'         => $clases,
-			'requires_coordinator' => $coordina,
+			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
 		);
+		$datos['coordinator_count'] = $coordina;
+		return $datos;
 	}
 
 	/**
@@ -590,7 +595,7 @@ final class ProcedureEditor {
 	 * @return array<string, mixed>
 	 */
 	private static function gated_data( int $procedure_id, bool $datos, bool $fechas ): array {
-		$crudo = self::submitted_data();
+		$crudo = self::submitted_data( $procedure_id );
 		if ( ! $fechas ) {
 			$plazos = array(
 				'opens_at'        => ProcedureMetaKeys::OPENS_AT,
@@ -605,8 +610,8 @@ final class ProcedureEditor {
 		if ( ! $datos ) {
 			// En crudo, sin los filtros de `display`: esto se va a reescribir
 			// tal cual, no a pintar.
-			$post  = get_post( $procedure_id );
-			$crudo = array_merge(
+			$post                       = get_post( $procedure_id );
+			$crudo                      = array_merge(
 				$crudo,
 				array(
 					'title'                => $post instanceof \WP_Post ? $post->post_title : '',
@@ -622,6 +627,7 @@ final class ProcedureEditor {
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				)
 			);
+			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
 		return $crudo;
 	}
@@ -650,6 +656,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
 		);
+		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
 			update_post_meta( $procedure_id, $clave, wp_slash( $valor ) );
 		}
@@ -1211,19 +1218,20 @@ final class ProcedureEditor {
 				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
 				: array_keys( ProcedureMetaKeys::ownerships() ),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
-			ProcedureMetaKeys::REQUIRES_COORDINATOR => get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ? '1' : '',
+			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
 		);
+		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
 
 		// Lo tecleado manda sobre lo guardado, pero solo en los campos que
 		// existen: del POST no entra ninguna clave nueva.
-		$tecleado = self::submitted_data();
+		$tecleado = self::submitted_data( $procedure_id );
 		$mapa     = array(
 			self::FIELD_TITLE                  => 'title',
 			self::FIELD_DESCRIPTION            => 'description',
@@ -1250,8 +1258,8 @@ final class ProcedureEditor {
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
 		}
-		if ( in_array( self::FIELD_TITLE, $enviados, true ) ) {
-			$guardado[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] = $tecleado['requires_coordinator'] ? '1' : '';
+		if ( in_array( ProcedureMetaKeys::COORDINATOR_COUNT, $enviados, true ) ) {
+			$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) $tecleado['coordinator_count'];
 		}
 		foreach ( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) as $clave ) {
 			if ( in_array( $clave, $enviados, true ) ) {

@@ -283,6 +283,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$this->assertSame( '', $r['data']['opens_at'] );
 		$this->assertSame( '', $r['data']['resolution_url'] );
 		$this->assertFalse( $r['data']['requires_coordinator'] );
+		$this->assertSame( 0, $r['data']['coordinator_count'] );
 	}
 
 	/**

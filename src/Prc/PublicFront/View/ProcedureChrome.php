@@ -336,7 +336,7 @@ final class ProcedureChrome {
 			array( 'Curso', (string) $m['courses'], '' ),
 			array( 'Inscripción', (string) $m['dates'], '' ),
 			array( 'Subsanación', (string) $m['amend_dates'], '' ),
-			array( 'Coordinación', empty( $m['requires_coordinator'] ) ? '' : 'Pide una persona coordinadora', '' ),
+			array( 'Coordinación', (int) ( $m['coordinator_count'] ?? 0 ) < 1 ? '' : sprintf( 'Pide %d %s coordinadora%s', (int) $m['coordinator_count'], 1 === (int) $m['coordinator_count'] ? 'persona' : 'personas', 1 === (int) $m['coordinator_count'] ? '' : 's' ), '' ),
 			array( 'Contacto', (string) $m['contact_email'], (string) $m['contact_email'] ),
 		);
 

@@ -185,7 +185,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Las pestañas, la que se pide en la URL y sus recuentos.
+	 * Las seis pestañas, la que se pide en la URL y sus recuentos.
 	 */
 	public function test_the_five_panels_and_the_one_asked_for() {
 		list( , $uid, $procedimiento ) = $this->mio(
@@ -1157,6 +1157,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Marcar como histórico', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', $html );
 	}
 
 	/**
@@ -1180,6 +1182,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );
 		$this->assertStringContainsString( 'histórico', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
 
 		$this->acting_as( $this->administrator() );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
@@ -1212,6 +1216,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertTrue( $before[0]['delivery'] );
 		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
+		$this->assertSame( 1, $this->modelo( $procedure )['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
 		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
@@ -1285,5 +1290,30 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			);
 			$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
 		}
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => array( '2027-01-01' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => 'not-an-array' ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A submission without a delivery key cannot update unrelated questions. */
+	public function test_delivery_dates_reject_submissions_without_existing_deliveries() {
+		$question                  = array(
+			'key'      => 'q1',
+			'label'    => 'Texto',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $this->dia( '+30 days' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->acting_as( $uid );
+		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES );
+		$this->assertSame( 'error', $model['flash']['tipo'] );
+		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', ProcedureEditorView::html( $model ) );
 	}
 }

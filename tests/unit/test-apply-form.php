@@ -517,7 +517,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertNotNull( $id );
 		$meta = Applications::meta( $id );
 		$this->assertSame( ApplicationMetaKeys::POSITION_HEAD, $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] );
-		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ]['email'] );
+		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ][0]['email'] );
 		$this->assertSame(
 			array(
 				'q1' => 'Nada que añadir',

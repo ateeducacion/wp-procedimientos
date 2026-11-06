@@ -6526,7 +6526,8 @@ final class Applications {
 
 
 
-	public static function save( int $procedure_id, int $user_id, array $data, string $code = '' ): int {
+
+	public static function save( int $procedure_id, int $user_id, array $data, string $code = '', array $files = array() ): int {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
@@ -6535,8 +6536,45 @@ final class Applications {
 			return 0;
 		}
 
+		$id = self::save_post( $procedure_id, $user_id, $centro, $files );
+		if ( 0 === $id ) {
+			return 0;
+		}
+
+
+
+		$data += array(
+			'position'    => '',
+			'coordinator' => array(),
+			'answers'     => array(),
+		);
+		$metas = array(
+			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
+			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
+			ApplicationMetaKeys::APPLICANT_POSITION => (string) $data['position'],
+			ApplicationMetaKeys::COORDINATOR        => (array) $data['coordinator'],
+			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+		);
+		foreach ( $metas as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+		return $id;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files ): int {
 		$titulo = self::title( $centro, $procedure_id );
 		$id     = self::find( $procedure_id, $centro['code'] );
+		$is_new = null === $id;
 		if ( null === $id ) {
 			$id = wp_insert_post(
 				array(
@@ -6548,7 +6586,18 @@ final class Applications {
 				),
 				true
 			);
-		} else {
+		}
+		if ( is_wp_error( $id ) || ! $id ) {
+			return 0;
+		}
+		$id = (int) $id;
+		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
+			if ( $is_new ) {
+				wp_delete_post( $id, true );
+			}
+			return 0;
+		}
+		if ( ! $is_new ) {
 			$id = wp_update_post(
 				array(
 					'ID'         => $id,
@@ -6556,25 +6605,11 @@ final class Applications {
 				),
 				true
 			);
+			if ( is_wp_error( $id ) || ! $id ) {
+				return 0;
+			}
 		}
-		if ( is_wp_error( $id ) || ! $id ) {
-			return 0;
-		}
-		$id = (int) $id;
 
-
-
-		$metas = array(
-			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
-			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
-			ApplicationMetaKeys::APPLICANT_POSITION => (string) ( $data['position'] ?? '' ),
-			ApplicationMetaKeys::COORDINATOR        => (array) ( $data['coordinator'] ?? array() ),
-			ApplicationMetaKeys::ANSWERS            => (array) ( $data['answers'] ?? array() ),
-			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
-		);
-		foreach ( $metas as $clave => $valor ) {
-			update_post_meta( $id, $clave, wp_slash( $valor ) );
-		}
 		return $id;
 	}
 
@@ -7156,7 +7191,12 @@ final class ApplicationFiles {
 		}
 
 		$antes = self::descriptors( $application_id );
-		update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) );
+		if ( ! update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) ) ) {
+			foreach ( $nuevos as $descriptor ) {
+				self::erase( $descriptor );
+			}
+			return false;
+		}
 
 
 
@@ -13686,23 +13726,12 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code );
+		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = 'No se ha podido guardar la solicitud. Vuelva a intentarlo.';
+			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
 		}
 
-
-
-
-
-		if ( ! ApplicationFiles::store_all( $id, $ficheros['files'] ) ) {
-			if ( null === $existente ) {
-				wp_delete_post( $id, true );
-			}
-			self::$rejected = 'No se ha podido guardar el documento que adjuntó, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
-			return;
-		}
 		Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
 	}
 

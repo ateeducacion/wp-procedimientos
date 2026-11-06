@@ -187,7 +187,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	/**
 	 * Las seis pestañas, la que se pide en la URL y sus recuentos.
 	 */
-	public function test_the_five_panels_and_the_one_asked_for() {
+	public function test_the_workshop_panels_and_the_one_asked_for() {
 		list( , $uid, $procedimiento ) = $this->mio(
 			array(
 				ProcedureMetaKeys::QUESTIONS => array(
@@ -210,6 +210,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
 				ProcedureEditor::PANEL_PUBLISH,
+				ProcedureEditor::PANEL_CODE,
 			),
 			array_keys( $m['panels'] )
 		);
@@ -233,6 +234,33 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'Modalidad', $m['app_cols']['q1'] );
 
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $this->modelo( $procedimiento, 'inventado' )['panel'] );
+	}
+
+	/** A manager's forged JavaScript is ignored while CSS is saved. */
+	public function test_managers_can_save_css_but_cannot_save_javascript() {
+		list( , $uid, $procedure ) = $this->mio();
+		$this->submit(
+			$uid,
+			ProcedureEditor::OP_CUSTOM_CODE,
+			$procedure,
+			0,
+			array(
+				'prc_custom_css' => 'body { color: red; }',
+				'prc_custom_js'  => 'alert("forged");',
+			)
+		);
+		$this->assertSame( 'body { color: red; }', get_post_meta( $procedure, ProcedureMetaKeys::CUSTOM_CSS, true ) );
+		$this->assertSame( '', get_post_meta( $procedure, ProcedureMetaKeys::CUSTOM_JS, true ) );
+	}
+
+	/** Managers get the CSS editor and an explanation for hidden JavaScript. */
+	public function test_custom_code_panel_explains_and_limits_javascript_access() {
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::CUSTOM_CSS => 'h1 { color: red; }' ) );
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
+		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
+		$this->assertStringContainsString( 'solo está disponible para administración', $html );
 	}
 
 	/**

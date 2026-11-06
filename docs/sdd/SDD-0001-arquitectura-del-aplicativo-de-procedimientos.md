@@ -555,3 +555,22 @@ Mientras el taller siga pintando un solo campo de correo, `ProcedureEditor`
 acepta también el nombre anterior, `prc_contact_email`, y lo mete como el
 primero de la lista; `ProcedureView::model()` sigue ofreciendo `contact_email`
 con el primero de los tres. Las dos costuras se van con la pantalla del calco.
+
+## Adenda — 2026-11-06: entregas documentales independientes
+
+La ADR-0033 amplía las preguntas de tipo `file` con una marca opcional `delivery`
+y los días `opens_at` y `closes_at`. No crea otro tipo de contenido ni otro
+almacén. El formulario inicial excluye esas preguntas; un POST independiente
+por documento las recibe para una solicitud existente, sin alterar su núcleo
+ni su revisión. `ProcedureAccess::can_deliver()` comprueba centro, publicación,
+exclusión, archivo y plazo propio en la zona del sitio.
+
+El estado derivado del procedimiento no cambia. Las entregas pueden seguir
+abiertas tras el definitivo. Se conserva el límite de veinte preguntas y un
+fichero por pregunta; no incluye migración histórica, participantes docentes,
+reclamaciones ni versiones de documentos. Los plazos propios se configuran
+mientras «Preguntas» siga editable.
+
+Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0033 y pruebas en
+`tests/unit/test-procedure-questions.php`, `test-procedure-editor.php` y
+`test-application-files.php`.

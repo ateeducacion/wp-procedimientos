@@ -268,6 +268,18 @@ if ( ! function_exists( 'prc_demo_procedures' ) ) {
 					'prc_final_list_url'       => 'https://www.example.org/salud/listado-definitivo.pdf',
 					'prc_ownership'            => array( 'public', 'private' ),
 					'prc_requires_coordinator' => true,
+					'prc_questions'            => array(
+						array(
+							'key'       => 'q1',
+							'label'     => 'Memoria final',
+							'help'      => 'Adjunte la memoria del proyecto en un único documento.',
+							'type'      => 'file',
+							'required'  => true,
+							'delivery'  => true,
+							'opens_at'  => prc_demo_day( -2 ),
+							'closes_at' => prc_demo_day( 30 ),
+						),
+					),
 				),
 				'applications' => array(
 					'direccion' => array( 'state' => 'admitted' ),

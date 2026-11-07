@@ -1,5 +1,5 @@
 ---
-id: ADR-0036
+id: ADR-0037
 title: "Las solicitudes del profesorado son individuales y usan su cuenta"
 status: Propuesta
 date: 2026-11-07
@@ -15,7 +15,7 @@ ai_assistance:
   model: "GPT-6"
 ---
 
-# ADR-0036: Las solicitudes del profesorado son individuales y usan su cuenta
+# ADR-0037: Las solicitudes del profesorado son individuales y usan su cuenta
 
 ## Estado
 

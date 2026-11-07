@@ -131,7 +131,7 @@ final class ApplyFormView {
 						<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>">Entregar documento</button>
 					</form>
 				<?php else : ?>
-					<p>No se admiten entregas: hace falta una solicitud de su centro no excluida, un plazo abierto y un procedimiento publicado sin archivar.</p>
+					<p>No se admiten entregas: hace falta una solicitud vigente, un plazo abierto y un procedimiento publicado sin archivar.</p>
 				<?php endif; ?>
 			</section>
 			<?php
@@ -150,7 +150,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; Mi centro</a></p>
+		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'] ? 'Mis solicitudes' : 'Mi centro' ); ?></a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 			<span class="<?php echo esc_attr( Assets::state_class( (string) $m['state'] ) ); ?>"><?php echo esc_html( (string) $m['state_label'] ); ?></span>
@@ -289,11 +289,12 @@ final class ApplyFormView {
 	 * @return string
 	 */
 	private static function form( array $m ): string {
-		$v      = (array) $m['values'];
-		$spec   = (array) $m['spec'];
-		$centro = (array) $m['centre'];
-		$quien  = (array) ( $m['applicant'] ?? array() );
-		$nueva  = array() === (array) $m['application'];
+		$v       = (array) $m['values'];
+		$spec    = (array) $m['spec'];
+		$centro  = (array) $m['centre'];
+		$quien   = (array) ( $m['applicant'] ?? array() );
+		$nueva   = array() === (array) $m['application'];
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 
 		// Los campos bloqueados se arman antes: dentro del `echo` de la
 		// plantilla, el escape ya no se ve desde fuera.
@@ -344,26 +345,30 @@ final class ApplyFormView {
 
 			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
-				<div class="prc-seccion__cuerpo">
-					<?php echo $del_centro; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				</div>
-			</section>
+			<?php if ( ! $docente ) : ?>
+				<section class="prc-seccion">
+					<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
+					<div class="prc-seccion__cuerpo">
+						<?php echo $del_centro; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					</div>
+				</section>
+			<?php endif; ?>
 
 			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo">DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO</h3>
+				<h3 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'DATOS DE LA PERSONA PARTICIPANTE' : 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO' ); ?></h3>
 				<div class="prc-seccion__cuerpo">
 					<?php echo $de_quien; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-					<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
-						<?php echo self::label( 'prc-position', 'Cargo en el centro', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-						<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
-							<option value="">— Elija —</option>
-							<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
-								<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
-							<?php endforeach; ?>
-						</select>
-					</div>
+					<?php if ( ! $docente ) : ?>
+						<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
+							<?php echo self::label( 'prc-position', 'Cargo en el centro', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+							<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
+								<option value="">— Elija —</option>
+								<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
+									<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+					<?php endif; ?>
 				</div>
 			</section>
 
@@ -372,7 +377,7 @@ final class ApplyFormView {
 					<h3 class="prc-seccion__titulo">SOLICITA</h3>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
-							<p>La participación de su centro en la <em>presente convocatoria</em>, comprometiéndose a cumplir los siguientes compromisos:</p>
+							<p><?php echo esc_html( $docente ? 'Su participación en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' : 'La participación de su centro en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' ); ?></p>
 							<p><?php echo nl2br( esc_html( (string) $spec['commitments'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escapado antes de nl2br(). ?></p>
 						</div>
 						<div class="prc-campo prc-campo--completo">
@@ -380,7 +385,7 @@ final class ApplyFormView {
 								<div class="prc-opcion">
 									<label for="prc-accept">
 										<input type="checkbox" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?> />
-										El centro acepta estos compromisos
+										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
 									</label>
 								</div>
 							</div>
@@ -637,8 +642,10 @@ final class ApplyFormView {
 		<section class="prc-seccion prc-solicitud-resumen">
 			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
 			<dl class="prc-respuestas">
-				<dt>Cargo</dt>
-				<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
+				<?php if ( '' !== (string) $s['position'] ) : ?>
+					<dt>Cargo</dt>
+					<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
+				<?php endif; ?>
 				<?php foreach ( $coord as $index => $persona ) : ?>
 					<?php if ( '' !== (string) $persona['name'] ) : ?>
 						<dt><?php echo esc_html( sprintf( 1 === count( $coord ) ? 'Persona coordinadora' : 'Persona coordinadora %d', $index + 1 ) ); ?></dt>
@@ -673,6 +680,7 @@ final class ApplyFormView {
 		if ( '' === $url ) {
 			return '';
 		}
-		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">Las solicitudes de mi centro</a></p>';
+		$rotulo = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' ) ? 'Mis solicitudes' : 'Las solicitudes de mi centro';
+		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">' . esc_html( $rotulo ) . '</a></p>';
 	}
 }

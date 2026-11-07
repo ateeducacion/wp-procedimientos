@@ -452,7 +452,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => 'Mi centro',
+				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -702,11 +702,10 @@ final class Shell {
 			$menu[] = self::entry( 'Inicio', $secciones['home']['url'], 'home' === $activa );
 		}
 
-		// «Sus solicitudes»: las que ha presentado su centro. Las del
-		// profesorado son de otra fase y no hay pantalla a la que llevar.
+		// Solicitudes presentadas por el centro o por la persona docente.
 		if ( isset( $secciones['mine'] ) ) {
 			$suyas            = self::entry( 'Sus solicitudes' );
-			$suyas['items'][] = self::entry( 'De su centro', $secciones['mine']['url'], 'mine' === $activa );
+			$suyas['items'][] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
 			$menu[]           = $suyas;
 		}
 

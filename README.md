@@ -23,7 +23,7 @@ aplicativo**, no en el escritorio: en «Gestión de procedimientos», que es lo
 que se viene a ver.
 
 Lleva también el mu-plugin de desarrollo, así que desde la barra superior se
-puede **cambiar de cuenta** —`gestion`, `gestion2`, `direccion`, `direccion2`—
+puede **cambiar de cuenta** —`gestion`, `gestion2`, `direccion`, `direccion2`, `profesor`—
 y ver el aplicativo desde cada lado: quien convoca y quien solicita, cada uno
 acotado a su ámbito o a su centro, que es la mitad de lo que hay que probar
 aquí. Volver a la propia cuenta se hace desde la misma barra.
@@ -198,14 +198,16 @@ contraseña es `password` en todos.
 | `editor-ambito2` | `editor` | Ámbito 2 y descendientes |
 | `direccion` | `prc_school_head` | Un centro del catálogo inventado |
 | `direccion2` | `prc_school_head` | Otro centro |
+| `profesor` | `prc_teacher` | Sin centro; tiene una solicitud de ejemplo |
 
 Flujo sugerido: entra como `editor-ambito1` y `editor-ambito2` y comprueba que
 ambos pueden editar el procedimiento compartido, pero cada uno solo cambia
 los ámbitos organizadores de su rama. Un procedimiento exclusivo de la otra
 rama no aparece en el listado ni se abre por enlace directo. Después entra
 como `direccion`, presenta una solicitud y vuelve a «Solicitar»: te reabre la
-misma. `gestion` y `gestion2` sirven para comprobar la compatibilidad del rol
-anterior.
+misma. Con `profesor`, consulta la solicitud individual de ejemplo y presenta
+otra desde un procedimiento dirigido al profesorado. `gestion` y `gestion2`
+sirven para comprobar la compatibilidad del rol anterior.
 
 Para cambiar de usuario sin cerrar sesión, **WPFront User Role Editor** (menú
 «Switch To» en Usuarios), igual que en producción.

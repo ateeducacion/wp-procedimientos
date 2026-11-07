@@ -19,13 +19,13 @@ ai_assistance:
 
 **Estado:** propuesta. Los requisitos marcados **F1** son el alcance que fija
 [SDD-0001](../sdd/SDD-0001-arquitectura-del-aplicativo-de-procedimientos.md)
-y que desarrollan las veinticuatro ADR del [registro](../adr/registro.md):
+y que desarrollan las ADR del [registro](../adr/registro.md):
 el esqueleto que se está construyendo (fase 0 de
 [PLAN-0001](../plan/PLAN-0001-implantacion-por-fases.md)) más las pantallas
 completas, los correos y el CSV (fase 1). Los marcados **F2**, **F3** y **F4**
-se escriben aquí para que el alcance de F1 se entienda por lo que deja fuera,
-y se cerrarán con su propia ADR cuando les toque. Ninguno está entregado: a
-esta fecha no hay nada desplegado en el sitio de destino.
+se escriben aquí para que el alcance se entienda por lo que queda fuera. Las
+solicitudes docentes se incorporan a F1 mediante ADR-0036. El desarrollo del
+repositorio no implica que haya nada desplegado en el sitio de destino.
 **Fecha:** 2026-09-15
 **Fuentes:**
 
@@ -95,7 +95,7 @@ funcional en sí misma: RNF-REN-02 y RNF-OPE-01.
 | Dirección de centro | `prc_school_head` | Miembro del equipo directivo de un centro educativo que presenta la solicitud de su centro | La meta de usuario con el código de centro, cuya clave devuelve el filtro `prc_centre_code_meta_key` ([ADR-0016](../adr/ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)) |
 | Administración del aplicativo | `administrator` | Quien administra el sitio; llega a todos los ámbitos, ajusta, diagnostica y desarchiva | Capacidades `prc_manage_all_areas` y `prc_manage_app` |
 | Persona visitante | — | Cualquiera que llega al sitio | — |
-| Profesorado participante | — | Docente que se inscribe a título individual | **F3**: el modelo deja el hueco (`prc_audience = teachers`) y no se implementa antes |
+| Profesorado participante | Cuenta de docente | Docente que se inscribe a título individual | F1: solicitudes individuales con la capacidad `prc_apply_as_teacher` (ADR-0036) |
 
 Los slugs son los de los dos roles que crea el snippet suelto
 `snippets/roles-and-profiles.php` **en el entorno local**. El aplicativo solo
@@ -123,7 +123,7 @@ lo que hay hoy y adónde va cada pieza.
 | El centro de quien solicita | Meta de usuario escrita al iniciar sesión por un fragmento que consulta el directorio corporativo | Meta de usuario con clave configurable, de solo lectura en la solicitud ([ADR-0016](../adr/ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)) | F1 |
 | El catálogo de centros | Un cuarto formulario con los centros | Filtro `prc_centres`; por defecto un JSON fuera del repositorio ([ADR-0017](../adr/ADR-0017-el-catalogo-de-centros-no-se-versiona.md)) | F1 |
 | Documentación del centro | Subidas al formulario de solicitud: aceptación firmada, proyecto, memoria, otros | Ficheros privados fuera del alcance del servidor web, con su ADR | **F2** |
-| Solicitudes del profesorado | Un segundo formulario de solicitud, individual | Audiencia `teachers`, con su ADR | **F3** |
+| Solicitudes del profesorado | Un segundo formulario de solicitud, individual | El mismo formulario con núcleo individual, preguntas y documentos privados (ADR-0036) | F1 |
 | Lo ya presentado | Miles de entradas y ficheros | No se migra en la fase 1 ([ADR-0024](../adr/ADR-0024-las-solicitudes-de-hoy-no-se-migran.md)) | **F4** |
 
 **Fase**: F1 el alcance de SDD-0001 (fases 0 y 1 del plan) · F2
@@ -158,7 +158,7 @@ requisito sin forma de verificarlo es una intención, no un requisito.
 | RF-GES-14 | Ve el número de solicitudes de cada procedimiento en su listado, por curso | F1 | Página `gestion-de-procedimientos` (`[prc_workspace]`) |
 | RF-GES-15 | Recibe un correo cuando llega una solicitud a un procedimiento suyo, en el contacto del ámbito | F1 | los `prc_contact_emails` reciben el aviso al presentar; capturado en local |
 | RF-GES-16 | Configura qué documentación tiene que aportar el centro (aceptación firmada, proyecto, memoria) y hasta cuándo | F2 | Con su ADR |
-| RF-GES-17 | Dirige un procedimiento al profesorado individual en lugar de a los centros | F3 | `prc_audience = teachers`, con su ADR |
+| RF-GES-17 | Dirige un procedimiento al profesorado individual en lugar de a los centros | F1 | `prc_audience = teachers`; una persona docente presenta y consulta su solicitud |
 
 ### 5.2 Dirección de centro (`prc_apply`)
 

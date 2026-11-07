@@ -101,6 +101,8 @@ function prc_strip_comments( string $code ): string {
 			continue;
 		}
 		if ( T_COMMENT === $token[0] || T_DOC_COMMENT === $token[0] ) {
+			// Quita también el espacio anterior a un comentario en línea.
+			$out = rtrim( $out, " \t" );
 			// Los saltos que tuviera dentro se conservan; el texto no.
 			$out .= str_repeat( "\n", substr_count( $token[1], "\n" ) );
 			continue;

@@ -201,7 +201,10 @@ final class MyCentre {
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,
-			'state_label'  => ProcedureState::label( $estado ),
+			'state_label'  => ProcedureState::label(
+				$estado,
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'review'       => $revision,
 			'review_label' => (string) ( ApplicationMetaKeys::review_states()[ $revision ] ?? '' ),
 			'note'         => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],

@@ -10,12 +10,13 @@ namespace Prc\Domain;
 use Prc\Meta\ProcedureMetaKeys;
 
 /**
- * Deriva el estado del procedimiento de sus fechas y sus enlaces.
+ * Deriva el estado del procedimiento de su publicación, fechas y enlaces,
+ * con cierre manual de solicitudes.
  *
  * Hoy el estado es un desplegable de siete valores que alguien tiene que
  * acordarse de cambiar, y por eso hay iconos para «abierta con el plazo
  * finalizado» y «cerrada con el plazo abierto». Un dato que se puede calcular
- * no se guarda (ADR-0013).
+ * no se guarda (ADR-0013), salvo la pausa de solicitudes (ADR-0035).
  *
  * {@see of()} es pura: ni una llamada a WordPress. {@see of_post()} es el
  * envoltorio que lee el post, para que todas las pantallas lo pregunten igual.
@@ -76,6 +77,9 @@ final class ProcedureState {
 		if ( '' !== $amend_opens && $amend_opens <= $today && $today <= $amend_closes ) {
 			return ProcedureMetaKeys::STATE_AMENDMENT;
 		}
+		if ( ! empty( $meta[ ProcedureMetaKeys::APPLICATIONS_CLOSED ] ) ) {
+			return ProcedureMetaKeys::STATE_CLOSED;
+		}
 
 		$opens  = self::text( $meta, ProcedureMetaKeys::OPENS_AT );
 		$closes = self::text( $meta, ProcedureMetaKeys::CLOSES_AT );
@@ -124,10 +128,14 @@ final class ProcedureState {
 	/**
 	 * Human label for a state.
 	 *
-	 * @param string $state State slug.
+	 * @param string $state           State slug.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
 	 * @return string Empty when the slug is not one of ours.
 	 */
-	public static function label( string $state ): string {
+	public static function label( string $state, bool $manually_closed = false ): string {
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'Cerrado manualmente';
+		}
 		return (string) ( ProcedureMetaKeys::states()[ $state ] ?? '' );
 	}
 
@@ -182,7 +190,8 @@ final class ProcedureState {
 	 */
 	public static function why_locked( string $state ): string {
 		$textos = array(
-			ProcedureMetaKeys::STATE_CLOSED    => 'El plazo de solicitud está cerrado: solo se pueden cambiar las fechas y los enlaces. Las solicitudes se siguen gestionando.',
+			ProcedureMetaKeys::STATE_CLOSED    => 'Las solicitudes están cerradas: solo se pueden cambiar fechas y enlaces. '
+				. 'Las entregas documentales conservan sus propios plazos.',
 			ProcedureMetaKeys::STATE_AMENDMENT => 'La subsanación está en marcha: el procedimiento ya no se edita, para no mover el suelo a quien está subsanando. Las solicitudes se siguen gestionando.',
 			ProcedureMetaKeys::STATE_RESOLVED  => 'El procedimiento está resuelto: solo se pueden cambiar los enlaces.',
 		);

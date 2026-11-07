@@ -167,9 +167,10 @@ final class ApplyForm {
 	 *
 	 * @param string $state        One of ProcedureMetaKeys::states().
 	 * @param string $review_state Review state of the existing application, '' when there is none.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
 	 * @return string Empty when the form is open; otherwise why it is not.
 	 */
-	public static function window( string $state, string $review_state ): string {
+	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
 		if ( ProcedureState::accepts_applications( $state ) ) {
 			return '';
 		}
@@ -181,7 +182,10 @@ final class ApplyForm {
 		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
 			return 'El plazo de solicitud todavía no está abierto.';
 		}
-		return 'El plazo de solicitud está cerrado.';
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
 	}
 
 	/**
@@ -221,7 +225,8 @@ final class ApplyForm {
 		$existente = Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
-			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : ''
+			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -429,7 +434,10 @@ final class ApplyForm {
 		$m['title']           = (string) get_post_field( 'post_title', $procedure_id );
 		$m['view_url']        = (string) get_permalink( $procedure_id );
 		$m['state']           = ProcedureState::of_post( $procedure_id );
-		$m['state_label']     = ProcedureState::label( (string) $m['state'] );
+		$m['state_label']     = ProcedureState::label(
+			(string) $m['state'],
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+		);
 		$m['opens_at']        = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::OPENS_AT, true );
 		$m['closes_at']       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true );
 		$m['amend_opens_at']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_OPENS_AT, true );
@@ -471,7 +479,11 @@ final class ApplyForm {
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
 			$m['why'] = self::why_not_allowed( $user_id, $procedure_id );
 		} else {
-			$m['why'] = self::window( (string) $m['state'], (string) ( $m['application']['state'] ?? '' ) );
+			$m['why'] = self::window(
+				(string) $m['state'],
+				(string) ( $m['application']['state'] ?? '' ),
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			);
 		}
 		$m['can_submit'] = '' === $m['why'];
 		$m['values']     = self::values( (array) $m['application'] );

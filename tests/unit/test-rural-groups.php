@@ -196,12 +196,19 @@ class Test_Rural_Groups extends WP_UnitTestCase {
 		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $this->procedimiento( array( ProcedureMetaKeys::KIND_RURAL_GROUP ) ) ) ) );
 		$this->assertSame( array( 'C0001', 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $this->procedimiento( array_keys( ProcedureMetaKeys::centre_kinds() ) ) ) ) );
 		$this->assertSame( array( 'C0001', 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $this->procedimiento( null ) ) ), 'sin la meta, como hasta ahora: no se cierra a nadie' );
+		$solo_cer = $this->procedimiento( array( ProcedureMetaKeys::KIND_RURAL_GROUP ) );
+		update_post_meta( $solo_cer, ProcedureMetaKeys::OWNERSHIP, array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ) );
+		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $solo_cer ) ), 'la titularidad del centro no filtra a un CER que solicita como colectivo' );
 
 		$solo_centros = $this->procedimiento( array( ProcedureMetaKeys::KIND_SCHOOL ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $uid, $solo_centros, 'G0001' ) );
 		$this->assertTrue( ProcedureAccess::can_apply( $uid, $solo_centros, 'C0001' ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $uid, $solo_centros, 'C0009' ), 'un código que no es suyo, nunca' );
 		$this->assertFalse( ProcedureAccess::can_apply( $this->school_head( 'C0001' ), $this->procedimiento( array( ProcedureMetaKeys::KIND_RURAL_GROUP ) ) ) );
+
+		$solo_profesorado = $this->procedimiento( array( ProcedureMetaKeys::KIND_SCHOOL ) );
+		update_post_meta( $solo_profesorado, ProcedureMetaKeys::AUDIENCE, ProcedureMetaKeys::AUDIENCE_TEACHERS );
+		$this->assertSame( array(), ProcedureAccess::apply_codes( $uid, $solo_profesorado ) );
 	}
 
 	/**

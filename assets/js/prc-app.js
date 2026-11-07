@@ -247,6 +247,36 @@
 
 	/* --- 4. El interruptor de publicación -------------------------------- */
 
+	/* --- 5. Ajustes exclusivos para solicitudes de centros ---------------- */
+
+	function mostrarCamposDeCentro() {
+		var audiencia = document.getElementById( 'prc-audience' );
+		if ( ! audiencia ) {
+			return;
+		}
+		var soloCentros = 'schools' === audiencia.value;
+		var codigoCentro = document.getElementById( 'prc-centre-kind-school' );
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-schools-only]' ), function ( caja ) {
+			caja.hidden = ! soloCentros;
+			Array.prototype.forEach.call( caja.querySelectorAll( 'input' ), function ( input ) {
+				input.disabled = ! soloCentros;
+			} );
+		} );
+		var admiteCentros = soloCentros && ( ! codigoCentro || codigoCentro.checked );
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-school-code]' ), function ( caja ) {
+			caja.hidden = ! admiteCentros;
+			Array.prototype.forEach.call( caja.querySelectorAll( 'input' ), function ( input ) {
+				input.disabled = ! admiteCentros;
+			} );
+		} );
+	}
+	document.addEventListener( 'change', function ( e ) {
+		if ( e.target && ( 'prc-audience' === e.target.id || 'prc-centre-kind-school' === e.target.id ) ) {
+			mostrarCamposDeCentro();
+		}
+	} );
+	document.addEventListener( 'DOMContentLoaded', mostrarCamposDeCentro );
+
 	/*
 	 * `data-prc-switch` en la casilla. Al cambiarla se envía su formulario, que
 	 * es lo que se espera de un interruptor: se toca y pasa algo.

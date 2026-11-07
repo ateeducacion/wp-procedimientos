@@ -277,7 +277,7 @@ final class ProcedureMetaKeys {
 	public static function centre_kinds(): array {
 		return array(
 			self::KIND_SCHOOL      => 'Cada centro educativo, con su código',
-			self::KIND_RURAL_GROUP => 'Agrupaciones de escuelas rurales, como colectivo',
+			self::KIND_RURAL_GROUP => 'Un CER, como colectivo y con su código',
 		);
 	}
 
@@ -1289,8 +1289,10 @@ final class ProcedureInput {
 		$emails       = self::emails( $raw['contact_emails'] ?? array() );
 		$color        = self::text( $raw, 'header_color' );
 		$audience     = ProcedureMetaKeys::in_list( $raw['audience'] ?? '', ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
-		$ownership    = self::ownership( $raw['ownership'] ?? array() );
-		$kinds        = self::centre_kinds( $raw['centre_kinds'] ?? array() );
+		$kinds        = ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience ? self::centre_kinds( $raw['centre_kinds'] ?? array() ) : array();
+		$ownership    = ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && in_array( ProcedureMetaKeys::KIND_SCHOOL, $kinds, true )
+			? self::ownership( $raw['ownership'] ?? array() )
+			: array();
 		$urls         = array();
 
 		if ( '' === $title ) {
@@ -1357,10 +1359,10 @@ final class ProcedureInput {
 			$color    = '';
 		}
 		$color = '' === $color ? ProcedureMetaKeys::HEADER_COLOR_NEUTRAL : $color;
-		if ( array() === $ownership ) {
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && in_array( ProcedureMetaKeys::KIND_SCHOOL, $kinds, true ) && array() === $ownership ) {
 			$errors[] = 'ownership';
 		}
-		if ( array() === $kinds ) {
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && array() === $kinds ) {
 			$errors[] = 'centre_kinds';
 		}
 		$errors = array_values( array_unique( $errors ) );
@@ -1417,7 +1419,7 @@ final class ProcedureInput {
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
-			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
+			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
@@ -3291,6 +3293,9 @@ final class ProcedureAccess {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
+			return array();
+		}
 		$kinds     = self::centre_kinds( $post_id );
 		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
 		$ownership = is_array( $ownership ) ? $ownership : array();
@@ -3301,7 +3306,7 @@ final class ProcedureAccess {
 			if ( ! in_array( $kind, $kinds, true ) ) {
 				continue;
 			}
-			if ( array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
+			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
 				continue;
 			}
 			$out[ $code ] = $kind;
@@ -11111,9 +11116,9 @@ final class ProcedureEditorView {
 						<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v[ ProcedureMetaKeys::AUDIENCE ] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<p class="prc-campo__ayuda" id="prc-audience-ayuda">Casi siempre, el centro educativo.</p>
+				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
 			</div>
-			<div class="prc-campo prc-campo--medio">
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only data-prc-school-code <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] && in_array( ProcedureMetaKeys::KIND_SCHOOL, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ? '' : 'hidden'; ?>>
 				<fieldset>
 					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl(); ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
@@ -11129,9 +11134,9 @@ final class ProcedureEditorView {
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
 				</fieldset>
 			</div>
-			<div class="prc-campo prc-campo--medio">
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
-					<legend class="prc-campo__etiqueta">Con qué códigos se solicita <?php echo self::obl(); ?></legend>
+					<legend class="prc-campo__etiqueta">Quién puede presentar solicitud <?php echo self::obl(); ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
 						<?php foreach ( (array) $m['centre_kinds'] as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
@@ -11142,7 +11147,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Marque «Agrupaciones de escuelas rurales» solo si participa un CER. Quien tenga código de centro y de CER podrá elegir con cuál solicita; cada código lleva su propia solicitud.</p>
+					<p class="prc-campo__ayuda">Marque al menos una opción. Si solo se admite la solicitud del CER como colectivo, marque únicamente esa opción. Cada código presenta su propia solicitud.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>
@@ -16164,6 +16169,8 @@ final class App {
   text-align: left;
 }
 
+.prc-form.prc-form--taller [data-prc-schools-only][hidden] { display: none !important; }
+
 .prc-form.prc-form--taller .prc-campo__etiqueta {
   display: block;
   margin: 0;
@@ -19289,6 +19296,36 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 	} );
 
 	/* --- 4. El interruptor de publicación -------------------------------- */
+
+	/* --- 5. Ajustes exclusivos para solicitudes de centros ---------------- */
+
+	function mostrarCamposDeCentro() {
+		var audiencia = document.getElementById( \'prc-audience\' );
+		if ( ! audiencia ) {
+			return;
+		}
+		var soloCentros = \'schools\' === audiencia.value;
+		var codigoCentro = document.getElementById( \'prc-centre-kind-school\' );
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-schools-only]\' ), function ( caja ) {
+			caja.hidden = ! soloCentros;
+			Array.prototype.forEach.call( caja.querySelectorAll( \'input\' ), function ( input ) {
+				input.disabled = ! soloCentros;
+			} );
+		} );
+		var admiteCentros = soloCentros && ( ! codigoCentro || codigoCentro.checked );
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-school-code]\' ), function ( caja ) {
+			caja.hidden = ! admiteCentros;
+			Array.prototype.forEach.call( caja.querySelectorAll( \'input\' ), function ( input ) {
+				input.disabled = ! admiteCentros;
+			} );
+		} );
+	}
+	document.addEventListener( \'change\', function ( e ) {
+		if ( e.target && ( \'prc-audience\' === e.target.id || \'prc-centre-kind-school\' === e.target.id ) ) {
+			mostrarCamposDeCentro();
+		}
+	} );
+	document.addEventListener( \'DOMContentLoaded\', mostrarCamposDeCentro );
 
 	/*
 	 * `data-prc-switch` en la casilla. Al cambiarla se envía su formulario, que

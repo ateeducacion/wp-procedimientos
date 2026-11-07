@@ -275,6 +275,12 @@ class Test_Shell extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>De su centro<', $html );
 		$this->assertStringNotContainsString( '>Administrar<', $html );
 
+		// El perfil docente presenta solicitudes personales.
+		$this->acting_as( (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) ) );
+		$html = Shell::render( 'Mis solicitudes', '', '' );
+		$this->assertStringContainsString( '>Personales<', $html );
+		$this->assertStringNotContainsString( '>De su centro<', $html );
+
 		// Gestión: administrar. «Sus solicitudes» no, que no tiene centro con
 		// el que solicitar.
 		$this->acting_as( $this->manager( array( $this->area( 'Área de prueba' ) ) ) );

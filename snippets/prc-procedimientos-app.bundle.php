@@ -11303,13 +11303,31 @@ final class ProcedureEditorView {
 		ob_start();
 		?>
 		<div class="prc-campo">
-			<label class="prc-campo__etiqueta" for="prc-coordinator-count">Personas coordinadoras que se piden</label>
+			<label class="prc-campo__etiqueta" for="prc-coordinator-count">¿Pide la solicitud personas coordinadoras?</label>
 			<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>">
-				<?php for ( $count = 0; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) : ?>
-					<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ], $count ); ?>><?php echo esc_html( 0 === $count ? 'Ninguna' : sprintf( '%d %s', $count, 1 === $count ? 'persona' : 'personas' ) ); ?></option>
-				<?php endfor; ?>
+				<option value="0" <?php selected( 0, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>>No se piden</option>
+				<option value="1" <?php selected( 1, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>>Sí, una persona</option>
+				<optgroup label="Sí, varias personas">
+					<?php
+					$palabras = array(
+						2  => 'Dos',
+						3  => 'Tres',
+						4  => 'Cuatro',
+						5  => 'Cinco',
+						6  => 'Seis',
+						7  => 'Siete',
+						8  => 'Ocho',
+						9  => 'Nueve',
+						10 => 'Diez',
+					);
+					for ( $count = 2; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) :
+						$rotulo = isset( $palabras[ $count ] ) ? $palabras[ $count ] . ' personas' : sprintf( '%d personas', $count );
+						?>
+						<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( $count, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>><?php echo esc_html( $rotulo ); ?></option>
+					<?php endfor; ?>
+				</optgroup>
 			</select>
-			<p class="prc-campo__ayuda">El centro rellenará estos datos en su solicitud. Se pueden pedir de cero a diez personas.</p>
+			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. Lo habitual es una; en programas con coordinación por ejes, cinco o seis.</p>
 		</div>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>

@@ -114,7 +114,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$r = ProcedureInput::validate( array() );
 
 		$this->assertFalse( $r['ok'] );
-		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'ownership', 'centre_kinds' ), $r['errors'] );
+		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'centre_kinds' ), $r['errors'] );
 
 		$r = ProcedureInput::validate(
 			array(

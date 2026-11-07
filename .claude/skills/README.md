@@ -85,11 +85,11 @@ Las tres se leen juntas con la política de permisos de la casa: toda decisión 
 |---|---|
 | `changelog` | Abrir un bloque de versión en `CHANGELOG.md` y publicar con `make release` |
 | `profiler` | Medir el rendimiento con `make profile` y comparar dos ramas con `make profile-compare` |
+| `manage-procedures` | Operar el aplicativo desde su interfaz o las API que estén disponibles |
 
-Esta sí es de la casa, así que se mantiene aquí y no se actualiza desde ningún
-upstream. Está adaptada de otro aplicativo del equipo: se conserva el método
-—dónde está el corte, cómo se clasifica un PR, qué no entra— y se cambia todo
-lo que era suyo.
+Las skills propias son de la casa: se mantienen aquí y no se actualizan desde
+ningún upstream. Describen flujos de este repositorio sin importar instrucciones
+ni datos de otros aplicativos.
 
 Recuerda [ADR-0001](../../docs/adr/ADR-0001-repo-entorno-desarrollo-no-plugin.md):
 la arquitectura de este repositorio prevalece sobre lo que recomiende una skill

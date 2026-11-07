@@ -282,7 +282,11 @@ final class ProcedureInput {
 	 * @return string[]
 	 */
 	public static function centre_kinds( $raw ): array {
-		return self::keys_of( $raw, ProcedureMetaKeys::centre_kinds() );
+		$seleccionados = self::keys_of(
+			$raw,
+			array_merge( ProcedureMetaKeys::centre_kinds(), array( 'both' => '' ) )
+		);
+		return in_array( 'both', $seleccionados, true ) ? array_keys( ProcedureMetaKeys::centre_kinds() ) : $seleccionados;
 	}
 
 	/**

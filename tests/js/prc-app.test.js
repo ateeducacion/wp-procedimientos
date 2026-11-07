@@ -175,7 +175,7 @@ describe( 'fields for school procedures', () => {
 	it( 'hides and disables centre options for teachers, then restores them for schools', async () => {
 		document.body.innerHTML = `
 			<select id="prc-audience"><option value="schools">Centros</option><option value="teachers">Profesorado</option></select>
-			<div data-prc-schools-only><input type="checkbox" id="prc-centre-kind-school" checked /></div>
+			<div data-prc-schools-only><input type="radio" name="prc_centre_kinds" value="school" checked /></div>
 			<div data-prc-school-code><input name="ownership[]" /></div>`;
 		await load();
 		const audience = document.getElementById( 'prc-audience' );
@@ -191,8 +191,22 @@ describe( 'fields for school procedures', () => {
 		expect( fields.hidden ).toBe( false );
 		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
 
-		document.getElementById( 'prc-centre-kind-school' ).checked = false;
-		document.getElementById( 'prc-centre-kind-school' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		const both = document.createElement( 'input' );
+		both.type = 'radio';
+		both.name = 'prc_centre_kinds';
+		both.value = 'both';
+		document.body.appendChild( both );
+		both.checked = true;
+		both.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( false );
+
+		const cer = document.createElement( 'input' );
+		cer.type = 'radio';
+		cer.name = 'prc_centre_kinds';
+		cer.value = 'rural_group';
+		document.body.appendChild( cer );
+		cer.checked = true;
+		cer.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		expect( fields.hidden ).toBe( true );
 	} );
 } );

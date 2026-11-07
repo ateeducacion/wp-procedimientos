@@ -494,11 +494,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		// El rótulo dice a quién se dirige el procedimiento, que no es lo que
 		// significaba «Tipología» en el sistema que se sustituye.
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
-		$this->assertStringContainsString( 'Quién puede presentar solicitud ', $html );
-		$this->assertStringContainsString( 'value="school"', $html );
+		$this->assertStringContainsString( 'Modalidad para centros y CER ', $html );
+		$this->assertSame( 3, substr_count( $html, 'type="radio" name="' . ProcedureMetaKeys::CENTRE_KINDS . '"' ) );
 		$this->assertStringContainsString( 'data-prc-schools-only', $html );
-		$this->assertStringContainsString( 'Marque al menos una opción.', $html );
-		$this->assertStringContainsString( 'value="rural_group"', $html, 'solo el CER también puede presentar una solicitud' );
+		$this->assertStringContainsString( 'value="school" checked="checked"', $html );
+		$this->assertStringContainsString( 'value="rural_group"', $html );
+		$this->assertStringContainsString( 'value="both"', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
 		$this->assertStringNotContainsString( '¿Pide la solicitud personas coordinadoras?', $html, 'la configuración de la solicitud aparece en el taller después del alta' );

@@ -340,6 +340,16 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function general_fields( array $m, array $v, array $listas, bool $nuevo ): string {
+		$clases      = (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ];
+		$modo        = in_array( ProcedureMetaKeys::KIND_SCHOOL, $clases, true ) && in_array( ProcedureMetaKeys::KIND_RURAL_GROUP, $clases, true )
+			? 'both'
+			: ( in_array( ProcedureMetaKeys::KIND_RURAL_GROUP, $clases, true ) ? ProcedureMetaKeys::KIND_RURAL_GROUP : ProcedureMetaKeys::KIND_SCHOOL );
+		$centros     = in_array( ProcedureMetaKeys::KIND_SCHOOL, $clases, true );
+		$modalidades = array(
+			ProcedureMetaKeys::KIND_SCHOOL      => 'Cada centro, con su código',
+			ProcedureMetaKeys::KIND_RURAL_GROUP => 'El CER como colectivo, con su código',
+			'both'                              => 'Centros y CER; cada código presenta su propia solicitud',
+		);
 		// El desplegable se arma antes de la plantilla: dentro de ella el
 		// escapado ya lo hace `term_select()`, y así el `phpcs:ignore` cabe en
 		// la misma línea del `echo`.
@@ -374,7 +384,7 @@ final class ProcedureEditorView {
 				</select>
 				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
 			</div>
-			<div class="prc-campo prc-campo--medio" data-prc-schools-only data-prc-school-code <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] && in_array( ProcedureMetaKeys::KIND_SCHOOL, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only data-prc-school-code <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] && $centros ? '' : 'hidden'; ?>>
 				<fieldset>
 					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
@@ -391,19 +401,19 @@ final class ProcedureEditorView {
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
-				<fieldset>
-					<legend class="prc-campo__etiqueta">Quién puede presentar solicitud <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
+				<fieldset aria-describedby="prc-centre-kind-mode-help">
+					<legend class="prc-campo__etiqueta">Modalidad para centros y CER <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
-						<?php foreach ( (array) $m['centre_kinds'] as $clave => $rotulo ) : ?>
+						<?php foreach ( $modalidades as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
-								<input type="checkbox" id="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"
-									name="<?php echo esc_attr( ProcedureMetaKeys::CENTRE_KINDS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>"
-									<?php checked( in_array( $clave, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ); ?> />
-								<label for="prc-centre-kind-<?php echo esc_attr( (string) $clave ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
+								<input type="radio" id="prc-centre-kind-<?php echo esc_attr( $clave ); ?>"
+									name="<?php echo esc_attr( ProcedureMetaKeys::CENTRE_KINDS ); ?>" value="<?php echo esc_attr( $clave ); ?>"
+									required <?php checked( $modo, $clave ); ?> />
+								<label for="prc-centre-kind-<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $rotulo ); ?></label>
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Marque al menos una opción. Si solo se admite la solicitud del CER como colectivo, marque únicamente esa opción. Cada código presenta su propia solicitud.</p>
+					<p class="prc-campo__ayuda" id="prc-centre-kind-mode-help">Quien tenga código de centro y de CER podrá elegir con cuál presenta su solicitud.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>

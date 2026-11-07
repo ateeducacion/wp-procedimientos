@@ -372,9 +372,9 @@ final class ProcedureEditorView {
 						<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v[ ProcedureMetaKeys::AUDIENCE ] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<p class="prc-campo__ayuda" id="prc-audience-ayuda">Casi siempre, el centro educativo.</p>
+				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
 			</div>
-			<div class="prc-campo prc-campo--medio">
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only data-prc-school-code <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] && in_array( ProcedureMetaKeys::KIND_SCHOOL, (array) $v[ ProcedureMetaKeys::CENTRE_KINDS ], true ) ? '' : 'hidden'; ?>>
 				<fieldset>
 					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
@@ -390,9 +390,9 @@ final class ProcedureEditorView {
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
 				</fieldset>
 			</div>
-			<div class="prc-campo prc-campo--medio">
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
-					<legend class="prc-campo__etiqueta">Con qué códigos se solicita <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
+					<legend class="prc-campo__etiqueta">Quién puede presentar solicitud <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
 						<?php foreach ( (array) $m['centre_kinds'] as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
@@ -403,7 +403,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Marque «Agrupaciones de escuelas rurales» solo si participa un CER. Quien tenga código de centro y de CER podrá elegir con cuál solicita; cada código lleva su propia solicitud.</p>
+					<p class="prc-campo__ayuda">Marque al menos una opción. Si solo se admite la solicitud del CER como colectivo, marque únicamente esa opción. Cada código presenta su propia solicitud.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>

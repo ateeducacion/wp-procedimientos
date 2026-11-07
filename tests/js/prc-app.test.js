@@ -171,6 +171,32 @@ describe( 'confirmation before an irreversible action', () => {
 	} );
 } );
 
+describe( 'fields for school procedures', () => {
+	it( 'hides and disables centre options for teachers, then restores them for schools', async () => {
+		document.body.innerHTML = `
+			<select id="prc-audience"><option value="schools">Centros</option><option value="teachers">Profesorado</option></select>
+			<div data-prc-schools-only><input type="checkbox" id="prc-centre-kind-school" checked /></div>
+			<div data-prc-school-code><input name="ownership[]" /></div>`;
+		await load();
+		const audience = document.getElementById( 'prc-audience' );
+		const fields = document.querySelector( '[data-prc-school-code]' );
+
+		audience.value = 'teachers';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( true );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => input.disabled ) ).toBe( true );
+
+		audience.value = 'schools';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
+
+		document.getElementById( 'prc-centre-kind-school' ).checked = false;
+		document.getElementById( 'prc-centre-kind-school' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( true );
+	} );
+} );
+
 describe( 'edit lock over the WordPress Heartbeat', () => {
 	const LOCK = `
 		<div id="prc-edit-lock" data-post-id="42" data-lock="100:7" data-release-nonce="nonce"

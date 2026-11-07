@@ -26,6 +26,8 @@
   text-align: left;
 }
 
+.prc-form.prc-form--taller [data-prc-schools-only][hidden] { display: none !important; }
+
 .prc-form.prc-form--taller .prc-campo__etiqueta {
   display: block;
   margin: 0;

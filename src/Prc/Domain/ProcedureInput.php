@@ -51,8 +51,10 @@ final class ProcedureInput {
 		$emails       = self::emails( $raw['contact_emails'] ?? array() );
 		$color        = self::text( $raw, 'header_color' );
 		$audience     = ProcedureMetaKeys::in_list( $raw['audience'] ?? '', ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
-		$ownership    = self::ownership( $raw['ownership'] ?? array() );
-		$kinds        = self::centre_kinds( $raw['centre_kinds'] ?? array() );
+		$kinds        = ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience ? self::centre_kinds( $raw['centre_kinds'] ?? array() ) : array();
+		$ownership    = ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && in_array( ProcedureMetaKeys::KIND_SCHOOL, $kinds, true )
+			? self::ownership( $raw['ownership'] ?? array() )
+			: array();
 		$urls         = array();
 
 		if ( '' === $title ) {
@@ -119,10 +121,10 @@ final class ProcedureInput {
 			$color    = '';
 		}
 		$color = '' === $color ? ProcedureMetaKeys::HEADER_COLOR_NEUTRAL : $color;
-		if ( array() === $ownership ) {
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && in_array( ProcedureMetaKeys::KIND_SCHOOL, $kinds, true ) && array() === $ownership ) {
 			$errors[] = 'ownership';
 		}
-		if ( array() === $kinds ) {
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience && array() === $kinds ) {
 			$errors[] = 'centre_kinds';
 		}
 		$errors = array_values( array_unique( $errors ) );
@@ -179,7 +181,7 @@ final class ProcedureInput {
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
-			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
+			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
@@ -280,7 +282,11 @@ final class ProcedureInput {
 	 * @return string[]
 	 */
 	public static function centre_kinds( $raw ): array {
-		return self::keys_of( $raw, ProcedureMetaKeys::centre_kinds() );
+		$seleccionados = self::keys_of(
+			$raw,
+			array_merge( ProcedureMetaKeys::centre_kinds(), array( 'both' => '' ) )
+		);
+		return in_array( 'both', $seleccionados, true ) ? array_keys( ProcedureMetaKeys::centre_kinds() ) : $seleccionados;
 	}
 
 	/**

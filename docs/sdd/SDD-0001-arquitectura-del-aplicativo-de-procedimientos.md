@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0036]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -110,7 +110,7 @@ permisos y pantallas que se lean en código y se prueben.
 - Subida de documentación por parte del centro (proyecto, memoria, aceptación
   firmada): fase 2, con su propia ADR.
 - Convocatorias dirigidas al profesorado individual o al alumnado: el modelo
-  deja el hueco (`prc_audience`) pero la fase 1 solo implementa centros.
+  dispone de solicitudes individuales para docentes además de solicitudes de centros (ADR-0036).
 - Certificaciones del profesorado participante.
 - Correos y recordatorios automáticos: fase 1, después del esqueleto.
 - Conservar las URL públicas de las convocatorias de hoy: decisión pendiente,
@@ -255,6 +255,7 @@ Capacidades del aplicativo:
 | Capacidad | Quién la tiene en local | Permite |
 |---|---|---|
 | `prc_apply` | `prc_school_head` | Presentar y editar la solicitud **de su centro** |
+| `prc_apply_as_teacher` | `prc_teacher` | Presentar y editar solicitudes individuales en procedimientos para docentes |
 | `prc_manage_procedures` | `prc_manager` | Crear, editar, publicar y archivar procedimientos **de sus ámbitos** |
 | `prc_review_applications` | `prc_manager` | Ver, admitir, excluir, pedir subsanar y exportar solicitudes de esos procedimientos |
 | `prc_manage_all_areas` | `administrator` | Lo anterior en todos los ámbitos |
@@ -454,7 +455,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
       cambiar el estado de revisión (a quien solicita). Fase 1.
 - [ ] Documentación adjunta del centro (aceptación firmada, proyecto,
       memoria) con ficheros privados fuera del alcance del servidor web. Fase 2.
-- [ ] Audiencia `teachers`. Fase 3.
+- [x] Audiencia `teachers`: solicitud individual, pantalla personal y control por capacidad (ADR-0036).
 - [ ] Migración del histórico y conservación de las URL. Fase 4, con ADR.
 - [ ] Recordatorios de cierre de plazo.
 - [ ] Estadísticas de participación por curso y ámbito.

@@ -57,6 +57,11 @@ if ( ! function_exists( 'prc_dev_demo_accounts' ) ) {
 				'pass'  => 'password',
 				'label' => 'Dirección 2 (IES Ejemplo Dos)',
 			),
+			array(
+				'login' => 'profesor',
+				'pass'  => 'password',
+				'label' => 'Docente de ejemplo',
+			),
 		);
 	}
 }

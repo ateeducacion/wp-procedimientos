@@ -124,16 +124,18 @@ final class MyCentre {
 	public static function model(): array {
 		$orden = self::sort();
 		$m     = array(
-			'aviso'   => '',
-			'centre'  => array(
+			'aviso'          => '',
+			'applicant_type' => ApplicationMetaKeys::TYPE_CENTRE,
+			'applicant'      => '',
+			'centre'         => array(
 				'code'      => '',
 				'name'      => '',
 				'ownership' => '',
 			),
-			'rows'    => array(),
-			'sort'    => $orden,
-			'headers' => self::headers( $orden ),
-			'amend'   => array(
+			'rows'           => array(),
+			'sort'           => $orden,
+			'headers'        => self::headers( $orden ),
+			'amend'          => array(
 				'count'  => 0,
 				'closes' => '',
 				'id'     => '',
@@ -141,12 +143,24 @@ final class MyCentre {
 		);
 
 		if ( ! is_user_logged_in() ) {
-			$m['aviso'] = 'Debe iniciar sesión con su usuario para ver las solicitudes de su centro.';
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para ver sus solicitudes.';
 			return $m;
 		}
 		$user_id = get_current_user_id();
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			$m['aviso'] = 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
+			$m['aviso'] = 'Su perfil no puede consultar solicitudes. Pídalo a quien administre el aplicativo.';
+			return $m;
+		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ) {
+			$m['applicant_type'] = ApplicationMetaKeys::TYPE_TEACHER;
+			$m['applicant']      = (string) wp_get_current_user()->display_name;
+			$solicitudes         = Applications::for_teacher( $user_id );
+			_prime_post_caches( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_parent' ) ) ), false, true );
+			foreach ( $solicitudes as $solicitud ) {
+				$m['rows'][] = self::row( $solicitud );
+			}
+			$m['rows']  = self::ordered( $m['rows'], $orden );
+			$m['amend'] = self::amendment( $m['rows'] );
 			return $m;
 		}
 		$m['centre'] = Applications::centre_of( $user_id );
@@ -192,7 +206,9 @@ final class MyCentre {
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
+			'url'          => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+				? ApplyForm::url( $procedure_id )
+				: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),

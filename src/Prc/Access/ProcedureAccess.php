@@ -42,7 +42,8 @@ final class ProcedureAccess {
 	/**
 	 * Presentar y editar la solicitud del propio centro.
 	 */
-	public const CAP_APPLY = 'prc_apply';
+	public const CAP_APPLY            = 'prc_apply';
+	public const CAP_APPLY_AS_TEACHER = 'prc_apply_as_teacher';
 
 	/**
 	 * Crear, editar, publicar y archivar procedimientos de sus ámbitos.
@@ -652,6 +653,15 @@ final class ProcedureAccess {
 		if ( $user_id <= 0 || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( $post_id <= 0 ) {
+			return user_can( $user_id, self::CAP_APPLY_AS_TEACHER ) || array() !== CentreScope::codes_for( $user_id );
+		}
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
+			return false;
+		}
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return '' === $code && user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$codes = $post_id > 0 ? self::apply_codes( $user_id, $post_id ) : CentreScope::codes_for( $user_id );
 		return '' === $code ? array() !== $codes : isset( $codes[ $code ] );
 	}
@@ -722,6 +732,10 @@ final class ProcedureAccess {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+			return (int) get_post_field( 'post_author', $application_id ) === $user_id
+				&& user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
 	}
@@ -738,9 +752,10 @@ final class ProcedureAccess {
 		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
-		if ( ! isset( CentreScope::codes_for( $user_id )[ $code ] )
+		$teacher      = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( ( $teacher ? ( ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) || ! self::can_apply( $user_id, $procedure_id ) ) : ! isset( CentreScope::codes_for( $user_id )[ $code ] ) )
 			|| 'publish' !== get_post_status( $application_id )
 			|| ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id )
 			|| 'publish' !== get_post_status( $procedure_id ) || self::is_archived( $procedure_id ) ) {

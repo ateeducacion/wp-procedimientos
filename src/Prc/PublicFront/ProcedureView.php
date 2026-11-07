@@ -336,6 +336,32 @@ final class ProcedureView {
 		if ( $user_id <= 0 || ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) || ! class_exists( Applications::class ) ) {
 			return array();
 		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			$solicitud = Applications::find_for_teacher( $post_id, $user_id );
+			$url       = ApplyForm::url( $post_id );
+			$vacia     = array(
+				'has'   => false,
+				'state' => '',
+				'label' => '',
+				'date'  => '',
+				'iso'   => '',
+				'url'   => $url,
+			);
+			if ( null === $solicitud ) {
+				return $vacia;
+			}
+			$estado = (string) get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true );
+			return array_merge(
+				$vacia,
+				array(
+					'has'   => true,
+					'state' => $estado,
+					'label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
+					'date'  => (string) get_the_date( 'd-m-Y', $solicitud ),
+					'iso'   => (string) get_post_time( 'Y-m-d', false, $solicitud ),
+				)
+			);
+		}
 		// El primer código con el que el procedimiento deja solicitar: el de
 		// la agrupación de escuelas rurales solo si no admite el del centro.
 		$code = ApplyForm::chosen( $user_id, $post_id, '' );

@@ -395,6 +395,10 @@ namespace Prc\Meta;
 if ( ! class_exists( 'Prc\Meta\ApplicationMetaKeys', false ) ) {
 final class ApplicationMetaKeys {
 
+	public const APPLICANT_TYPE = 'prc_applicant_type';
+	public const TYPE_CENTRE    = 'centre';
+	public const TYPE_TEACHER   = 'teacher';
+
 
 
 
@@ -459,6 +463,7 @@ final class ApplicationMetaKeys {
 
 	public static function all(): array {
 		return array(
+			self::APPLICANT_TYPE,
 			self::CENTRE_CODE,
 			self::CENTRE_NAME,
 			self::APPLICANT_POSITION,
@@ -1632,15 +1637,16 @@ final class ApplicationInput {
 
 
 	public static function validate( array $raw, array $procedure ): array {
-		$errors = array();
+		$errors  = array();
+		$teacher = 'teacher' === ( $procedure['applicant_type'] ?? '' );
 
-		$position = self::text( $raw, 'position' );
-		if ( ! isset( ApplicationMetaKeys::positions()[ $position ] ) ) {
+		$position = $teacher ? '' : self::text( $raw, 'position' );
+		if ( ! $teacher && ! isset( ApplicationMetaKeys::positions()[ $position ] ) ) {
 			$errors[] = 'position';
 			$position = '';
 		}
 
-		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$count            = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
 		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
 		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
 			$raw_coordinators[] = array(
@@ -2666,7 +2672,8 @@ final class ProcedureAccess {
 
 
 
-	public const CAP_APPLY = 'prc_apply';
+	public const CAP_APPLY            = 'prc_apply';
+	public const CAP_APPLY_AS_TEACHER = 'prc_apply_as_teacher';
 
 
 
@@ -3276,6 +3283,15 @@ final class ProcedureAccess {
 		if ( $user_id <= 0 || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( $post_id <= 0 ) {
+			return user_can( $user_id, self::CAP_APPLY_AS_TEACHER ) || array() !== CentreScope::codes_for( $user_id );
+		}
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
+			return false;
+		}
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return '' === $code && user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$codes = $post_id > 0 ? self::apply_codes( $user_id, $post_id ) : CentreScope::codes_for( $user_id );
 		return '' === $code ? array() !== $codes : isset( $codes[ $code ] );
 	}
@@ -3346,6 +3362,10 @@ final class ProcedureAccess {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+			return (int) get_post_field( 'post_author', $application_id ) === $user_id
+				&& user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
 	}
@@ -3362,9 +3382,10 @@ final class ProcedureAccess {
 		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
-		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
-		if ( ! isset( CentreScope::codes_for( $user_id )[ $code ] )
+		$teacher      = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( ( $teacher ? ( ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) || ! self::can_apply( $user_id, $procedure_id ) ) : ! isset( CentreScope::codes_for( $user_id )[ $code ] ) )
 			|| 'publish' !== get_post_status( $application_id )
 			|| ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id )
 			|| 'publish' !== get_post_status( $procedure_id ) || self::is_archived( $procedure_id ) ) {
@@ -3949,6 +3970,10 @@ final class ApplicationMetaRegistration {
 
 	public static function schema(): array {
 		return array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_applicant_type' ),
+			),
 			ApplicationMetaKeys::CENTRE_CODE        => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_text_field',
@@ -3982,6 +4007,16 @@ final class ApplicationMetaRegistration {
 				'sanitize' => 'sanitize_textarea_field',
 			),
 		);
+	}
+
+
+
+
+
+
+
+	public static function sanitize_applicant_type( $value ): string {
+		return ApplicationMetaKeys::TYPE_TEACHER === $value ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
 	}
 
 
@@ -5206,7 +5241,7 @@ final class Shell {
 		status_header( 200 );
 		nocache_headers();
 		self::send_header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
-		echo self::document( $body ); 
+		echo self::document( $body );
 		self::leave();
 	}
 
@@ -5233,15 +5268,15 @@ final class Shell {
 		wp_head();
 
 
-		echo ProcedureChrome::consent(); 
+		echo ProcedureChrome::consent();
 		?>
 </head>
 <body <?php body_class(); ?>>
 		<?php
 		wp_body_open();
-		echo $body; 
+		echo $body;
 		wp_footer();
-		echo ProcedureChrome::analytics(); 
+		echo ProcedureChrome::analytics();
 		?>
 </body>
 </html>
@@ -5473,7 +5508,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => 'Mi centro',
+				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -5613,7 +5648,7 @@ final class Shell {
 			<?php if ( '' !== $subtitle ) : ?>
 				<p class="prc-sub"><?php echo esc_html( $subtitle ); ?></p>
 			<?php endif; ?>
-			<?php echo $body; ?>
+			<?php echo $body;?>
 		</div>
 		<?php
 		return self::top() . self::tabs() . (string) ob_get_clean() . self::bottom();
@@ -5724,10 +5759,9 @@ final class Shell {
 		}
 
 
-
 		if ( isset( $secciones['mine'] ) ) {
 			$suyas            = self::entry( 'Sus solicitudes' );
-			$suyas['items'][] = self::entry( 'De su centro', $secciones['mine']['url'], 'mine' === $activa );
+			$suyas['items'][] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
 			$menu[]           = $suyas;
 		}
 
@@ -5927,7 +5961,7 @@ final class Shell {
 			<?php endif; ?>
 			<p class="prc-solo-admin-porque"><?php echo esc_html( $porque ); ?></p>
 			<div class="prc-solo-admin-cuerpo">
-				<?php echo $cuerpo; ?>
+				<?php echo $cuerpo;?>
 			</div>
 		</section>
 		<?php
@@ -5983,7 +6017,7 @@ final class Shell {
 
 	public static function leave( string $url = '' ): void {
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
-			throw new ExitSignal( $url ); 
+			throw new ExitSignal( $url );
 		}
 		if ( '' !== $url ) {
 			wp_safe_redirect( $url );
@@ -6506,6 +6540,7 @@ final class PanelParts {
 namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
+use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -6569,12 +6604,63 @@ final class Applications {
 				'orderby'          => 'date ID',
 				'order'            => 'ASC',
 				'fields'           => 'ids',
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, 
-				'meta_value'       => $centre_code, 
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $centre_code,
 				'suppress_filters' => false,
 			)
 		);
 		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+
+
+
+
+
+
+
+	public static function find_for_teacher( int $procedure_id, int $user_id ): ?int {
+		if ( $procedure_id <= 0 || $user_id <= 0 ) {
+			return null;
+		}
+		$ids = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_parent' => $procedure_id,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => 1,
+				'fields'      => 'ids',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE,
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER,
+			)
+		);
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+
+
+
+
+
+
+	public static function for_teacher( int $user_id ): array {
+		if ( $user_id <= 0 ) {
+			return array();
+		}
+		$posts = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => -1,
+				'orderby'     => 'date',
+				'order'       => 'DESC',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE,
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER,
+			)
+		);
+		return is_array( $posts ) ? $posts : array();
 	}
 
 
@@ -6622,8 +6708,8 @@ final class Applications {
 				'numberposts'      => -1,
 				'orderby'          => 'date',
 				'order'            => 'DESC',
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, 
-				'meta_value'       => $centre_code, 
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $centre_code,
 				'meta_compare'     => 'IN',
 				'suppress_filters' => false,
 			)
@@ -6692,9 +6778,11 @@ final class Applications {
 
 
 	public static function spec( int $procedure_id ): array {
+		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
 		return array(
-			'coordinator_count'    => self::coordinator_count( $procedure_id ),
-			'requires_coordinator' => self::coordinator_count( $procedure_id ) > 0,
+			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
+			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
+			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
@@ -6783,6 +6871,7 @@ final class Applications {
 			'answers'     => array(),
 		);
 		$metas = array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
 			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
 			ApplicationMetaKeys::APPLICANT_POSITION => (string) $data['position'],
@@ -6805,9 +6894,57 @@ final class Applications {
 
 
 
-	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files ): int {
-		$titulo = self::title( $centro, $procedure_id );
-		$id     = self::find( $procedure_id, $centro['code'] );
+	public static function save_teacher( int $procedure_id, int $user_id, array $data, array $files = array() ): int {
+		$user = get_userdata( $user_id );
+		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 0;
+		}
+		$id = self::save_post(
+			$procedure_id,
+			$user_id,
+			array(
+				'code'      => '',
+				'name'      => '',
+				'ownership' => '',
+			),
+			$files,
+			ApplicationMetaKeys::TYPE_TEACHER,
+			'Solicitud individual'
+		);
+		if ( 0 === $id ) {
+			return 0;
+		}
+		$data += array( 'answers' => array() );
+		foreach (
+			array(
+				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
+				ApplicationMetaKeys::CENTRE_CODE        => '',
+				ApplicationMetaKeys::CENTRE_NAME        => '',
+				ApplicationMetaKeys::APPLICANT_POSITION => '',
+				ApplicationMetaKeys::COORDINATOR        => array(),
+				ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+				ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+			) as $key => $value
+		) {
+			update_post_meta( $id, $key, wp_slash( $value ) );
+		}
+		return $id;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files, string $type = ApplicationMetaKeys::TYPE_CENTRE, string $applicant = '' ): int {
+		$titulo = ApplicationMetaKeys::TYPE_TEACHER === $type ? $applicant . ' — ' . (string) get_post_field( 'post_title', $procedure_id ) : self::title( $centro, $procedure_id );
+		$id     = ApplicationMetaKeys::TYPE_TEACHER === $type ? self::find_for_teacher( $procedure_id, $user_id ) : self::find( $procedure_id, $centro['code'] );
 		$is_new = null === $id;
 		if ( null === $id ) {
 			$id = wp_insert_post(
@@ -6969,7 +7106,7 @@ final class Applications {
 		$fila = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
-			'centre'            => (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
+			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
 			'code'              => (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ],
 
 
@@ -7727,7 +7864,7 @@ final class ApplicationFiles {
 		foreach ( self::headers( $descriptor, strlen( $bytes ) ) as $linea ) {
 			Shell::send_header( $linea );
 		}
-		echo $bytes; 
+		echo $bytes;
 		Shell::leave();
 	}
 
@@ -8317,14 +8454,14 @@ final class Home {
 
 
 
-			'posts_per_page'      => 500, 
+			'posts_per_page'      => 500,
 			'orderby'             => 'title',
 			'order'               => 'ASC',
 			'no_found_rows'       => true,
 			'ignore_sticky_posts' => true,
 		);
 		if ( $course > 0 ) {
-			$args['tax_query'] = array( 
+			$args['tax_query'] = array(
 				array(
 					'taxonomy' => ProcedureTaxonomies::COURSE,
 					'field'    => 'term_id',
@@ -8609,7 +8746,7 @@ final class ProcedureChrome {
 				<div class="prc-ficha-izq">
 					<h1 class="prc-titulo-proc"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 					<?php
-					echo self::resolution( $m ); 
+					echo self::resolution( $m );
 					?>
 					<?php if ( '' !== (string) $m['image'] ) : ?>
 						<img class="prc-ficha-cartel" src="<?php echo esc_url( (string) $m['image'] ); ?>" alt="<?php echo esc_attr( (string) $m['image_alt'] ); ?>" />
@@ -8620,15 +8757,15 @@ final class ProcedureChrome {
 				</div>
 				<div class="prc-ficha-der">
 					<?php
-					echo self::countdown( $m );  
-					echo self::summary( $m );    
+					echo self::countdown( $m );
+					echo self::summary( $m );
 					?>
 				</div>
 			</div>
 
 			<?php
-			echo self::tabs( $m );   
-			echo self::access( $m ); 
+			echo self::tabs( $m );
+			echo self::access( $m );
 			?>
 
 			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
@@ -8818,7 +8955,7 @@ final class ProcedureChrome {
 			<?php endif; ?>
 
 			<?php
-			echo self::summary_mine( (array) $m['mine'] ); 
+			echo self::summary_mine( (array) $m['mine'] );
 			?>
 		</aside>
 		<?php
@@ -9433,6 +9570,32 @@ final class ProcedureView {
 		if ( $user_id <= 0 || ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) || ! class_exists( Applications::class ) ) {
 			return array();
 		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			$solicitud = Applications::find_for_teacher( $post_id, $user_id );
+			$url       = ApplyForm::url( $post_id );
+			$vacia     = array(
+				'has'   => false,
+				'state' => '',
+				'label' => '',
+				'date'  => '',
+				'iso'   => '',
+				'url'   => $url,
+			);
+			if ( null === $solicitud ) {
+				return $vacia;
+			}
+			$estado = (string) get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true );
+			return array_merge(
+				$vacia,
+				array(
+					'has'   => true,
+					'state' => $estado,
+					'label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
+					'date'  => (string) get_the_date( 'd-m-Y', $solicitud ),
+					'iso'   => (string) get_post_time( 'Y-m-d', false, $solicitud ),
+				)
+			);
+		}
 
 
 		$code = ApplyForm::chosen( $user_id, $post_id, '' );
@@ -9720,7 +9883,7 @@ final class WorkspaceView {
 		ob_start();
 		?>
 		<div class="prc-taller">
-			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'] ); ?>
+			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'] );?>
 			<?php self::band( $m ); ?>
 			<?php self::courses( $m ); ?>
 			<?php self::count( $m ); ?>
@@ -9747,7 +9910,7 @@ final class WorkspaceView {
 				<?php if ( ! empty( $m['can_create'] ) ) : ?>
 					<p class="prc-acciones">
 						<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
-							<?php echo Shell::icon_plus(); ?>
+							<?php echo Shell::icon_plus();?>
 							Nuevo procedimiento
 						</a>
 					</p>
@@ -10397,7 +10560,7 @@ final class Workspace {
 
 
 
-			'posts_per_page'      => 500, 
+			'posts_per_page'      => 500,
 			'orderby'             => 'date',
 			'order'               => 'DESC',
 			'no_found_rows'       => true,
@@ -10417,7 +10580,7 @@ final class Workspace {
 			array_merge(
 				$base,
 				array(
-					'tax_query' => array( 
+					'tax_query' => array(
 						array(
 							'taxonomy'     => ProcedureTaxonomies::AREA,
 							'field'        => 'term_id',
@@ -10793,17 +10956,17 @@ final class ProcedureEditorView {
 		$panel = (string) $m['panel'];
 
 		ob_start();
-		echo self::head( $m ); 
-		echo self::tabs( $m ); 
-		echo self::flash( $m ); 
-		echo self::archived_notice( $m ); 
+		echo self::head( $m );
+		echo self::tabs( $m );
+		echo self::flash( $m );
+		echo self::archived_notice( $m );
 
-		echo Shell::notice( 'aviso', (string) $m['state_notice'] ); 
+		echo Shell::notice( 'aviso', (string) $m['state_notice'] );
 
 
 
 		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::archive_switch( $m ); 
+			echo self::archive_switch( $m );
 		}
 
 
@@ -10815,21 +10978,21 @@ final class ProcedureEditorView {
 		}
 
 		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
-			echo self::questions_panel( $m ); 
+			echo self::questions_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_LINKS === $panel ) {
-			echo self::links_panel( $m ); 
+			echo self::links_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			echo self::applications_panel( $m ); 
+			echo self::applications_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
 
 			echo self::deliveries_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::publish_panel( $m ); 
+			echo self::publish_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 
 			echo self::custom_code_panel( $m );
 		} else {
-			echo self::data_panel( $m ); 
+			echo self::data_panel( $m );
 		}
 
 		if ( $cerrado ) {
@@ -10905,7 +11068,7 @@ final class ProcedureEditorView {
 							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
 						</div>
 					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar nuevos cierres' ); ?>
+					<?php echo PanelParts::submit( 'Guardar nuevos cierres' );?>
 				</form>
 			<?php endif; ?>
 		</section>
@@ -10940,8 +11103,8 @@ final class ProcedureEditorView {
 			enlaces</strong>.
 		</p>
 		<?php
-		echo self::flash( $m ); 
-		echo self::data_panel( $m ); 
+		echo self::flash( $m );
+		echo self::data_panel( $m );
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 
@@ -10968,10 +11131,10 @@ final class ProcedureEditorView {
 		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título' ); ?></h1>
-			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); ?>
-			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] ); ?>
+			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
+			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
 			<span class="prc-acciones">
-				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' ); ?>
+				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
 			</span>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
@@ -11071,8 +11234,8 @@ final class ProcedureEditorView {
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<?php echo $secciones; ?>
-			<?php echo PanelParts::submit( $nuevo ? 'Crear el procedimiento' : 'Guardar los datos' ); ?>
+			<?php echo $secciones;?>
+			<?php echo PanelParts::submit( $nuevo ? 'Crear el procedimiento' : 'Guardar los datos' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -11113,27 +11276,27 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-seccion__cuerpo">
 			<div class="prc-campo prc-campo--medio">
-				<label class="prc-campo__etiqueta" for="prc-title">Título del procedimiento <?php echo self::obl(); ?></label>
+				<label class="prc-campo__etiqueta" for="prc-title">Título del procedimiento <?php echo self::obl();?></label>
 				<input class="prc-control" type="text" id="prc-title" name="<?php echo esc_attr( ProcedureEditor::FIELD_TITLE ); ?>"
 					maxlength="120" required aria-describedby="prc-title-ayuda"
 					value="<?php echo esc_attr( (string) $v[ ProcedureEditor::FIELD_TITLE ] ); ?>" />
 				<p class="prc-campo__ayuda" id="prc-title-ayuda">Máximo 120 caracteres. El curso no se escribe aquí: se elige al lado.</p>
 			</div>
 			<div class="prc-campo prc-campo--cuarto">
-				<?php echo $sel_course; ?>
+				<?php echo $sel_course;?>
 			</div>
 			<div class="prc-campo prc-campo--cuarto">
-				<label class="prc-campo__etiqueta" for="prc-audience">Quién solicita <?php echo self::obl(); ?></label>
+				<label class="prc-campo__etiqueta" for="prc-audience">Quién solicita <?php echo self::obl();?></label>
 				<select class="prc-control" id="prc-audience" name="<?php echo esc_attr( ProcedureMetaKeys::AUDIENCE ); ?>" required aria-describedby="prc-audience-ayuda">
 					<?php foreach ( (array) $m['audiences'] as $clave => $rotulo ) : ?>
 						<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v[ ProcedureMetaKeys::AUDIENCE ] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
+				<p class="prc-campo__ayuda" id="prc-audience-ayuda">Cada docente presenta su propia solicitud con su cuenta.</p>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
-					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl(); ?></legend>
+					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl();?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
 						<?php foreach ( (array) $m['ownerships'] as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
@@ -11149,7 +11312,7 @@ final class ProcedureEditorView {
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset aria-describedby="prc-centre-kind-mode-help">
-					<legend class="prc-campo__etiqueta">Modalidad para centros CER <?php echo self::obl(); ?></legend>
+					<legend class="prc-campo__etiqueta">Modalidad para centros CER <?php echo self::obl();?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
 						<?php foreach ( $modalidades as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
@@ -11191,13 +11354,13 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-campo">
 			<fieldset>
-				<legend class="prc-campo__etiqueta">Ámbito convocante <?php echo self::obl(); ?></legend>
+				<legend class="prc-campo__etiqueta">Ámbito convocante <?php echo self::obl();?></legend>
 				<?php if ( array() === $arbol ) : ?>
 					<p class="prc-vacio">No tiene ningún ámbito asignado. Pídalo a quien administre el aplicativo.</p>
 				<?php else : ?>
 					<ul class="prc-arbol">
 						<?php foreach ( $arbol as $nodo ) : ?>
-							<?php echo self::area_node( (array) $nodo, $elegidos ); ?>
+							<?php echo self::area_node( (array) $nodo, $elegidos );?>
 						<?php endforeach; ?>
 					</ul>
 				<?php endif; ?>
@@ -11259,7 +11422,7 @@ final class ProcedureEditorView {
 			<?php if ( $rama ) : ?>
 				<ul class="prc-arbol prc-arbol--rama">
 					<?php foreach ( $hijos as $hijo ) : ?>
-						<?php echo self::area_node( (array) $hijo, $elegidos ); ?>
+						<?php echo self::area_node( (array) $hijo, $elegidos );?>
 					<?php endforeach; ?>
 				</ul>
 			<?php endif; ?>
@@ -11305,7 +11468,7 @@ final class ProcedureEditorView {
 					<?php echo esc_html( $rotulo ); ?>
 					<?php
 					if ( 0 === $i ) {
-						echo self::obl(); 
+						echo self::obl();
 					}
 					?>
 				</label>
@@ -11342,7 +11505,7 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-campo">
 			<fieldset>
-				<legend class="prc-campo__etiqueta">Color de cabecera <?php echo self::obl(); ?></legend>
+				<legend class="prc-campo__etiqueta">Color de cabecera <?php echo self::obl();?></legend>
 				<div class="prc-paleta">
 					<?php foreach ( (array) $m['header_colors'] as $clave => $color ) : ?>
 						<label class="prc-muestra" style="--prc-muestra: <?php echo esc_attr( (string) $color['hex'] ); ?>">
@@ -11465,7 +11628,7 @@ final class ProcedureEditorView {
 	private static function term_select( string $id, string $nombre, string $rotulo, array $terminos, int $elegido, string $ayuda ): string {
 		ob_start();
 		?>
-		<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $rotulo ); ?> <?php echo self::obl(); ?></label>
+		<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $rotulo ); ?> <?php echo self::obl();?></label>
 		<select class="prc-control" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" required aria-describedby="<?php echo esc_attr( $id . '-ayuda' ); ?>">
 			<option value="0">— Elija —</option>
 			<?php foreach ( $terminos as $term_id => $texto ) : ?>
@@ -11518,10 +11681,10 @@ final class ProcedureEditorView {
 			</p>
 
 			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'] ); ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'] );?>
 			<?php endforeach; ?>
 
-			<?php echo PanelParts::submit( 'Guardar las preguntas' ); ?>
+			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -11632,7 +11795,7 @@ final class ProcedureEditorView {
 					</div>
 				<?php endforeach; ?>
 			</fieldset>
-			<?php echo PanelParts::submit( 'Guardar los enlaces' ); ?>
+			<?php echo PanelParts::submit( 'Guardar los enlaces' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -11647,10 +11810,11 @@ final class ProcedureEditorView {
 
 
 	private static function applications_panel( array $m ): string {
-		$filas = (array) $m['applications'];
+		$filas   = (array) $m['applications'];
+		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values']['audience'] ?? '' );
 		if ( array() === $filas ) {
 			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
-				. '<p class="prc-vacio">Cuando un centro solicite saldrá en esta tabla, y desde ella podrá admitirlo, pedirle subsanar o excluirlo, y exportar la lista a CSV.</p></section>';
+				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
 		}
 		$cuenta = count( $filas );
 
@@ -11661,18 +11825,25 @@ final class ProcedureEditorView {
 				<?php echo esc_html( sprintf( 1 === $cuenta ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $cuenta ) ); ?>
 				Cada una se revisa desde su fila; la exportación lleva todas las columnas, respuestas incluidas.
 			</p>
-			<?php echo self::export_form( $m ); ?>
+			<?php echo self::export_form( $m );?>
 		</div>
 		<div class="prc-tabla-caja prc-panel-solicitudes">
 			<table class="prc-tabla prc-tabla--densa table">
 				<caption class="screen-reader-text">Solicitudes presentadas a este procedimiento</caption>
 				<thead>
 					<tr>
-						<th class="prc-th" scope="col">Centro</th>
-						<th class="prc-th" scope="col">Código</th>
+						<?php if ( $docente ) : ?>
+							<th class="prc-th" scope="col">Docente</th>
+							<th class="prc-th" scope="col">Correo</th>
+						<?php else : ?>
+							<th class="prc-th" scope="col">Centro</th>
+							<th class="prc-th" scope="col">Código</th>
+						<?php endif; ?>
 						<th class="prc-th" scope="col">Fecha</th>
-						<th class="prc-th" scope="col">Cargo</th>
-						<th class="prc-th" scope="col">Coordinación</th>
+						<?php if ( ! $docente ) : ?>
+							<th class="prc-th" scope="col">Cargo</th>
+							<th class="prc-th" scope="col">Coordinación</th>
+						<?php endif; ?>
 						<th class="prc-th" scope="col">Revisión</th>
 						<th class="prc-th" scope="col">Acciones</th>
 					</tr>
@@ -11680,13 +11851,20 @@ final class ProcedureEditorView {
 				<tbody>
 					<?php foreach ( $filas as $fila ) : ?>
 						<tr data-estado="<?php echo esc_attr( (string) $fila['state_key'] ); ?>">
-							<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
-							<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
+							<?php if ( $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Docente"><?php echo esc_html( (string) $fila['applicant'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Correo"><?php echo esc_html( (string) $fila['email'] ); ?></td>
+							<?php else : ?>
+								<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
+								<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
+							<?php endif; ?>
 							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_email'] ) ); ?></td>
-							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); ?></td>
+							<?php if ( ! $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_email'] ) );?></td>
+							<?php endif; ?>
+							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] );?></td>
+							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -11761,7 +11939,7 @@ final class ProcedureEditorView {
 						? self::download( $fila, (string) $pregunta['key'] )
 						: esc_html( '' !== (string) ( $fila[ $pregunta['key'] ] ?? '' ) ? (string) $fila[ $pregunta['key'] ] : '—' );
 					?>
-					<dd><?php echo $respuesta; ?></dd>
+					<dd><?php echo $respuesta;?></dd>
 				<?php endforeach; ?>
 			</dl>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
@@ -11783,7 +11961,7 @@ final class ProcedureEditorView {
 						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
 					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
 				</div>
-				<?php echo PanelParts::submit( 'Guardar la revisión' ); ?>
+				<?php echo PanelParts::submit( 'Guardar la revisión' );?>
 			</form>
 		</details>
 		<?php
@@ -11875,9 +12053,9 @@ final class ProcedureEditorView {
 				<?php endforeach; ?>
 			</ol>
 			<p class="prc-intro">
-				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); ?>
-				Las fechas y los enlaces calculan el estado. Si necesita cerrar las solicitudes antes, puede hacerlo aquí
-				sin cambiar esos datos ni los plazos de entrega documental.
+				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
+				El estado sale de las fechas y los enlaces; no hay que marcarlo a mano. Con el listado definitivo enlazado pasa a «Resuelto».
+				Si necesita cerrar las solicitudes antes, puede hacerlo aquí sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
 			<?php if ( true === $m['can_publish'] ) : ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
@@ -11963,13 +12141,13 @@ final class ProcedureEditorView {
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) ); ?>
+				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) );?>
 				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
 					<div class="prc-aviso prc-aviso-warning prc-codigo-admin">
 						<h3 id="prc-codigo-admin-titulo">Solo para administración</h3>
 						<p>Este JavaScript se ejecuta en la ficha pública del procedimiento. Revíselo antes de guardarlo.</p>
 					</div>
-					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false ); ?>
+					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false );?>
 				<?php endif; ?>
 				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
 			</form>
@@ -12035,7 +12213,7 @@ final class ProcedureEditorView {
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Dar el procedimiento por terminado</h2>
 			<p class="prc-intro">Cuando ya no quede nada que tocar —resuelto, con los listados enlazados y las solicitudes revisadas—, márquelo como histórico y quedará cerrado tal y como está. Seguirá entrando a consultarlo y a exportarlo, y la ficha pública se verá igual; lo que ya no podrá es cambiar nada. <strong>Para volver a abrirlo tendrá que pedírselo a quien administre el aplicativo.</strong></p>
-			<?php echo self::archive_form( $m, true ); ?>
+			<?php echo self::archive_form( $m, true );?>
 		</section>
 		<?php
 		return (string) ob_get_clean();
@@ -13104,7 +13282,7 @@ final class ProcedureEditor {
 		Shell::send_header( 'Content-Disposition: attachment; filename="' . $nombre . '"' );
 		Shell::send_header( 'Content-Length: ' . strlen( $cuerpo ) );
 		Shell::send_header( 'Cache-Control: no-store, no-cache, must-revalidate' );
-		echo $cuerpo; 
+		echo $cuerpo;
 		Shell::leave();
 	}
 
@@ -13720,16 +13898,16 @@ final class ApplyFormView {
 		$flash = (array) $m['flash'];
 
 		ob_start();
-		echo self::head( $m ); 
-		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] ); 
-		echo self::choices( $m ); 
-		echo self::status_card( $m ); 
+		echo self::head( $m );
+		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		echo self::choices( $m );
+		echo self::status_card( $m );
 
 		if ( true === $m['can_submit'] ) {
-			echo self::form( $m ); 
+			echo self::form( $m );
 		} else {
-			echo Shell::notice( 'aviso', (string) $m['why'] ); 
-			echo self::summary( $m ); 
+			echo Shell::notice( 'aviso', (string) $m['why'] );
+			echo self::summary( $m );
 		}
 		self::deliveries( $m );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -13766,7 +13944,7 @@ final class ApplyFormView {
 						<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>">Entregar documento</button>
 					</form>
 				<?php else : ?>
-					<p>No se admiten entregas: hace falta una solicitud de su centro no excluida, un plazo abierto y un procedimiento publicado sin archivar.</p>
+					<p>No se admiten entregas: hace falta una solicitud vigente, un plazo abierto y un procedimiento publicado sin archivar.</p>
 				<?php endif; ?>
 			</section>
 			<?php
@@ -13785,12 +13963,12 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; Mi centro</a></p>
+		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'] ? 'Mis solicitudes' : 'Mi centro' ); ?></a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 			<span class="<?php echo esc_attr( Assets::state_class( (string) $m['state'] ) ); ?>"><?php echo esc_html( (string) $m['state_label'] ); ?></span>
 			<span class="prc-acciones">
-				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' ); ?>
+				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
 			</span>
 		</div>
 		<?php if ( '' !== $plazo ) : ?>
@@ -13924,11 +14102,12 @@ final class ApplyFormView {
 
 
 	private static function form( array $m ): string {
-		$v      = (array) $m['values'];
-		$spec   = (array) $m['spec'];
-		$centro = (array) $m['centre'];
-		$quien  = (array) ( $m['applicant'] ?? array() );
-		$nueva  = array() === (array) $m['application'];
+		$v       = (array) $m['values'];
+		$spec    = (array) $m['spec'];
+		$centro  = (array) $m['centre'];
+		$quien   = (array) ( $m['applicant'] ?? array() );
+		$nueva   = array() === (array) $m['application'];
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 
 
 
@@ -13970,35 +14149,39 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<?php ?>
+		<?php?>
 		<form class="prc-form prc-form--solicitud" method="post" action="" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
 
-			<?php echo self::privacy(); ?>
+			<?php echo self::privacy();?>
 
-			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
-				<div class="prc-seccion__cuerpo">
-					<?php echo $del_centro; ?>
-				</div>
-			</section>
-
-			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo">DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO</h3>
-				<div class="prc-seccion__cuerpo">
-					<?php echo $de_quien; ?>
-					<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
-						<?php echo self::label( 'prc-position', 'Cargo en el centro', true ); ?>
-						<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
-							<option value="">— Elija —</option>
-							<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
-								<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
-							<?php endforeach; ?>
-						</select>
+			<?php if ( ! $docente ) : ?>
+				<section class="prc-seccion">
+					<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
+					<div class="prc-seccion__cuerpo">
+						<?php echo $del_centro;?>
 					</div>
+				</section>
+			<?php endif; ?>
+
+			<section class="prc-seccion">
+				<h3 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'DATOS DE LA PERSONA PARTICIPANTE' : 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO' ); ?></h3>
+				<div class="prc-seccion__cuerpo">
+					<?php echo $de_quien;?>
+					<?php if ( ! $docente ) : ?>
+						<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
+							<?php echo self::label( 'prc-position', 'Cargo en el centro', true );?>
+							<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
+								<option value="">— Elija —</option>
+								<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
+									<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+					<?php endif; ?>
 				</div>
 			</section>
 
@@ -14007,15 +14190,15 @@ final class ApplyFormView {
 					<h3 class="prc-seccion__titulo">SOLICITA</h3>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
-							<p>La participación de su centro en la <em>presente convocatoria</em>, comprometiéndose a cumplir los siguientes compromisos:</p>
-							<p><?php echo nl2br( esc_html( (string) $spec['commitments'] ) ); ?></p>
+							<p><?php echo esc_html( $docente ? 'Su participación en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' : 'La participación de su centro en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' ); ?></p>
+							<p><?php echo nl2br( esc_html( (string) $spec['commitments'] ) );?></p>
 						</div>
 						<div class="prc-campo prc-campo--completo">
 							<div class="prc-opciones prc-opciones--vertical">
 								<div class="prc-opcion">
 									<label for="prc-accept">
 										<input type="checkbox" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?> />
-										El centro acepta estos compromisos
+										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
 									</label>
 								</div>
 							</div>
@@ -14029,7 +14212,7 @@ final class ApplyFormView {
 					<h3 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h3>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
-							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos ); ?>
+							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos );?>
 						<?php endforeach; ?>
 					</div>
 				</section>
@@ -14047,11 +14230,11 @@ final class ApplyFormView {
 							<fieldset class="prc-seccion-campos">
 								<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
 								<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
-									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true ); ?>
+									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true );?>
 									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
 								</div>
 								<div class="prc-campo prc-campo--cuarto">
-									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); ?>
+									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true );?>
 									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
 								</div>
 							</fieldset>
@@ -14161,9 +14344,9 @@ final class ApplyFormView {
 				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="prc-control" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
-					<?php echo $pie; ?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
+					<?php echo $pie;?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
 			<?php elseif ( ProcedureQuestions::TYPE_FILE === $tipo ) : ?>
-				<?php echo self::label( $id, (string) $p['label'], $obliga ); ?>
+				<?php echo self::label( $id, (string) $p['label'], $obliga );?>
 				<?php if ( array() !== $subido ) : ?>
 					<p class="prc-campo__adjunto">
 						Ya adjuntó
@@ -14174,7 +14357,7 @@ final class ApplyFormView {
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
 					class="prc-control" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
-					<?php echo $pie; ?> />
+					<?php echo $pie;?> />
 				<div class="prc-campo__ayuda">
 					Un solo documento, de hasta <?php echo esc_html( size_format( ApplicationFiles::max_bytes() ) ); ?>.
 					Se admiten PDF, JPG, PNG, DOCX y ODT.
@@ -14185,7 +14368,7 @@ final class ApplyFormView {
 						<label for="<?php echo esc_attr( $id ); ?>">
 							<input type="checkbox" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" value="1"
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
-								<?php echo $pie; ?> />
+								<?php echo $pie;?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>
 						</label>
 					</div>
@@ -14194,11 +14377,11 @@ final class ApplyFormView {
 				<?php
 				$varias = ProcedureQuestions::TYPE_MULTIPLE === $tipo;
 				$unica  = is_scalar( $valor ) ? (string) $valor : '';
-				echo self::label( $id . '-rotulo', (string) $p['label'], $obliga, 'p' ); 
+				echo self::label( $id . '-rotulo', (string) $p['label'], $obliga, 'p' );
 				?>
 				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>"
 					aria-labelledby="<?php echo esc_attr( $id . '-rotulo' ); ?>"
-					<?php echo $pie; ?>>
+					<?php echo $pie;?>>
 					<?php foreach ( (array) $p['choices'] as $i => $opcion ) : ?>
 						<?php
 						$marcada = $varias
@@ -14267,8 +14450,10 @@ final class ApplyFormView {
 		<section class="prc-seccion prc-solicitud-resumen">
 			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
 			<dl class="prc-respuestas">
-				<dt>Cargo</dt>
-				<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
+				<?php if ( '' !== (string) $s['position'] ) : ?>
+					<dt>Cargo</dt>
+					<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
+				<?php endif; ?>
 				<?php if ( '' !== (string) ( $coord['name'] ?? '' ) ) : ?>
 					<dt>Persona coordinadora</dt>
 					<dd><?php echo esc_html( trim( (string) $coord['name'] . ' ' . (string) ( $coord['email'] ?? '' ) ) ); ?></dd>
@@ -14282,7 +14467,7 @@ final class ApplyFormView {
 						? self::attached( $s, (string) $pregunta['key'] )
 						: esc_html( ProcedureQuestions::as_text( (array) $pregunta, $s['answers'][ $pregunta['key'] ] ?? null ) );
 					?>
-					<dd><?php echo $respuesta; ?></dd>
+					<dd><?php echo $respuesta;?></dd>
 				<?php endforeach; ?>
 			</dl>
 		</section>
@@ -14301,7 +14486,8 @@ final class ApplyFormView {
 		if ( '' === $url ) {
 			return '';
 		}
-		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">Las solicitudes de mi centro</a></p>';
+		$rotulo = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' ) ? 'Mis solicitudes' : 'Las solicitudes de mi centro';
+		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">' . esc_html( $rotulo ) . '</a></p>';
 	}
 }
 
@@ -14524,7 +14710,9 @@ final class ApplyForm {
 
 
 
-		$pedido = self::field( self::FIELD_CENTRE );
+		$docente = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER )
+			&& ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pedido  = $docente ? '' : self::field( self::FIELD_CENTRE );
 		if ( self::OP_DELIVER === $op ) {
 			self::deliver( $procedure_id, $user_id, $pedido );
 			return;
@@ -14533,8 +14721,8 @@ final class ApplyForm {
 			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
 		}
-		$code      = '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' );
-		$existente = Applications::find( $procedure_id, $code );
+		$code      = $docente ? '' : ( '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' ) );
+		$existente = $docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
@@ -14564,7 +14752,9 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
+		$id = $docente
+			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
+			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
 			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
@@ -14659,7 +14849,10 @@ final class ApplyForm {
 
 	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
+			return 'Su perfil no puede presentar solicitudes. Pídalo a quien administre el aplicativo.';
+		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.';
 		}
 		$suyos = CentreScope::codes_for( $user_id );
 		if ( array() === $suyos ) {
@@ -14695,6 +14888,7 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			'applicant_type'  => '',
 			'state'           => '',
 			'state_label'     => '',
 			'opens_at'        => '',
@@ -14733,7 +14927,7 @@ final class ApplyForm {
 		);
 
 		if ( ! is_user_logged_in() ) {
-			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud de su centro.';
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud.';
 			return $m;
 		}
 		$user_id = get_current_user_id();
@@ -14741,16 +14935,14 @@ final class ApplyForm {
 			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
 			return $m;
 		}
-		$quien          = wp_get_current_user();
-		$m['applicant'] = array(
+		$quien               = wp_get_current_user();
+		$m['applicant']      = array(
 			'name'  => (string) $quien->display_name,
 			'email' => (string) $quien->user_email,
 		);
-		$m['centre']    = Applications::centre_of( $user_id );
-		if ( array() === CentreScope::codes_for( $user_id ) ) {
-			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
-			return $m;
-		}
+		$es_docente          = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		$m['applicant_type'] = $es_docente ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
+		$m['centre']         = Applications::centre_of( $user_id );
 
 
 		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
@@ -14760,7 +14952,7 @@ final class ApplyForm {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
 			$m['aviso'] = $procedure_id > 0
 				? 'Ese procedimiento no existe o todavía no está publicado.'
-				: 'Abra la solicitud desde la ficha del procedimiento, o desde las solicitudes de su centro.';
+				: 'Abra la solicitud desde la ficha del procedimiento, o desde sus solicitudes.';
 			return $m;
 		}
 
@@ -14778,13 +14970,20 @@ final class ApplyForm {
 		$m['amend_closes_at'] = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
 		$m['final_list_url']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL, true );
 		$m['spec']            = Applications::spec( $procedure_id );
+		$m['applicant_type']  = (string) $m['spec']['applicant_type'];
+		$es_docente           = ApplicationMetaKeys::TYPE_TEACHER === $m['applicant_type'] && user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		if ( ! $es_docente && array() === CentreScope::codes_for( $user_id ) ) {
+			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
+			return $m;
+		}
 
+		$code = $es_docente ? '' : self::chosen( $user_id, $procedure_id, self::wanted() );
+		if ( ! $es_docente ) {
+			$m['centre']  = Applications::centre_of( $user_id, $code );
+			$m['choices'] = self::choices( $user_id, $procedure_id );
+		}
 
-		$code         = self::chosen( $user_id, $procedure_id, self::wanted() );
-		$m['centre']  = Applications::centre_of( $user_id, $code );
-		$m['choices'] = self::choices( $user_id, $procedure_id );
-
-		$existente = Applications::find( $procedure_id, $m['centre']['code'] );
+		$existente = $es_docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $m['centre']['code'] );
 		if ( null !== $existente ) {
 			$meta             = Applications::meta( $existente );
 			$estado           = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
@@ -14844,7 +15043,9 @@ final class ApplyForm {
 
 	private static function deliver( int $procedure_id, int $user_id, string $code ): void {
 		$key = self::field( self::FIELD_DELIVERY );
-		$id  = Applications::find( $procedure_id, $code );
+		$id  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true )
+			? Applications::find_for_teacher( $procedure_id, $user_id )
+			: Applications::find( $procedure_id, $code );
 		foreach ( Applications::questions( $procedure_id ) as $question ) {
 			if ( $key !== $question['key'] || ! ProcedureAccess::can_deliver( $user_id, (int) $id, $question ) ) {
 				continue;
@@ -14943,6 +15144,7 @@ namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
+use Prc\Meta\ApplicationMetaKeys;
 
 
 
@@ -14967,21 +15169,23 @@ final class MyCentreView {
 
 
 	public static function html( array $m ): string {
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' );
+		$titulo  = $docente ? 'Mis solicitudes de participación en procedimientos' : self::TITLE;
 		if ( '' !== (string) $m['aviso'] ) {
-			return Shell::render( self::TITLE, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
+			return Shell::render( $titulo, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
 		}
 
 		$centro = (array) $m['centre'];
 		$filas  = (array) $m['rows'];
 		$nombre = '' !== (string) $centro['name'] ? (string) $centro['name'] : 'Centro ' . (string) $centro['code'];
-		$ambito = 'Procedimientos para ' . $nombre . ' (' . (string) $centro['code'] . ')';
+		$ambito = $docente ? 'Solicitudes presentadas por ' . (string) ( $m['applicant'] ?? '' ) : 'Procedimientos para ' . $nombre . ' (' . (string) $centro['code'] . ')';
 
 		if ( array() === $filas ) {
 			return Shell::render(
-				self::TITLE,
+				$titulo,
 				$ambito,
-				'<div class="prc-mi-centro">' . self::count( 0 )
-					. '<p class="prc-vacio">Su centro todavía no ha presentado ninguna solicitud. Se presentan desde la ficha de cada procedimiento, mientras su plazo esté abierto.</p></div>'
+				'<div class="prc-mi-centro">' . self::count( 0, $docente )
+					. '<p class="prc-vacio">' . esc_html( $docente ? 'Todavía no ha presentado ninguna solicitud. Puede hacerlo desde la ficha de un procedimiento dirigido al profesorado, mientras el plazo esté abierto.' : 'Su centro todavía no ha presentado ninguna solicitud. Se presentan desde la ficha de cada procedimiento, mientras su plazo esté abierto.' ) . '</p></div>'
 			);
 		}
 
@@ -14994,29 +15198,33 @@ final class MyCentreView {
 				la segunda vez, al revés.
 			</p>
 			<?php
-			echo self::count( count( $filas ) ); 
-			echo self::amendment( (array) $m['amend'] ); 
+			echo self::count( count( $filas ), $docente );
+			echo self::amendment( (array) $m['amend'] );
 			?>
 			<div class="prc-tabla-caja">
 				<table class="prc-tabla prc-tabla--densa prc-mi-tabla">
 					<caption class="screen-reader-text"><?php echo esc_html( $ambito ); ?></caption>
 					<thead>
 						<tr>
-							<?php foreach ( (array) $m['headers'] as $columna ) : ?>
-								<?php echo self::heading( (array) $columna ); ?>
+							<?php foreach ( (array) $m['headers'] as $clave => $columna ) : ?>
+								<?php
+								if ( $docente && 'coordinador' === (string) $clave ) {
+									continue; }
+								?>
+								<?php echo self::heading( (array) $columna );?>
 							<?php endforeach; ?>
 						</tr>
 					</thead>
 					<tbody>
 						<?php foreach ( $filas as $fila ) : ?>
-							<?php echo self::row( (array) $fila ); ?>
+							<?php echo self::row( (array) $fila, $docente );?>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
 			</div>
 		</div>
 		<?php
-		return Shell::render( self::TITLE, $ambito, (string) ob_get_clean() );
+		return Shell::render( $titulo, $ambito, (string) ob_get_clean() );
 	}
 
 
@@ -15025,9 +15233,10 @@ final class MyCentreView {
 
 
 
-	private static function count( int $total ): string {
-		return '<p class="prc-recuento">Mostrando <strong>' . (int) $total . '</strong> '
-			. ( 1 === $total ? 'procedimiento' : 'procedimientos' ) . '.</p>';
+
+	private static function count( int $total, bool $docente = false ): string {
+		$nombre = $docente ? ( 1 === $total ? 'solicitud' : 'solicitudes' ) : ( 1 === $total ? 'procedimiento' : 'procedimientos' );
+		return '<p class="prc-recuento">Mostrando <strong>' . (int) $total . '</strong> ' . $nombre . '.</p>';
 	}
 
 
@@ -15082,7 +15291,8 @@ final class MyCentreView {
 
 
 
-	private static function row( array $fila ): string {
+
+	private static function row( array $fila, bool $docente = false ): string {
 		$cargo    = (string) $fila['position'];
 		$quien    = (string) $fila['applicant'];
 		$quien    = '' !== $quien && '' !== $cargo ? $quien . ' (' . $cargo . ')' : $quien;
@@ -15100,9 +15310,11 @@ final class MyCentreView {
 				<span class="<?php echo esc_attr( Assets::state_class( (string) $fila['state'] ) ); ?>"><?php echo esc_html( (string) $fila['state_label'] ); ?></span>
 			</th>
 			<td class="prc-celda prc-celda--fecha" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
-			<td class="prc-celda" data-rotulo="Solicitante (cargo)"><?php echo self::value( $quien ); ?></td>
-			<td class="prc-celda" data-rotulo="Coordinador/a"><?php echo self::value( (string) $fila['coordinator'] ); ?></td>
-			<td class="prc-celda" data-rotulo="Opciones"><?php echo self::value( implode( '<br>', $opciones ), false ); ?></td>
+			<td class="prc-celda" data-rotulo="Solicitante (cargo)"><?php echo self::value( $quien );?></td>
+			<?php if ( ! $docente ) : ?>
+				<td class="prc-celda" data-rotulo="Coordinador/a"><?php echo self::value( (string) $fila['coordinator'] );?></td>
+			<?php endif; ?>
+			<td class="prc-celda" data-rotulo="Opciones"><?php echo self::value( implode( '<br>', $opciones ), false );?></td>
 			<td class="prc-celda prc-celda--revision" data-rotulo="Revisión">
 				<span class="<?php echo esc_attr( Assets::state_class( (string) $fila['review'] ) ); ?>"><?php echo esc_html( (string) $fila['review_label'] ); ?></span>
 				<?php if ( '' !== (string) $fila['note'] ) : ?>
@@ -15261,16 +15473,18 @@ final class MyCentre {
 	public static function model(): array {
 		$orden = self::sort();
 		$m     = array(
-			'aviso'   => '',
-			'centre'  => array(
+			'aviso'          => '',
+			'applicant_type' => ApplicationMetaKeys::TYPE_CENTRE,
+			'applicant'      => '',
+			'centre'         => array(
 				'code'      => '',
 				'name'      => '',
 				'ownership' => '',
 			),
-			'rows'    => array(),
-			'sort'    => $orden,
-			'headers' => self::headers( $orden ),
-			'amend'   => array(
+			'rows'           => array(),
+			'sort'           => $orden,
+			'headers'        => self::headers( $orden ),
+			'amend'          => array(
 				'count'  => 0,
 				'closes' => '',
 				'id'     => '',
@@ -15278,12 +15492,24 @@ final class MyCentre {
 		);
 
 		if ( ! is_user_logged_in() ) {
-			$m['aviso'] = 'Debe iniciar sesión con su usuario para ver las solicitudes de su centro.';
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para ver sus solicitudes.';
 			return $m;
 		}
 		$user_id = get_current_user_id();
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			$m['aviso'] = 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
+			$m['aviso'] = 'Su perfil no puede consultar solicitudes. Pídalo a quien administre el aplicativo.';
+			return $m;
+		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ) {
+			$m['applicant_type'] = ApplicationMetaKeys::TYPE_TEACHER;
+			$m['applicant']      = (string) wp_get_current_user()->display_name;
+			$solicitudes         = Applications::for_teacher( $user_id );
+			_prime_post_caches( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_parent' ) ) ), false, true );
+			foreach ( $solicitudes as $solicitud ) {
+				$m['rows'][] = self::row( $solicitud );
+			}
+			$m['rows']  = self::ordered( $m['rows'], $orden );
+			$m['amend'] = self::amendment( $m['rows'] );
 			return $m;
 		}
 		$m['centre'] = Applications::centre_of( $user_id );
@@ -15329,7 +15555,9 @@ final class MyCentre {
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
+			'url'          => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+				? ApplyForm::url( $procedure_id )
+				: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
@@ -15570,7 +15798,7 @@ final class ProcedureAdmin {
 				'post_status'    => 'any',
 				'posts_per_page' => -1,
 				'fields'         => 'ids',
-				'tax_query'      => array( 
+				'tax_query'      => array(
 					array(
 						'taxonomy'         => ProcedureTaxonomies::AREA,
 						'field'            => 'term_id',
@@ -15819,10 +16047,10 @@ final class Settings {
 				no está activo.
 			</p>
 
-			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) : ?>
-				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['msg'] ) ) ); ?></p></div>
-			<?php elseif ( isset( $_GET['error'] ) && ! empty( $_GET['error'] ) ) : ?>
-				<div class="notice notice-error is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['error'] ) ) ); ?></p></div>
+			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) :?>
+				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['msg'] ) ) );?></p></div>
+			<?php elseif ( isset( $_GET['error'] ) && ! empty( $_GET['error'] ) ) :?>
+				<div class="notice notice-error is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['error'] ) ) );?></p></div>
 			<?php endif; ?>
 
 			<h2>Tipos de contenido</h2>

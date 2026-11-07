@@ -1173,8 +1173,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			'Publicación',
 			'Ver la ficha pública',
 			'Guardar los datos',
-			'Cerrar solicitudes ahora',
-			'Devolver a borrador',
 		);
 		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
@@ -1214,6 +1212,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'Marcar como histórico', $html );
+		$this->assertStringContainsString( 'Cerrar solicitudes ahora', $html );
+		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );

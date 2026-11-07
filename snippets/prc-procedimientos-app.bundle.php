@@ -11201,7 +11201,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda" id="prc-centre-kind-mode-help">Si elige «Ambos», cada solicitud se presenta con su código de centro o de CER. La titularidad indicada arriba se aplica a los centros del CER.</p>
+					<p class="prc-campo__ayuda" id="prc-centre-kind-mode-help">Si elige «Ambos», quien dirige un centro y coordina un CER podrá solicitar como centro, como CER o de las dos formas. Cada solicitud se presenta por separado.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>

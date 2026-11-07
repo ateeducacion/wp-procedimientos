@@ -6,6 +6,8 @@
  */
 
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -266,6 +268,26 @@ class Test_Procedure_View extends WP_UnitTestCase {
 			ProcedureView::model( $procedimiento )['action'],
 			'con el plazo cerrado ya no se edita: se consulta, y deja de ser el botón principal'
 		);
+	}
+
+	/** A teacher sees the status of their own individual application. */
+	public function test_a_teacher_sees_their_individual_application() {
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) )
+		);
+		$teacher = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$this->acting_as( $teacher );
+
+		$this->assertFalse( ProcedureView::model( $procedure )['mine']['has'] );
+		$id = Applications::save_teacher( $procedure, $teacher, array() );
+		update_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		$mine = ProcedureView::model( $procedure )['mine'];
+		$this->assertTrue( $mine['has'] );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, $mine['state'] );
+		$this->assertSame( 'Admitida', $mine['label'] );
+		$this->assertSame( Shell::url( 'apply', array( Shell::ARG_PROCEDURE => $procedure ) ), $mine['url'] );
 	}
 
 	/**

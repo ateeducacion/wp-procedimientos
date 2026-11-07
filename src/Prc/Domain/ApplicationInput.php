@@ -32,15 +32,16 @@ final class ApplicationInput {
 	 * @return array{ok:bool, errors:string[], data:array<string, mixed>}
 	 */
 	public static function validate( array $raw, array $procedure ): array {
-		$errors = array();
+		$errors  = array();
+		$teacher = 'teacher' === ( $procedure['applicant_type'] ?? '' );
 
-		$position = self::text( $raw, 'position' );
-		if ( ! isset( ApplicationMetaKeys::positions()[ $position ] ) ) {
+		$position = $teacher ? '' : self::text( $raw, 'position' );
+		if ( ! $teacher && ! isset( ApplicationMetaKeys::positions()[ $position ] ) ) {
 			$errors[] = 'position';
 			$position = '';
 		}
 
-		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$count            = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
 		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
 		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
 			$raw_coordinators[] = array(

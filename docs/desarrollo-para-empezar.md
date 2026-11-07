@@ -232,7 +232,8 @@ castellano y, en el menú de la izquierda, **Procedimientos** y **Solicitudes**.
 
 Hay más cuentas para probar qué ve cada perfil, todas con la contraseña
 `password`: `gestion` y `gestion2` (gestión de dos ámbitos distintos) y
-`direccion` y `direccion2` (dirección de dos centros distintos).
+`direccion` y `direccion2` (dirección de dos centros distintos), y `profesor`
+(docente participante, con una solicitud individual de ejemplo).
 Están explicadas en el [README](../README.md#usuarios-de-prueba).
 
 Este WordPress **es tuyo y es de mentira**. Puedes romperlo, borrarlo y

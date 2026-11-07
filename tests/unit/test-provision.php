@@ -56,12 +56,13 @@ class Test_Provision extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Los dos roles, con sus capacidades propias y las de los tipos.
+	 * Los roles de centro, docente y gestión, con sus capacidades.
 	 */
 	public function test_roles_exist_with_their_capabilities() {
 		$this->assertTrue( get_role( 'prc_manager' )->has_cap( 'prc_manage_procedures' ) );
 		$this->assertTrue( get_role( 'prc_manager' )->has_cap( 'edit_prc_procedures' ), 'las del tipo las reparte el aplicativo en la misma pasada' );
 		$this->assertTrue( get_role( 'prc_school_head' )->has_cap( 'prc_apply' ) );
+		$this->assertTrue( get_role( 'prc_teacher' )->has_cap( 'prc_apply_as_teacher' ) );
 	}
 
 	/**
@@ -130,7 +131,7 @@ class Test_Provision extends WP_UnitTestCase {
 		sort( $estados );
 		$esperados = array_keys( ProcedureMetaKeys::states() );
 		sort( $esperados );
-		$this->assertSame( $esperados, $estados, 'uno por estado, sin repetir' );
+		$this->assertSame( array(), array_diff( $esperados, $estados ), 'hay al menos un procedimiento por estado derivado' );
 
 		$this->assertSame( array(), array_diff( array( 'text', 'single', 'multiple', 'yesno' ), $tipos ), 'hay preguntas de los cuatro tipos' );
 	}
@@ -147,7 +148,14 @@ class Test_Provision extends WP_UnitTestCase {
 			)
 		);
 		$estados     = array();
+		$docente     = false;
 		foreach ( $solicitudes as $solicitud ) {
+			if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $solicitud->ID, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+				$this->assertSame( 'profesor', get_userdata( (int) $solicitud->post_author )->user_login );
+				$this->assertSame( '', get_post_meta( $solicitud->ID, ApplicationMetaKeys::CENTRE_CODE, true ) );
+				$docente = true;
+				continue;
+			}
 			$estados[] = get_post_meta( $solicitud->ID, ApplicationMetaKeys::REVIEW_STATE, true );
 			$this->assertSame(
 				CentreScope::code_for( (int) $solicitud->post_author ),
@@ -161,6 +169,7 @@ class Test_Provision extends WP_UnitTestCase {
 		$estados = array_values( array_unique( $estados ) );
 		sort( $estados );
 		$this->assertSame( $esperados, $estados );
+		$this->assertTrue( $docente, 'hay una solicitud individual de ejemplo para profesorado' );
 	}
 
 	/**

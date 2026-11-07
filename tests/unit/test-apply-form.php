@@ -717,4 +717,40 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			'la respuesta a la pregunta borrada se conserva en la meta'
 		);
 	}
+
+	/** Individual applications use the teacher account and omit centre fields. */
+	public function test_teacher_can_submit_and_see_an_individual_application() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::AUDIENCE    => ProcedureMetaKeys::AUDIENCE_TEACHERS,
+				ProcedureMetaKeys::COMMITMENTS => 'Completar la formación.',
+			)
+		);
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$this->acting_as( $teacher );
+		$model = $this->modelo( $procedure );
+		$this->assertTrue( $model['can_submit'] );
+		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, $model['applicant_type'] );
+		$school_procedure = $this->procedimiento();
+		$this->assertFalse( \Prc\Access\ProcedureAccess::can_apply( $teacher, $school_procedure ), 'el perfil docente no solicita procedimientos de centros' );
+
+		$html = $this->pintar( $procedure );
+		$this->assertStringContainsString( 'DATOS DE LA PERSONA PARTICIPANTE', $html );
+		$this->assertStringNotContainsString( 'DATOS DEL CENTRO EDUCATIVO', $html );
+		$this->assertStringNotContainsString( 'Cargo en el centro', $html );
+
+		$url = $this->enviar( $teacher, $procedure, array( ApplyForm::FIELD_ACCEPT => '1' ) );
+		$this->assertNotNull( $url );
+		$id = Applications::find_for_teacher( $procedure, $teacher );
+		$this->assertNotNull( $id );
+		$this->assertSame( $teacher, (int) get_post_field( 'post_author', $id ) );
+		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, get_post_meta( $id, ApplicationMetaKeys::APPLICANT_TYPE, true ) );
+		$this->assertSame( '', get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true ) );
+		$this->assertSame( array(), get_post_meta( $id, ApplicationMetaKeys::COORDINATOR, true ) );
+	}
 }

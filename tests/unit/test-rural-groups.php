@@ -298,7 +298,7 @@ class Test_Rural_Groups extends WP_UnitTestCase {
 		$m = $this->modelo( $this->procedimiento( array( ProcedureMetaKeys::KIND_RURAL_GROUP ) ) );
 
 		$this->assertFalse( $m['can_submit'] );
-		$this->assertStringContainsString( 'agrupaciones de escuelas rurales', $m['why'] );
+		$this->assertStringContainsString( 'CER, como colectivo', $m['why'] );
 	}
 
 	/**

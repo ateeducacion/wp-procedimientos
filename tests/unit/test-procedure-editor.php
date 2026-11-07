@@ -1153,6 +1153,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				),
 			)
 		);
+		$this->acting_as( $uid );
 		wp_update_post(
 			array(
 				'ID'          => $procedimiento,

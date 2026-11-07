@@ -206,13 +206,14 @@ class Test_Applications_Csv extends WP_UnitTestCase {
 
 		$this->assertCount( 3, $lineas, 'cabecera y dos solicitudes' );
 		$this->assertStringContainsString( '"Centro";"Código";"Fecha"', $lineas[0] );
+		$this->assertStringContainsString( '"DNI o NIE de coordinación"', $lineas[0] );
 		$this->assertStringEndsWith( ';"Tiene huerto"', $lineas[0], 'la pregunta es la última columna' );
 
 		// Dos solicitudes del mismo segundo no tienen orden fiable: se buscan.
 		$norte = $this->linea_de( $lineas, '"C0001"' );
 		$sur   = $this->linea_de( $lineas, '"C0002"' );
 		$this->assertStringContainsString( '"Centro de prueba Norte";"C0001"', $norte );
-		$this->assertStringContainsString( '"Ana Pérez";"ana@example.org"', $norte );
+		$this->assertStringContainsString( '"Ana Pérez";"";"ana@example.org"', $norte );
 		$this->assertStringContainsString( '"Presentada"', $norte );
 		$this->assertStringEndsWith( ';"Sí"', $norte );
 		$this->assertStringEndsWith( ';"No"', $sur );

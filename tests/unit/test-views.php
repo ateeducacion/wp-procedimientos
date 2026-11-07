@@ -299,6 +299,20 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Las bases de la convocatoria.', $html );
 	}
 
+	/** A manager link is shown as the primary action when the model provides it. */
+	public function test_the_public_card_paints_the_primary_manage_link() {
+		$id = $this->procedure( $this->administrator(), array( $this->area( 'Área de prueba' ) ) );
+
+		$this->acting_as( 0 );
+		$model               = ProcedureView::model( $id );
+		$model['manage_url'] = 'https://example.org/gestionar';
+		$html                = ProcedureChrome::html( $model );
+
+		$this->assertStringContainsString( 'class="prc-btn prc-btn-primary btn btn-primary"', $html );
+		$this->assertStringContainsString( 'href="https://example.org/gestionar"', $html );
+		$this->assertStringContainsString( 'Editar procedimiento', $html );
+	}
+
 	/**
 	 * Sin datos no se pinta la fila vacía, ni la lista vacía, ni el contador.
 	 *

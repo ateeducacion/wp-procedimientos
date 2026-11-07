@@ -353,7 +353,7 @@ final class ApplyForm {
 	 */
 	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			return 'Su perfil no puede presentar solicitudes. Pídalo a quien administre el aplicativo.';
+			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 		}
 		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.';

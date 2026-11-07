@@ -5761,7 +5761,8 @@ final class Shell {
 
 		if ( isset( $secciones['mine'] ) ) {
 			$suyas            = self::entry( 'Sus solicitudes' );
-			$suyas['items'][] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
+			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'De su centro';
+			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
 			$menu[]           = $suyas;
 		}
 
@@ -11811,7 +11812,7 @@ final class ProcedureEditorView {
 
 	private static function applications_panel( array $m ): string {
 		$filas   = (array) $m['applications'];
-		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values']['audience'] ?? '' );
+		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values'][ ProcedureMetaKeys::AUDIENCE ] ?? '' );
 		if ( array() === $filas ) {
 			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
 				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
@@ -14849,7 +14850,7 @@ final class ApplyForm {
 
 	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			return 'Su perfil no puede presentar solicitudes. Pídalo a quien administre el aplicativo.';
+			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 		}
 		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.';
@@ -15497,7 +15498,7 @@ final class MyCentre {
 		}
 		$user_id = get_current_user_id();
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			$m['aviso'] = 'Su perfil no puede consultar solicitudes. Pídalo a quien administre el aplicativo.';
+			$m['aviso'] = 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 			return $m;
 		}
 		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ) {

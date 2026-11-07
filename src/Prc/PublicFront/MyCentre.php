@@ -148,7 +148,7 @@ final class MyCentre {
 		}
 		$user_id = get_current_user_id();
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
-			$m['aviso'] = 'Su perfil no puede consultar solicitudes. Pídalo a quien administre el aplicativo.';
+			$m['aviso'] = 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 			return $m;
 		}
 		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ) {

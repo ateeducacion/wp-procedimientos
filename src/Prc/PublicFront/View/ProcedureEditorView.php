@@ -900,7 +900,7 @@ final class ProcedureEditorView {
 	 */
 	private static function applications_panel( array $m ): string {
 		$filas   = (array) $m['applications'];
-		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values']['audience'] ?? '' );
+		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values'][ ProcedureMetaKeys::AUDIENCE ] ?? '' );
 		if ( array() === $filas ) {
 			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
 				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';

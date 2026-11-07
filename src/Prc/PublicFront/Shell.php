@@ -705,7 +705,8 @@ final class Shell {
 		// Solicitudes presentadas por el centro o por la persona docente.
 		if ( isset( $secciones['mine'] ) ) {
 			$suyas            = self::entry( 'Sus solicitudes' );
-			$suyas['items'][] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
+			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'De su centro';
+			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
 			$menu[]           = $suyas;
 		}
 

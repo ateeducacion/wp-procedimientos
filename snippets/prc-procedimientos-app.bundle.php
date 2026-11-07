@@ -11133,11 +11133,10 @@ final class ProcedureEditorView {
 		$modo        = in_array( ProcedureMetaKeys::KIND_SCHOOL, $clases, true ) && in_array( ProcedureMetaKeys::KIND_RURAL_GROUP, $clases, true )
 			? 'both'
 			: ( in_array( ProcedureMetaKeys::KIND_RURAL_GROUP, $clases, true ) ? ProcedureMetaKeys::KIND_RURAL_GROUP : ProcedureMetaKeys::KIND_SCHOOL );
-		$centros     = in_array( ProcedureMetaKeys::KIND_SCHOOL, $clases, true );
 		$modalidades = array(
 			ProcedureMetaKeys::KIND_SCHOOL      => 'Cada centro, con su código',
 			ProcedureMetaKeys::KIND_RURAL_GROUP => 'El CER como colectivo, con su código',
-			'both'                              => 'Centros y CER; cada código presenta su propia solicitud',
+			'both'                              => 'Ambos',
 		);
 
 
@@ -11173,7 +11172,7 @@ final class ProcedureEditorView {
 				</select>
 				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
 			</div>
-			<div class="prc-campo prc-campo--medio" data-prc-schools-only data-prc-school-code <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] && $centros ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
 					<legend class="prc-campo__etiqueta">Dirigido a <?php echo self::obl(); ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
@@ -11191,7 +11190,7 @@ final class ProcedureEditorView {
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset aria-describedby="prc-centre-kind-mode-help">
-					<legend class="prc-campo__etiqueta">Modalidad para centros y CER <?php echo self::obl(); ?></legend>
+					<legend class="prc-campo__etiqueta">Modalidad para centros CER <?php echo self::obl(); ?></legend>
 					<div class="prc-opciones prc-opciones--vertical">
 						<?php foreach ( $modalidades as $clave => $rotulo ) : ?>
 							<div class="prc-opcion">
@@ -11202,7 +11201,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda" id="prc-centre-kind-mode-help">Quien tenga código de centro y de CER podrá elegir con cuál presenta su solicitud.</p>
+					<p class="prc-campo__ayuda" id="prc-centre-kind-mode-help">Si elige «Ambos», cada solicitud se presenta con su código de centro o de CER. La titularidad indicada arriba se aplica a los centros del CER.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>
@@ -19373,23 +19372,15 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 			return;
 		}
 		var soloCentros = \'schools\' === audiencia.value;
-		var modalidad = document.querySelector( \'[name="prc_centre_kinds"]:checked\' );
 		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-schools-only]\' ), function ( caja ) {
 			caja.hidden = ! soloCentros;
 			Array.prototype.forEach.call( caja.querySelectorAll( \'input\' ), function ( input ) {
 				input.disabled = ! soloCentros;
 			} );
 		} );
-		var admiteCentros = soloCentros && ( ! modalidad || \'school\' === modalidad.value || \'both\' === modalidad.value );
-		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-school-code]\' ), function ( caja ) {
-			caja.hidden = ! admiteCentros;
-			Array.prototype.forEach.call( caja.querySelectorAll( \'input\' ), function ( input ) {
-				input.disabled = ! admiteCentros;
-			} );
-		} );
 	}
 	document.addEventListener( \'change\', function ( e ) {
-		if ( e.target && ( \'prc-audience\' === e.target.id || ( e.target.matches && e.target.matches( \'[name="prc_centre_kinds"]\' ) ) ) ) {
+		if ( e.target && \'prc-audience\' === e.target.id ) {
 			mostrarCamposDeCentro();
 		}
 	} );

@@ -176,10 +176,10 @@ describe( 'fields for school procedures', () => {
 		document.body.innerHTML = `
 			<select id="prc-audience"><option value="schools">Centros</option><option value="teachers">Profesorado</option></select>
 			<div data-prc-schools-only><input type="radio" name="prc_centre_kinds" value="school" checked /></div>
-			<div data-prc-school-code><input name="ownership[]" /></div>`;
+			<div id="ownership-fields" data-prc-schools-only><input name="ownership[]" /></div>`;
 		await load();
 		const audience = document.getElementById( 'prc-audience' );
-		const fields = document.querySelector( '[data-prc-school-code]' );
+		const fields = document.getElementById( 'ownership-fields' );
 
 		audience.value = 'teachers';
 		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
@@ -199,6 +199,7 @@ describe( 'fields for school procedures', () => {
 		both.checked = true;
 		both.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
 
 		const cer = document.createElement( 'input' );
 		cer.type = 'radio';
@@ -207,7 +208,8 @@ describe( 'fields for school procedures', () => {
 		document.body.appendChild( cer );
 		cer.checked = true;
 		cer.dispatchEvent( new Event( 'change', { bubbles: true } ) );
-		expect( fields.hidden ).toBe( true );
+		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
 	} );
 } );
 

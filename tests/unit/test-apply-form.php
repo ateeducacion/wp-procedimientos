@@ -304,8 +304,8 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_POSITION . '"', $html );
 		$this->assertStringContainsString( 'Jefatura de estudios', $html );
 
-		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORD_NAME . '"', $html );
-		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORD_EMAIL . '"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][name]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][email]"', $html );
 
 		$this->assertStringContainsString( 'El centro se compromete a sostener la red.', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_ACCEPT . '"', $html );
@@ -358,6 +358,54 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'class="prc-campo__obligatorio" aria-hidden="true">*', $html, 'el asterisco es decorativo' );
 		$this->assertStringContainsString( 'placeholder="Escriba aquí"', $html, 'la caja de respuesta libre' );
 		$this->assertStringContainsString( 'class="prc-boton-enviar"', $html );
+	}
+
+	/** A procedure requesting two coordinators shows two independently labelled rows. */
+	public function test_multiple_requested_coordinators_have_separate_fields() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 2 ) );
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$html = $this->pintar( $procedure );
+		$this->assertStringContainsString( 'Persona coordinadora 1', $html );
+		$this->assertStringContainsString( 'Persona coordinadora 2', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][email]"', $html );
+		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
+	}
+
+	/** Multiple coordinator rows are validated and saved together. */
+	public function test_multiple_coordinators_are_saved_on_the_application() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 2 ) );
+		$uid       = $this->school_head( 'C0001' );
+		$redirect  = $this->enviar(
+			$uid,
+			$procedure,
+			array(
+				ApplyForm::FIELD_COORDINATORS => array(
+					array(
+						'name'  => 'Ana Pérez',
+						'email' => 'ana@example.org',
+					),
+					array(
+						'name'  => 'Luis Díaz',
+						'email' => 'luis@example.org',
+					),
+				),
+			)
+		);
+		$this->assertNotNull( $redirect );
+		$id = Applications::find( $procedure, 'C0001' );
+		$this->assertSame(
+			array(
+				array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				),
+				array(
+					'name'  => 'Luis Díaz',
+					'email' => 'luis@example.org',
+				),
+			),
+			Applications::meta( (int) $id )[ ApplicationMetaKeys::COORDINATOR ]
+		);
 	}
 
 	/**
@@ -469,7 +517,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertNotNull( $id );
 		$meta = Applications::meta( $id );
 		$this->assertSame( ApplicationMetaKeys::POSITION_HEAD, $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] );
-		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ]['email'] );
+		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ][0]['email'] );
 		$this->assertSame(
 			array(
 				'q1' => 'Nada que añadir',

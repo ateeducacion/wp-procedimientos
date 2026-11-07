@@ -129,6 +129,12 @@ final class ProcedureMetaKeys {
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
 
+	public const COORDINATOR_COUNT = 'prc_coordinator_count';
+
+
+	public const COORDINATOR_COUNT_MAX = 10;
+
+
 
 
 	public const QUESTIONS = 'prc_questions';
@@ -199,6 +205,7 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
+			self::COORDINATOR_COUNT,
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,
@@ -1257,7 +1264,13 @@ final class ProcedureInput {
 
 
 	public static function validate( array $raw ): array {
-		$errors = array();
+		$errors                = array();
+		$raw_coordinator_count = $raw['coordinator_count'] ?? ( ! empty( $raw['requires_coordinator'] ) ? 1 : 0 );
+		$coordinator_count     = is_scalar( $raw_coordinator_count ) && false !== filter_var( $raw_coordinator_count, FILTER_VALIDATE_INT ) ? (int) $raw_coordinator_count : -1;
+		if ( $coordinator_count < 0 || $coordinator_count > ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) {
+			$errors[]          = 'coordinator_count';
+			$coordinator_count = 0;
+		}
 
 		$title        = self::text( $raw, 'title' );
 		$description  = self::text( $raw, 'description' );
@@ -1364,7 +1377,8 @@ final class ProcedureInput {
 					'audience'             => $audience,
 					'ownership'            => $ownership,
 					'centre_kinds'         => $kinds,
-					'requires_coordinator' => ! empty( $raw['requires_coordinator'] ),
+					'coordinator_count'    => $coordinator_count,
+					'requires_coordinator' => $coordinator_count > 0,
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
 				$urls
@@ -1398,6 +1412,7 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
 			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
+			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
 		$faltan = array();
@@ -1613,19 +1628,28 @@ final class ApplicationInput {
 			$position = '';
 		}
 
-		$coordinator = array(
-			'name'  => '',
-			'email' => '',
-		);
-		if ( ! empty( $procedure['requires_coordinator'] ) ) {
-			$coordinator['name']  = self::text( $raw, 'coordinator_name' );
-			$coordinator['email'] = strtolower( self::text( $raw, 'coordinator_email' ) );
+		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
+		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
+			$raw_coordinators[] = array(
+				'name'  => $raw['coordinator_name'] ?? '',
+				'email' => $raw['coordinator_email'] ?? '',
+			);
+		}
+		$coordinators = array();
+		for ( $i = 0; $i < $count; ++$i ) {
+			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
+			$coordinator     = array(
+				'name'  => self::text( $raw_coordinator, 'name' ),
+				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
+			);
 			if ( '' === $coordinator['name'] ) {
 				$errors[] = 'coordinator_name';
 			}
 			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
 				$errors[] = 'coordinator_email';
 			}
+			$coordinators[] = $coordinator;
 		}
 
 
@@ -1645,7 +1669,7 @@ final class ApplicationInput {
 			'errors' => $errors,
 			'data'   => array(
 				'position'    => $position,
-				'coordinator' => $coordinator,
+				'coordinator' => $coordinators,
 				'accept'      => $accepted,
 				'answers'     => $respuesta['data'],
 			),
@@ -1662,8 +1686,8 @@ final class ApplicationInput {
 	public static function why( array $errors, array $questions = array() ): string {
 		$textos = array(
 			'position'          => 'el cargo',
-			'coordinator_name'  => 'el nombre de la persona coordinadora',
-			'coordinator_email' => 'el correo de la persona coordinadora',
+			'coordinator_name'  => 'el nombre de cada persona coordinadora',
+			'coordinator_email' => 'el correo de cada persona coordinadora',
 			'accept'            => 'la aceptación de los compromisos',
 		);
 		foreach ( $questions as $pregunta ) {
@@ -3593,6 +3617,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
+			ProcedureMetaKeys::COORDINATOR_COUNT    => array(
+				'type'     => 'integer',
+				'sanitize' => array( self::class, 'sanitize_coordinator_count' ),
+			),
 			ProcedureMetaKeys::QUESTIONS            => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
@@ -3795,6 +3823,17 @@ final class ProcedureMetaRegistration {
 
 
 
+	public static function sanitize_coordinator_count( $value ): int {
+		$count = is_scalar( $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT ) ? (int) $value : 0;
+		return min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, max( 0, $count ) );
+	}
+
+
+
+
+
+
+
 	public static function sanitize_questions( $value ): array {
 		$preguntas = ProcedureQuestions::sanitize( $value );
 		foreach ( $preguntas as $i => $pregunta ) {
@@ -3933,11 +3972,21 @@ final class ApplicationMetaRegistration {
 
 	public static function sanitize_coordinator( $value ): array {
 		$value = is_array( $value ) ? $value : array();
-		$email = sanitize_email( isset( $value['email'] ) && is_scalar( $value['email'] ) ? (string) $value['email'] : '' );
-		return array(
-			'name'  => sanitize_text_field( isset( $value['name'] ) && is_scalar( $value['name'] ) ? (string) $value['name'] : '' ),
-			'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
-		);
+		if ( isset( $value['name'] ) || isset( $value['email'] ) ) {
+			$value = array( $value );
+		}
+		$out = array();
+		foreach ( array_slice( $value, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $coordinator ) {
+			if ( ! is_array( $coordinator ) ) {
+				continue;
+			}
+			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
+			$out[] = array(
+				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
+				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
+			);
+		}
+		return $out;
 	}
 
 
@@ -6398,6 +6447,8 @@ use Prc\Access\CentreScope;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -6580,10 +6631,27 @@ final class Applications {
 
 	public static function spec( int $procedure_id ): array {
 		return array(
-			'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
+			'coordinator_count'    => self::coordinator_count( $procedure_id ),
+			'requires_coordinator' => self::coordinator_count( $procedure_id ) > 0,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
+	}
+
+
+
+
+
+
+
+	public static function coordinator_count( int $procedure_id ): int {
+		if ( $procedure_id <= 0 ) {
+			return 0;
+		}
+		$count = metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT )
+			? get_post_meta( $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT, true )
+			: ( ! empty( get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ) ? 1 : 0 );
+		return ProcedureMetaRegistration::sanitize_coordinator_count( $count );
 	}
 
 
@@ -6833,7 +6901,7 @@ final class Applications {
 	public static function row( \WP_Post $application, array $questions ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
-		$coord  = (array) $meta[ ApplicationMetaKeys::COORDINATOR ];
+		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
 		$fila = array(
@@ -6849,8 +6917,8 @@ final class Applications {
 			'applicant'         => false !== $autor ? (string) $autor->display_name : '',
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'       => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);
@@ -8709,7 +8777,7 @@ final class ProcedureChrome {
 			array( 'Curso', (string) $m['courses'], '' ),
 			array( 'Inscripción', (string) $m['dates'], '' ),
 			array( 'Subsanación', (string) $m['amend_dates'], '' ),
-			array( 'Coordinación', empty( $m['requires_coordinator'] ) ? '' : 'Pide una persona coordinadora', '' ),
+			array( 'Coordinación', (int) ( $m['coordinator_count'] ?? 0 ) < 1 ? '' : sprintf( 'Pide %d %s coordinadora%s', (int) $m['coordinator_count'], 1 === (int) $m['coordinator_count'] ? 'persona' : 'personas', 1 === (int) $m['coordinator_count'] ? '' : 's' ), '' ),
 			array( 'Contacto', (string) $m['contact_email'], (string) $m['contact_email'] ),
 		);
 
@@ -9103,7 +9171,8 @@ final class ProcedureView {
 				'courses'              => self::terms( $post_id, ProcedureTaxonomies::COURSE ),
 				'audience'             => (string) ( ProcedureMetaKeys::audiences()[ $audiencia ] ?? '' ),
 				'ownership'            => ProcedureChrome::ownership_label( $ownership ),
-				'requires_coordinator' => (bool) $meta[ ProcedureMetaKeys::REQUIRES_COORDINATOR ],
+				'coordinator_count'    => Applications::coordinator_count( $post_id ),
+				'requires_coordinator' => Applications::coordinator_count( $post_id ) > 0,
 
 
 				'contact_emails'       => $correos,
@@ -9149,6 +9218,7 @@ final class ProcedureView {
 			'audience'             => '',
 			'ownership'            => '',
 			'requires_coordinator' => false,
+			'coordinator_count'    => 0,
 			'contact_emails'       => array(),
 			'contact_email'        => '',
 			'header_color'         => ProcedureMetaKeys::header_hex( '' ),
@@ -11230,17 +11300,41 @@ final class ProcedureEditorView {
 
 
 	private static function request_fields( array $v ): string {
+		$numero = (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ];
+		$tipo   = 0 === $numero ? 'none' : ( 1 === $numero ? 'one' : 'several' );
+		$varias = max( 2, $numero );
+
 		ob_start();
 		?>
-		<div class="prc-campo">
-			<div class="prc-opcion">
-				<input type="checkbox" id="prc-coordinator"
-					name="<?php echo esc_attr( ProcedureMetaKeys::REQUIRES_COORDINATOR ); ?>" value="1"
-					<?php checked( '' !== (string) $v[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] ); ?> />
-				<label for="prc-coordinator">La solicitud pide una persona coordinadora</label>
+		<fieldset class="prc-campo">
+			<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras?</legend>
+			<div class="prc-opciones prc-opciones--vertical">
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="none" <?php checked( 'none', $tipo ); ?> />
+						No se piden
+					</label>
+				</div>
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="one" <?php checked( 'one', $tipo ); ?> />
+						Sí, una persona
+					</label>
+				</div>
+				<div class="prc-opcion prc-opcion--varias">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="several" <?php checked( 'several', $tipo ); ?> />
+						Sí, varias personas:
+					</label>
+					<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>" aria-label="Número de personas coordinadoras">
+						<?php for ( $count = 2; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) : ?>
+							<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( $count, $varias ); ?>><?php echo esc_html( (string) $count ); ?></option>
+						<?php endfor; ?>
+					</select>
+				</div>
 			</div>
-			<p class="prc-campo__ayuda">Nombre y correo de quien coordina en el centro.</p>
-		</div>
+			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
+		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
 			<textarea class="prc-control" id="prc-commitments" name="<?php echo esc_attr( ProcedureMetaKeys::COMMITMENTS ); ?>" rows="5"
@@ -11953,6 +12047,13 @@ final class ProcedureEditor {
 
 
 
+
+
+	public const FIELD_COORDINATOR_KIND = 'prc_coordinator_kind';
+
+
+
+
 	public const FIELD_Q = 'prc_q_';
 
 
@@ -12394,21 +12495,37 @@ final class ProcedureEditor {
 
 
 
-	private static function submitted_data(): array {
+
+	private static function submitted_data( int $procedure_id = 0 ): array {
 
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
 
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
 
-		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
-		$coordina = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
+		$clases = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$tipo   = isset( $_POST[ self::FIELD_COORDINATOR_KIND ] )
+			? sanitize_key( wp_unslash( (string) $_POST[ self::FIELD_COORDINATOR_KIND ] ) )
+			: '';
+		if ( in_array( $tipo, array( 'none', 'one', 'several' ), true ) ) {
+			if ( 'none' === $tipo ) {
+				$coordina = '0';
+			} elseif ( 'one' === $tipo ) {
+				$coordina = '1';
+			} else {
+				$coordina = (string) max( 2, min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, (int) self::field( ProcedureMetaKeys::COORDINATOR_COUNT ) ) );
+			}
+		} else {
+			$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
+				? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
+				: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		}
 
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
 
 
-		return array(
+		$datos                      = array(
 			'title'                => self::field( self::FIELD_TITLE ),
 			'description'          => $descripcion,
 			'areas'                => $ambitos,
@@ -12422,9 +12539,11 @@ final class ProcedureEditor {
 			'audience'             => self::field( ProcedureMetaKeys::AUDIENCE ),
 			'ownership'            => $titularidad,
 			'centre_kinds'         => $clases,
-			'requires_coordinator' => $coordina,
+			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
 		);
+		$datos['coordinator_count'] = $coordina;
+		return $datos;
 	}
 
 
@@ -12441,7 +12560,7 @@ final class ProcedureEditor {
 
 
 	private static function gated_data( int $procedure_id, bool $datos, bool $fechas ): array {
-		$crudo = self::submitted_data();
+		$crudo = self::submitted_data( $procedure_id );
 		if ( ! $fechas ) {
 			$plazos = array(
 				'opens_at'        => ProcedureMetaKeys::OPENS_AT,
@@ -12456,8 +12575,8 @@ final class ProcedureEditor {
 		if ( ! $datos ) {
 
 
-			$post  = get_post( $procedure_id );
-			$crudo = array_merge(
+			$post                       = get_post( $procedure_id );
+			$crudo                      = array_merge(
 				$crudo,
 				array(
 					'title'                => $post instanceof \WP_Post ? $post->post_title : '',
@@ -12473,6 +12592,7 @@ final class ProcedureEditor {
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				)
 			);
+			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
 		return $crudo;
 	}
@@ -12501,6 +12621,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
 		);
+		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
 			update_post_meta( $procedure_id, $clave, wp_slash( $valor ) );
 		}
@@ -13062,19 +13183,20 @@ final class ProcedureEditor {
 				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
 				: array_keys( ProcedureMetaKeys::ownerships() ),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
-			ProcedureMetaKeys::REQUIRES_COORDINATOR => get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ? '1' : '',
+			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
 		);
+		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
 
 
 
-		$tecleado = self::submitted_data();
+		$tecleado = self::submitted_data( $procedure_id );
 		$mapa     = array(
 			self::FIELD_TITLE                  => 'title',
 			self::FIELD_DESCRIPTION            => 'description',
@@ -13101,8 +13223,8 @@ final class ProcedureEditor {
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
 		}
-		if ( in_array( self::FIELD_TITLE, $enviados, true ) ) {
-			$guardado[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] = $tecleado['requires_coordinator'] ? '1' : '';
+		if ( in_array( ProcedureMetaKeys::COORDINATOR_COUNT, $enviados, true ) ) {
+			$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) $tecleado['coordinator_count'];
 		}
 		foreach ( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) as $clave ) {
 			if ( in_array( $clave, $enviados, true ) ) {
@@ -13695,24 +13817,27 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( ! empty( $spec['requires_coordinator'] ) ) : ?>
+			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
 				<section class="prc-seccion">
 					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
-							<p>La persona coordinadora acepta el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria del mismo.</p>
-							<p><strong>La persona coordinadora es:</strong></p>
+							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
 						</div>
-						<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
-							<?php echo self::label( 'prc-coordinator-name', 'Nombre y apellidos', true ); ?>
-							<input class="prc-control" type="text" id="prc-coordinator-name" name="<?php echo esc_attr( ApplyForm::FIELD_COORD_NAME ); ?>" required
-								value="<?php echo esc_attr( (string) $v['coordinator_name'] ); ?>" />
-						</div>
-						<div class="prc-campo prc-campo--cuarto">
-							<?php echo self::label( 'prc-coordinator-email', 'Correo electrónico', true ); ?>
-							<input class="prc-control" type="email" id="prc-coordinator-email" name="<?php echo esc_attr( ApplyForm::FIELD_COORD_EMAIL ); ?>" required
-								value="<?php echo esc_attr( (string) $v['coordinator_email'] ); ?>" />
-						</div>
+						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
+							<?php $coordinator = (array) ( $v['coordinators'][ $index ] ?? array() ); ?>
+							<fieldset class="prc-seccion-campos">
+								<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
+								<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
+									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true ); ?>
+									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
+								</div>
+								<div class="prc-campo prc-campo--cuarto">
+									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); ?>
+									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
+								</div>
+							</fieldset>
+						<?php endfor; ?>
 					</div>
 				</section>
 			<?php endif; ?>
@@ -13979,6 +14104,7 @@ use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
@@ -14031,13 +14157,14 @@ final class ApplyForm {
 	public const OP_DELIVER     = 'deliver';
 	public const FIELD_DELIVERY = 'prc_delivery';
 
-	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
-	public const FIELD_CENTRE      = 'prc_apply_centre';
-	public const FIELD_POSITION    = 'prc_position';
-	public const FIELD_COORD_NAME  = 'prc_coordinator_name';
-	public const FIELD_COORD_EMAIL = 'prc_coordinator_email';
-	public const FIELD_ACCEPT      = 'prc_accept';
-	public const FIELD_ANSWERS     = 'prc_q';
+	public const FIELD_PROCEDURE    = 'prc_apply_procedure';
+	public const FIELD_CENTRE       = 'prc_apply_centre';
+	public const FIELD_POSITION     = 'prc_position';
+	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
+	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
+	public const FIELD_COORDINATORS = 'prc_coordinators';
+	public const FIELD_ACCEPT       = 'prc_accept';
+	public const FIELD_ANSWERS      = 'prc_q';
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
@@ -14236,12 +14363,14 @@ final class ApplyForm {
 	private static function submitted(): array {
 
 
-		$respuestas = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
-		$acepta     = ! empty( $_POST[ self::FIELD_ACCEPT ] );
-
+		$respuestas   = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
+		$acepta       = ! empty( $_POST[ self::FIELD_ACCEPT ] );
+		$coordinators = wp_unslash( $_POST[ self::FIELD_COORDINATORS ] ?? array() );
+		$coordinators = is_array( $coordinators ) ? self::clean_coordinators( $coordinators ) : array();
 
 		return array(
 			'position'          => self::field( self::FIELD_POSITION ),
+			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
 			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
 			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
 			'accept'            => $acepta,
@@ -14263,6 +14392,26 @@ final class ApplyForm {
 			} elseif ( is_scalar( $valor ) ) {
 				$out[ (string) $key ] = sanitize_textarea_field( (string) $valor );
 			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function clean_coordinators( array $raw ): array {
+		$out = array();
+		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
+			$row   = is_array( $row ) ? $row : array();
+			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
+			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
+			$out[] = array(
+				'name'  => $name,
+				'email' => $email,
+			);
 		}
 		return $out;
 	}
@@ -14356,9 +14505,9 @@ final class ApplyForm {
 			'can_submit'      => false,
 			'why'             => '',
 			'spec'            => array(
-				'requires_coordinator' => false,
-				'commitments'          => '',
-				'questions'            => array(),
+				'coordinator_count' => 0,
+				'commitments'       => '',
+				'questions'         => array(),
 			),
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
@@ -14428,7 +14577,7 @@ final class ApplyForm {
 				'state_label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 				'note'        => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 				'position'    => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-				'coordinator' => (array) $meta[ ApplicationMetaKeys::COORDINATOR ],
+				'coordinator' => ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] ),
 				'answers'     => (array) $meta[ ApplicationMetaKeys::ANSWERS ],
 				'files'       => ApplicationFiles::descriptors( $existente ),
 			);
@@ -14537,12 +14686,13 @@ final class ApplyForm {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coord = (array) ( $application['coordinator'] ?? array() );
-		$meta  = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
+		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
-			'coordinator_name'  => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinators'      => $coordinators,
+			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
+			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 
 			'accept'            => array() !== $application,
 			'answers'           => (array) ( $application['answers'] ?? array() ),
@@ -14780,6 +14930,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\View\MyCentreView;
 
@@ -14946,7 +15097,7 @@ final class MyCentre {
 		$procedure_id = (int) $application->post_parent;
 		$meta         = Applications::meta( (int) $application->ID );
 		$autor        = get_userdata( (int) $application->post_author );
-		$coord        = (array) $meta[ ApplicationMetaKeys::COORDINATOR ];
+		$coord        = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$revision     = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 		$opciones     = self::options( $procedure_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] );
 		$cierre       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
@@ -14966,7 +15117,7 @@ final class MyCentre {
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => (string) ( $coord['name'] ?? '' ),
+			'coordinator'  => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,
@@ -15897,6 +16048,19 @@ final class App {
 .prc-form.prc-form--taller .prc-opcion label {
   font: 400 13px/16.9px var(--prc-fuente);
   color: var(--prc-c-fuerte);
+}
+
+/* «Sí, varias personas: [5]»: el número va en la misma línea que su radio. */
+.prc-form.prc-form--taller .prc-opcion--varias {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prc-form.prc-form--taller .prc-opcion--varias .prc-control {
+  width: auto;
+  min-width: 4.5rem;
 }
 
 /* --- la banda de sección ------------------------------------------------

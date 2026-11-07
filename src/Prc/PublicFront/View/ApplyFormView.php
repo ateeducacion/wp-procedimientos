@@ -399,24 +399,27 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( ! empty( $spec['requires_coordinator'] ) ) : ?>
+			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
 				<section class="prc-seccion">
 					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
-							<p>La persona coordinadora acepta el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria del mismo.</p>
-							<p><strong>La persona coordinadora es:</strong></p>
+							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
 						</div>
-						<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
-							<?php echo self::label( 'prc-coordinator-name', 'Nombre y apellidos', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-							<input class="prc-control" type="text" id="prc-coordinator-name" name="<?php echo esc_attr( ApplyForm::FIELD_COORD_NAME ); ?>" required
-								value="<?php echo esc_attr( (string) $v['coordinator_name'] ); ?>" />
-						</div>
-						<div class="prc-campo prc-campo--cuarto">
-							<?php echo self::label( 'prc-coordinator-email', 'Correo electrónico', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-							<input class="prc-control" type="email" id="prc-coordinator-email" name="<?php echo esc_attr( ApplyForm::FIELD_COORD_EMAIL ); ?>" required
-								value="<?php echo esc_attr( (string) $v['coordinator_email'] ); ?>" />
-						</div>
+						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
+							<?php $coordinator = (array) ( $v['coordinators'][ $index ] ?? array() ); ?>
+							<fieldset class="prc-seccion-campos">
+								<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
+								<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
+									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
+								</div>
+								<div class="prc-campo prc-campo--cuarto">
+									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
+								</div>
+							</fieldset>
+						<?php endfor; ?>
 					</div>
 				</section>
 			<?php endif; ?>

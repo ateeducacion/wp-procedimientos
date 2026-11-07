@@ -637,17 +637,41 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function request_fields( array $v ): string {
+		$numero = (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ];
+		$tipo   = 0 === $numero ? 'none' : ( 1 === $numero ? 'one' : 'several' );
+		$varias = max( 2, $numero );
+
 		ob_start();
 		?>
-		<div class="prc-campo">
-			<div class="prc-opcion">
-				<input type="checkbox" id="prc-coordinator"
-					name="<?php echo esc_attr( ProcedureMetaKeys::REQUIRES_COORDINATOR ); ?>" value="1"
-					<?php checked( '' !== (string) $v[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] ); ?> />
-				<label for="prc-coordinator">La solicitud pide una persona coordinadora</label>
+		<fieldset class="prc-campo">
+			<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras?</legend>
+			<div class="prc-opciones prc-opciones--vertical">
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="none" <?php checked( 'none', $tipo ); ?> />
+						No se piden
+					</label>
+				</div>
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="one" <?php checked( 'one', $tipo ); ?> />
+						Sí, una persona
+					</label>
+				</div>
+				<div class="prc-opcion prc-opcion--varias">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="several" <?php checked( 'several', $tipo ); ?> />
+						Sí, varias personas:
+					</label>
+					<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>" aria-label="Número de personas coordinadoras">
+						<?php for ( $count = 2; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) : ?>
+							<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( $count, $varias ); ?>><?php echo esc_html( (string) $count ); ?></option>
+						<?php endfor; ?>
+					</select>
+				</div>
 			</div>
-			<p class="prc-campo__ayuda">Nombre y correo de quien coordina en el centro.</p>
-		</div>
+			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
+		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
 			<textarea class="prc-control" id="prc-commitments" name="<?php echo esc_attr( ProcedureMetaKeys::COMMITMENTS ); ?>" rows="5"

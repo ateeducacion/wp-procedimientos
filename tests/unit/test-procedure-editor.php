@@ -253,14 +253,39 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( '', get_post_meta( $procedure, ProcedureMetaKeys::CUSTOM_JS, true ) );
 	}
 
-	/** Managers get the CSS editor and an explanation for hidden JavaScript. */
+	/** Managers see CSS only; JavaScript is entirely hidden from their screen. */
 	public function test_custom_code_panel_explains_and_limits_javascript_access() {
 		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::CUSTOM_CSS => 'h1 { color: red; }' ) );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
 		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
 		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
-		$this->assertStringContainsString( 'solo está disponible para administración', $html );
+		$this->assertStringNotContainsString( 'JavaScript', $html );
+	}
+
+	/** Administrators see the executable editor and its yellow public-impact warning. */
+	public function test_administrators_see_the_javascript_warning_and_editor() {
+		list( , , $procedure ) = $this->mio();
+		$this->acting_as( $this->administrator() );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$this->assertStringContainsString( 'name="prc_custom_js"', $html );
+		$this->assertStringContainsString( 'class="prc-aviso prc-aviso-warning prc-codigo-admin"', $html );
+		$this->assertStringContainsString( 'Solo para administración', $html );
+	}
+
+	/** The CSS manager gets no JavaScript editor assets or initializer. */
+	public function test_code_editor_enqueues_only_the_css_field_for_managers() {
+		list( , $uid, $procedure ) = $this->mio();
+		update_user_option( $uid, 'syntax_highlighting', 'true', true );
+		$this->acting_as( $uid );
+		$this->go_to( ProcedureEditor::url( $procedure, ProcedureEditor::PANEL_CODE ) );
+
+		ProcedureEditor::enqueue_code_editor();
+		$scripts = wp_scripts();
+		$inline  = implode( '', (array) ( $scripts->registered['code-editor']->extra['after'] ?? array() ) );
+		$this->assertTrue( $scripts->query( 'code-editor', 'enqueued' ) );
+		$this->assertStringContainsString( 'prc-custom-css', $inline );
+		$this->assertStringNotContainsString( 'prc-custom-js', $inline );
 	}
 
 	/**

@@ -153,7 +153,14 @@ final class ApplicationInput {
 		if ( ! preg_match( '/^(?:[0-9]{8}|[XYZ][0-9]{7})[A-Z]$/', $value ) ) {
 			return false;
 		}
-		$number = strtr( substr( $value, 0, -1 ), array( 'X' => '0', 'Y' => '1', 'Z' => '2' ) );
+		$number = strtr(
+			substr( $value, 0, -1 ),
+			array(
+				'X' => '0',
+				'Y' => '1',
+				'Z' => '2',
+			)
+		);
 		return substr( 'TRWAGMYFPDXBNJZSQVHLCKE', (int) $number % 23, 1 ) === substr( $value, -1 );
 	}
 

@@ -764,9 +764,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	/** A manager may pause applications, keep delivery dates, resume by calendar, and return a procedure to draft. */
 	public function test_close_pause_keeps_delivery_windows_and_unpublish_returns_to_draft() {
 		list( , $uid, $procedure ) = $this->mio();
-		$closes_at = get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true );
-		$before    = ProcedureState::of_post( $procedure );
-		$questions = ProcedureQuestions::sanitize(
+		$closes_at                 = get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true );
+		$before                    = ProcedureState::of_post( $procedure );
+		$questions                 = ProcedureQuestions::sanitize(
 			array(
 				array(
 					'label'     => 'Memoria',
@@ -1153,10 +1153,16 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				),
 			)
 		);
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'B' ) ) );
 		$this->acting_as( $uid );
 
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$html   = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
 		$labels = array(
 			'Datos',
 			'Preguntas',
@@ -1266,6 +1272,21 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 		$panel = ProcedureEditor::PANEL_PUBLISH;
+		update_post_meta(
+			$procedure,
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array(
+					'key'       => 'documento',
+					'label'     => 'Documento',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-2 days' ),
+					'closes_at' => $this->dia( '+2 days' ),
+				),
+			)
+		);
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
 		$this->assertMatchesRegularExpression( '/<h3>Publicado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 
 		update_post_meta( $procedure, ProcedureMetaKeys::OPENS_AT, $this->dia( '-10 days' ) );

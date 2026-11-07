@@ -128,7 +128,8 @@ final class ProcedureState {
 	/**
 	 * Human label for a state.
 	 *
-	 * @param string $state State slug.
+	 * @param string $state           State slug.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
 	 * @return string Empty when the slug is not one of ours.
 	 */
 	public static function label( string $state, bool $manually_closed = false ): string {

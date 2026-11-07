@@ -167,6 +167,7 @@ final class ApplyForm {
 	 *
 	 * @param string $state        One of ProcedureMetaKeys::states().
 	 * @param string $review_state Review state of the existing application, '' when there is none.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
 	 * @return string Empty when the form is open; otherwise why it is not.
 	 */
 	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {

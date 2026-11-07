@@ -366,7 +366,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		// Y el motivo se cuenta por grupo, no por procedimiento.
 		$this->assertSame( '', ProcedureAccess::why_not_editable( $yo, $cerrado ) );
 		$this->assertSame( '', ProcedureAccess::why_not_editable( $yo, $cerrado, ProcedureState::GROUP_DATES ) );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', ProcedureAccess::why_not_editable( $yo, $cerrado, ProcedureState::GROUP_QUESTIONS ) );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', ProcedureAccess::why_not_editable( $yo, $cerrado, ProcedureState::GROUP_QUESTIONS ) );
 		$this->assertStringContainsString( 'subsanación', ProcedureAccess::why_not_editable( $yo, $subsana, ProcedureState::GROUP_DATES ) );
 		$this->assertStringContainsString( 'resuelto', ProcedureAccess::why_not_editable( $yo, $resuelto, ProcedureState::GROUP_DATA ) );
 		$this->assertStringContainsString( 'de otro ámbito', ProcedureAccess::why_not_editable( $ella, $cerrado, ProcedureState::GROUP_DATES ), 'primero el permiso, luego el estado' );

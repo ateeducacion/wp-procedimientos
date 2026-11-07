@@ -755,6 +755,7 @@ final class ProcedureState {
 
 
 
+
 	public static function label( string $state, bool $manually_closed = false ): string {
 		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
 			return 'Cerrado manualmente';
@@ -3605,7 +3606,7 @@ final class ProcedureMetaRegistration {
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 				'auth'     => array( self::class, 'auth_archived' ),
 			),
-			ProcedureMetaKeys::APPLICATIONS_CLOSED => array(
+			ProcedureMetaKeys::APPLICATIONS_CLOSED  => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
@@ -11628,8 +11629,8 @@ final class ProcedureEditorView {
 
 
 	private static function publish_panel( array $m ): string {
-		$op    = ProcedureEditor::OP_PUBLISH;
-		$state = (string) $m['state'];
+		$op                 = ProcedureEditor::OP_PUBLISH;
+		$state              = (string) $m['state'];
 		$close_confirmation = sprintf(
 			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
 				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
@@ -11640,7 +11641,7 @@ final class ProcedureEditorView {
 				. 'hasta que vuelva a publicarse.',
 			(string) $m['title']
 		);
-		$stage = 1;
+		$stage              = 1;
 		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
 			$stage = 0;
 		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
@@ -11909,15 +11910,15 @@ final class ProcedureEditor {
 	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
 
-	public const OP_REVIEW             = 'review';
-	public const OP_EXPORT             = 'export';
+	public const OP_REVIEW              = 'review';
+	public const OP_EXPORT              = 'export';
 	public const OP_PUBLISH             = 'publish';
 	public const OP_UNPUBLISH           = 'unpublish';
 	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
-	public const OP_ARCHIVE            = 'archive';
-	public const OP_UNARCHIVE          = 'unarchive';
-	public const OP_DELIVERY_DATES     = 'delivery_dates';
-	public const FIELD_DELIVERY_CLOSES = 'prc_delivery_closes';
+	public const OP_ARCHIVE             = 'archive';
+	public const OP_UNARCHIVE           = 'unarchive';
+	public const OP_DELIVERY_DATES      = 'delivery_dates';
+	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
 
@@ -12686,7 +12687,7 @@ final class ProcedureEditor {
 		}
 		$closed = ! (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, $closed );
-		if ( $closed !== (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) ) {
+		if ( $closed xor (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) ) {
 			self::$rejected = 'No se pudo cambiar el cierre de solicitudes. No se ha aplicado el cambio.';
 			return;
 		}
@@ -12848,53 +12849,53 @@ final class ProcedureEditor {
 
 	private static function blank(): array {
 		return array(
-			'aviso'         => '',
-			'aviso_tipo'    => 'aviso',
-			'nuevo'         => false,
-			'procedure_id'  => 0,
-			'title'         => '',
-			'panel'         => self::PANEL_DATA,
-			'panels'        => array(),
-			'flash'         => array(
+			'aviso'                   => '',
+			'aviso_tipo'              => 'aviso',
+			'nuevo'                   => false,
+			'procedure_id'            => 0,
+			'title'                   => '',
+			'panel'                   => self::PANEL_DATA,
+			'panels'                  => array(),
+			'flash'                   => array(
 				'tipo'  => '',
 				'texto' => '',
 			),
-			'can_edit'      => false,
-			'groups'        => array(),
-			'state_notice'  => '',
-			'can_review'    => false,
-			'can_publish'   => false,
-			'can_unpublish'             => false,
-			'can_toggle_applications'   => false,
-			'applications_closed'       => false,
-			'pending_documentation'     => false,
-			'can_archive'   => false,
-			'can_unarchive' => false,
-			'archived'      => false,
-			'lock'          => EditLock::none(),
-			'state'         => '',
-			'state_label'   => '',
-			'status'        => '',
-			'status_label'  => '',
-			'area_names'    => '',
-			'foreign_areas' => array(),
-			'view_url'      => '',
-			'workspace_url' => Shell::url( 'workspace' ),
-			'values'        => array(),
-			'terms'         => array(
+			'can_edit'                => false,
+			'groups'                  => array(),
+			'state_notice'            => '',
+			'can_review'              => false,
+			'can_publish'             => false,
+			'can_unpublish'           => false,
+			'can_toggle_applications' => false,
+			'applications_closed'     => false,
+			'pending_documentation'   => false,
+			'can_archive'             => false,
+			'can_unarchive'           => false,
+			'archived'                => false,
+			'lock'                    => EditLock::none(),
+			'state'                   => '',
+			'state_label'             => '',
+			'status'                  => '',
+			'status_label'            => '',
+			'area_names'              => '',
+			'foreign_areas'           => array(),
+			'view_url'                => '',
+			'workspace_url'           => Shell::url( 'workspace' ),
+			'values'                  => array(),
+			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
 			),
-			'ownerships'    => ProcedureMetaKeys::ownerships(),
-			'centre_kinds'  => ProcedureMetaKeys::centre_kinds(),
-			'audiences'     => ProcedureMetaKeys::audiences(),
-			'header_colors' => ProcedureMetaKeys::header_colors(),
-			'questions'     => array(),
-			'q_types'       => ProcedureQuestions::types(),
-			'q_max'         => ProcedureQuestions::MAX,
-			'applications'  => array(),
-			'app_cols'      => array(),
-			'review_states' => ApplicationMetaKeys::review_states(),
+			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
+			'audiences'               => ProcedureMetaKeys::audiences(),
+			'header_colors'           => ProcedureMetaKeys::header_colors(),
+			'questions'               => array(),
+			'q_types'                 => ProcedureQuestions::types(),
+			'q_max'                   => ProcedureQuestions::MAX,
+			'applications'            => array(),
+			'app_cols'                => array(),
+			'review_states'           => ApplicationMetaKeys::review_states(),
 		);
 	}
 
@@ -12967,16 +12968,16 @@ final class ProcedureEditor {
 		if ( (int) $m['lock']['owner'] > 0 ) {
 			$m['can_edit'] = false;
 		}
-		$libre              = 0 === (int) $m['lock']['owner'];
-		$m['can_archive']   = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
-		$m['can_unarchive'] = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
-		$m['can_publish']   = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$libre                        = 0 === (int) $m['lock']['owner'];
+		$m['can_archive']             = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
+		$m['can_unarchive']           = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
+		$m['can_publish']             = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
 		$m['can_unpublish']           = $m['can_edit']
 			&& 'publish' === $procedimiento->post_status
 			&& ProcedureAccess::can_publish( $user_id, $procedure_id );
 		$m['can_toggle_applications'] = $libre && $m['can_edit'] && 'publish' === $procedimiento->post_status;
 		$m['applications_closed']     = (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
-		$m['pending_documentation'] = false;
+		$m['pending_documentation']   = false;
 		if ( 0 < (int) $paneles[ self::PANEL_APPLICATIONS ]['count'] ) {
 			foreach ( Applications::questions( $procedure_id ) as $question ) {
 				if ( ! ProcedureQuestions::is_delivery( $question ) ) {
@@ -12988,8 +12989,8 @@ final class ProcedureEditor {
 				}
 			}
 		}
-		$m['state']         = ProcedureState::of_post( $procedure_id );
-		$m['state_label']   = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
+		$m['state']       = ProcedureState::of_post( $procedure_id );
+		$m['state_label'] = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
 
 
 
@@ -14122,6 +14123,7 @@ final class ApplyForm {
 		}
 		return array() === $codes ? '' : (string) array_key_first( $codes );
 	}
+
 
 
 

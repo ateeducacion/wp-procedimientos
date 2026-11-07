@@ -1036,8 +1036,8 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function publish_panel( array $m ): string {
-		$op    = ProcedureEditor::OP_PUBLISH;
-		$state = (string) $m['state'];
+		$op                 = ProcedureEditor::OP_PUBLISH;
+		$state              = (string) $m['state'];
 		$close_confirmation = sprintf(
 			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
 				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
@@ -1048,7 +1048,7 @@ final class ProcedureEditorView {
 				. 'hasta que vuelva a publicarse.',
 			(string) $m['title']
 		);
-		$stage = 1;
+		$stage              = 1;
 		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
 			$stage = 0;
 		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {

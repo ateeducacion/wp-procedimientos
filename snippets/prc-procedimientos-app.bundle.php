@@ -9860,7 +9860,7 @@ final class WorkspaceView {
 			return;
 		}
 		$s      = $m['selection'];
-		$cursos = (array) $m['courses'] + array( 0 => 'Todos los cursos' );
+		$cursos = (array) $m['courses'];
 		?>
 		<nav class="prc-cursos" aria-label="Curso escolar">
 			<ul class="prc-cursos__lista">
@@ -9893,12 +9893,12 @@ final class WorkspaceView {
 
 
 		$frase = sprintf(
-			'Mostrando <strong>%1$s</strong> %2$s %3$s',
+			'Mostrando <strong>%1$s</strong> %2$s%3$s',
 			esc_html( (string) $n ),
 			esc_html( 1 === $n ? 'procedimiento' : 'procedimientos' ),
 			'' !== $curso
-				? 'en <strong>' . esc_html( $curso ) . '</strong>'
-				: 'de <strong>todos los cursos</strong>'
+				? ' en <strong>' . esc_html( $curso ) . '</strong>'
+				: ''
 		);
 		if ( '' !== $q ) {
 			$frase .= sprintf(
@@ -9930,7 +9930,7 @@ final class WorkspaceView {
 		<div class="prc-tabla-caja">
 			<table class="prc-tabla prc-tabla--densa prc-tabla--taller">
 				<caption class="screen-reader-text">
-					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos de todos los cursos' ); ?>
+					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos' ); ?>
 				</caption>
 				<thead>
 					<tr class="prc-tabla__grupos">
@@ -10482,8 +10482,7 @@ final class Workspace {
 			return $pedido;
 		}
 
-
-		return $pedido > 0 || array() === $cursos ? 0 : (int) array_key_first( $cursos );
+		return array() === $cursos ? 0 : (int) array_key_first( $cursos );
 	}
 
 
@@ -11143,7 +11142,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Quien dirige un centro y coordina una agrupación de escuelas rurales tiene los dos códigos. Con una sola casilla, solicita con ese código sin preguntarle; con las dos, elige, y cada código lleva su propia solicitud.</p>
+					<p class="prc-campo__ayuda">Marque «Agrupaciones de escuelas rurales» solo si participa un CER. Quien tenga código de centro y de CER podrá elegir con cuál solicita; cada código lleva su propia solicitud.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>

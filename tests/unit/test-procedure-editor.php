@@ -494,6 +494,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		// El rótulo dice a quién se dirige el procedimiento, que no es lo que
 		// significaba «Tipología» en el sistema que se sustituye.
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
+		$this->assertStringContainsString( 'solo si participa un CER', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
 		$this->assertStringNotContainsString( '¿Pide la solicitud personas coordinadoras?', $html, 'la configuración de la solicitud aparece en el taller después del alta' );

@@ -305,6 +305,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Jefatura de estudios', $html );
 
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][name]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][dni]"', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][email]"', $html );
 
 		$this->assertStringContainsString( 'El centro se compromete a sostener la red.', $html );
@@ -368,6 +369,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Persona coordinadora 1', $html );
 		$this->assertStringContainsString( 'Persona coordinadora 2', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][email]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][dni]"', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
 	}
 
@@ -382,10 +384,12 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				ApplyForm::FIELD_COORDINATORS => array(
 					array(
 						'name'  => 'Ana Pérez',
+						'dni'   => '12345678Z',
 						'email' => 'ana@example.org',
 					),
 					array(
 						'name'  => 'Luis Díaz',
+						'dni'   => 'X0000000T',
 						'email' => 'luis@example.org',
 					),
 				),
@@ -397,10 +401,12 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array(
 				array(
 					'name'  => 'Ana Pérez',
+					'dni'   => '12345678Z',
 					'email' => 'ana@example.org',
 				),
 				array(
 					'name'  => 'Luis Díaz',
+					'dni'   => 'X0000000T',
 					'email' => 'luis@example.org',
 				),
 			),
@@ -503,6 +509,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				$respuestas,
 				array(
 					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
+					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
 					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
 					ApplyForm::FIELD_ACCEPT      => '1',
 				)
@@ -536,6 +543,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				array(
 					ApplyForm::FIELD_POSITION    => ApplicationMetaKeys::POSITION_SECRETARY,
 					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
+					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
 					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
 					ApplyForm::FIELD_ACCEPT      => '1',
 				)

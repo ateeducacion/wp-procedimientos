@@ -670,7 +670,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo.</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -924,7 +924,7 @@ final class ProcedureEditorView {
 							<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
 							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
 							<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
+							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_dni'] . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 						</tr>

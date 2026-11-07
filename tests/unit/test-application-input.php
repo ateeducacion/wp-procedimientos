@@ -53,6 +53,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 			array(
 				'position'          => 'head',
 				'coordinator_name'  => '  Ana Pérez ',
+				'coordinator_dni'   => ' 12345678z ',
 				'coordinator_email' => ' Ana@Example.org ',
 				'accept'            => '1',
 				'answers'           => array(
@@ -70,6 +71,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 			array(
 				array(
 					'name'  => 'Ana Pérez',
+					'dni'   => '12345678Z',
 					'email' => 'ana@example.org',
 				),
 			),
@@ -128,6 +130,14 @@ class Test_Application_Input extends WP_UnitTestCase {
 		);
 	}
 
+	/** The DNI/NIE must have the control letter that matches its number. */
+	public function test_coordinator_dni_and_nie_control_letters_are_checked() {
+		$this->assertTrue( ApplicationInput::is_dni( '12345678Z' ) );
+		$this->assertTrue( ApplicationInput::is_dni( 'x0000000t' ) );
+		$this->assertFalse( ApplicationInput::is_dni( '12345678A' ) );
+		$this->assertFalse( ApplicationInput::is_dni( '1234567Z' ) );
+	}
+
 	/** A procedure can request no coordinators or several, and validates every requested row. */
 	public function test_multiple_coordinators_are_validated_as_a_list() {
 		$procedure = $this->procedimiento( array( 'coordinator_count' => 2 ) );
@@ -137,10 +147,12 @@ class Test_Application_Input extends WP_UnitTestCase {
 				'coordinators' => array(
 					array(
 						'name'  => 'Ana Pérez',
+						'dni'   => '12345678Z',
 						'email' => 'ANA@example.org',
 					),
 					array(
 						'name'  => 'Luis Díaz',
+						'dni'   => 'X0000000T',
 						'email' => 'luis@example.org',
 					),
 				),
@@ -151,6 +163,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 		);
 		$this->assertTrue( $valid['ok'], implode( ', ', $valid['errors'] ) );
 		$this->assertSame( 'ana@example.org', $valid['data']['coordinator'][0]['email'] );
+		$this->assertSame( '12345678Z', $valid['data']['coordinator'][0]['dni'] );
 		$this->assertSame( 'Luis Díaz', $valid['data']['coordinator'][1]['name'] );
 
 		$invalid = ApplicationInput::validate(
@@ -159,6 +172,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 				'coordinators' => array(
 					array(
 						'name'  => 'Ana',
+						'dni'   => '12345678A',
 						'email' => 'ana@example.org',
 					),
 				),
@@ -168,6 +182,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 			$procedure
 		);
 		$this->assertContains( 'coordinator_name', $invalid['errors'], 'se exige la segunda persona' );
+		$this->assertContains( 'coordinator_dni', $invalid['errors'], 'el DNI debe tener una letra válida' );
 		$this->assertSame(
 			array(),
 			ApplicationInput::validate(

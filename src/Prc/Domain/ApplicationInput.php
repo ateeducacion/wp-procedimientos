@@ -42,9 +42,10 @@ final class ApplicationInput {
 
 		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
 		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
-		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
+		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) || '' !== self::text( $raw, 'coordinator_dni' ) ) ) {
 			$raw_coordinators[] = array(
 				'name'  => $raw['coordinator_name'] ?? '',
+				'dni'   => $raw['coordinator_dni'] ?? '',
 				'email' => $raw['coordinator_email'] ?? '',
 			);
 		}
@@ -53,6 +54,7 @@ final class ApplicationInput {
 			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
 			$coordinator     = array(
 				'name'  => self::text( $raw_coordinator, 'name' ),
+				'dni'   => self::dni( self::text( $raw_coordinator, 'dni' ) ),
 				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
 			);
 			if ( '' === $coordinator['name'] ) {
@@ -60,6 +62,9 @@ final class ApplicationInput {
 			}
 			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
 				$errors[] = 'coordinator_email';
+			}
+			if ( ! self::is_dni( $coordinator['dni'] ) ) {
+				$errors[] = 'coordinator_dni';
 			}
 			$coordinators[] = $coordinator;
 		}
@@ -99,6 +104,7 @@ final class ApplicationInput {
 		$textos = array(
 			'position'          => 'el cargo',
 			'coordinator_name'  => 'el nombre de cada persona coordinadora',
+			'coordinator_dni'   => 'el DNI o NIE de cada persona coordinadora',
 			'coordinator_email' => 'el correo de cada persona coordinadora',
 			'accept'            => 'la aceptación de los compromisos',
 		);
@@ -134,5 +140,30 @@ final class ApplicationInput {
 	private static function text( array $raw, string $key ): string {
 		$value = $raw[ $key ] ?? '';
 		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+
+	/**
+	 * Validate a Spanish DNI or NIE control letter.
+	 *
+	 * @param string $value DNI or NIE.
+	 * @return bool
+	 */
+	public static function is_dni( string $value ): bool {
+		$value = self::dni( $value );
+		if ( ! preg_match( '/^(?:[0-9]{8}|[XYZ][0-9]{7})[A-Z]$/', $value ) ) {
+			return false;
+		}
+		$number = strtr( substr( $value, 0, -1 ), array( 'X' => '0', 'Y' => '1', 'Z' => '2' ) );
+		return substr( 'TRWAGMYFPDXBNJZSQVHLCKE', (int) $number % 23, 1 ) === substr( $value, -1 );
+	}
+
+	/**
+	 * Normalize the document format accepted in the form.
+	 *
+	 * @param string $value Raw value.
+	 * @return string
+	 */
+	private static function dni( string $value ): string {
+		return strtoupper( (string) preg_replace( '/[ -]/', '', trim( $value ) ) );
 	}
 }

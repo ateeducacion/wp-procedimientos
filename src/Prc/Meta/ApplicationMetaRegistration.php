@@ -115,10 +115,10 @@ final class ApplicationMetaRegistration {
 	}
 
 	/**
-	 * Coordinators as a list of `{name, email}`; a saved single coordinator is upgraded on read.
+	 * Coordinators as a list of `{name, dni, email}`; a saved single coordinator is upgraded on read.
 	 *
 	 * @param mixed $value Raw value.
-	 * @return array<int, array{name:string, email:string}>
+	 * @return array<int, array{name:string, dni:string, email:string}>
 	 */
 	public static function sanitize_coordinator( $value ): array {
 		$value = is_array( $value ) ? $value : array();
@@ -133,6 +133,7 @@ final class ApplicationMetaRegistration {
 			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
 			$out[] = array(
 				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
+				'dni'   => strtoupper( (string) preg_replace( '/[ -]/', '', sanitize_text_field( isset( $coordinator['dni'] ) && is_scalar( $coordinator['dni'] ) ? (string) $coordinator['dni'] : '' ) ) ),
 				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
 		}

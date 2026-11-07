@@ -1630,9 +1630,10 @@ final class ApplicationInput {
 
 		$count            = (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
 		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
-		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) ) ) {
+		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) || '' !== self::text( $raw, 'coordinator_dni' ) ) ) {
 			$raw_coordinators[] = array(
 				'name'  => $raw['coordinator_name'] ?? '',
+				'dni'   => $raw['coordinator_dni'] ?? '',
 				'email' => $raw['coordinator_email'] ?? '',
 			);
 		}
@@ -1641,6 +1642,7 @@ final class ApplicationInput {
 			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
 			$coordinator     = array(
 				'name'  => self::text( $raw_coordinator, 'name' ),
+				'dni'   => self::dni( self::text( $raw_coordinator, 'dni' ) ),
 				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
 			);
 			if ( '' === $coordinator['name'] ) {
@@ -1648,6 +1650,9 @@ final class ApplicationInput {
 			}
 			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
 				$errors[] = 'coordinator_email';
+			}
+			if ( ! self::is_dni( $coordinator['dni'] ) ) {
+				$errors[] = 'coordinator_dni';
 			}
 			$coordinators[] = $coordinator;
 		}
@@ -1687,6 +1692,7 @@ final class ApplicationInput {
 		$textos = array(
 			'position'          => 'el cargo',
 			'coordinator_name'  => 'el nombre de cada persona coordinadora',
+			'coordinator_dni'   => 'el DNI o NIE de cada persona coordinadora',
 			'coordinator_email' => 'el correo de cada persona coordinadora',
 			'accept'            => 'la aceptación de los compromisos',
 		);
@@ -1722,6 +1728,31 @@ final class ApplicationInput {
 	private static function text( array $raw, string $key ): string {
 		$value = $raw[ $key ] ?? '';
 		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+
+
+
+
+
+
+
+	public static function is_dni( string $value ): bool {
+		$value = self::dni( $value );
+		if ( ! preg_match( '/^(?:[0-9]{8}|[XYZ][0-9]{7})[A-Z]$/', $value ) ) {
+			return false;
+		}
+		$number = strtr( substr( $value, 0, -1 ), array( 'X' => '0', 'Y' => '1', 'Z' => '2' ) );
+		return substr( 'TRWAGMYFPDXBNJZSQVHLCKE', (int) $number % 23, 1 ) === substr( $value, -1 );
+	}
+
+
+
+
+
+
+
+	private static function dni( string $value ): string {
+		return strtoupper( (string) preg_replace( '/[ -]/', '', trim( $value ) ) );
 	}
 }
 
@@ -3983,6 +4014,7 @@ final class ApplicationMetaRegistration {
 			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
 			$out[] = array(
 				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
+				'dni'   => strtoupper( (string) preg_replace( '/[ -]/', '', sanitize_text_field( isset( $coordinator['dni'] ) && is_scalar( $coordinator['dni'] ) ? (string) $coordinator['dni'] : '' ) ) ),
 				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
 		}
@@ -6863,6 +6895,7 @@ final class Applications {
 			'email'             => 'Correo',
 			'position'          => 'Cargo',
 			'coordinator'       => 'Coordinación',
+			'coordinator_dni'   => 'DNI o NIE de coordinación',
 			'coordinator_email' => 'Correo de coordinación',
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
@@ -6918,6 +6951,7 @@ final class Applications {
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
 			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator_dni'   => implode( ', ', array_filter( array_column( $coord, 'dni' ) ) ),
 			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
@@ -11333,7 +11367,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo.</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -11587,7 +11621,7 @@ final class ProcedureEditorView {
 							<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
 							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
 							<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_email'] ) ); ?></td>
+							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_dni'] . ' ' . (string) $fila['coordinator_email'] ) ); ?></td>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); ?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); ?></td>
 						</tr>
@@ -13427,6 +13461,7 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
@@ -13833,6 +13868,11 @@ final class ApplyFormView {
 									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
 								</div>
 								<div class="prc-campo prc-campo--cuarto">
+									<?php echo self::label( 'prc-coordinator-dni-' . $index, 'DNI o NIE', true ); ?>
+									<input class="prc-control" type="text" id="prc-coordinator-dni-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][dni]' ); ?>" required autocomplete="off" aria-describedby="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>" value="<?php echo esc_attr( (string) ( $coordinator['dni'] ?? '' ) ); ?>" />
+									<p class="prc-campo__ayuda" id="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>">Escriba el DNI o NIE completo, con la letra.</p>
+								</div>
+								<div class="prc-campo prc-campo--cuarto">
 									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); ?>
 									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
 								</div>
@@ -14041,7 +14081,7 @@ final class ApplyFormView {
 		if ( array() === $s ) {
 			return '';
 		}
-		$coord     = (array) $s['coordinator'];
+		$coord     = ApplicationMetaRegistration::sanitize_coordinator( $s['coordinator'] );
 		$preguntas = (array) ( $m['spec']['questions'] ?? array() );
 
 		ob_start();
@@ -14051,10 +14091,12 @@ final class ApplyFormView {
 			<dl class="prc-respuestas">
 				<dt>Cargo</dt>
 				<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
-				<?php if ( '' !== (string) ( $coord['name'] ?? '' ) ) : ?>
-					<dt>Persona coordinadora</dt>
-					<dd><?php echo esc_html( trim( (string) $coord['name'] . ' ' . (string) ( $coord['email'] ?? '' ) ) ); ?></dd>
-				<?php endif; ?>
+				<?php foreach ( $coord as $index => $persona ) : ?>
+					<?php if ( '' !== (string) $persona['name'] ) : ?>
+						<dt><?php echo esc_html( sprintf( 1 === count( $coord ) ? 'Persona coordinadora' : 'Persona coordinadora %d', $index + 1 ) ); ?></dt>
+						<dd><?php echo esc_html( implode( ' · ', array_filter( array( $persona['name'], $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
+					<?php endif; ?>
+				<?php endforeach; ?>
 				<?php foreach ( $preguntas as $pregunta ) : ?>
 					<dt><?php echo esc_html( (string) $pregunta['label'] ); ?></dt>
 					<?php
@@ -14161,6 +14203,7 @@ final class ApplyForm {
 	public const FIELD_CENTRE       = 'prc_apply_centre';
 	public const FIELD_POSITION     = 'prc_position';
 	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
+	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
 	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
 	public const FIELD_COORDINATORS = 'prc_coordinators';
 	public const FIELD_ACCEPT       = 'prc_accept';
@@ -14372,6 +14415,7 @@ final class ApplyForm {
 			'position'          => self::field( self::FIELD_POSITION ),
 			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
 			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
 			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
 			'accept'            => $acepta,
 			'answers'           => self::clean_answers( $respuestas ),
@@ -14407,9 +14451,11 @@ final class ApplyForm {
 		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
 			$row   = is_array( $row ) ? $row : array();
 			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
+			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
 			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
 			$out[] = array(
 				'name'  => $name,
+				'dni'   => $dni,
 				'email' => $email,
 			);
 		}
@@ -14692,6 +14738,7 @@ final class ApplyForm {
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
 			'coordinators'      => $coordinators,
 			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
+			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
 			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 
 			'accept'            => array() !== $application,

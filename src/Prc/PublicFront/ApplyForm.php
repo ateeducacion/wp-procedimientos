@@ -69,6 +69,7 @@ final class ApplyForm {
 	public const FIELD_CENTRE       = 'prc_apply_centre';
 	public const FIELD_POSITION     = 'prc_position';
 	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
+	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
 	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
 	public const FIELD_COORDINATORS = 'prc_coordinators';
 	public const FIELD_ACCEPT       = 'prc_accept';
@@ -280,6 +281,7 @@ final class ApplyForm {
 			'position'          => self::field( self::FIELD_POSITION ),
 			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
 			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
 			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
 			'accept'            => $acepta,
 			'answers'           => self::clean_answers( $respuestas ),
@@ -308,16 +310,18 @@ final class ApplyForm {
 	 * Clean coordinator fields before they are shown again after a rejected submit.
 	 *
 	 * @param array<mixed> $raw Submitted rows.
-	 * @return array<int, array{name:string, email:string}>
+	 * @return array<int, array{name:string, dni:string, email:string}>
 	 */
 	private static function clean_coordinators( array $raw ): array {
 		$out = array();
 		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
 			$row   = is_array( $row ) ? $row : array();
 			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
+			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
 			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
 			$out[] = array(
 				'name'  => $name,
+				'dni'   => $dni,
 				'email' => $email,
 			);
 		}
@@ -588,7 +592,7 @@ final class ApplyForm {
 	 * What every form field shows: what was typed on a refused submit, or what is stored.
 	 *
 	 * @param array<string, mixed> $application The existing application, empty for none.
-	 * @return array{position:string, coordinators:array<int, array<string, mixed>>, coordinator_name:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
+	 * @return array{position:string, coordinators:array<int, array<string, mixed>>, coordinator_name:string, coordinator_dni:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
 	 */
 	private static function values( array $application ): array {
 		if ( '' !== self::$rejected ) {
@@ -600,6 +604,7 @@ final class ApplyForm {
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
 			'coordinators'      => $coordinators,
 			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
+			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
 			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 			// Una solicitud ya presentada ya aceptó los compromisos.
 			'accept'            => array() !== $application,

@@ -10,6 +10,7 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
@@ -415,6 +416,11 @@ final class ApplyFormView {
 									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
 								</div>
 								<div class="prc-campo prc-campo--cuarto">
+									<?php echo self::label( 'prc-coordinator-dni-' . $index, 'DNI o NIE', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+									<input class="prc-control" type="text" id="prc-coordinator-dni-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][dni]' ); ?>" required autocomplete="off" aria-describedby="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>" value="<?php echo esc_attr( (string) ( $coordinator['dni'] ?? '' ) ); ?>" />
+									<p class="prc-campo__ayuda" id="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>">Escriba el DNI o NIE completo, con la letra.</p>
+								</div>
+								<div class="prc-campo prc-campo--cuarto">
 									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
 								</div>
@@ -623,7 +629,7 @@ final class ApplyFormView {
 		if ( array() === $s ) {
 			return '';
 		}
-		$coord     = (array) $s['coordinator'];
+		$coord     = ApplicationMetaRegistration::sanitize_coordinator( $s['coordinator'] );
 		$preguntas = (array) ( $m['spec']['questions'] ?? array() );
 
 		ob_start();
@@ -633,10 +639,12 @@ final class ApplyFormView {
 			<dl class="prc-respuestas">
 				<dt>Cargo</dt>
 				<dd><?php echo esc_html( (string) $s['position'] ); ?></dd>
-				<?php if ( '' !== (string) ( $coord['name'] ?? '' ) ) : ?>
-					<dt>Persona coordinadora</dt>
-					<dd><?php echo esc_html( trim( (string) $coord['name'] . ' ' . (string) ( $coord['email'] ?? '' ) ) ); ?></dd>
-				<?php endif; ?>
+				<?php foreach ( $coord as $index => $persona ) : ?>
+					<?php if ( '' !== (string) $persona['name'] ) : ?>
+						<dt><?php echo esc_html( sprintf( 1 === count( $coord ) ? 'Persona coordinadora' : 'Persona coordinadora %d', $index + 1 ) ); ?></dt>
+						<dd><?php echo esc_html( implode( ' · ', array_filter( array( $persona['name'], $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
+					<?php endif; ?>
+				<?php endforeach; ?>
 				<?php foreach ( $preguntas as $pregunta ) : ?>
 					<dt><?php echo esc_html( (string) $pregunta['label'] ); ?></dt>
 					<?php

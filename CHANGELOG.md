@@ -12,6 +12,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
 
 ### Añadido
 
+- DNI o NIE de cada persona coordinadora, con validación de la letra de control y disponible para la revisión y el CSV. La ayuda indica que lo habitual es pedir una persona coordinadora.
 - En «Publicación», pausa y reapertura de solicitudes sin cambiar el calendario
   ni los plazos documentales; los procedimientos publicados también pueden
   volver a borrador (ADR-0035).

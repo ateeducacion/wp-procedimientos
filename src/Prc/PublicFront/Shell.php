@@ -691,6 +691,9 @@ final class Shell {
 	 * @return array<int, array{label:string, url:string, active:bool, group:bool, items:array<int, array<string, mixed>>}>
 	 */
 	private static function menu( int $user_id = 0 ): array {
+		if ( $user_id <= 0 ) {
+			$user_id = get_current_user_id();
+		}
 		$secciones = self::sections( $user_id );
 		if ( array() === $secciones ) {
 			return array();

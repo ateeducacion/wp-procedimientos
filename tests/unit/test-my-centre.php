@@ -183,7 +183,12 @@ class Test_My_Centre extends WP_UnitTestCase {
 			'Formación de prueba',
 			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
 		);
-		$teacher = (int) self::factory()->user->create( array( 'role' => 'prc_teacher', 'display_name' => 'Docente de prueba' ) );
+		$teacher = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
 		$other   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
 		$this->assertGreaterThan( 0, Applications::save_teacher( $procedure, $teacher, $this->nucleo() ) );
 		$this->assertGreaterThan( 0, Applications::save_teacher( $procedure, $other, $this->nucleo() ) );

@@ -152,7 +152,12 @@ class Test_Applications extends WP_UnitTestCase {
 	/** A teacher has one personal application per procedure. */
 	public function test_teacher_applications_are_found_and_saved_per_person() {
 		$procedure = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
-		$teacher   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher', 'display_name' => 'Docente de prueba' ) );
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
 		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
 
 		$this->assertNull( Applications::find_for_teacher( $procedure, $teacher ) );

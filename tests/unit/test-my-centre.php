@@ -198,7 +198,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, $model['applicant_type'] );
 		$this->assertSame( 'Docente de prueba', $model['applicant'] );
 		$this->assertCount( 1, $model['rows'] );
-		$this->assertSame( 'Profesorado', $model['rows'][0]['centre'] );
+		$this->assertSame( 'Docente de prueba', $model['rows'][0]['applicant'] );
 		$this->assertSame( ApplyForm::url( $procedure ), $model['rows'][0]['url'] );
 		$html = MyCentreView::html( $model );
 		$this->assertStringContainsString( 'Mis solicitudes de participación en procedimientos', $html );

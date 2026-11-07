@@ -171,7 +171,7 @@ class Test_Applications extends WP_UnitTestCase {
 		$this->assertSame( $id, Applications::find_for_teacher( $procedure, $teacher ) );
 		$this->assertCount( 1, Applications::for_teacher( $teacher ) );
 		$this->assertNull( Applications::find_for_teacher( $procedure, $other ) );
-		$this->assertSame( 'Docente de prueba — Red de prueba', get_the_title( $id ) );
+		$this->assertSame( 'Solicitud individual — Red de prueba', get_the_title( $id ) );
 		$this->assertSame( 'Profesorado', Applications::row( get_post( $id ), array() )['centre'] );
 		$this->assertSame( 0, Applications::save_teacher( $procedure, 0, array() ), 'sin una persona válida no se guarda' );
 		$this->assertSame( 0, Applications::save_teacher( $this->procedimiento(), $teacher, array() ), 'un procedimiento para centros no acepta solicitudes individuales' );

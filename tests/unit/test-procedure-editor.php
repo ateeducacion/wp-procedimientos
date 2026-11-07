@@ -443,7 +443,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
-		$this->assertStringNotContainsString( 'Personas coordinadoras que se piden', $html, 'la configuración de la solicitud aparece en el taller después del alta' );
+		$this->assertStringNotContainsString( '¿Pide la solicitud personas coordinadoras?', $html, 'la configuración de la solicitud aparece en el taller después del alta' );
 		foreach ( ProcedureMetaKeys::audiences() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
@@ -501,6 +501,27 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureMetaKeys::AUDIENCE_TEACHERS, get_post_meta( $id, ProcedureMetaKeys::AUDIENCE, true ) );
 		$this->assertSame( array( 'uno@example.org', 'tres@example.org' ), get_post_meta( $id, ProcedureMetaKeys::CONTACT_EMAILS, true ) );
 		$this->assertSame( 'granate', get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) );
+	}
+
+	/**
+	 * La coordinación se pregunta en tres casos —ninguna, una o varias— y el
+	 * número solo aparece dentro de «varias».
+	 *
+	 * Es la misma meta de siempre: el desplegable no guarda el caso, guarda
+	 * cuántas. Así lo que ya estaba escrito como cero o uno se sigue leyendo.
+	 */
+	public function test_the_coordinator_question_offers_none_one_or_several() {
+		list( , $uid, $id ) = $this->mio( array( ProcedureMetaKeys::COORDINATOR_COUNT => 5 ) );
+		$this->acting_as( $uid );
+
+		$html = ProcedureEditorView::html( $this->modelo( $id ) );
+
+		$this->assertStringContainsString( '¿Pide la solicitud personas coordinadoras?', $html );
+		$this->assertStringContainsString( '>No se piden</option>', $html );
+		$this->assertStringContainsString( '>Sí, una persona</option>', $html );
+		$this->assertStringContainsString( '<optgroup label="Sí, varias personas">', $html );
+		$this->assertStringContainsString( '>Cinco personas</option>', $html );
+		$this->assertMatchesRegularExpression( '/value="5"\s+selected/', $html );
 	}
 
 	/**

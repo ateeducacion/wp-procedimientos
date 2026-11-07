@@ -495,7 +495,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		// significaba «Tipología» en el sistema que se sustituye.
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
 		$this->assertStringContainsString( 'Modalidad para centros y CER ', $html );
-		$this->assertSame( 3, substr_count( $html, 'type="radio" name="' . ProcedureMetaKeys::CENTRE_KINDS . '"' ) );
+		$this->assertSame( 3, substr_count( $html, 'name="' . ProcedureMetaKeys::CENTRE_KINDS . '" value="' ) );
 		$this->assertStringContainsString( 'data-prc-schools-only', $html );
 		$this->assertStringContainsString( 'value="school" checked="checked"', $html );
 		$this->assertStringContainsString( 'value="rural_group"', $html );

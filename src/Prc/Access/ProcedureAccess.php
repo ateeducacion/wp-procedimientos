@@ -10,6 +10,7 @@ namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -706,6 +707,30 @@ final class ProcedureAccess {
 		}
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
+	}
+
+	/**
+	 * Whether a school may deliver this document for its existing application.
+	 *
+	 * @param int                  $user_id Current user.
+	 * @param int                  $application_id Application ID.
+	 * @param array<string, mixed> $question Stored question, never request data.
+	 * @return bool
+	 */
+	public static function can_deliver( int $user_id, int $application_id, array $question ): bool {
+		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) ) {
+			return false;
+		}
+		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ! isset( CentreScope::codes_for( $user_id )[ $code ] )
+			|| 'publish' !== get_post_status( $application_id )
+			|| ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id )
+			|| 'publish' !== get_post_status( $procedure_id ) || self::is_archived( $procedure_id ) ) {
+			return false;
+		}
+		return ApplicationMetaKeys::REVIEW_EXCLUDED !== get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
+			&& ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() );
 	}
 
 	/**

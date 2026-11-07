@@ -8635,16 +8635,16 @@ final class ProcedureChrome {
 			<?php endif; ?>
 			<hr class="prc-filete" />
 			<div class="prc-ficha-pie">
+				<?php if ( '' !== (string) $m['manage_url'] ) : ?>
+					<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['manage_url'] ); ?>">
+						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+						Editar procedimiento</a>
+				<?php endif; ?>
 				<p class="prc-ficha-meta">
 					<?php foreach ( self::footer_meta( $m ) as $linea ) : ?>
 						<?php echo esc_html( $linea ); ?><br />
 					<?php endforeach; ?>
 				</p>
-				<?php if ( '' !== (string) $m['manage_url'] ) : ?>
-					<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( (string) $m['manage_url'] ); ?>">
-						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
-						Editar procedimiento</a>
-				<?php endif; ?>
 			</div>
 		</div>
 		<?php
@@ -18061,7 +18061,7 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 .prc-ficha-pie {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }

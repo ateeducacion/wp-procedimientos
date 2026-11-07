@@ -395,7 +395,10 @@ final class Workspace {
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
 			'state'            => $state,
-			'state_label'      => ProcedureState::label( $state ),
+			'state_label'      => ProcedureState::label(
+				$state,
+				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'warning'          => self::mismatch( $id, $opens, $closes ),
 			'archived'         => ProcedureAccess::is_archived( $id ),
 			'status'           => (string) $post->post_status,

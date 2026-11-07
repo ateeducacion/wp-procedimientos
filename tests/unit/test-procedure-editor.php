@@ -761,6 +761,46 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'desarchivado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 	}
 
+	/** A manager may pause applications, keep delivery dates, resume by calendar, and return a procedure to draft. */
+	public function test_close_pause_keeps_delivery_windows_and_unpublish_returns_to_draft() {
+		list( , $uid, $procedure ) = $this->mio();
+		$closes_at = get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true );
+		$before    = ProcedureState::of_post( $procedure );
+		$questions = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'     => 'Memoria',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-1 day' ),
+					'closes_at' => $this->dia( '+1 day' ),
+				),
+			)
+		);
+		update_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, $questions );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertTrue( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $closes_at, get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true ) );
+		$this->assertSame( $questions, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertTrue( ProcedureQuestions::delivery_is_open( $questions[0], ProcedureState::today() ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_CLOSED, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'cerradas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertFalse( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
+		$this->assertTrue( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertFalse( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $before, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'reabiertas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_UNPUBLISH, $procedure );
+		$this->assertSame( 'draft', get_post_status( $procedure ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_DRAFT, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'borrador', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+	}
+
 	// ─── Solicitudes ───────────────────────────────────────────────────────
 
 	/**
@@ -984,7 +1024,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS );
 		$this->assertSame( 'error', $m['flash']['tipo'] );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $m['flash']['texto'] );
 	}
 
 	/**
@@ -1081,10 +1121,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			),
 			(array) $m['groups']
 		);
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', (string) $m['state_notice'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', (string) $m['state_notice'] );
 
 		$html = ProcedureEditorView::html( $m );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $html );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
 		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan' );
 		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
@@ -1117,7 +1157,19 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		foreach ( array( 'Datos', 'Preguntas', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
+		$labels = array(
+			'Datos',
+			'Preguntas',
+			'Entregas',
+			'Enlaces',
+			'Solicitudes',
+			'Publicación',
+			'Ver la ficha pública',
+			'Guardar los datos',
+			'Cerrar solicitudes ahora',
+			'Devolver a borrador',
+		);
+		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );

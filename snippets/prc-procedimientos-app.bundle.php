@@ -47,6 +47,7 @@ if ( \defined( 'PRC_BUNDLE_LOADED' ) ) {
 
 
 
+
 if ( ! class_exists( 'Prc\Meta\ProcedureMetaKeys', false ) ) {
 final class ProcedureMetaKeys {
 
@@ -146,6 +147,11 @@ final class ProcedureMetaKeys {
 
 	public const ARCHIVED = 'prc_archived';
 
+
+
+
+	public const APPLICATIONS_CLOSED = 'prc_applications_closed';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -196,6 +202,7 @@ final class ProcedureMetaKeys {
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,
+			self::APPLICATIONS_CLOSED,
 		);
 	}
 
@@ -636,6 +643,7 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+
 if ( ! class_exists( 'Prc\Domain\ProcedureState', false ) ) {
 final class ProcedureState {
 
@@ -693,6 +701,9 @@ final class ProcedureState {
 		if ( '' !== $amend_opens && $amend_opens <= $today && $today <= $amend_closes ) {
 			return ProcedureMetaKeys::STATE_AMENDMENT;
 		}
+		if ( ! empty( $meta[ ProcedureMetaKeys::APPLICATIONS_CLOSED ] ) ) {
+			return ProcedureMetaKeys::STATE_CLOSED;
+		}
 
 		$opens  = self::text( $meta, ProcedureMetaKeys::OPENS_AT );
 		$closes = self::text( $meta, ProcedureMetaKeys::CLOSES_AT );
@@ -744,7 +755,10 @@ final class ProcedureState {
 
 
 
-	public static function label( string $state ): string {
+	public static function label( string $state, bool $manually_closed = false ): string {
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'Cerrado manualmente';
+		}
 		return (string) ( ProcedureMetaKeys::states()[ $state ] ?? '' );
 	}
 
@@ -799,7 +813,8 @@ final class ProcedureState {
 
 	public static function why_locked( string $state ): string {
 		$textos = array(
-			ProcedureMetaKeys::STATE_CLOSED    => 'El plazo de solicitud está cerrado: solo se pueden cambiar las fechas y los enlaces. Las solicitudes se siguen gestionando.',
+			ProcedureMetaKeys::STATE_CLOSED    => 'Las solicitudes están cerradas: solo se pueden cambiar fechas y enlaces. '
+				. 'Las entregas documentales conservan sus propios plazos.',
 			ProcedureMetaKeys::STATE_AMENDMENT => 'La subsanación está en marcha: el procedimiento ya no se edita, para no mover el suelo a quien está subsanando. Las solicitudes se siguen gestionando.',
 			ProcedureMetaKeys::STATE_RESOLVED  => 'El procedimiento está resuelto: solo se pueden cambiar los enlaces.',
 		);
@@ -3589,6 +3604,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 				'auth'     => array( self::class, 'auth_archived' ),
+			),
+			ProcedureMetaKeys::APPLICATIONS_CLOSED => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
 		);
 	}
@@ -8274,7 +8293,10 @@ final class Home {
 			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
 			'areas'        => self::terms( $id ),
 			'state'        => $state,
-			'state_label'  => ProcedureState::label( $state ),
+			'state_label'  => ProcedureState::label(
+				$state,
+				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'closes_at'    => $cierra,
 			'days_left'    => $quedan,
 			'deadline'     => self::deadline( $quedan ),
@@ -9057,7 +9079,10 @@ final class ProcedureView {
 				'tabs'                 => self::tabs( $contenido ),
 				'excerpt'              => trim( wp_strip_all_tags( (string) get_post_field( 'post_excerpt', $post_id ) ) ),
 				'state'                => $state,
-				'state_label'          => ProcedureState::label( $state ),
+				'state_label'          => ProcedureState::label(
+					$state,
+					(bool) $meta[ ProcedureMetaKeys::APPLICATIONS_CLOSED ]
+				),
 				'state_icon'           => self::state_icon( $state ),
 				'dates'                => DateRange::of( (string) $meta[ ProcedureMetaKeys::OPENS_AT ], (string) $meta[ ProcedureMetaKeys::CLOSES_AT ] ),
 				'amend_dates'          => DateRange::of( (string) $meta[ ProcedureMetaKeys::AMEND_OPENS_AT ], (string) $meta[ ProcedureMetaKeys::AMEND_CLOSES_AT ] ),
@@ -9496,6 +9521,7 @@ use Prc\PublicFront\Workspace;
 
 if ( ! class_exists( 'Prc\PublicFront\View\WorkspaceView', false ) ) {
 final class WorkspaceView {
+
 
 
 
@@ -10280,7 +10306,10 @@ final class Workspace {
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
 			'state'            => $state,
-			'state_label'      => ProcedureState::label( $state ),
+			'state_label'      => ProcedureState::label(
+				$state,
+				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'warning'          => self::mismatch( $id, $opens, $closes ),
 			'archived'         => ProcedureAccess::is_archived( $id ),
 			'status'           => (string) $post->post_status,
@@ -11601,14 +11630,39 @@ final class ProcedureEditorView {
 	private static function publish_panel( array $m ): string {
 		$op    = ProcedureEditor::OP_PUBLISH;
 		$state = (string) $m['state'];
-		$stage = ProcedureMetaKeys::STATE_DRAFT === $state
-			? 0
-			: ( ProcedureMetaKeys::STATE_ARCHIVED === $state ? 4 : ( ProcedureMetaKeys::STATE_RESOLVED === $state ? 3 : ( ProcedureMetaKeys::STATE_CLOSED === $state ? 2 : 1 ) ) );
+		$close_confirmation = sprintf(
+			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
+				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
+			(string) $m['title']
+		);
+		$draft_confirmation = sprintf(
+			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar '
+				. 'hasta que vuelva a publicarse.',
+			(string) $m['title']
+		);
+		$stage = 1;
+		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
+			$stage = 0;
+		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
+			$stage = 4;
+		} elseif ( ProcedureMetaKeys::STATE_RESOLVED === $state ) {
+			$stage = 3;
+		} elseif ( ProcedureMetaKeys::STATE_CLOSED === $state ) {
+			$stage = $m['pending_documentation'] ? 2 : 3;
+		}
 		$steps = array(
 			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
 			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
-			array( 'Pendiente de documentación', 'El plazo de solicitud terminó. Falta publicar el listado definitivo para resolverlo.' ),
-			array( 'Cerrado', 'El listado definitivo ya está publicado. Cuando termine la gestión, puede marcarlo como histórico.' ),
+			array(
+				'Pendiente de documentación',
+				'Las solicitudes están cerradas y los centros ya inscritos aún pueden '
+					. 'entregar documentos dentro de su plazo.',
+			),
+			array(
+				'Cerrado',
+				'No se admiten solicitudes. Cuando ya no quede nada que gestionar, '
+					. 'puede marcar el procedimiento como histórico.',
+			),
 			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
 		);
 
@@ -11630,10 +11684,12 @@ final class ProcedureEditorView {
 			</ol>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); ?>
-				El estado sale de las fechas y de los enlaces: no hay nada que marcar a mano. Con el listado definitivo enlazado pasa a «Resuelto».
+				Las fechas y los enlaces calculan el estado. Si necesita cerrar las solicitudes antes, puede hacerlo aquí
+				sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
 			<?php if ( true === $m['can_publish'] ) : ?>
-				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada, y los centros solicitan cuando abra el plazo.</p>
+				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
+					y los centros solicitan cuando abra el plazo.</p>
 				<form class="prc-acciones" method="post" action=""
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
@@ -11643,7 +11699,55 @@ final class ProcedureEditorView {
 					<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit">Publicar el procedimiento</button>
 				</form>
 			<?php elseif ( 'publish' === (string) $m['status'] ) : ?>
-				<p class="prc-intro">Publicado: se ve en la portada y en su ficha.</p>
+				<p class="prc-intro">Publicado: se ve en la portada y en su ficha. Si necesita retirarlo temporalmente,
+					puede devolverlo a borrador.</p>
+			<?php endif; ?>
+			<?php if ( true === $m['can_toggle_applications'] && 'publish' === (string) $m['status'] ) : ?>
+				<p class="prc-intro">
+					<?php if ( true === $m['applications_closed'] ) : ?>
+						La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega
+						de documentos ya solicitados.
+					<?php else : ?>
+						<?php if ( true === $m['pending_documentation'] ) : ?>
+							Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.
+						<?php else : ?>
+							Las solicitudes se abren y cierran según las fechas configuradas.
+						<?php endif; ?>
+					<?php endif; ?>
+				</p>
+				<?php $toggle = ProcedureEditor::OP_TOGGLE_APPLICATIONS; ?>
+				<form class="prc-acciones" method="post" action=""
+					<?php if ( false === $m['applications_closed'] ) : ?>
+						data-prc-confirm="<?php echo esc_attr( $close_confirmation ); ?>"
+						data-prc-confirm-ok="Cerrar solicitudes"
+					<?php endif; ?>
+				>
+					<?php wp_nonce_field( ProcedureEditor::nonce_action( $toggle ), ProcedureEditor::nonce_name( $toggle ), false ); ?>
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
+						value="<?php echo esc_attr( $toggle ); ?>" />
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
+						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">
+						<?php echo true === $m['applications_closed'] ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora'; ?>
+					</button>
+				</form>
+			<?php endif; ?>
+			<?php if ( true === $m['can_unpublish'] ) : ?>
+				<?php $op_borrador = ProcedureEditor::OP_UNPUBLISH; ?>
+				<form class="prc-acciones" method="post" action=""
+					data-prc-confirm="<?php echo esc_attr( $draft_confirmation ); ?>"
+					data-prc-confirm-ok="Devolver a borrador">
+					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op_borrador ), ProcedureEditor::nonce_name( $op_borrador ), false ); ?>
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
+						value="<?php echo esc_attr( $op_borrador ); ?>" />
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
+						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Devolver a borrador</button>
+				</form>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -11807,7 +11911,9 @@ final class ProcedureEditor {
 
 	public const OP_REVIEW             = 'review';
 	public const OP_EXPORT             = 'export';
-	public const OP_PUBLISH            = 'publish';
+	public const OP_PUBLISH             = 'publish';
+	public const OP_UNPUBLISH           = 'unpublish';
+	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
 	public const OP_ARCHIVE            = 'archive';
 	public const OP_UNARCHIVE          = 'unarchive';
 	public const OP_DELIVERY_DATES     = 'delivery_dates';
@@ -11861,6 +11967,8 @@ final class ProcedureEditor {
 		self::OP_REVIEW,
 		self::OP_EXPORT,
 		self::OP_PUBLISH,
+		self::OP_UNPUBLISH,
+		self::OP_TOGGLE_APPLICATIONS,
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 	);
@@ -11878,6 +11986,10 @@ final class ProcedureEditor {
 		'enlaces'      => 'Enlaces guardados.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
+		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
+		'cerradas'     => 'Inscripción cerrada. Los plazos de subsanación y de entrega documental '
+			. 'se mantienen como estaban.',
+		'reabiertas'   => 'La inscripción vuelve a regirse por las fechas configuradas.',
 		'archivado'    => 'Procedimiento marcado como histórico. Ya no se edita ni se gestionan sus solicitudes; la ficha pública se sigue viendo igual. Para volver a abrirlo hay que pedírselo a quien administre el aplicativo.',
 		'desarchivado' => 'Procedimiento desmarcado: su ámbito vuelve a poder editarlo.',
 	);
@@ -12078,6 +12190,14 @@ final class ProcedureEditor {
 
 		if ( self::OP_PUBLISH === $op ) {
 			self::publish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_UNPUBLISH === $op ) {
+			self::unpublish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_TOGGLE_APPLICATIONS === $op ) {
+			self::toggle_applications( $procedure_id, $user_id );
 			return;
 		}
 		if ( self::PANEL_DATA === $op ) {
@@ -12529,6 +12649,59 @@ final class ProcedureEditor {
 
 
 
+	private static function unpublish( int $procedure_id, int $user_id ): void {
+		if ( ! ProcedureAccess::can_publish( $user_id, $procedure_id ) ) {
+			self::$rejected = 'Su perfil no puede devolver este procedimiento a borrador.';
+			return;
+		}
+		$result = wp_update_post(
+			array(
+				'ID'          => $procedure_id,
+				'post_status' => 'draft',
+			),
+			true
+		);
+		if ( is_wp_error( $result ) ) {
+			self::$rejected = 'No se pudo devolver el procedimiento a borrador. No se ha cambiado.';
+			return;
+		}
+		Shell::leave( self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => 'borrador' ) ) );
+	}
+
+
+
+
+
+
+
+
+	private static function toggle_applications( int $procedure_id, int $user_id ): void {
+		if ( 'publish' !== get_post_status( $procedure_id ) ) {
+			self::$rejected = 'Solo se puede cerrar la inscripción de un procedimiento publicado.';
+			return;
+		}
+		if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+			return;
+		}
+		$closed = ! (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, $closed );
+		if ( $closed !== (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) ) {
+			self::$rejected = 'No se pudo cambiar el cierre de solicitudes. No se ha aplicado el cambio.';
+			return;
+		}
+		Shell::leave(
+			self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => $closed ? 'cerradas' : 'reabiertas' ) )
+		);
+	}
+
+
+
+
+
+
+
+
 
 
 
@@ -12691,6 +12864,10 @@ final class ProcedureEditor {
 			'state_notice'  => '',
 			'can_review'    => false,
 			'can_publish'   => false,
+			'can_unpublish'             => false,
+			'can_toggle_applications'   => false,
+			'applications_closed'       => false,
+			'pending_documentation'     => false,
 			'can_archive'   => false,
 			'can_unarchive' => false,
 			'archived'      => false,
@@ -12794,8 +12971,25 @@ final class ProcedureEditor {
 		$m['can_archive']   = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
 		$m['can_unarchive'] = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
 		$m['can_publish']   = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_unpublish']           = $m['can_edit']
+			&& 'publish' === $procedimiento->post_status
+			&& ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_toggle_applications'] = $libre && $m['can_edit'] && 'publish' === $procedimiento->post_status;
+		$m['applications_closed']     = (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		$m['pending_documentation'] = false;
+		if ( 0 < (int) $paneles[ self::PANEL_APPLICATIONS ]['count'] ) {
+			foreach ( Applications::questions( $procedure_id ) as $question ) {
+				if ( ! ProcedureQuestions::is_delivery( $question ) ) {
+					continue;
+				}
+				if ( ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() ) ) {
+					$m['pending_documentation'] = true;
+					break;
+				}
+			}
+		}
 		$m['state']         = ProcedureState::of_post( $procedure_id );
-		$m['state_label']   = ProcedureState::label( (string) $m['state'] );
+		$m['state_label']   = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
 
 
 
@@ -13941,7 +14135,7 @@ final class ApplyForm {
 
 
 
-	public static function window( string $state, string $review_state ): string {
+	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
 		if ( ProcedureState::accepts_applications( $state ) ) {
 			return '';
 		}
@@ -13953,7 +14147,10 @@ final class ApplyForm {
 		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
 			return 'El plazo de solicitud todavía no está abierto.';
 		}
-		return 'El plazo de solicitud está cerrado.';
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
 	}
 
 
@@ -13993,7 +14190,8 @@ final class ApplyForm {
 		$existente = Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
-			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : ''
+			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -14201,7 +14399,10 @@ final class ApplyForm {
 		$m['title']           = (string) get_post_field( 'post_title', $procedure_id );
 		$m['view_url']        = (string) get_permalink( $procedure_id );
 		$m['state']           = ProcedureState::of_post( $procedure_id );
-		$m['state_label']     = ProcedureState::label( (string) $m['state'] );
+		$m['state_label']     = ProcedureState::label(
+			(string) $m['state'],
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+		);
 		$m['opens_at']        = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::OPENS_AT, true );
 		$m['closes_at']       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true );
 		$m['amend_opens_at']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_OPENS_AT, true );
@@ -14243,7 +14444,11 @@ final class ApplyForm {
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
 			$m['why'] = self::why_not_allowed( $user_id, $procedure_id );
 		} else {
-			$m['why'] = self::window( (string) $m['state'], (string) ( $m['application']['state'] ?? '' ) );
+			$m['why'] = self::window(
+				(string) $m['state'],
+				(string) ( $m['application']['state'] ?? '' ),
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			);
 		}
 		$m['can_submit'] = '' === $m['why'];
 		$m['values']     = self::values( (array) $m['application'] );
@@ -14763,7 +14968,10 @@ final class MyCentre {
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,
-			'state_label'  => ProcedureState::label( $estado ),
+			'state_label'  => ProcedureState::label(
+				$estado,
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'review'       => $revision,
 			'review_label' => (string) ( ApplicationMetaKeys::review_states()[ $revision ] ?? '' ),
 			'note'         => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
@@ -14918,6 +15126,7 @@ namespace Prc\Admin;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -15037,7 +15246,12 @@ final class ProcedureAdmin {
 			return;
 		}
 		if ( 'prc_state' === $column ) {
-			echo esc_html( ProcedureState::label( ProcedureState::of_post( $post_id ) ) );
+			echo esc_html(
+				ProcedureState::label(
+					ProcedureState::of_post( $post_id ),
+					(bool) get_post_meta( $post_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+				)
+			);
 		}
 	}
 

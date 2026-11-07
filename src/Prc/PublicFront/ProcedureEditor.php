@@ -61,7 +61,9 @@ final class ProcedureEditor {
 
 	public const OP_REVIEW             = 'review';
 	public const OP_EXPORT             = 'export';
-	public const OP_PUBLISH            = 'publish';
+	public const OP_PUBLISH             = 'publish';
+	public const OP_UNPUBLISH           = 'unpublish';
+	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
 	public const OP_ARCHIVE            = 'archive';
 	public const OP_UNARCHIVE          = 'unarchive';
 	public const OP_DELIVERY_DATES     = 'delivery_dates';
@@ -115,6 +117,8 @@ final class ProcedureEditor {
 		self::OP_REVIEW,
 		self::OP_EXPORT,
 		self::OP_PUBLISH,
+		self::OP_UNPUBLISH,
+		self::OP_TOGGLE_APPLICATIONS,
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 	);
@@ -132,6 +136,10 @@ final class ProcedureEditor {
 		'enlaces'      => 'Enlaces guardados.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
+		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
+		'cerradas'     => 'Inscripción cerrada. Los plazos de subsanación y de entrega documental '
+			. 'se mantienen como estaban.',
+		'reabiertas'   => 'La inscripción vuelve a regirse por las fechas configuradas.',
 		'archivado'    => 'Procedimiento marcado como histórico. Ya no se edita ni se gestionan sus solicitudes; la ficha pública se sigue viendo igual. Para volver a abrirlo hay que pedírselo a quien administre el aplicativo.',
 		'desarchivado' => 'Procedimiento desmarcado: su ámbito vuelve a poder editarlo.',
 	);
@@ -332,6 +340,14 @@ final class ProcedureEditor {
 
 		if ( self::OP_PUBLISH === $op ) {
 			self::publish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_UNPUBLISH === $op ) {
+			self::unpublish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_TOGGLE_APPLICATIONS === $op ) {
+			self::toggle_applications( $procedure_id, $user_id );
 			return;
 		}
 		if ( self::PANEL_DATA === $op ) {
@@ -777,6 +793,59 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * Return the procedure to draft without changing its configured dates.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who is asking.
+	 * @return void
+	 */
+	private static function unpublish( int $procedure_id, int $user_id ): void {
+		if ( ! ProcedureAccess::can_publish( $user_id, $procedure_id ) ) {
+			self::$rejected = 'Su perfil no puede devolver este procedimiento a borrador.';
+			return;
+		}
+		$result = wp_update_post(
+			array(
+				'ID'          => $procedure_id,
+				'post_status' => 'draft',
+			),
+			true
+		);
+		if ( is_wp_error( $result ) ) {
+			self::$rejected = 'No se pudo devolver el procedimiento a borrador. No se ha cambiado.';
+			return;
+		}
+		Shell::leave( self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => 'borrador' ) ) );
+	}
+
+	/**
+	 * Pause or resume new applications while leaving delivery deadlines alone.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who is asking.
+	 * @return void
+	 */
+	private static function toggle_applications( int $procedure_id, int $user_id ): void {
+		if ( 'publish' !== get_post_status( $procedure_id ) ) {
+			self::$rejected = 'Solo se puede cerrar la inscripción de un procedimiento publicado.';
+			return;
+		}
+		if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+			return;
+		}
+		$closed = ! (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, $closed );
+		if ( $closed !== (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) ) {
+			self::$rejected = 'No se pudo cambiar el cierre de solicitudes. No se ha aplicado el cambio.';
+			return;
+		}
+		Shell::leave(
+			self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => $closed ? 'cerradas' : 'reabiertas' ) )
+		);
+	}
+
+	/**
 	 * Mark or unmark the procedure as «histórico».
 	 *
 	 * Las dos mitades no piden lo mismo: marcar lo hace el ámbito que convoca;
@@ -945,6 +1014,10 @@ final class ProcedureEditor {
 			'state_notice'  => '',
 			'can_review'    => false,
 			'can_publish'   => false,
+			'can_unpublish'             => false,
+			'can_toggle_applications'   => false,
+			'applications_closed'       => false,
+			'pending_documentation'     => false,
 			'can_archive'   => false,
 			'can_unarchive' => false,
 			'archived'      => false,
@@ -1048,8 +1121,25 @@ final class ProcedureEditor {
 		$m['can_archive']   = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
 		$m['can_unarchive'] = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
 		$m['can_publish']   = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_unpublish']           = $m['can_edit']
+			&& 'publish' === $procedimiento->post_status
+			&& ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_toggle_applications'] = $libre && $m['can_edit'] && 'publish' === $procedimiento->post_status;
+		$m['applications_closed']     = (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		$m['pending_documentation'] = false;
+		if ( 0 < (int) $paneles[ self::PANEL_APPLICATIONS ]['count'] ) {
+			foreach ( Applications::questions( $procedure_id ) as $question ) {
+				if ( ! ProcedureQuestions::is_delivery( $question ) ) {
+					continue;
+				}
+				if ( ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() ) ) {
+					$m['pending_documentation'] = true;
+					break;
+				}
+			}
+		}
 		$m['state']         = ProcedureState::of_post( $procedure_id );
-		$m['state_label']   = ProcedureState::label( (string) $m['state'] );
+		$m['state_label']   = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
 		// Qué grupos deja tocar el estado de hoy, y por qué cierra el resto.
 		// Lo decide el dominio; la pantalla solo pinta apagado lo que aquí
 		// salga en `false`.

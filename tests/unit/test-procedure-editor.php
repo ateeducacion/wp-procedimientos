@@ -497,7 +497,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Modalidad para centros y CER ', $html );
 		$this->assertSame( 3, substr_count( $html, 'name="' . ProcedureMetaKeys::CENTRE_KINDS . '" value="' ) );
 		$this->assertStringContainsString( 'data-prc-schools-only', $html );
-		$this->assertSame( 1, preg_match( '/value="school"[^>]*checked="checked"/', $html ) );
+		$this->assertSame( 1, preg_match( '/<input[^>]+id="prc-centre-kind-school"[^>]+checked/', $html ) );
 		$this->assertStringContainsString( 'value="rural_group"', $html );
 		$this->assertStringContainsString( 'value="both"', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );

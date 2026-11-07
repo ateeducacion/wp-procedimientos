@@ -574,3 +574,14 @@ mientras «Preguntas» siga editable.
 Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0033 y pruebas en
 `tests/unit/test-procedure-questions.php`, `test-procedure-editor.php` y
 `test-application-files.php`.
+
+## Adenda — 2026-11-06: ampliación del cierre de una entrega
+
+El panel «Entregas» permite mantener o ampliar el cierre de las preguntas de
+archivo configuradas como entregas independientes, aun cuando «Preguntas» ya
+esté bloqueado. No permite cambiar la apertura, acortar el cierre ni modificar
+preguntas. El POST conserva las comprobaciones del editor y guarda la misma
+lista de preguntas con solo el cierre autorizado cambiado (ADR-0034).
+
+Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0034 y pruebas en
+`tests/unit/test-procedure-editor.php`.

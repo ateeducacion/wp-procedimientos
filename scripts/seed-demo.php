@@ -582,6 +582,63 @@ if ( ! function_exists( 'prc_seed_application' ) ) {
 
 if ( ! function_exists( 'prc_seed_demo' ) ) {
 	/**
+	 * Set example contact details on the demo scopes.
+	 *
+	 * @return void
+	 * @throws RuntimeException If a scope or the demo image cannot be saved.
+	 */
+	function prc_seed_scope_details(): void {
+		$image    = get_posts(
+			array(
+				'post_type'   => 'attachment',
+				'post_status' => 'inherit',
+				'numberposts' => 1,
+				'fields'      => 'ids',
+				'meta_key'    => '_prc_demo_scope_image', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- identifica la imagen de demostración para no duplicarla.
+				'meta_value'  => '1', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		$image_id = (int) ( $image[0] ?? 0 );
+		if ( ! $image_id ) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+			$path = __DIR__ . '/assets/demo-scope.png';
+			$data = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- es un recurso local del repositorio, no una URL.
+			if ( false === $data ) {
+				throw new RuntimeException( 'No se pudo leer scripts/assets/demo-scope.png.' );
+			}
+			$bits = wp_upload_bits( basename( $path ), null, $data );
+			if ( ! empty( $bits['error'] ) ) {
+				throw new RuntimeException( esc_html( 'No se pudo cargar la imagen de demostración: ' . $bits['error'] ) );
+			}
+			$image_id = wp_insert_attachment(
+				array(
+					'post_mime_type' => $bits['type'],
+					'post_title'     => 'Imagen de ámbito de demostración',
+					'post_status'    => 'inherit',
+				),
+				$bits['file'],
+				0,
+				true
+			);
+			if ( is_wp_error( $image_id ) ) {
+				throw new RuntimeException( esc_html( 'No se pudo registrar la imagen de demostración: ' . $image_id->get_error_message() ) );
+			}
+			wp_update_attachment_metadata( $image_id, wp_generate_attachment_metadata( $image_id, $bits['file'] ) );
+			update_post_meta( $image_id, '_wp_attachment_image_alt', 'Ilustración de un centro educativo' );
+			update_post_meta( $image_id, '_prc_demo_scope_image', '1' );
+		}
+
+		foreach ( array( 'ambito-1', 'subambito-1a', 'subambito-1b', 'subambito-1c', 'ambito-2', 'subambito-2a', 'subambito-2b' ) as $slug ) {
+			$term = get_term_by( 'slug', $slug, 'prc_area' );
+			if ( ! $term instanceof WP_Term ) {
+				throw new RuntimeException( esc_html( "No existe el ámbito de demostración «{$slug}». Ejecute antes scripts/setup-vocabulary.php." ) );
+			}
+			update_term_meta( $term->term_id, \Prc\Taxonomy\ProcedureTaxonomies::EMAIL, sanitize_email( $slug . '@example.org' ) );
+			update_term_meta( $term->term_id, \Prc\Taxonomy\ProcedureTaxonomies::IMAGE_ID, $image_id );
+		}
+	}
+
+	/**
 	 * Seed the whole demo dataset.
 	 *
 	 * @return void
@@ -594,6 +651,7 @@ if ( ! function_exists( 'prc_seed_demo' ) ) {
 		if ( ! get_role( 'prc_manager' ) || ! get_role( 'prc_school_head' ) ) {
 			throw new RuntimeException( 'Faltan los roles del aplicativo: ejecute antes scripts/provision-roles.php.' );
 		}
+		prc_seed_scope_details();
 
 		foreach ( prc_demo_accounts() as $login => $account ) {
 			prc_seed_account( $login, $account );

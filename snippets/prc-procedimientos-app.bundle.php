@@ -11300,35 +11300,41 @@ final class ProcedureEditorView {
 
 
 	private static function request_fields( array $v ): string {
+		$numero = (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ];
+		$tipo   = 0 === $numero ? 'none' : ( 1 === $numero ? 'one' : 'several' );
+		$varias = max( 2, $numero );
+
 		ob_start();
 		?>
-		<div class="prc-campo">
-			<label class="prc-campo__etiqueta" for="prc-coordinator-count">¿Pide la solicitud personas coordinadoras?</label>
-			<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>">
-				<option value="0" <?php selected( 0, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>>No se piden</option>
-				<option value="1" <?php selected( 1, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>>Sí, una persona</option>
-				<optgroup label="Sí, varias personas">
-					<?php
-					$palabras = array(
-						2  => 'Dos',
-						3  => 'Tres',
-						4  => 'Cuatro',
-						5  => 'Cinco',
-						6  => 'Seis',
-						7  => 'Siete',
-						8  => 'Ocho',
-						9  => 'Nueve',
-						10 => 'Diez',
-					);
-					for ( $count = 2; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) :
-						$rotulo = isset( $palabras[ $count ] ) ? $palabras[ $count ] . ' personas' : sprintf( '%d personas', $count );
-						?>
-						<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( $count, (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ] ); ?>><?php echo esc_html( $rotulo ); ?></option>
-					<?php endfor; ?>
-				</optgroup>
-			</select>
+		<fieldset class="prc-campo">
+			<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras?</legend>
+			<div class="prc-opciones prc-opciones--vertical">
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="none" <?php checked( 'none', $tipo ); ?> />
+						No se piden
+					</label>
+				</div>
+				<div class="prc-opcion">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="one" <?php checked( 'one', $tipo ); ?> />
+						Sí, una persona
+					</label>
+				</div>
+				<div class="prc-opcion prc-opcion--varias">
+					<label>
+						<input type="radio" name="<?php echo esc_attr( ProcedureEditor::FIELD_COORDINATOR_KIND ); ?>" value="several" <?php checked( 'several', $tipo ); ?> />
+						Sí, varias personas:
+					</label>
+					<select class="prc-control" id="prc-coordinator-count" name="<?php echo esc_attr( ProcedureMetaKeys::COORDINATOR_COUNT ); ?>" aria-label="Número de personas coordinadoras">
+						<?php for ( $count = 2; $count <= ProcedureMetaKeys::COORDINATOR_COUNT_MAX; ++$count ) : ?>
+							<option value="<?php echo esc_attr( (string) $count ); ?>" <?php selected( $count, $varias ); ?>><?php echo esc_html( (string) $count ); ?></option>
+						<?php endfor; ?>
+					</select>
+				</div>
+			</div>
 			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
-		</div>
+		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
 			<textarea class="prc-control" id="prc-commitments" name="<?php echo esc_attr( ProcedureMetaKeys::COMMITMENTS ); ?>" rows="5"
@@ -12041,6 +12047,13 @@ final class ProcedureEditor {
 
 
 
+
+
+	public const FIELD_COORDINATOR_KIND = 'prc_coordinator_kind';
+
+
+
+
 	public const FIELD_Q = 'prc_q_';
 
 
@@ -12489,10 +12502,23 @@ final class ProcedureEditor {
 
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
 
-		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
-		$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
-			? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
-			: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		$clases = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$tipo   = isset( $_POST[ self::FIELD_COORDINATOR_KIND ] )
+			? sanitize_key( wp_unslash( (string) $_POST[ self::FIELD_COORDINATOR_KIND ] ) )
+			: '';
+		if ( in_array( $tipo, array( 'none', 'one', 'several' ), true ) ) {
+			if ( 'none' === $tipo ) {
+				$coordina = '0';
+			} elseif ( 'one' === $tipo ) {
+				$coordina = '1';
+			} else {
+				$coordina = (string) max( 2, min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, (int) self::field( ProcedureMetaKeys::COORDINATOR_COUNT ) ) );
+			}
+		} else {
+			$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
+				? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
+				: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		}
 
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 
@@ -16022,6 +16048,19 @@ final class App {
 .prc-form.prc-form--taller .prc-opcion label {
   font: 400 13px/16.9px var(--prc-fuente);
   color: var(--prc-c-fuerte);
+}
+
+/* «Sí, varias personas: [5]»: el número va en la misma línea que su radio. */
+.prc-form.prc-form--taller .prc-opcion--varias {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prc-form.prc-form--taller .prc-opcion--varias .prc-control {
+  width: auto;
+  min-width: 4.5rem;
 }
 
 /* --- la banda de sección ------------------------------------------------

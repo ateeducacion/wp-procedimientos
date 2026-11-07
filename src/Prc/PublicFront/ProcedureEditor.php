@@ -100,6 +100,13 @@ final class ProcedureEditor {
 	public const FIELD_COURSE      = 'prc_course_term';
 
 	/**
+	 * Radio that says whether the application asks for none, one or several coordinators.
+	 *
+	 * No se guarda: lo que se guarda es cuántas, en `prc_coordinator_count`.
+	 */
+	public const FIELD_COORDINATOR_KIND = 'prc_coordinator_kind';
+
+	/**
 	 * Prefix of the parallel fields of the question rows.
 	 */
 	public const FIELD_Q = 'prc_q_';
@@ -550,10 +557,23 @@ final class ProcedureEditor {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::ownership() se queda solo con lo que está en ella.
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::centre_kinds() se queda solo con lo que está en ella.
-		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
-		$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
-			? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
-			: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		$clases = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$tipo   = isset( $_POST[ self::FIELD_COORDINATOR_KIND ] )
+			? sanitize_key( wp_unslash( (string) $_POST[ self::FIELD_COORDINATOR_KIND ] ) )
+			: '';
+		if ( in_array( $tipo, array( 'none', 'one', 'several' ), true ) ) {
+			if ( 'none' === $tipo ) {
+				$coordina = '0';
+			} elseif ( 'one' === $tipo ) {
+				$coordina = '1';
+			} else {
+				$coordina = (string) max( 2, min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, (int) self::field( ProcedureMetaKeys::COORDINATOR_COUNT ) ) );
+			}
+		} else {
+			$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
+				? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
+				: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- identificadores de término: ProcedureInput::term_ids() se queda solo con los enteros positivos.
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.

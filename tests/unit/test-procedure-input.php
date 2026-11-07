@@ -87,6 +87,9 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 
 		$both = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => array( 'school', 'rural_group' ) ) ) );
 		$this->assertSame( array( 'school', 'rural_group' ), $both['data']['centre_kinds'] );
+
+		$radio = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => 'both' ) ) );
+		$this->assertSame( array( 'school', 'rural_group' ), $radio['data']['centre_kinds'] );
 	}
 
 	/** El público individual no usa la configuración ni las solicitudes de centros. */

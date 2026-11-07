@@ -16,7 +16,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
   ni los plazos documentales; los procedimientos publicados también pueden
   volver a borrador (ADR-0035).
 - «Mis procedimientos» abre el curso más reciente sin ofrecer mezclar todos los cursos; la solicitud por agrupación queda explicada como opción exclusiva de los CER.
-- En «Ajustes generales», se elige si pueden solicitar los centros, los CER como colectivo o ambos; las opciones de centro se ocultan al elegir profesorado, cuya inscripción aún no está implementada.
+- En «Ajustes generales», tres opciones de radio definen si solicitan los centros, los CER como colectivo o ambos; las opciones de centro se ocultan al elegir profesorado, cuya inscripción aún no está implementada.
 - Panel «Entregas» para ampliar el cierre de documentos ya configurados aunque las preguntas estén bloqueadas. Conserva apertura y definición, rechaza cierres anteriores y mantiene el ámbito y bloqueo del procedimiento (ADR-0034).
 - Entregas documentales con plazo propio: una pregunta «Archivo» puede recibirse después de la inscripción y del listado definitivo, sin modificar la solicitud ni su revisión. Configuración en «Preguntas», calendario público y entrega privada desde «Mi centro» (ADR-0033).
 - Arranque del repositorio: entorno de desarrollo (wp-env en los puertos 8698 y 8699), empaquetado del aplicativo en un Code Snippet y herramientas de calidad (PHPCS, PHPMD, PHPUnit, Plugin Check, `check-public`, `check-provision`), a partir del esqueleto del aplicativo de eventos (ADR-0010)

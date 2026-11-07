@@ -255,14 +255,14 @@
 			return;
 		}
 		var soloCentros = 'schools' === audiencia.value;
-		var codigoCentro = document.getElementById( 'prc-centre-kind-school' );
+		var modalidad = document.querySelector( '[name="prc_centre_kinds"]:checked' );
 		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-schools-only]' ), function ( caja ) {
 			caja.hidden = ! soloCentros;
 			Array.prototype.forEach.call( caja.querySelectorAll( 'input' ), function ( input ) {
 				input.disabled = ! soloCentros;
 			} );
 		} );
-		var admiteCentros = soloCentros && ( ! codigoCentro || codigoCentro.checked );
+		var admiteCentros = soloCentros && ( ! modalidad || 'school' === modalidad.value || 'both' === modalidad.value );
 		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-school-code]' ), function ( caja ) {
 			caja.hidden = ! admiteCentros;
 			Array.prototype.forEach.call( caja.querySelectorAll( 'input' ), function ( input ) {
@@ -271,7 +271,7 @@
 		} );
 	}
 	document.addEventListener( 'change', function ( e ) {
-		if ( e.target && ( 'prc-audience' === e.target.id || 'prc-centre-kind-school' === e.target.id ) ) {
+		if ( e.target && ( 'prc-audience' === e.target.id || ( e.target.matches && e.target.matches( '[name="prc_centre_kinds"]' ) ) ) ) {
 			mostrarCamposDeCentro();
 		}
 	} );

@@ -403,7 +403,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Quien dirige un centro y coordina una agrupación de escuelas rurales tiene los dos códigos. Con una sola casilla, solicita con ese código sin preguntarle; con las dos, elige, y cada código lleva su propia solicitud.</p>
+					<p class="prc-campo__ayuda">Marque «Agrupaciones de escuelas rurales» solo si participa un CER. Quien tenga código de centro y de CER podrá elegir con cuál solicita; cada código lleva su propia solicitud.</p>
 				</fieldset>
 			</div>
 			<?php if ( ! $nuevo ) : ?>

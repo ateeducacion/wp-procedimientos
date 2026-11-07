@@ -1201,20 +1201,53 @@ final class ProcedureEditorView {
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Código adicional</h2>
-			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento. El JavaScript se ejecuta en esa ficha y solo puede editarlo una persona administradora con permiso para HTML sin filtrar.</p>
+			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
 			<form class="prc-form prc-form--taller" method="post" action="">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<p><label for="prc-custom-css">CSS</label><textarea id="prc-custom-css" name="prc_custom_css" rows="14" spellcheck="false"<?php disabled( empty( $m['can_edit'] ) ); ?>><?php echo esc_textarea( (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ) ); ?></textarea></p>
+				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
-					<p><label for="prc-custom-js">JavaScript (solo administración)</label><textarea id="prc-custom-js" name="prc_custom_js" rows="14" spellcheck="false"><?php echo esc_textarea( (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ) ); ?></textarea></p>
-				<?php else : ?>
-					<p>El campo JavaScript solo está disponible para administración con permiso de HTML sin filtrar.</p>
+					<div class="prc-aviso prc-aviso-warning prc-codigo-admin">
+						<h3 id="prc-codigo-admin-titulo">Solo para administración</h3>
+						<p>Este JavaScript se ejecuta en la ficha pública del procedimiento. Revíselo antes de guardarlo.</p>
+					</div>
+					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php endif; ?>
 				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
 			</form>
 		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Render a labelled textarea that WordPress may enhance with CodeMirror.
+	 *
+	 * @param string $id       Field ID.
+	 * @param string $name     Field name.
+	 * @param string $label    Visible label.
+	 * @param string $value    Saved value.
+	 * @param bool   $disabled Whether editing is unavailable.
+	 * @return string
+	 */
+	private static function code_editor_field( string $id, string $name, string $label, string $value, bool $disabled ): string {
+		ob_start();
+		?>
+		<div class="prc-code">
+			<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $label ); ?></label>
+			<textarea
+				class="prc-control"
+				id="<?php echo esc_attr( $id ); ?>"
+				name="<?php echo esc_attr( $name ); ?>"
+				rows="14"
+				spellcheck="false"
+				autocapitalize="off"
+				autocomplete="off"
+				autocorrect="off"
+				<?php disabled( $disabled ); ?>
+				><?php echo esc_textarea( $value ); ?></textarea>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}

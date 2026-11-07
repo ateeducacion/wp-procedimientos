@@ -184,9 +184,33 @@ final class ProcedureEditor {
 	 */
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_code_editor' ), 20 );
 		// Después de que el CPT y sus capacidades estén registrados (init 10 y
 		// 11), y antes de que se pinte nada: aquí todavía se puede redirigir.
 		add_action( 'init', array( self::class, 'handle' ), 20 );
+	}
+
+	/** Enqueue WordPress CodeMirror before the page head, only on this tab. */
+	public static function enqueue_code_editor(): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- lectura de la pestaña; mutar lleva su nonce.
+		if ( 'editor' !== Shell::current_section() || self::PANEL_CODE !== sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_PANEL ] ?? '' ) ) ) ) {
+			return;
+		}
+		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		$user_id = get_current_user_id();
+		if ( ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-css",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
+		if ( ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/javascript' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-js",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
 	}
 
 	/*

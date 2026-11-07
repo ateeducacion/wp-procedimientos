@@ -84,3 +84,13 @@ contenido cierre el elemento `style` del documento.
 
 - Cada persona administradora puede revisar el código desde la pestaña
   «Código» del taller.
+
+## Adenda — 2026-11-07
+
+El editor mejora el `<textarea>` con el CodeMirror que incluye WordPress,
+mediante `wp_enqueue_code_editor()` y `wp.codeEditor.initialize()`. El CSS y
+el JavaScript se encolan solo al abrir la pestaña y con el permiso
+correspondiente. Si WordPress desactiva el resaltado en el perfil, el área de
+texto nativa sigue disponible. El campo JavaScript y su aviso amarillo solo se
+pintan para administración; a los demás perfiles no se les menciona esa
+función.

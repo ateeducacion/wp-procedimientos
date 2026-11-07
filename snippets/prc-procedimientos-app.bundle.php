@@ -11327,7 +11327,7 @@ final class ProcedureEditorView {
 					<?php endfor; ?>
 				</optgroup>
 			</select>
-			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. Lo habitual es una; en programas con coordinación por ejes, cinco o seis.</p>
+			<p class="prc-campo__ayuda">El centro escribirá el nombre y el correo de cada una. En programas con coordinación por ejes, lo habitual es cinco o seis.</p>
 		</div>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>

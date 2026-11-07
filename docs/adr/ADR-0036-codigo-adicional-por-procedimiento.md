@@ -1,5 +1,5 @@
 ---
-id: ADR-0037
+id: ADR-0036
 title: "El código adicional se limita a la ficha pública del procedimiento"
 status: Propuesta
 date: 2026-11-06
@@ -15,7 +15,7 @@ ai_assistance:
   model: "GPT-6"
 ---
 
-# ADR-0037: El código adicional se limita a la ficha pública del procedimiento
+# ADR-0036: El código adicional se limita a la ficha pública del procedimiento
 
 ## Estado
 

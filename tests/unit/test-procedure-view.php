@@ -277,7 +277,7 @@ class Test_Procedure_View extends WP_UnitTestCase {
 			array( $this->area( 'Área de prueba' ) ),
 			array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) )
 		);
-		$teacher = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$teacher   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
 		$this->acting_as( $teacher );
 
 		$this->assertFalse( ProcedureView::model( $procedure )['mine']['has'] );

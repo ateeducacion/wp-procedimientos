@@ -529,9 +529,9 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 			array( $this->area( 'Área de prueba' ) ),
 			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
 		);
-		$teacher = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
-		$other   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
-		$mine    = (int) wp_insert_post(
+		$teacher   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$mine      = (int) wp_insert_post(
 			array(
 				'post_type'   => ApplicationPostType::POST_TYPE,
 				'post_status' => 'publish',
@@ -540,7 +540,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 			)
 		);
 		update_post_meta( $mine, ApplicationMetaKeys::APPLICANT_TYPE, ApplicationMetaKeys::TYPE_TEACHER );
-		$theirs  = (int) wp_insert_post(
+		$theirs = (int) wp_insert_post(
 			array(
 				'post_type'   => ApplicationPostType::POST_TYPE,
 				'post_status' => 'publish',

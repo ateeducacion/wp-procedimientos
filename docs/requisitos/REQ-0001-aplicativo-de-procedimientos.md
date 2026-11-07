@@ -24,7 +24,7 @@ el esqueleto que se está construyendo (fase 0 de
 [PLAN-0001](../plan/PLAN-0001-implantacion-por-fases.md)) más las pantallas
 completas, los correos y el CSV (fase 1). Los marcados **F2**, **F3** y **F4**
 se escriben aquí para que el alcance se entienda por lo que queda fuera. Las
-solicitudes docentes se incorporan a F1 mediante ADR-0036. El desarrollo del
+solicitudes docentes se incorporan a F1 mediante ADR-0037. El desarrollo del
 repositorio no implica que haya nada desplegado en el sitio de destino.
 **Fecha:** 2026-09-15
 **Fuentes:**
@@ -95,7 +95,7 @@ funcional en sí misma: RNF-REN-02 y RNF-OPE-01.
 | Dirección de centro | `prc_school_head` | Miembro del equipo directivo de un centro educativo que presenta la solicitud de su centro | La meta de usuario con el código de centro, cuya clave devuelve el filtro `prc_centre_code_meta_key` ([ADR-0016](../adr/ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)) |
 | Administración del aplicativo | `administrator` | Quien administra el sitio; llega a todos los ámbitos, ajusta, diagnostica y desarchiva | Capacidades `prc_manage_all_areas` y `prc_manage_app` |
 | Persona visitante | — | Cualquiera que llega al sitio | — |
-| Profesorado participante | Cuenta de docente | Docente que se inscribe a título individual | F1: solicitudes individuales con la capacidad `prc_apply_as_teacher` (ADR-0036) |
+| Profesorado participante | Cuenta de docente | Docente que se inscribe a título individual | F1: solicitudes individuales con la capacidad `prc_apply_as_teacher` (ADR-0037) |
 
 Los slugs son los de los dos roles que crea el snippet suelto
 `snippets/roles-and-profiles.php` **en el entorno local**. El aplicativo solo
@@ -123,7 +123,7 @@ lo que hay hoy y adónde va cada pieza.
 | El centro de quien solicita | Meta de usuario escrita al iniciar sesión por un fragmento que consulta el directorio corporativo | Meta de usuario con clave configurable, de solo lectura en la solicitud ([ADR-0016](../adr/ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)) | F1 |
 | El catálogo de centros | Un cuarto formulario con los centros | Filtro `prc_centres`; por defecto un JSON fuera del repositorio ([ADR-0017](../adr/ADR-0017-el-catalogo-de-centros-no-se-versiona.md)) | F1 |
 | Documentación del centro | Subidas al formulario de solicitud: aceptación firmada, proyecto, memoria, otros | Ficheros privados fuera del alcance del servidor web, con su ADR | **F2** |
-| Solicitudes del profesorado | Un segundo formulario de solicitud, individual | El mismo formulario con núcleo individual, preguntas y documentos privados (ADR-0036) | F1 |
+| Solicitudes del profesorado | Un segundo formulario de solicitud, individual | El mismo formulario con núcleo individual, preguntas y documentos privados (ADR-0037) | F1 |
 | Lo ya presentado | Miles de entradas y ficheros | No se migra en la fase 1 ([ADR-0024](../adr/ADR-0024-las-solicitudes-de-hoy-no-se-migran.md)) | **F4** |
 
 **Fase**: F1 el alcance de SDD-0001 (fases 0 y 1 del plan) · F2

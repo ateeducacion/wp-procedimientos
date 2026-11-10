@@ -10,6 +10,7 @@ namespace Prc\Admin;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -128,7 +129,12 @@ final class ProcedureAdmin {
 			return;
 		}
 		if ( 'prc_state' === $column ) {
-			echo esc_html( ProcedureState::label( ProcedureState::of_post( $post_id ) ) );
+			echo esc_html(
+				ProcedureState::label(
+					ProcedureState::of_post( $post_id ),
+					(bool) get_post_meta( $post_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+				)
+			);
 		}
 	}
 

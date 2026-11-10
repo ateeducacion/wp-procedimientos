@@ -448,7 +448,10 @@ final class Home {
 			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
 			'areas'        => self::terms( $id ),
 			'state'        => $state,
-			'state_label'  => ProcedureState::label( $state ),
+			'state_label'  => ProcedureState::label(
+				$state,
+				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'closes_at'    => $cierra,
 			'days_left'    => $quedan,
 			'deadline'     => self::deadline( $quedan ),

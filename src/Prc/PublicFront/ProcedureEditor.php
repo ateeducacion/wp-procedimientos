@@ -1442,6 +1442,9 @@ final class ProcedureEditor {
 			'foreign_areas'           => array(),
 			'view_url'                => '',
 			'workspace_url'           => Shell::url( 'workspace' ),
+			// Los dos sitios del taller que más dudas levantan: el alta y las preguntas.
+			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
+			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),

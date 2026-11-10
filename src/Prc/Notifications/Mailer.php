@@ -21,7 +21,9 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
+use Prc\PublicFront\ObserveSettings;
 use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -366,7 +368,9 @@ final class Mailer {
 			return;
 		}
 		$autor = (int) get_post_field( 'post_author', (int) $application_id );
-		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id ) ) {
+		// Solo si sigue siendo suya: poder verla por la consulta de su zona no
+		// basta para recibir la nota (ADR-0043).
+		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id, ProcedureAccess::VIEW_OWN ) ) {
 			return;
 		}
 		self::safely(
@@ -472,7 +476,7 @@ final class Mailer {
 				$ctx['url']    = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
-				self::send_to_zone( (int) $application_id, $ctx );
+				self::send_to_zone( (int) $application_id, $ctx, (array) $before, (array) $after );
 			}
 		);
 	}
@@ -482,23 +486,35 @@ final class Mailer {
 	 *
 	 * Solo si el procedimiento admite la consulta y lo pide
 	 * (`prc_observer_notify`, apagado por defecto), y solo a las cuentas que
-	 * consultan la zona que el catálogo de hoy da al centro (ADR-0043). El
-	 * mismo texto, sin DNI, con el enlace a la consulta y no al taller.
+	 * consultan la zona que el catálogo de hoy da al centro (ADR-0043). La
+	 * persona se describe con las columnas de personas que la consulta enseña
+	 * y nada más; sin ninguna, el correo solo dice que hubo un cambio en la
+	 * lista de ese centro. Nunca el DNI. El enlace es a la consulta, no al
+	 * taller.
 	 *
 	 * @param int                  $application_id Application ID.
 	 * @param array<string, mixed> $ctx            The context of the contacts' mail.
+	 * @param array<string, mixed> $before         The row before; empty when added.
+	 * @param array<string, mixed> $after          The row after; empty when removed.
 	 * @return void
 	 */
-	private static function send_to_zone( int $application_id, array $ctx ): void {
+	private static function send_to_zone( int $application_id, array $ctx, array $before, array $after ): void {
 		$procedure_id = (int) $ctx['procedure_id'];
 		if ( ! ObserverScope::is_observable( $procedure_id ) || ! get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_NOTIFY, true ) ) {
 			return;
 		}
 		$codigo   = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
-		$destinos = array_map( array( self::class, 'email_of' ), ObserverScope::observers_of( $codigo ) );
-		if ( array() === array_filter( $destinos ) ) {
+		$destinos = array_filter( array_map( array( self::class, 'email_of' ), ObserverScope::observers_of( $codigo ) ) );
+		if ( array() === $destinos ) {
 			return;
 		}
+		$campos = array();
+		foreach ( array_keys( array_intersect_key( ObserveSettings::columns( $procedure_id ), PeopleExport::COLUMNS ) ) as $columna ) {
+			$campos[] = substr( (string) $columna, strlen( 'person_' ) );
+		}
+		$spec             = People::spec( $procedure_id );
+		$ctx['before']    = array() !== $before && array() !== $campos ? ApplicationPeople::describe( $spec, $before, $campos ) : '';
+		$ctx['after']     = array() !== $after && array() !== $campos ? ApplicationPeople::describe( $spec, $after, $campos ) : '';
 		$ctx['url']       = Observe::url( $procedure_id );
 		$ctx['url_label'] = 'Se consulta en la consulta de solicitudes:';
 		self::send( self::EVENT_PEOPLE_CHANGED, $destinos, $ctx );

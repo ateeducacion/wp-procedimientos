@@ -11718,6 +11718,7 @@ final class Applications {
 			'coordinator' => array(),
 			'answers'     => array(),
 		);
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		$metas = array(
 			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
@@ -11733,7 +11734,7 @@ final class Applications {
 
 
 		$created = ApplicationOperations::adopt( $id, $user_id ) || $created;
-		self::saved( $id, $created, $user_id );
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -11768,6 +11769,7 @@ final class Applications {
 			return 0;
 		}
 		$data += array( 'answers' => array() );
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		foreach (
 			array(
 				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
@@ -11781,7 +11783,7 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created, $user_id );
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -11801,7 +11803,13 @@ final class Applications {
 
 
 
-	private static function saved( int $id, bool $created, int $user_id ): void {
+
+
+
+
+
+
+	private static function saved( int $id, bool $created, int $user_id, string $previous = '' ): void {
 
 
 
@@ -11809,7 +11817,8 @@ final class Applications {
 
 
 
-		do_action( 'prc_application_saved', $id, $created, $user_id );
+
+		do_action( 'prc_application_saved', $id, $created, $user_id, $previous );
 	}
 
 
@@ -13558,7 +13567,7 @@ final class ApplicationHistory {
 
 
 	public static function register(): void {
-		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 3 );
+		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 4 );
 		add_action( 'prc_application_reviewed', array( self::class, 'on_reviewed' ), 5, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery' ), 5, 3 );
 		add_action( 'prc_people_changed', array( self::class, 'on_people' ), 5, 5 );
@@ -13579,8 +13588,28 @@ final class ApplicationHistory {
 
 
 
-	public static function on_saved( $application_id, $created = false, $user_id = 0 ): void {
+
+
+
+
+
+	public static function on_saved( $application_id, $created = false, $user_id = 0, $previous = '' ): void {
 		ApplicationLog::add( (int) $application_id, $created ? self::SUBMITTED : self::UPDATED, array(), (int) $user_id );
+		$previous = (string) $previous;
+		if ( $created || '' === $previous || ApplicationMetaKeys::REVIEW_SUBMITTED === $previous ) {
+			return;
+		}
+		ApplicationLog::add(
+			(int) $application_id,
+			self::REVIEWED,
+			array(
+				'state'        => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'previous'     => $previous,
+				'note_changed' => false,
+				'by'           => 'save',
+			),
+			(int) $user_id
+		);
 	}
 
 
@@ -13828,7 +13857,8 @@ final class ApplicationHistory {
 		if ( $antes === $estado ) {
 			return self::words( 'Revisión: nota cambiada' );
 		}
-		return self::words( 'Revisión: ' . $estado . ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' ), $antes, $estado );
+		$porque = 'save' === ( $data['by'] ?? '' ) ? ', al modificarla quien la presentó' : ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' );
+		return self::words( 'Revisión: ' . $estado . $porque, $antes, $estado );
 	}
 
 
@@ -16115,6 +16145,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
 
 
 
@@ -16405,6 +16436,7 @@ final class ApplicationActionsPanel {
 				'can_extend'    => '' === ApplicationActions::why_not_extend( $user_id, $id ),
 				'internal_note' => (string) get_post_meta( $id, ApplicationMetaKeys::INTERNAL_NOTE, true ),
 				'pending'       => ApplicationOperations::pending_for_school( $id ),
+				'review'        => (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'history'       => array(
 					'open'    => (string) $id === $abiertas,
 					'url'     => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $id ) + $args ) . '#prc-historial-' . $id,
@@ -16416,6 +16448,7 @@ final class ApplicationActionsPanel {
 		return array(
 			'rows'            => $filas,
 			'today'           => ProcedureState::today(),
+			'resolved'        => ProcedureMetaKeys::STATE_RESOLVED === ProcedureState::of_post( $procedure_id ),
 			'withdrawn_count' => ApplicationOperations::withdrawn_count( $procedure_id ),
 			'withdrawn_open'  => $abrir,
 			'withdrawn_url'   => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( self::ARG_WITHDRAWN => 1 ) ),
@@ -19765,6 +19798,7 @@ final class ExportDialogView {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\PublicFront\ApplicationActionsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
@@ -20014,6 +20048,9 @@ final class ApplicationActionsView {
 				);
 				?>
 			</p>
+			<?php foreach ( self::extend_warnings( $m, $a ) as $aviso ) : ?>
+				<p class="prc-campo__ayuda prc-aviso-prorroga"><?php echo esc_html( $aviso ); ?></p>
+			<?php endforeach; ?>
 			<div class="prc-campo">
 				<label class="prc-campo__etiqueta" for="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>">Puede editarla hasta el</label>
 				<input class="prc-control" type="date" id="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_LATE ); ?>" value="<?php echo esc_attr( $hasta ); ?>" min="<?php echo esc_attr( (string) ( $m['actions']['today'] ?? '' ) ); ?>" required />
@@ -20027,6 +20064,27 @@ final class ApplicationActionsView {
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function extend_warnings( array $m, array $a ): array {
+		$out = array();
+		if ( in_array( (string) ( $a['review'] ?? '' ), array( ApplicationMetaKeys::REVIEW_ADMITTED, ApplicationMetaKeys::REVIEW_EXCLUDED ), true ) ) {
+			$out[] = 'Esta solicitud ya está revisada: si el centro la modifica con la prórroga, volverá a «Presentada» y habrá que revisarla de nuevo.';
+		}
+		if ( ! empty( $m['actions']['resolved'] ) ) {
+			$out[] = 'Este procedimiento ya está resuelto: una prórroga deja cambiar una solicitud después de la resolución.';
+		}
+		return $out;
 	}
 
 

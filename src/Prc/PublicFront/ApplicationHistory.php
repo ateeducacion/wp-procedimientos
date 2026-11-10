@@ -42,7 +42,7 @@ final class ApplicationHistory {
 	 * @return void
 	 */
 	public static function register(): void {
-		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 3 );
+		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 4 );
 		add_action( 'prc_application_reviewed', array( self::class, 'on_reviewed' ), 5, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery' ), 5, 3 );
 		add_action( 'prc_people_changed', array( self::class, 'on_people' ), 5, 5 );
@@ -58,13 +58,33 @@ final class ApplicationHistory {
 	/**
 	 * Submitted or changed by its school.
 	 *
-	 * @param int  $application_id Application ID.
-	 * @param bool $created        Whether it is new.
-	 * @param int  $user_id        Who stored it.
+	 * Si guardar la devolvió a «presentada» desde otro estado —admitida,
+	 * excluida, a subsanar—, eso queda además como un cambio de revisión
+	 * hecho por el guardado, con el estado de antes.
+	 *
+	 * @param int    $application_id Application ID.
+	 * @param bool   $created        Whether it is new.
+	 * @param int    $user_id        Who stored it.
+	 * @param string $previous       Review state before saving.
 	 * @return void
 	 */
-	public static function on_saved( $application_id, $created = false, $user_id = 0 ): void {
+	public static function on_saved( $application_id, $created = false, $user_id = 0, $previous = '' ): void {
 		ApplicationLog::add( (int) $application_id, $created ? self::SUBMITTED : self::UPDATED, array(), (int) $user_id );
+		$previous = (string) $previous;
+		if ( $created || '' === $previous || ApplicationMetaKeys::REVIEW_SUBMITTED === $previous ) {
+			return;
+		}
+		ApplicationLog::add(
+			(int) $application_id,
+			self::REVIEWED,
+			array(
+				'state'        => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'previous'     => $previous,
+				'note_changed' => false,
+				'by'           => 'save',
+			),
+			(int) $user_id
+		);
 	}
 
 	/**
@@ -312,7 +332,8 @@ final class ApplicationHistory {
 		if ( $antes === $estado ) {
 			return self::words( 'Revisión: nota cambiada' );
 		}
-		return self::words( 'Revisión: ' . $estado . ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' ), $antes, $estado );
+		$porque = 'save' === ( $data['by'] ?? '' ) ? ', al modificarla quien la presentó' : ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' );
+		return self::words( 'Revisión: ' . $estado . $porque, $antes, $estado );
 	}
 
 	/**

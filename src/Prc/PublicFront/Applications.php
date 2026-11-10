@@ -373,6 +373,7 @@ final class Applications {
 			'coordinator' => array(),
 			'answers'     => array(),
 		);
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		$metas = array(
 			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
@@ -388,7 +389,7 @@ final class Applications {
 		// Una presentada en su nombre (PLAN-0003, PR 9) la presenta de verdad
 		// el centro la primera vez que la guarda: cuenta como nueva.
 		$created = ApplicationOperations::adopt( $id, $user_id ) || $created;
-		self::saved( $id, $created, $user_id );
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -423,6 +424,7 @@ final class Applications {
 			return 0;
 		}
 		$data += array( 'answers' => array() );
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		foreach (
 			array(
 				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
@@ -436,7 +438,7 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created, $user_id );
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -451,20 +453,27 @@ final class Applications {
 	 * centro es del centro y no de quien la presentó: otra persona del mismo
 	 * centro puede modificarla, y el aviso es para ella.
 	 *
-	 * @param int  $id      Application post ID.
-	 * @param bool $created Whether it did not exist before.
-	 * @param int  $user_id Account that stored it.
+	 * El estado de revisión de antes viaja también: guardar devuelve la
+	 * solicitud a «presentada» (ADR-0020), y el historial lo anota como un
+	 * cambio de revisión hecho por el guardado (ADR-0044). No es una revisión:
+	 * no emite `prc_application_reviewed` ni manda su correo.
+	 *
+	 * @param int    $id       Application post ID.
+	 * @param bool   $created  Whether it did not exist before.
+	 * @param int    $user_id  Account that stored it.
+	 * @param string $previous Review state before saving; empty for a new one.
 	 * @return void
 	 */
-	private static function saved( int $id, bool $created, int $user_id ): void {
+	private static function saved( int $id, bool $created, int $user_id, string $previous = '' ): void {
 		/**
 		 * An application has just been stored, new or edited.
 		 *
-		 * @param int  $id      Application post ID.
-		 * @param bool $created Whether it did not exist before.
-		 * @param int  $user_id Account that stored it.
+		 * @param int    $id       Application post ID.
+		 * @param bool   $created  Whether it did not exist before.
+		 * @param int    $user_id  Account that stored it.
+		 * @param string $previous Review state before saving; empty for a new one.
 		 */
-		do_action( 'prc_application_saved', $id, $created, $user_id );
+		do_action( 'prc_application_saved', $id, $created, $user_id, $previous );
 	}
 
 	/**

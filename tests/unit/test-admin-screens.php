@@ -233,6 +233,31 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Al volver de guardar en `options.php`, la pantalla dice que se guardó.
+	 */
+	public function test_the_settings_screen_says_it_saved() {
+		$this->acting_as( $this->administrator() );
+		set_transient(
+			'settings_errors',
+			array(
+				array(
+					'setting' => 'general',
+					'code'    => 'settings_updated',
+					'message' => 'Configuración guardada.',
+					'type'    => 'success',
+				),
+			),
+			30
+		);
+		$_GET['settings-updated'] = 'true';
+
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Configuración guardada.', $html );
+	}
+
+	/**
 	 * La pantalla está en el menú, y colgando del listado de procedimientos.
 	 */
 	public function test_the_diagnostics_screen_hangs_from_the_procedures_menu() {

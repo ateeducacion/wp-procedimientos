@@ -21,6 +21,9 @@ use Prc\PostType\ProcedurePostType;
 /**
  * Las solicitudes de los centros: guardarlas, leerlas, revisarlas y exportarlas.
  *
+ * Exportar a medida —qué columnas, por persona, el fichero de alta de
+ * usuarios— es de {@see ApplicationExport}; aquí quedan la fila y el CSV puro.
+ *
  * Una solicitud cuelga de su procedimiento por `post_parent` y hay **una por
  * centro y procedimiento** (ADR-0018): antes de crear se pregunta por
  * {@see find()} y, si existe, se edita esa. Hoy esa unicidad es una clave
@@ -668,13 +671,16 @@ final class Applications {
 	}
 
 	/**
-	 * The applications of one procedure as a CSV file.
+	 * The applications of one procedure as a CSV file, with every column.
+	 *
+	 * Lo hace {@see ApplicationExport::csv()}, que es quien sabe exportar a
+	 * medida; sin columnas elegidas, salen todas y una fila por solicitud.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return string
 	 */
 	public static function csv( int $procedure_id ): string {
-		return self::csv_lines( self::columns( self::questions( $procedure_id ) ), self::rows( $procedure_id ) );
+		return ApplicationExport::csv( $procedure_id );
 	}
 
 	/**
@@ -725,10 +731,7 @@ final class Applications {
 	private static function csv_line( array $campos ): string {
 		$fuera = array();
 		foreach ( $campos as $campo ) {
-			if ( '' !== $campo && false !== strpos( "=+-@\t\r", $campo[0] ) ) {
-				$campo = "'" . $campo;
-			}
-			$fuera[] = '"' . str_replace( '"', '""', $campo ) . '"';
+			$fuera[] = '"' . str_replace( '"', '""', ApplicationExport::neutralize( $campo ) ) . '"';
 		}
 		return implode( ';', $fuera );
 	}

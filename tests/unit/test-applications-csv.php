@@ -8,6 +8,7 @@
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureEditor;
 
@@ -220,6 +221,43 @@ class Test_Applications_Csv extends WP_UnitTestCase {
 
 		$vacio = Applications::csv( $this->procedure( $this->administrator() ) );
 		$this->assertCount( 1, explode( "\r\n", trim( substr( $vacio, 3 ) ) ), 'sin solicitudes, solo la cabecera' );
+	}
+
+	/**
+	 * El CSV de siempre es la exportación a medida sin nada elegido, y un
+	 * envío sin los campos del diálogo descarga ese mismo fichero (ADR-0039).
+	 */
+	public function test_the_csv_of_always_is_the_export_without_a_choice() {
+		list( $procedimiento, $area ) = $this->con_solicitudes();
+
+		$this->assertSame( ApplicationExport::csv( $procedimiento, array(), ApplicationExport::SHAPE_APPLICATION ), Applications::csv( $procedimiento ) );
+		$this->assertSame( Applications::csv( $procedimiento ), $this->exportar( $this->manager( array( $area ) ), $procedimiento ) );
+	}
+
+	/**
+	 * Con columnas elegidas, el formato del fichero es el mismo: BOM, punto y
+	 * coma, CRLF, todo entrecomillado y las fórmulas desactivadas.
+	 */
+	public function test_a_chosen_export_keeps_the_file_format() {
+		list( $procedimiento ) = $this->con_solicitudes();
+		update_post_meta(
+			(int) Applications::find( $procedimiento, 'C0001' ),
+			ApplicationMetaKeys::REVIEW_NOTE,
+			'=1+1'
+		);
+
+		$csv = ApplicationExport::csv( $procedimiento, array( 'code', 'note' ) );
+		$this->assertStringStartsWith( "\xEF\xBB\xBF\"Código\";\"Nota\"\r\n", $csv );
+		$this->assertStringContainsString( "\"C0001\";\"'=1+1\"\r\n", $csv );
+		$this->assertStringEndsWith( "\r\n", $csv );
+	}
+
+	/**
+	 * El fichero de usuarios se llama como el CSV, con «usuarios» delante.
+	 */
+	public function test_the_user_file_name() {
+		$this->assertSame( Applications::filename( 'Red' ), ApplicationExport::filename( 'Red', ApplicationExport::FORMAT_CSV ) );
+		$this->assertSame( 'usuarios-red-' . gmdate( 'Y-m-d' ) . '.csv', ApplicationExport::filename( 'Red', ApplicationExport::FORMAT_MOODLE ) );
 	}
 
 	/**

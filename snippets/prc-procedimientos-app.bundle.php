@@ -17271,6 +17271,11 @@ final class Settings {
 		?>
 		<div class="wrap">
 			<h1>Ajustes y diagnóstico de procedimientos</h1>
+			<?php
+
+
+			settings_errors();
+			?>
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único

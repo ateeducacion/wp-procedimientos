@@ -9,7 +9,6 @@
 namespace Prc\PublicFront;
 
 use Prc\Domain\ProcedureInput;
-use Prc\Domain\QuestionGrid;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
@@ -76,21 +75,6 @@ final class ApplicationExport {
 	);
 
 	/**
-	 * Columns of the list of people, only when the procedure asks for it.
-	 *
-	 * @var array<string, string>
-	 */
-	private const PEOPLE_COLUMNS = array(
-		'person_name'    => 'Nombre (persona)',
-		'person_surname' => 'Apellidos (persona)',
-		'person_dni'     => 'DNI o NIE (persona)',
-		'person_email'   => 'Correo (persona)',
-		'person_phone'   => 'Teléfono (persona)',
-		'person_role'    => 'Papel (persona)',
-		'person_group'   => 'Grupo (persona)',
-	);
-
-	/**
 	 * Hook registration.
 	 *
 	 * @return void
@@ -136,10 +120,7 @@ final class ApplicationExport {
 			'review'       => 'Revisión',
 			'questions'    => 'Preguntas',
 		);
-		if ( $procedure_id > 0 && ! People::enabled( $procedure_id ) ) {
-			unset( $out['people'] );
-		}
-		return $out;
+		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
 
 	/**
@@ -153,44 +134,16 @@ final class ApplicationExport {
 	 * @return array<string, array<string, string>> group => (column key => heading).
 	 */
 	public static function groups( int $procedure_id ): array {
-		$todas = self::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id );
 		$out   = array();
 		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
 			$fijas        += $out[ $grupo ];
 		}
-		// Sin lista de personas, el grupo no existe: el diálogo es el de siempre.
-		if ( array() === $out['people'] ) {
-			unset( $out['people'] );
-		}
 		$out['questions'] = array_diff_key( $todas, $fijas );
-		return $out;
-	}
-
-	/**
-	 * Every column one can export, in the order of the table.
-	 *
-	 * Las de la lista de personas van tras la coordinación, y solo si el
-	 * procedimiento la pide (ADR-0041): sin ella, el CSV es el de siempre.
-	 *
-	 * @param int $procedure_id Procedure post ID.
-	 * @return array<string, string> key => heading.
-	 */
-	private static function all_columns( int $procedure_id ): array {
-		$preguntas = Applications::questions( $procedure_id );
-		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
-		if ( ! People::enabled( $procedure_id ) ) {
-			return $todas;
-		}
-		$out = array();
-		foreach ( $todas as $clave => $rotulo ) {
-			$out[ $clave ] = $rotulo;
-			if ( 'coordinator_email' === $clave ) {
-				$out += self::PEOPLE_COLUMNS;
-			}
-		}
-		return $out;
+		// Sin lista de personas, el grupo no existe: el diálogo es el de siempre.
+		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
 
 	/**
@@ -201,7 +154,7 @@ final class ApplicationExport {
 	 * @return array<string, string> key => heading; empty when none is valid.
 	 */
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = self::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -228,9 +181,9 @@ final class ApplicationExport {
 	 */
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = self::all_columns( $procedure_id );
+		$todas     = PeopleExport::all_columns( $procedure_id );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
-		$personas  = People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : null;
+		$personas  = PeopleExport::spec( $procedure_id );
 		// Ninguna válida, o todas aunque sea en otro orden: el CSV de siempre.
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
 			$columnas = $todas;
@@ -239,7 +192,7 @@ final class ApplicationExport {
 		$filas  = array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				$fila = Applications::row( $solicitud, $preguntas ) + self::people_cells( $personas, $solicitud );
+				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas ) : array( $fila ) as $una ) {
 					// Solo lo que se va a escribir: la fila entera no se guarda.
 					$filas[] = array_intersect_key( $una, $claves );
@@ -265,12 +218,11 @@ final class ApplicationExport {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private static function per_person( \WP_Post $application, array $row, ?array $people = null ): array {
-		$sin_personas = null === $people ? array() : array_fill_keys( array_keys( self::PEOPLE_COLUMNS ), '' );
-		$out          = array();
+		$out = array();
 		foreach ( self::coordinators( $application ) as $persona ) {
 			$out[] = array_merge(
 				$row,
-				$sin_personas,
+				PeopleExport::cells( $people, array() ),
 				array(
 					'coordinator'       => ApplicationMetaRegistration::full_name( $persona ),
 					'coordinator_dni'   => $persona['dni'],
@@ -278,52 +230,8 @@ final class ApplicationExport {
 				)
 			);
 		}
-		foreach ( null === $people ? array() : People::of( (int) $application->ID ) as $persona ) {
-			$out[] = array_merge(
-				$row,
-				array_fill_keys( array( 'coordinator', 'coordinator_dni', 'coordinator_email' ), '' ),
-				self::person_cells( $people, array( $persona ) )
-			);
-		}
+		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID ) );
 		return array() === $out ? array( $row ) : $out;
-	}
-
-	/**
-	 * The columns of the list of people of one application, for its row.
-	 *
-	 * En la fila de la solicitud, cada columna junta a todas sus personas,
-	 * como la coordinación.
-	 *
-	 * @param array<string, mixed>|null $people      Specification of the list; null without one.
-	 * @param \WP_Post                  $application The application.
-	 * @return array<string, string>
-	 */
-	private static function people_cells( ?array $people, \WP_Post $application ): array {
-		return null === $people ? array() : self::person_cells( $people, People::of( (int) $application->ID ) );
-	}
-
-	/**
-	 * The people columns of some people, each column joined.
-	 *
-	 * @param array<string, mixed>              $spec Specification of the list.
-	 * @param array<int, array<string, string>> $rows People.
-	 * @return array<string, string>
-	 */
-	private static function person_cells( array $spec, array $rows ): array {
-		$filas = PeopleForm::rows( $spec, $rows );
-		$out   = array();
-		foreach ( array(
-			'person_name'    => 'name',
-			'person_surname' => 'surname',
-			'person_dni'     => 'dni',
-			'person_email'   => 'email',
-			'person_phone'   => 'phone',
-			'person_role'    => 'role_label',
-			'person_group'   => 'group_label',
-		) as $columna => $campo ) {
-			$out[ $columna ] = implode( ', ', array_column( $filas, $campo ) );
-		}
-		return $out;
 	}
 
 	// ─── el fichero de alta de usuarios ────────────────────────────────────
@@ -345,10 +253,7 @@ final class ApplicationExport {
 			self::WHO_PEOPLE       => 'Personas de la solicitud',
 		);
 		// El diálogo de un procedimiento sin lista de personas no la ofrece.
-		if ( $procedure_id > 0 && ! People::enabled( $procedure_id ) ) {
-			unset( $out[ self::WHO_PEOPLE ] );
-		}
-		return $out;
+		return PeopleExport::offered( $out, self::WHO_PEOPLE, $procedure_id );
 	}
 
 	/**
@@ -594,13 +499,9 @@ final class ApplicationExport {
 				}
 				return $out;
 			case self::WHO_PEOPLE:
-				$out = array();
 				// Su usuario es la parte local del correo, como quien se teclea
 				// en un formulario ({@see username()}).
-				foreach ( People::of( (int) $application->ID ) as $persona ) {
-					$out[] = self::person( self::WHO_PEOPLE, $application, 0, '', $persona['name'], $persona['surname'], $persona['email'] );
-				}
-				return $out;
+				return PeopleExport::users( (int) $application->ID );
 		}
 		return array();
 	}

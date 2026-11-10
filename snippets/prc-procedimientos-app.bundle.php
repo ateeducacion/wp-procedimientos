@@ -10366,11 +10366,180 @@ final class People {
 
 
 
+namespace Prc\PublicFront;
+
+use Prc\Domain\QuestionGrid;
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\PeopleExport', false ) ) {
+final class PeopleExport {
+
+
+
+
+
+
+	public const COLUMNS = array(
+		'person_name'    => 'Nombre (persona)',
+		'person_surname' => 'Apellidos (persona)',
+		'person_dni'     => 'DNI o NIE (persona)',
+		'person_email'   => 'Correo (persona)',
+		'person_phone'   => 'Teléfono (persona)',
+		'person_role'    => 'Papel (persona)',
+		'person_group'   => 'Grupo (persona)',
+	);
+
+
+
+
+
+
+	private const FIELDS = array(
+		'person_name'    => 'name',
+		'person_surname' => 'surname',
+		'person_dni'     => 'dni',
+		'person_email'   => 'email',
+		'person_phone'   => 'phone',
+		'person_role'    => 'role_label',
+		'person_group'   => 'group_label',
+	);
+
+
+
+
+
+
+
+
+
+	public static function all_columns( int $procedure_id ): array {
+		$preguntas = Applications::questions( $procedure_id );
+		$columns   = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		if ( ! People::enabled( $procedure_id ) ) {
+			return $columns;
+		}
+		$out = array();
+		foreach ( $columns as $clave => $rotulo ) {
+			$out[ $clave ] = $rotulo;
+			if ( 'coordinator_email' === $clave ) {
+				$out += self::COLUMNS;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function cells( ?array $spec, array $rows ): array {
+		if ( null === $spec ) {
+			return array();
+		}
+		$filas = PeopleForm::rows( $spec, $rows );
+		$out   = array();
+		foreach ( self::FIELDS as $columna => $campo ) {
+			$out[ $columna ] = implode( ', ', array_column( $filas, $campo ) );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function rows( ?array $spec, array $row, int $application_id ): array {
+		$out = array();
+		foreach ( null === $spec ? array() : People::of( $application_id ) as $persona ) {
+			$out[] = array_merge(
+				$row,
+				array_fill_keys( array( 'coordinator', 'coordinator_dni', 'coordinator_email' ), '' ),
+				self::cells( $spec, array( $persona ) )
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function spec( int $procedure_id ): ?array {
+		return People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : null;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function offered( array $items, string $key, int $procedure_id ): array {
+		if ( $procedure_id > 0 && ! People::enabled( $procedure_id ) ) {
+			unset( $items[ $key ] );
+		}
+		return $items;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function users( int $application_id ): array {
+		$out = array();
+		foreach ( People::of( $application_id ) as $persona ) {
+			$out[] = array(
+				'source'         => ApplicationExport::WHO_PEOPLE,
+				'application_id' => $application_id,
+				'user_id'        => 0,
+				'username'       => '',
+				'firstname'      => $persona['name'],
+				'lastname'       => $persona['surname'],
+				'email'          => $persona['email'],
+			);
+		}
+		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 
 namespace Prc\PublicFront;
 
 use Prc\Domain\ProcedureInput;
-use Prc\Domain\QuestionGrid;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
@@ -10442,21 +10611,6 @@ final class ApplicationExport {
 
 
 
-	private const PEOPLE_COLUMNS = array(
-		'person_name'    => 'Nombre (persona)',
-		'person_surname' => 'Apellidos (persona)',
-		'person_dni'     => 'DNI o NIE (persona)',
-		'person_email'   => 'Correo (persona)',
-		'person_phone'   => 'Teléfono (persona)',
-		'person_role'    => 'Papel (persona)',
-		'person_group'   => 'Grupo (persona)',
-	);
-
-
-
-
-
-
 	public static function register(): void {
 		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
 	}
@@ -10498,10 +10652,7 @@ final class ApplicationExport {
 			'review'       => 'Revisión',
 			'questions'    => 'Preguntas',
 		);
-		if ( $procedure_id > 0 && ! People::enabled( $procedure_id ) ) {
-			unset( $out['people'] );
-		}
-		return $out;
+		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
 
 
@@ -10515,44 +10666,16 @@ final class ApplicationExport {
 
 
 	public static function groups( int $procedure_id ): array {
-		$todas = self::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id );
 		$out   = array();
 		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
 			$fijas        += $out[ $grupo ];
 		}
-
-		if ( array() === $out['people'] ) {
-			unset( $out['people'] );
-		}
 		$out['questions'] = array_diff_key( $todas, $fijas );
-		return $out;
-	}
 
-
-
-
-
-
-
-
-
-
-	private static function all_columns( int $procedure_id ): array {
-		$preguntas = Applications::questions( $procedure_id );
-		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
-		if ( ! People::enabled( $procedure_id ) ) {
-			return $todas;
-		}
-		$out = array();
-		foreach ( $todas as $clave => $rotulo ) {
-			$out[ $clave ] = $rotulo;
-			if ( 'coordinator_email' === $clave ) {
-				$out += self::PEOPLE_COLUMNS;
-			}
-		}
-		return $out;
+		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
 
 
@@ -10563,7 +10686,7 @@ final class ApplicationExport {
 
 
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = self::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -10590,9 +10713,9 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = self::all_columns( $procedure_id );
+		$todas     = PeopleExport::all_columns( $procedure_id );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
-		$personas  = People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : null;
+		$personas  = PeopleExport::spec( $procedure_id );
 
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
 			$columnas = $todas;
@@ -10601,7 +10724,7 @@ final class ApplicationExport {
 		$filas  = array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				$fila = Applications::row( $solicitud, $preguntas ) + self::people_cells( $personas, $solicitud );
+				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas ) : array( $fila ) as $una ) {
 
 					$filas[] = array_intersect_key( $una, $claves );
@@ -10627,12 +10750,11 @@ final class ApplicationExport {
 
 
 	private static function per_person( \WP_Post $application, array $row, ?array $people = null ): array {
-		$sin_personas = null === $people ? array() : array_fill_keys( array_keys( self::PEOPLE_COLUMNS ), '' );
-		$out          = array();
+		$out = array();
 		foreach ( self::coordinators( $application ) as $persona ) {
 			$out[] = array_merge(
 				$row,
-				$sin_personas,
+				PeopleExport::cells( $people, array() ),
 				array(
 					'coordinator'       => ApplicationMetaRegistration::full_name( $persona ),
 					'coordinator_dni'   => $persona['dni'],
@@ -10640,52 +10762,8 @@ final class ApplicationExport {
 				)
 			);
 		}
-		foreach ( null === $people ? array() : People::of( (int) $application->ID ) as $persona ) {
-			$out[] = array_merge(
-				$row,
-				array_fill_keys( array( 'coordinator', 'coordinator_dni', 'coordinator_email' ), '' ),
-				self::person_cells( $people, array( $persona ) )
-			);
-		}
+		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID ) );
 		return array() === $out ? array( $row ) : $out;
-	}
-
-
-
-
-
-
-
-
-
-
-
-	private static function people_cells( ?array $people, \WP_Post $application ): array {
-		return null === $people ? array() : self::person_cells( $people, People::of( (int) $application->ID ) );
-	}
-
-
-
-
-
-
-
-
-	private static function person_cells( array $spec, array $rows ): array {
-		$filas = PeopleForm::rows( $spec, $rows );
-		$out   = array();
-		foreach ( array(
-			'person_name'    => 'name',
-			'person_surname' => 'surname',
-			'person_dni'     => 'dni',
-			'person_email'   => 'email',
-			'person_phone'   => 'phone',
-			'person_role'    => 'role_label',
-			'person_group'   => 'group_label',
-		) as $columna => $campo ) {
-			$out[ $columna ] = implode( ', ', array_column( $filas, $campo ) );
-		}
-		return $out;
 	}
 
 
@@ -10707,10 +10785,7 @@ final class ApplicationExport {
 			self::WHO_PEOPLE       => 'Personas de la solicitud',
 		);
 
-		if ( $procedure_id > 0 && ! People::enabled( $procedure_id ) ) {
-			unset( $out[ self::WHO_PEOPLE ] );
-		}
-		return $out;
+		return PeopleExport::offered( $out, self::WHO_PEOPLE, $procedure_id );
 	}
 
 
@@ -10956,13 +11031,9 @@ final class ApplicationExport {
 				}
 				return $out;
 			case self::WHO_PEOPLE:
-				$out = array();
 
 
-				foreach ( People::of( (int) $application->ID ) as $persona ) {
-					$out[] = self::person( self::WHO_PEOPLE, $application, 0, '', $persona['name'], $persona['surname'], $persona['email'] );
-				}
-				return $out;
+				return PeopleExport::users( (int) $application->ID );
 		}
 		return array();
 	}

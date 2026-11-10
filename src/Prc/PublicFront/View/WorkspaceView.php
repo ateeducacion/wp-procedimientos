@@ -9,6 +9,7 @@ namespace Prc\PublicFront\View;
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\Workspace;
 
@@ -288,7 +289,7 @@ final class WorkspaceView {
 					<tr class="prc-tabla__grupos">
 						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
 						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="3" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
+						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
 					</tr>
 					<tr>
 						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
@@ -304,6 +305,7 @@ final class WorkspaceView {
 						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
+						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -381,7 +383,38 @@ final class WorkspaceView {
 				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
 				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
 			</td>
+			<td class="prc-celda-accion" data-rotulo="Duplicar">
+				<?php self::duplicate( $row ); ?>
+			</td>
 		</tr>
+		<?php
+	}
+
+	/**
+	 * «Duplicar» de una fila: el mismo POST que el del taller.
+	 *
+	 * Cada fila que sale aquí es de un procedimiento que esta persona abre, y
+	 * la pantalla entera es de quien puede crear: puede duplicarlos todos. El
+	 * formulario va al taller del original, que es quien explica un rechazo.
+	 * El nonce va sin `id`: hay uno por fila y un `id` repetido no es HTML.
+	 *
+	 * @param array<string, mixed> $row One row of the model.
+	 * @return void
+	 */
+	private static function duplicate( array $row ): void {
+		$op = ProcedureEditor::OP_DUPLICATE;
+		?>
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
+			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar">
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
+			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
+				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+				<span class="screen-reader-text">Duplicar este procedimiento</span>
+			</button>
+		</form>
 		<?php
 	}
 

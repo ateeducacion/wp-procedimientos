@@ -56,14 +56,11 @@ final class MyCentreView {
 		ob_start();
 		?>
 		<div class="prc-mi-centro">
-			<p class="prc-ayuda-orden">
-				<strong>Pulse en las cabeceras</strong> de las columnas de la tabla <strong>para ordenarla</strong>:<br>
-				la primera vez ordenará de menor a mayor (de la A a la Z, o de la más antigua a la más reciente);<br>
-				la segunda vez, al revés.
-			</p>
+			<p class="prc-ayuda-orden">Pulse una cabecera para ordenar la tabla; otra vez, al revés.</p>
 			<?php
 			echo self::count( count( $filas ), $docente ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
 			echo self::amendment( (array) $m['amend'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
+			echo self::incomplete( (array) ( $m['incomplete'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
 			?>
 			<div class="prc-tabla-caja">
 				<table class="prc-tabla prc-tabla--densa prc-mi-tabla">
@@ -72,7 +69,7 @@ final class MyCentreView {
 						<tr>
 							<?php foreach ( (array) $m['headers'] as $clave => $columna ) : ?>
 								<?php
-								if ( $docente && 'coordinador' === (string) $clave ) {
+								if ( ( $docente && 'coordinador' === (string) $clave ) || ( empty( $m['has_people'] ) && 'personas' === (string) $clave ) ) {
 									continue; }
 								?>
 								<?php echo self::heading( (array) $columna ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
@@ -81,7 +78,7 @@ final class MyCentreView {
 					</thead>
 					<tbody>
 						<?php foreach ( $filas as $fila ) : ?>
-							<?php echo self::row( (array) $fila, $docente ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
+							<?php echo self::row( (array) $fila, $docente, ! empty( $m['has_people'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
@@ -132,6 +129,59 @@ final class MyCentreView {
 	}
 
 	/**
+	 * The notice about the lists of people still short, or nothing.
+	 *
+	 * Como el de la subsanación: el dato, y el camino a la primera.
+	 *
+	 * @param array<string, mixed> $incomplete What the model counted: `count` and the `id` of the first.
+	 * @return string
+	 */
+	private static function incomplete( array $incomplete ): string {
+		$cuantas = (int) ( $incomplete['count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$texto = 1 === $cuantas
+			? '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.'
+			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan personas en la lista.';
+		if ( '' !== (string) ( $incomplete['id'] ?? '' ) ) {
+			$texto .= ' <a href="#fila-' . esc_attr( (string) $incomplete['id'] ) . '">' . ( 1 === $cuantas ? 'Ir a la solicitud' : 'Ir a la primera' ) . '</a>';
+		}
+		return '<p class="' . esc_attr( Assets::alert_class( 'warning' ) ) . '" role="status">' . $texto . '</p>';
+	}
+
+	/**
+	 * The «Personas» cell: how many there are, how many it asks for, and the way to the list.
+	 *
+	 * @param array<string, mixed> $fila One entry of the model rows.
+	 * @return string
+	 */
+	private static function people_cell( array $fila ): string {
+		if ( empty( $fila['people'] ) ) {
+			return '<td class="prc-celda" data-rotulo="Personas">' . self::value( '' ) . '</td>';
+		}
+		$hay = (int) $fila['people_count'];
+		$min = (int) $fila['people_min'];
+		$max = (int) $fila['people_max'];
+		if ( empty( $fila['people_complete'] ) ) {
+			$faltan = $min - $hay;
+			$dato   = '<span class="' . esc_attr( Assets::state_class( 'amend' ) ) . '">' . esc_html( 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan ) ) . '</span>';
+		} else {
+			$dato = esc_html( $min > 0 ? sprintf( $min === $max ? '%1$d de %3$d' : '%1$d de %2$d a %3$d', $hay, $min, $max ) : sprintf( '%1$d, hasta %2$d', $hay, $max ) );
+		}
+		$out = $dato;
+		if ( ! empty( $fila['people_open'] ) ) {
+			$out .= ' <a class="prc-ver-solicitud" href="' . esc_url( (string) $fila['people_url'] ) . '">' . ( empty( $fila['people_complete'] ) ? 'Completar' : 'Cambiar' ) . '</a>';
+			if ( '' !== (string) ( $fila['people_until'] ?? '' ) ) {
+				$out .= '<span class="prc-nota-revision">' . esc_html( 'Hasta el ' . (string) $fila['people_until'] . ', incluido.' ) . '</span>';
+			}
+		} else {
+			$out .= '<span class="prc-nota-revision">La lista ya no se puede cambiar.</span>';
+		}
+		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
+	}
+
+	/**
 	 * One column heading: a real link, with its arrow and its `aria-sort`.
 	 *
 	 * El rótulo no va en azul: es la cabecera de la columna, no un enlace de
@@ -152,11 +202,12 @@ final class MyCentreView {
 	/**
 	 * One application, as a row.
 	 *
-	 * @param array<string, mixed> $fila One entry of the model rows.
-	 * @param bool                 $docente Whether this is the individual view.
+	 * @param array<string, mixed> $fila     One entry of the model rows.
+	 * @param bool                 $docente  Whether this is the individual view.
+	 * @param bool                 $personas Whether the table has the «Personas» column.
 	 * @return string
 	 */
-	private static function row( array $fila, bool $docente = false ): string {
+	private static function row( array $fila, bool $docente = false, bool $personas = false ): string {
 		$cargo    = (string) $fila['position'];
 		$quien    = (string) $fila['applicant'];
 		$quien    = '' !== $quien && '' !== $cargo ? $quien . ' (' . $cargo . ')' : $quien;
@@ -187,16 +238,11 @@ final class MyCentreView {
 				<?php if ( '' !== (string) $fila['url'] ) : ?>
 					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['url'] ); ?>">Ver la solicitud</a>
 				<?php endif; ?>
-				<?php if ( '' !== (string) ( $fila['people_url'] ?? '' ) ) : ?>
-					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['people_url'] ); ?>"><?php echo esc_html( sprintf( 'Personas (%d)', (int) $fila['people_count'] ) ); ?></a>
-				<?php endif; ?>
 				<?php if ( '' !== (string) ( $fila['late'] ?? '' ) ) : ?>
 					<span class="prc-nota-revision"><?php echo esc_html( (string) $fila['late'] ); ?></span>
 				<?php endif; ?>
-				<?php if ( '' !== (string) ( $fila['withdraw_url'] ?? '' ) ) : ?>
-					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['withdraw_url'] ); ?>">Retirar la solicitud</a>
-				<?php endif; ?>
 			</td>
+			<?php echo $personas ? self::people_cell( $fila ) : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
 		</tr>
 		<?php
 		return (string) ob_get_clean();

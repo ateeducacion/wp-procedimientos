@@ -412,6 +412,6 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertStringEndsWith( '#' . PeopleForm::ANCHOR, (string) $filas[ (string) $con ]['people_url'] );
 		$this->assertSame( 1, $filas[ (string) $con ]['people_count'] );
 		$this->assertSame( '', $filas[ (string) $sin ]['people_url'] );
-		$this->assertStringContainsString( 'Personas (1)', MyCentre::render() );
+		$this->assertStringContainsString( 'Falta 1 persona', MyCentre::render() );
 	}
 }

@@ -372,11 +372,10 @@ final class ProcedureMetaRegistration {
 
 	/**
 	 * The columns a consultation shows: column keys, without repeats, and
-	 * never one a consultation must not show (ADR-0043).
+	 * only those of the closed list or questions (ADR-0043).
 	 *
-	 * Solo la forma de una clave de columna —`code`, `q4`, `q4:r1`—: si existe
-	 * lo decide quien la lee, con las columnas que el procedimiento tenga ese
-	 * día.
+	 * Si la pregunta existe lo decide quien la lee, con las columnas que el
+	 * procedimiento tenga ese día.
 	 *
 	 * @param mixed $value Raw value.
 	 * @return string[]
@@ -385,7 +384,7 @@ final class ProcedureMetaRegistration {
 		$out = array();
 		foreach ( is_array( $value ) ? $value : array() as $clave ) {
 			$clave = is_string( $clave ) ? trim( $clave ) : '';
-			if ( preg_match( '/^[a-z][a-z0-9_]*(:[a-z0-9_]+)?$/', $clave ) && ! in_array( $clave, ObserverScope::FORBIDDEN_COLUMNS, true ) ) {
+			if ( ObserverScope::is_allowed( $clave ) ) {
 				$out[ $clave ] = $clave;
 			}
 		}

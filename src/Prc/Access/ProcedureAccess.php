@@ -84,6 +84,13 @@ final class ProcedureAccess {
 	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
 
 	/**
+	 * What {@see can_view_application()} asks: only if it is the user's own, or
+	 * whether one of its documents may be downloaded.
+	 */
+	public const VIEW_OWN      = 'own';
+	public const VIEW_DOCUMENT = 'document';
+
+	/**
 	 * Register filters.
 	 *
 	 * @return void
@@ -883,26 +890,45 @@ final class ProcedureAccess {
 	 * Whether the user may see this application: their school's, one they
 	 * review, or one of their zone in a procedure that admits consultation.
 	 *
-	 * Con `$documents`, si además puede descargar sus documentos: quien la
-	 * presentó y quien la revisa, siempre; quien la consulta por su zona,
-	 * solo si el procedimiento lo permite (`prc_observer_files`). Es lo que
-	 * pregunta la descarga de {@see \Prc\PublicFront\ApplicationFiles}, que
-	 * no se fía del identificador del documento (ADR-0028, ADR-0043).
+	 * `$purpose` acota la pregunta:
 	 *
-	 * @param int  $user_id        User ID.
-	 * @param int  $application_id Application ID.
-	 * @param bool $documents      Whether the question is about downloading its documents.
+	 * - {@see VIEW_OWN}: solo si es **suya** —de su centro, o su solicitud
+	 *   individual de profesorado—. Es lo que pregunta el correo que lleva la
+	 *   nota de revisión: verla por la consulta no basta.
+	 * - {@see VIEW_DOCUMENT}: si puede descargar el documento de la pregunta
+	 *   `$question_key`. Quien la presentó y quien la revisa, siempre; quien la
+	 *   consulta por su zona, solo con `prc_observer_files` y si esa pregunta
+	 *   está entre las columnas que la consulta enseña. Lo pregunta la descarga
+	 *   de {@see \Prc\PublicFront\ApplicationFiles}, que no se fía del
+	 *   identificador del documento (ADR-0028, ADR-0043).
+	 *
+	 * @param int    $user_id        User ID.
+	 * @param int    $application_id Application ID.
+	 * @param string $purpose        Empty to read it; {@see VIEW_OWN} or {@see VIEW_DOCUMENT}.
+	 * @param string $question_key   With {@see VIEW_DOCUMENT}, the question the document answers.
 	 * @return bool
 	 */
-	public static function can_view_application( int $user_id, int $application_id, bool $documents = false ): bool {
+	public static function can_view_application( int $user_id, int $application_id, string $purpose = '', string $question_key = '' ): bool {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
-		if ( self::can_review( $user_id, $application_id ) || self::is_own_application( $user_id, $application_id ) ) {
+		$propia = self::is_own_application( $user_id, $application_id );
+		if ( self::VIEW_OWN === $purpose ) {
+			return $propia;
+		}
+		if ( $propia || self::can_review( $user_id, $application_id ) ) {
 			return true;
 		}
-		return self::can_observe_application( $user_id, $application_id )
-			&& ( ! $documents || (bool) get_post_meta( self::root_id( $application_id ), ProcedureMetaKeys::OBSERVER_FILES, true ) );
+		if ( ! self::can_observe_application( $user_id, $application_id ) ) {
+			return false;
+		}
+		if ( self::VIEW_DOCUMENT !== $purpose ) {
+			return true;
+		}
+		$raiz = self::root_id( $application_id );
+		return '' !== $question_key
+			&& (bool) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_FILES, true )
+			&& in_array( $question_key, (array) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), true );
 	}
 
 	/**

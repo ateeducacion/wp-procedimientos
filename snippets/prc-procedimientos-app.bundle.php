@@ -210,6 +210,7 @@ final class ProcedureMetaKeys {
 
 
 
+
 	public const OBSERVER_COLUMNS = 'prc_observer_columns';
 
 
@@ -5308,7 +5309,33 @@ final class ObserverScope {
 
 
 
-	public const FORBIDDEN_COLUMNS = array( 'coordinator_dni', 'person_dni', 'note' );
+
+
+
+	public const ALLOWED_COLUMNS = array(
+		'date',
+		'centre',
+		'code',
+		'island',
+		'municipality',
+		'centre_type',
+		'ownership',
+		'zone',
+		'zone_code',
+		'applicant',
+		'email',
+		'position',
+		'coordinator',
+		'coordinator_email',
+		'person_name',
+		'person_surname',
+		'person_email',
+		'person_phone',
+		'person_role',
+		'person_group',
+		'state',
+		'score',
+	);
 
 
 
@@ -5378,20 +5405,37 @@ final class ObserverScope {
 		if ( '' === $zona || '' === $meta ) {
 			return array();
 		}
-		$candidatos = get_users(
+
+
+		$ids = get_users(
 			array(
 				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
-				'fields'       => 'all_with_meta',
+				'fields'       => 'ID',
 				'meta_key'     => $meta,
 				'meta_compare' => 'EXISTS',
 			)
 		);
-		$out        = array();
-		foreach ( (array) $candidatos as $user ) {
-			if ( $user instanceof \WP_User && in_array( $zona, self::zones_for( (int) $user->ID ), true ) ) {
-				$out[] = (int) $user->ID;
+		$ids = array_map( 'intval', (array) $ids );
+		if ( array() === $ids ) {
+			return array();
+		}
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ')',
+				array_merge( array( $meta ), $ids )
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
+				$out[ (int) $fila->user_id ] = (int) $fila->user_id;
 			}
 		}
+		$out = array_values( $out );
 		return $out;
 	}
 
@@ -5447,16 +5491,33 @@ final class ObserverScope {
 
 
 
+
+	public static function is_allowed( string $column ): bool {
+		return in_array( $column, self::ALLOWED_COLUMNS, true ) || (bool) preg_match( '/^q[1-9][0-9]*(:r[1-9][0-9]*)?$/', $column );
+	}
+
+
+
+
+
+
+
 	public static function allowed( array $groups ): array {
 		$out = array();
 		foreach ( $groups as $grupo => $columnas ) {
-			$quedan = array_diff_key( (array) $columnas, array_flip( self::FORBIDDEN_COLUMNS ) );
+			$quedan = array();
+			foreach ( (array) $columnas as $clave => $rotulo ) {
+				if ( self::is_allowed( (string) $clave ) ) {
+					$quedan[ (string) $clave ] = $rotulo;
+				}
+			}
 			if ( array() !== $quedan ) {
 				$out[ (string) $grupo ] = $quedan;
 			}
 		}
 		return $out;
 	}
+
 
 
 
@@ -5570,6 +5631,13 @@ final class ProcedureAccess {
 
 
 	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
+
+
+
+
+
+	public const VIEW_OWN      = 'own';
+	public const VIEW_DOCUMENT = 'document';
 
 
 
@@ -6382,15 +6450,34 @@ final class ProcedureAccess {
 
 
 
-	public static function can_view_application( int $user_id, int $application_id, bool $documents = false ): bool {
+
+
+
+
+
+
+
+	public static function can_view_application( int $user_id, int $application_id, string $purpose = '', string $question_key = '' ): bool {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
-		if ( self::can_review( $user_id, $application_id ) || self::is_own_application( $user_id, $application_id ) ) {
+		$propia = self::is_own_application( $user_id, $application_id );
+		if ( self::VIEW_OWN === $purpose ) {
+			return $propia;
+		}
+		if ( $propia || self::can_review( $user_id, $application_id ) ) {
 			return true;
 		}
-		return self::can_observe_application( $user_id, $application_id )
-			&& ( ! $documents || (bool) get_post_meta( self::root_id( $application_id ), ProcedureMetaKeys::OBSERVER_FILES, true ) );
+		if ( ! self::can_observe_application( $user_id, $application_id ) ) {
+			return false;
+		}
+		if ( self::VIEW_DOCUMENT !== $purpose ) {
+			return true;
+		}
+		$raiz = self::root_id( $application_id );
+		return '' !== $question_key
+			&& (bool) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_FILES, true )
+			&& in_array( $question_key, (array) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), true );
 	}
 
 
@@ -7143,12 +7230,11 @@ final class ProcedureMetaRegistration {
 
 
 
-
 	public static function sanitize_observer_columns( $value ): array {
 		$out = array();
 		foreach ( is_array( $value ) ? $value : array() as $clave ) {
 			$clave = is_string( $clave ) ? trim( $clave ) : '';
-			if ( preg_match( '/^[a-z][a-z0-9_]*(:[a-z0-9_]+)?$/', $clave ) && ! in_array( $clave, ObserverScope::FORBIDDEN_COLUMNS, true ) ) {
+			if ( ObserverScope::is_allowed( $clave ) ) {
 				$out[ $clave ] = $clave;
 			}
 		}
@@ -11722,6 +11808,7 @@ final class ApplicationFiles {
 
 
 
+
 	public static function handle(): void {
 
 		$file_id = isset( $_GET[ self::ARG_FILE ] ) ? sanitize_text_field( wp_unslash( $_GET[ self::ARG_FILE ] ) ) : '';
@@ -11733,7 +11820,7 @@ final class ApplicationFiles {
 
 		if ( $application_id <= 0
 			|| ApplicationPostType::POST_TYPE !== (string) get_post_type( $application_id )
-			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id, true ) ) {
+			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id, ProcedureAccess::VIEW_DOCUMENT, self::question_of( $application_id, $file_id ) ) ) {
 			self::deny();
 			return;
 		}
@@ -11750,6 +11837,25 @@ final class ApplicationFiles {
 		}
 		echo $bytes;
 		Shell::leave();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function question_of( int $application_id, string $file_id ): string {
+		foreach ( self::descriptors( $application_id ) as $question_key => $descriptor ) {
+			if ( hash_equals( (string) $descriptor['id'], $file_id ) ) {
+				return (string) $question_key;
+			}
+		}
+		return '';
 	}
 
 

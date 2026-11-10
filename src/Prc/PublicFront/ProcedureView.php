@@ -607,18 +607,26 @@ final class ProcedureView {
 	 * procedimiento sin titularidad guardada se dirige a todos, como dice
 	 * {@see ProcedureAccess::can_apply()}.
 	 *
+	 * Solo para CER, el texto lleva también los acotados que les aplican —el
+	 * tipo, la isla y la lista cerrada—; la titularidad no, como en
+	 * `ProcedureAccess::why_not_code()`. Es también la pastilla de «Mis
+	 * procedimientos» y de la cabecera del taller, para que digan lo mismo.
+	 *
 	 * @param int    $post_id  Procedure.
 	 * @param string $audience One of ProcedureMetaKeys::audiences().
 	 * @return string
 	 */
-	private static function who_can_apply( int $post_id, string $audience ): string {
+	public static function who_can_apply( int $post_id, string $audience ): string {
 		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience ) {
 			return 'Profesorado: cada docente con su cuenta';
 		}
-		if ( ! in_array( ProcedureMetaKeys::KIND_SCHOOL, ProcedureAccess::centre_kinds( $post_id ), true ) ) {
-			return 'Agrupaciones de escuelas rurales (CER), como colectivo';
+		$rules = ProcedureAccess::eligibility( $post_id );
+		if ( in_array( ProcedureMetaKeys::KIND_SCHOOL, ProcedureAccess::centre_kinds( $post_id ), true ) ) {
+			return CentreEligibility::describe( $rules );
 		}
-		return CentreEligibility::describe( ProcedureAccess::eligibility( $post_id ) );
+		$cer                = 'Agrupaciones de escuelas rurales (CER), como colectivo';
+		$rules['ownership'] = array();
+		return CentreEligibility::restricted( $rules ) ? $cer . ': ' . lcfirst( CentreEligibility::describe( $rules ) ) : $cer;
 	}
 
 	/**

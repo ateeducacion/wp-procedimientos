@@ -201,7 +201,7 @@ Todo puro, en `src/Prc/Domain/`, sin capa nueva: `ProcedureQuestions` sigue
 siendo la entrada (`sanitize()`, `validate_answers()`, `as_text()`) y se
 apoya en tres clases `final` con métodos `static`, para que ninguna pase del
 umbral de complejidad de PHPMD (`phpmd.xml`): `QuestionGrid` (filas, claves,
-columnas), `QuestionPoints` (puntos y puntuación) y `QuestionChanges` (subir,
+columnas de la exportación), `QuestionPoints` (opciones, puntos y puntuación) y `QuestionChanges` (subir,
 bajar y qué cambios se rechazan). La pantalla de solicitud pinta los tres
 tipos nuevos en `View/MeasuredQuestionView`.
 

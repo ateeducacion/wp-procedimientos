@@ -232,8 +232,10 @@ copia de todo `procedure_created` y `application_received`). Con
   (`int[]`, uno por opción). Respuestas: `number` entero o `''`; `date`
   `'Y-m-d'` o `''`; `grid` `{ r1: 3, r2: '' }`.
 - `QuestionGrid::match_rows( string $text, array $previous ): array`,
-  `::columns( array $question ): array` (`q4:r1` => «Pregunta — Fila») y
-  `::cells( array $question, $answer ): array`.
+  `::columns( array $question ): array` (`q4:r1` => «Pregunta — Fila»),
+  `::cells( array $question, $answer ): array` y
+  `::expand( array $columns, array $questions ): array`, que abre cada
+  rejilla de `Applications::columns()` en sus filas para la exportación.
 - `QuestionPoints::score( array $questions, array $answers ): ?int` —
   `null` sin puntos; `::has_points()`, `::lines()`.
 - `QuestionChanges::move( array $questions, string $key, string $direction ): array`

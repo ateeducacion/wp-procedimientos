@@ -639,27 +639,40 @@ final class ProcedureEditor {
 	 */
 	private static function save_questions( int $procedure_id ): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- el nonce lo comprobó handle(); son listas y cada elemento se sanea en el bucle de abajo.
-		$claves    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
-		$rotulos   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
-		$ayudas    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
-		$tipos     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
-		$opciones  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
-		$obligadas = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
+		$rotulos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
+		$ayudas     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
+		$tipos      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
+		$opciones   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
+		$obligadas  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
+		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
+		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		$crudas = array();
 		foreach ( $rotulos as $i => $rotulo ) {
 			$crudas[] = array(
-				'key'      => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
-				'label'    => sanitize_text_field( (string) $rotulo ),
-				'help'     => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
-				'type'     => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
-				'choices'  => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
-				'required' => ! empty( $obligadas[ $i ] ),
+				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'label'     => sanitize_text_field( (string) $rotulo ),
+				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
+				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
+				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
+				'required'  => ! empty( $obligadas[ $i ] ),
+				'delivery'  => ! empty( $deliveries[ $i ] ),
+				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
+				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
 			);
 		}
 
-		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( ProcedureQuestions::sanitize( $crudas ) ) );
+		$questions = ProcedureQuestions::sanitize( $crudas );
+		foreach ( $questions as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
+				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
+				return;
+			}
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
 	}
 

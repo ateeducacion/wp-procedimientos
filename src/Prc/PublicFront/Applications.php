@@ -194,7 +194,7 @@ final class Applications {
 		return array(
 			'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
-			'questions'            => self::questions( $procedure_id ),
+			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
 	}
 

@@ -10,6 +10,7 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -60,6 +61,9 @@ final class ApplyForm {
 
 	public const OP_APPLY = 'apply';
 
+	public const OP_DELIVER     = 'deliver';
+	public const FIELD_DELIVERY = 'prc_delivery';
+
 	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
 	public const FIELD_CENTRE      = 'prc_apply_centre';
 	public const FIELD_POSITION    = 'prc_position';
@@ -79,6 +83,7 @@ final class ApplyForm {
 	private const DONE = array(
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
+		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
 	);
 
 	/**
@@ -186,10 +191,10 @@ final class ApplyForm {
 	 */
 	public static function handle(): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- se comprueba justo debajo.
-		$op    = sanitize_key( wp_unslash( (string) ( $_POST[ self::FIELD_OP ] ?? '' ) ) );
-		$nonce = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::NONCE_FIELD ] ?? '' ) ) );
+		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
-		if ( self::OP_APPLY !== $op || ! is_user_logged_in() ) {
+		if ( ! in_array( $op, array( self::OP_APPLY, self::OP_DELIVER ), true ) || ! is_user_logged_in() ) {
 			return;
 		}
 		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
@@ -204,6 +209,10 @@ final class ApplyForm {
 		// Un código que no llega se elige como en la pantalla; uno que llega
 		// tiene que ser de la cuenta y admitido, o no se guarda nada.
 		$pedido = self::field( self::FIELD_CENTRE );
+		if ( self::OP_DELIVER === $op ) {
+			self::deliver( $procedure_id, $user_id, $pedido );
+			return;
+		}
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $pedido ) ) {
 			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
@@ -293,8 +302,12 @@ final class ApplyForm {
 	 * @return string
 	 */
 	private static function field( string $nombre ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
-		return trim( sanitize_text_field( wp_unslash( (string) ( $_POST[ $nombre ] ?? '' ) ) ) );
+		if ( ! isset( $_POST[ self::NONCE_FIELD ] ) || ! is_string( $_POST[ self::NONCE_FIELD ] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION ) ) {
+			return '';
+		}
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] )
+			? trim( sanitize_text_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
 	}
 
 	/**
@@ -367,6 +380,7 @@ final class ApplyForm {
 			'application'     => array(),
 			'max_file_size'   => ApplicationFiles::max_bytes(),
 			'file_mimes'      => ApplicationFiles::mimes(),
+			'deliveries'      => array(),
 			'can_submit'      => false,
 			'why'             => '',
 			'spec'            => array(
@@ -445,6 +459,13 @@ final class ApplyForm {
 			);
 		}
 
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) ) {
+				$question['can_submit'] = ProcedureAccess::can_deliver( $user_id, (int) $existente, $question );
+				$m['deliveries'][]      = $question;
+			}
+		}
+
 		// Primero quién, luego cuándo: la titularidad cierra la puerta aunque el
 		// plazo esté abierto, y se dice.
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
@@ -465,6 +486,36 @@ final class ApplyForm {
 			);
 
 		return $m;
+	}
+
+	/**
+	 * Store one delivery without changing the application or its review.
+	 *
+	 * @param int    $procedure_id Procedure ID.
+	 * @param int    $user_id Current user.
+	 * @param string $code One of the account's centre codes.
+	 * @return void
+	 */
+	private static function deliver( int $procedure_id, int $user_id, string $code ): void {
+		$key = self::field( self::FIELD_DELIVERY );
+		$id  = Applications::find( $procedure_id, $code );
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( $key !== $question['key'] || ! ProcedureAccess::can_deliver( $user_id, (int) $id, $question ) ) {
+				continue;
+			}
+			$question['required'] = true;
+			$files                = ApplicationFiles::submitted( array( $question ) );
+			if ( ! $files['ok'] ) {
+				self::$rejected = ApplicationFiles::why( $files['errors'] );
+				return;
+			}
+			if ( ! ApplicationFiles::store_all( (int) $id, $files['files'] ) ) {
+				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
+				return;
+			}
+			Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => 'entregado' ) ) );
+		}
+		self::$rejected = 'No puede entregar este documento: compruebe el centro, su solicitud y el plazo de entrega.';
 	}
 
 	/**

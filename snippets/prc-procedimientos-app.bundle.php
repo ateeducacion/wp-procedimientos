@@ -892,6 +892,7 @@ final class ProcedureQuestions {
 
 
 
+
 	public const TYPE_FILE = 'file';
 
 
@@ -989,13 +990,71 @@ final class ProcedureQuestions {
 		}
 		$key = isset( $raw['key'] ) && is_scalar( $raw['key'] ) ? strtolower( trim( (string) $raw['key'] ) ) : '';
 
-		return array(
+		$question = array(
 			'key'      => self::is_key( $key ) ? $key : '',
 			'label'    => self::text( $raw, 'label' ),
 			'help'     => self::text( $raw, 'help' ),
 			'type'     => $type,
 			'required' => ! empty( $raw['required'] ),
 			'choices'  => self::has_choices( $type ) ? self::choices( $raw['choices'] ?? array() ) : array(),
+		);
+		if ( self::TYPE_FILE === $type && ! empty( $raw['delivery'] ) ) {
+			$question['delivery']  = true;
+			$question['opens_at']  = self::text( $raw, 'opens_at' );
+			$question['closes_at'] = self::text( $raw, 'closes_at' );
+		}
+		return $question;
+	}
+
+
+
+
+
+
+
+	public static function is_delivery( array $question ): bool {
+		return self::TYPE_FILE === ( $question['type'] ?? '' ) && ! empty( $question['delivery'] );
+	}
+
+
+
+
+
+
+
+	public static function valid_delivery( array $question ): bool {
+		$opens  = self::text( $question, 'opens_at' );
+		$closes = self::text( $question, 'closes_at' );
+		return self::is_delivery( $question ) && ProcedureInput::is_valid_date( $opens )
+			&& ProcedureInput::is_valid_date( $closes ) && $opens <= $closes;
+	}
+
+
+
+
+
+
+
+
+	public static function delivery_is_open( array $question, string $today ): bool {
+		return self::valid_delivery( $question ) && ProcedureInput::is_valid_date( $today )
+			&& $question['opens_at'] <= $today && $today <= $question['closes_at'];
+	}
+
+
+
+
+
+
+
+	public static function application_questions( array $questions ): array {
+		return array_values(
+			array_filter(
+				$questions,
+				static function ( array $question ): bool {
+					return ! self::is_delivery( $question );
+				}
+			)
 		);
 	}
 
@@ -2522,6 +2581,7 @@ namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -3219,6 +3279,30 @@ final class ProcedureAccess {
 		}
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
+	}
+
+
+
+
+
+
+
+
+
+	public static function can_deliver( int $user_id, int $application_id, array $question ): bool {
+		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) ) {
+			return false;
+		}
+		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ! isset( CentreScope::codes_for( $user_id )[ $code ] )
+			|| 'publish' !== get_post_status( $application_id )
+			|| ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id )
+			|| 'publish' !== get_post_status( $procedure_id ) || self::is_archived( $procedure_id ) ) {
+			return false;
+		}
+		return ApplicationMetaKeys::REVIEW_EXCLUDED !== get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
+			&& ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() );
 	}
 
 
@@ -6478,7 +6562,7 @@ final class Applications {
 		return array(
 			'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
-			'questions'            => self::questions( $procedure_id ),
+			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
 	}
 
@@ -8272,6 +8356,7 @@ final class Home {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\DateRange;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
 
@@ -8393,6 +8478,17 @@ final class ProcedureChrome {
 			echo self::access( $m ); 
 			?>
 
+			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
+				<section class="prc-seccion" aria-labelledby="prc-delivery-dates">
+					<h2 id="prc-delivery-dates">Entregas de documentación</h2>
+					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Mi centro», dentro de cada plazo.</p>
+					<ul>
+						<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+							<li><strong><?php echo esc_html( (string) $delivery['label'] ); ?></strong>: <?php echo esc_html( DateRange::of( (string) $delivery['opens_at'], (string) $delivery['closes_at'] ) ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</section>
+			<?php endif; ?>
 			<hr class="prc-filete" />
 			<div class="prc-ficha-pie">
 				<p class="prc-ficha-meta">
@@ -8987,6 +9083,7 @@ final class ProcedureView {
 				'contact_emails'       => $correos,
 				'contact_email'        => (string) ( $correos[0] ?? '' ),
 				'header_color'         => ProcedureMetaKeys::header_hex( $meta[ ProcedureMetaKeys::HEADER_COLOR ] ),
+				'deliveries'           => array_values( array_filter( Applications::questions( $post_id ), array( \Prc\Domain\ProcedureQuestions::class, 'is_delivery' ) ) ),
 				'links'                => self::links( $meta ),
 				'resolution_url'       => trim( (string) $meta[ ProcedureMetaKeys::RESOLUTION_URL ] ),
 				'image'                => $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'large' ) : '',
@@ -9029,6 +9126,7 @@ final class ProcedureView {
 			'contact_emails'       => array(),
 			'contact_email'        => '',
 			'header_color'         => ProcedureMetaKeys::header_hex( '' ),
+			'deliveries'           => array(),
 			'links'                => array(),
 			'resolution_url'       => '',
 			'image'                => '',
@@ -11215,6 +11313,22 @@ final class ProcedureEditorView {
 				<p class="prc-campo__ayuda">Solo para «Una opción» y «Varias opciones».</p>
 			</div>
 			<div class="prc-campo prc-opcion">
+				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
+				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
+				<p class="prc-campo__ayuda" id="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p>
+			</div>
+			<?php
+			foreach ( array(
+				'opens_at'  => 'Apertura de la entrega',
+				'closes_at' => 'Cierre de la entrega (inclusive)',
+			) as $date_key => $date_label ) :
+				?>
+				<div class="prc-campo">
+					<label for="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>"><?php echo esc_html( $date_label ); ?></label>
+					<input class="prc-control" type="date" id="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $date_key ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) ( $p[ $date_key ] ?? '' ) ); ?>" aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
 				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatoria</label>
@@ -12210,27 +12324,40 @@ final class ProcedureEditor {
 
 	private static function save_questions( int $procedure_id ): void {
 
-		$claves    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
-		$rotulos   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
-		$ayudas    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
-		$tipos     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
-		$opciones  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
-		$obligadas = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
+		$rotulos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
+		$ayudas     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
+		$tipos      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
+		$opciones   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
+		$obligadas  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
+		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
+		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
 
 
 		$crudas = array();
 		foreach ( $rotulos as $i => $rotulo ) {
 			$crudas[] = array(
-				'key'      => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
-				'label'    => sanitize_text_field( (string) $rotulo ),
-				'help'     => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
-				'type'     => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
-				'choices'  => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
-				'required' => ! empty( $obligadas[ $i ] ),
+				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'label'     => sanitize_text_field( (string) $rotulo ),
+				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
+				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
+				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
+				'required'  => ! empty( $obligadas[ $i ] ),
+				'delivery'  => ! empty( $deliveries[ $i ] ),
+				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
+				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
 			);
 		}
 
-		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( ProcedureQuestions::sanitize( $crudas ) ) );
+		$questions = ProcedureQuestions::sanitize( $crudas );
+		foreach ( $questions as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
+				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
+				return;
+			}
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
 	}
 
@@ -12951,7 +13078,46 @@ final class ApplyFormView {
 			echo Shell::notice( 'aviso', (string) $m['why'] ); 
 			echo self::summary( $m ); 
 		}
+		self::deliveries( $m );
 		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+	private static function deliveries( array $m ): void {
+		foreach ( (array) ( $m['deliveries'] ?? array() ) as $question ) {
+			$key   = (string) $question['key'];
+			$dates = DateRange::of( (string) $question['opens_at'], (string) $question['closes_at'] );
+			?>
+			<section class="prc-seccion">
+				<h3 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h3>
+				<p><?php echo esc_html( '' !== $dates ? 'Plazo de entrega: ' . lcfirst( $dates ) . '.' : 'Plazo de entrega pendiente de configurar.' ); ?></p>
+				<p>Documento presentado: <?php echo wp_kses_post( self::attached( (array) $m['application'], $key ) ); ?></p>
+				<?php if ( ! empty( $question['can_submit'] ) ) : ?>
+					<form class="prc-form" method="post" action="<?php echo esc_url( ApplyForm::url_for_code( (int) $m['procedure_id'], (string) $m['centre']['code'] ) ); ?>" enctype="multipart/form-data">
+						<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_DELIVER ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $m['procedure_id'] ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $m['centre']['code'] ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_DELIVERY ); ?>" value="<?php echo esc_attr( $key ); ?>" />
+						<?php
+						$question['required'] = true;
+
+						echo self::question( $question, array() );
+						?>
+						<p>Si ya entregó un documento, esta entrega lo sustituirá. La solicitud y su revisión se conservan.</p>
+						<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>">Entregar documento</button>
+					</form>
+				<?php else : ?>
+					<p>No se admiten entregas: hace falta una solicitud de su centro no excluida, un plazo abierto y un procedimiento publicado sin archivar.</p>
+				<?php endif; ?>
+			</section>
+			<?php
+		}
 	}
 
 
@@ -13497,6 +13663,7 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -13548,6 +13715,9 @@ final class ApplyForm {
 
 	public const OP_APPLY = 'apply';
 
+	public const OP_DELIVER     = 'deliver';
+	public const FIELD_DELIVERY = 'prc_delivery';
+
 	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
 	public const FIELD_CENTRE      = 'prc_apply_centre';
 	public const FIELD_POSITION    = 'prc_position';
@@ -13567,6 +13737,7 @@ final class ApplyForm {
 	private const DONE = array(
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
+		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
 	);
 
 
@@ -13674,10 +13845,10 @@ final class ApplyForm {
 
 	public static function handle(): void {
 
-		$op    = sanitize_key( wp_unslash( (string) ( $_POST[ self::FIELD_OP ] ?? '' ) ) );
-		$nonce = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::NONCE_FIELD ] ?? '' ) ) );
+		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
 
-		if ( self::OP_APPLY !== $op || ! is_user_logged_in() ) {
+		if ( ! in_array( $op, array( self::OP_APPLY, self::OP_DELIVER ), true ) || ! is_user_logged_in() ) {
 			return;
 		}
 		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
@@ -13692,6 +13863,10 @@ final class ApplyForm {
 
 
 		$pedido = self::field( self::FIELD_CENTRE );
+		if ( self::OP_DELIVER === $op ) {
+			self::deliver( $procedure_id, $user_id, $pedido );
+			return;
+		}
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $pedido ) ) {
 			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
@@ -13781,8 +13956,12 @@ final class ApplyForm {
 
 
 	private static function field( string $nombre ): string {
-
-		return trim( sanitize_text_field( wp_unslash( (string) ( $_POST[ $nombre ] ?? '' ) ) ) );
+		if ( ! isset( $_POST[ self::NONCE_FIELD ] ) || ! is_string( $_POST[ self::NONCE_FIELD ] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION ) ) {
+			return '';
+		}
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] )
+			? trim( sanitize_text_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
 	}
 
 
@@ -13855,6 +14034,7 @@ final class ApplyForm {
 			'application'     => array(),
 			'max_file_size'   => ApplicationFiles::max_bytes(),
 			'file_mimes'      => ApplicationFiles::mimes(),
+			'deliveries'      => array(),
 			'can_submit'      => false,
 			'why'             => '',
 			'spec'            => array(
@@ -13933,6 +14113,13 @@ final class ApplyForm {
 			);
 		}
 
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) ) {
+				$question['can_submit'] = ProcedureAccess::can_deliver( $user_id, (int) $existente, $question );
+				$m['deliveries'][]      = $question;
+			}
+		}
+
 
 
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
@@ -13953,6 +14140,36 @@ final class ApplyForm {
 			);
 
 		return $m;
+	}
+
+
+
+
+
+
+
+
+
+	private static function deliver( int $procedure_id, int $user_id, string $code ): void {
+		$key = self::field( self::FIELD_DELIVERY );
+		$id  = Applications::find( $procedure_id, $code );
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( $key !== $question['key'] || ! ProcedureAccess::can_deliver( $user_id, (int) $id, $question ) ) {
+				continue;
+			}
+			$question['required'] = true;
+			$files                = ApplicationFiles::submitted( array( $question ) );
+			if ( ! $files['ok'] ) {
+				self::$rejected = ApplicationFiles::why( $files['errors'] );
+				return;
+			}
+			if ( ! ApplicationFiles::store_all( (int) $id, $files['files'] ) ) {
+				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
+				return;
+			}
+			Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => 'entregado' ) ) );
+		}
+		self::$rejected = 'No puede entregar este documento: compruebe el centro, su solicitud y el plazo de entrega.';
 	}
 
 

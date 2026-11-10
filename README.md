@@ -303,3 +303,16 @@ empiece a medir, y lo que hace se comprueba en `test-load-order.php`—.
 - `docs/adr/registro.md` — índice de decisiones
 - `docs/sdd/registro.md` — índice de diseño
 - [`AGENTS.md`](AGENTS.md) — instrucciones para agentes de código y convenciones
+
+## Entregas con plazo propio
+
+En «Preguntas», una pregunta de tipo «Archivo» puede marcarse como entrega con
+plazo propio, con apertura y cierre inclusivos. Se configura antes de cerrar la
+inscripción, mientras ese panel siga editable. El centro presenta primero su
+solicitud y después entrega cada documento desde «Mi centro», incluso si el
+procedimiento ya está resuelto. La entrega conserva la solicitud y su revisión.
+
+No se permite entregar a solicitudes excluidas ni a procedimientos archivados.
+El documento sigue siendo privado; una nueva entrega sustituye al anterior.
+Para probarlo en local: entre como `direccion`, abra «Escuelas Promotoras de Salud»
+en «Mi centro» y entregue su «Memoria final». Véase ADR-0033.

@@ -140,6 +140,9 @@ src/Prc/
 ├── PublicFront/ApplicationActionsPanel.php Retirar, restaurar, prórroga y en nombre de un centro desde el panel; su modelo
 ├── PublicFront/View/HomeView.php           Pinta la portada
 ├── PublicFront/Home.php                    [prc_home]
+├── PublicFront/HelpContent.php             El texto de la ayuda: dos guías y las preguntas frecuentes, como datos
+├── PublicFront/View/HelpView.php           Pinta la ayuda
+├── PublicFront/Help.php                    [prc_help] y Help::url() para enlazar a un apartado (ADR-0045)
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública
 ├── PublicFront/ProcedureView.php           El single de prc_procedure
 ├── PublicFront/View/WorkspaceView.php      Pinta «Mis procedimientos»

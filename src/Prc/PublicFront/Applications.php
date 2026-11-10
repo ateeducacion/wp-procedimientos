@@ -392,7 +392,7 @@ final class Applications {
 		);
 		// El formulario ya no pide la coordinación cuando está en la lista: la
 		// que una solicitud de antes guardó ahí se queda como estaba.
-		if ( self::spec( $procedure_id )['coordinators_in_list'] ) {
+		if ( array() === (array) $data['coordinator'] && self::spec( $procedure_id )['coordinators_in_list'] ) {
 			unset( $metas[ ApplicationMetaKeys::COORDINATOR ] );
 		}
 		foreach ( $metas as $clave => $valor ) {

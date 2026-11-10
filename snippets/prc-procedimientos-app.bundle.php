@@ -12001,7 +12001,7 @@ final class Applications {
 		);
 
 
-		if ( self::spec( $procedure_id )['coordinators_in_list'] ) {
+		if ( array() === (array) $data['coordinator'] && self::spec( $procedure_id )['coordinators_in_list'] ) {
 			unset( $metas[ ApplicationMetaKeys::COORDINATOR ] );
 		}
 		foreach ( $metas as $clave => $valor ) {
@@ -26283,11 +26283,167 @@ final class PeopleView {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ApplicationProgressView', false ) ) {
+final class ApplicationProgressView {
+
+
+
+
+
+
+
+	public static function steps( array $p ): string {
+		$pasos = (array) ( $p['steps'] ?? array() );
+		if ( array() === $pasos ) {
+			return '';
+		}
+		$actual = false;
+		$out    = '<nav class="prc-pasos-caja" aria-label="Pasos de la solicitud"><ol class="prc-pasos">';
+		foreach ( $pasos as $paso ) {
+			$hecho  = ! empty( $paso['done'] );
+			$marca  = ! $hecho && ! $actual;
+			$actual = $actual || $marca;
+			$out   .= '<li class="prc-paso prc-paso--' . ( $hecho ? 'hecho' : 'falta' ) . '"' . ( $marca ? ' aria-current="step"' : '' ) . '>'
+				. '<a href="' . esc_url( '#' . (string) $paso['anchor'] ) . '">' . esc_html( (string) $paso['label'] ) . '</a> '
+				. '<span class="prc-paso__estado">' . esc_html( $hecho ? 'Hecho' : 'Falta' ) . '</span></li>';
+		}
+		return $out . '</ol></nav>';
+	}
+
+
+
+
+
+
+
+	public static function notice( array $flash ): string {
+		$texto = (string) ( $flash['texto'] ?? '' );
+		$link  = (string) ( $flash['link'] ?? '' );
+		if ( '' === $texto || '' === $link ) {
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+		}
+		$tonos = array(
+			'ok'    => 'success',
+			'aviso' => 'warning',
+			'error' => 'danger',
+		);
+		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
+	}
+
+
+
+
+
+
+
+	public static function status( array $p ): string {
+		$out = '<span class="prc-solicitud-estado__fecha">' . esc_html( 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.' ) . '</span>';
+		if ( ! empty( $p['show_complete'] ) ) {
+			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
+		}
+		$enlaces = array();
+		if ( ! empty( $p['people_missing'] ) ) {
+			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de personas</a>';
+		}
+		if ( '' !== (string) ( $p['receipt_url'] ?? '' ) ) {
+			$enlaces[] = '<a href="' . esc_url( (string) $p['receipt_url'] ) . '">Ver e imprimir el justificante</a>';
+		}
+		if ( array() !== $enlaces ) {
+			$out .= '<span class="prc-solicitud-estado__enlace">' . implode( ' · ', $enlaces ) . '</span>';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function completeness( array $p ): string {
+		$falta = (array) ( $p['missing'] ?? array() );
+		return array() === $falta ? 'Completa: no le falta nada.' : 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function receipt( array $m ): string {
+		$p       = (array) $m['progress'];
+		$s       = (array) $m['application'];
+		$centro  = (array) $m['centre'];
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
+		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
+		$datos   = array(
+			'N.º de solicitud'    => (string) (int) $p['application'],
+			'Procedimiento'       => (string) $m['title'],
+			'Centro'              => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Presentada'          => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
+			'Última modificación' => (string) $p['modified'],
+			'Estado de revisión'  => (string) ( $s['state_label'] ?? '' ),
+			'Estado'              => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+		);
+
+		ob_start();
+		?>
+		<div class="prc-justificante">
+			<p class="prc-sub prc-no-imprimir"><a href="<?php echo esc_url( (string) $p['apply_url'] ); ?>">&larr; Volver a la solicitud</a></p>
+			<h1 class="prc-h1">Justificante de presentación</h1>
+			<dl class="prc-respuestas prc-justificante__datos">
+				<?php foreach ( $datos as $rotulo => $valor ) : ?>
+					<?php if ( '' !== $valor ) : ?>
+						<dt><?php echo esc_html( $rotulo ); ?></dt>
+						<dd><?php echo esc_html( $valor ); ?></dd>
+					<?php endif; ?>
+				<?php endforeach; ?>
+			</dl>
+			<?php echo ApplyFormView::summary( $m );?>
+			<?php echo PeopleView::review( (array) ( $m['people'] ?? array() ) );?>
+			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
+		</div>
+		<?php
+		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
@@ -26359,15 +26515,19 @@ final class ApplyFormView {
 			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::next_steps( $m ) . self::mine_link( $m ) );
 		}
 
-		$flash = (array) $m['flash'];
+		$progreso = (array) ( $m['progress'] ?? array() );
+		if ( ! empty( $progreso['receipt'] ) ) {
+			return ApplicationProgressView::receipt( $m );
+		}
 
 		ob_start();
 		echo self::head( $m );
-		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) );
 		echo self::choices( $m );
 		echo self::status_card( $m );
 
 		echo Shell::notice( 'info', (string) ( $m['withdraw']['late'] ?? '' ) );
+		echo ApplicationProgressView::steps( $progreso );
 
 		if ( true === $m['can_submit'] ) {
 			echo self::form( $m );
@@ -26376,10 +26536,15 @@ final class ApplyFormView {
 			echo array() === (array) $m['application'] ? self::next_steps( $m ) : '';
 			echo self::summary( $m );
 		}
-		self::deliveries( $m );
+
 
 
 		echo PeopleView::section( (array) ( $m['people'] ?? array() ) );
+		if ( array() !== (array) ( $m['deliveries'] ?? array() ) ) {
+			echo '<div id="' . esc_attr( ApplicationProgress::ANCHOR_DELIVERIES ) . '">';
+			self::deliveries( $m );
+			echo '</div>';
+		}
 
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -26575,7 +26740,11 @@ final class ApplyFormView {
 			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $icono ); ?></span>
 			<span class="prc-solicitud-estado__cuerpo">
 				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
-				<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
+				<?php if ( array() !== (array) ( $m['progress'] ?? array() ) ) : ?>
+					<?php echo ApplicationProgressView::status( (array) $m['progress'] );?>
+				<?php else : ?>
+					<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
+				<?php endif; ?>
 				<?php if ( '' !== (string) $s['note'] ) : ?>
 					<span class="prc-solicitud-estado__nota"><?php echo esc_html( (string) $s['note'] ); ?></span>
 				<?php endif; ?>
@@ -26661,7 +26830,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<?php ?>
-		<form class="prc-form prc-form--solicitud" method="post" action="" enctype="multipart/form-data">
+		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26731,15 +26900,27 @@ final class ApplyFormView {
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
 
-			<div class="prc-form__envio">
-				<button class="prc-boton-enviar" type="submit">
-					<span class="material-symbols-outlined" aria-hidden="true">send</span>
-					<?php echo esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ); ?>
-				</button>
-			</div>
+			<?php echo self::submit( $m, $nueva );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function submit( array $m, bool $nueva ): string {
+		$personas = (array) ( $m['people'] ?? array() );
+		$aviso    = $nueva && ! empty( $personas['show'] )
+			? '<p class="prc-form__siguiente">' . esc_html( sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) ) ) . '</p>'
+			: '';
+		return '<div class="prc-form__envio">' . $aviso
+			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
 	}
 
 
@@ -26997,7 +27178,7 @@ final class ApplyFormView {
 
 
 
-	private static function summary( array $m ): string {
+	public static function summary( array $m ): string {
 		$s = (array) $m['application'];
 		if ( array() === $s ) {
 			return '';
@@ -27007,7 +27188,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<section class="prc-seccion prc-solicitud-resumen">
+		<section class="prc-seccion prc-solicitud-resumen" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>">
 			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
 			<dl class="prc-respuestas">
 				<?php if ( '' !== (string) $s['position'] ) : ?>
@@ -27693,6 +27874,8 @@ final class ApplyForm {
 		$m['people'] = PeopleForm::model( $m );
 
 		$m['withdraw'] = WithdrawForm::model( $m );
+
+		$m['progress'] = ApplicationProgress::model( $m );
 		return ApplyFormView::html( $m );
 	}
 }
@@ -28259,6 +28442,220 @@ final class PeopleForm {
 
 	private static function day( string $ymd ): string {
 		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationProgress', false ) ) {
+final class ApplicationProgress {
+
+
+
+
+	public const ARG_RECEIPT = 'justificante';
+
+
+
+
+	public const ANCHOR_FORM = 'prc-solicitud-datos';
+
+
+
+
+	public const ANCHOR_DELIVERIES = 'prc-entregas';
+
+
+
+
+
+
+	private const VERB = array(
+		'presentada' => 'presentada',
+		'guardada'   => 'guardada',
+	);
+
+
+
+
+
+
+
+	public static function model( array $m ): array {
+		$app      = (array) ( $m['application'] ?? array() );
+		$id       = (int) ( $app['id'] ?? 0 );
+		$people   = (array) ( $m['people'] ?? array() );
+		$excluida = ApplicationMetaKeys::REVIEW_EXCLUDED === (string) ( $app['state'] ?? '' );
+		$falta    = $id > 0 ? self::missing( $id ) : array();
+		$autor    = $id > 0 ? get_userdata( (int) get_post_field( 'post_author', $id ) ) : false;
+		$out      = array(
+			'steps'          => self::steps( $m, $people ),
+			'application'    => $id,
+			'missing'        => $falta,
+			'show_complete'  => $id > 0 && ! $excluida,
+			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
+			'people_min'     => (int) ( $people['min'] ?? 0 ),
+			'people_until'   => (string) ( $people['until'] ?? '' ),
+			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
+			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
+			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'receipt_url'    => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
+			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
+
+			'receipt'        => $id > 0 && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
+		);
+		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function missing( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		return ApplicationCompleteness::reasons(
+			People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : array( 'enabled' => false ),
+			get_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, true ),
+			Applications::questions( $procedure_id ),
+			get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ),
+			ProcedureState::today(),
+			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
+			ApplicationOperations::pending_for_school( $application_id )
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function steps( array $m, array $people ): array {
+		$app = (array) ( $m['application'] ?? array() );
+		$hay = array() !== $app;
+		if ( ! $hay && empty( $m['can_submit'] ) ) {
+			return array();
+		}
+		$pasos = array(
+			array(
+				'label'  => 'Datos de la solicitud',
+				'anchor' => self::ANCHOR_FORM,
+				'done'   => $hay,
+			),
+		);
+		if ( ! empty( $people['show'] ) ) {
+			$pasos[] = array(
+				'label'  => 'Personas que participan',
+				'anchor' => PeopleForm::ANCHOR,
+				'done'   => $hay && ! empty( $people['complete'] ),
+			);
+		}
+		$entregas = (array) ( $m['deliveries'] ?? array() );
+		if ( array() !== $entregas ) {
+			$ficheros = (array) ( $app['files'] ?? array() );
+			$hechas   = true;
+			foreach ( $entregas as $pregunta ) {
+				$hechas = $hechas && ( empty( $pregunta['required'] ) || isset( $ficheros[ (string) $pregunta['key'] ] ) );
+			}
+			$pasos[] = array(
+				'label'  => 'Documentos con plazo propio',
+				'anchor' => self::ANCHOR_DELIVERIES,
+				'done'   => $hay && $hechas,
+			);
+		}
+		return count( $pasos ) > 1 ? $pasos : array();
+	}
+
+
+
+
+
+
+
+
+	private static function flash( array $flash, array $p ): array {
+		$flash += array(
+			'tipo'  => '',
+			'texto' => '',
+		);
+
+		$hecho = sanitize_key( wp_unslash( (string) ( $_GET[ ApplyForm::ARG_NOTICE ] ?? '' ) ) );
+		$out   = array(
+			'tipo'      => (string) $flash['tipo'],
+			'texto'     => (string) $flash['texto'],
+			'link'      => '',
+			'link_text' => '',
+		);
+		if ( 'ok' !== $out['tipo'] || ! isset( self::VERB[ $hecho ] ) || ! $p['show_complete'] ) {
+			return $out;
+		}
+		$verbo = 'Solicitud ' . self::VERB[ $hecho ];
+		if ( array() === (array) $p['missing'] ) {
+			$out['texto'] = ( 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo )
+				. '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.';
+			return $out;
+		}
+		$out['tipo'] = 'aviso';
+		if ( $p['people_missing'] ) {
+			$hasta            = (string) $p['people_until'];
+			$out['texto']     = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . '). Hágalo abajo, en «Personas que participan»'
+				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
+			$out['link']      = '#' . PeopleForm::ANCHOR;
+			$out['link_text'] = 'Ir a la lista de personas';
+			return $out;
+		}
+		$out['texto'] = $verbo . ', pero todavía no está completa. Le falta: ' . lcfirst( implode( '; ', (array) $p['missing'] ) ) . '.';
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function when( int $timestamp ): string {
+		return $timestamp > 0 ? (string) wp_date( 'd-m-Y', $timestamp ) . ' a las ' . (string) wp_date( 'H:i', $timestamp ) : '';
 	}
 }
 
@@ -34362,6 +34759,71 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 .prc-solicitud-estado__fecha,
 .prc-solicitud-estado__nota,
 .prc-solicitud-estado__enlace { display: block; margin-top: 4px; }
+
+.prc-solicitud-estado__completa { display: block; margin-top: 4px; font-weight: var(--prc-p-fuerte); }
+
+/* --- los pasos de la solicitud -------------------------------------------
+   Datos, personas y documentos, cada uno con «Hecho» o «Falta» escrito: el
+   color acompaña al texto, nunca lo sustituye. El primero que falta lleva
+   `aria-current="step"` y un filete. */
+.prc-pasos-caja { margin: 0 0 20px; }
+
+.prc-pasos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: prc-paso;
+}
+
+.prc-paso {
+  counter-increment: prc-paso;
+  padding: 6px 10px;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso::before { content: counter(prc-paso) ". "; font-weight: var(--prc-p-fuerte); }
+.prc-paso[aria-current="step"] { box-shadow: inset 3px 0 0 var(--prc-avi-texto); }
+
+.prc-paso__estado {
+  display: inline-block;
+  padding: 0 6px;
+  margin-left: 4px;
+  font-weight: var(--prc-p-fuerte);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso--hecho .prc-paso__estado { color: var(--prc-ok-texto); background: var(--prc-ok-fondo); }
+.prc-paso--falta .prc-paso__estado { color: var(--prc-avi-texto); background: var(--prc-avi-fondo); }
+
+/* El paso 2 anunciado encima del botón que cierra el paso 1. */
+.prc-form__siguiente {
+  margin: 20px 0 0;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+}
+
+.prc-personas__plazo { margin: 0 0 8px; color: var(--prc-c-titulo); }
+
+/* --- el justificante -----------------------------------------------------
+   Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
+   solo sirve en pantalla. Sin JavaScript. */
+.prc-justificante__datos { margin-bottom: 20px; }
+
+@media print {
+  body:has(.prc-justificante) .prc-top,
+  body:has(.prc-justificante) .prc-tabs,
+  body:has(.prc-justificante) .prc-pie,
+  body:has(.prc-justificante) #wpadminbar,
+  .prc-justificante .prc-no-imprimir { display: none !important; }
+
+  .prc-justificante { color: #000; }
+}
 ',
   'css/prc-mi-centro.css' => '/* «Mis solicitudes» del centro.
    ==========================================================================

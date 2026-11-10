@@ -325,3 +325,68 @@
 .prc-solicitud-estado__fecha,
 .prc-solicitud-estado__nota,
 .prc-solicitud-estado__enlace { display: block; margin-top: 4px; }
+
+.prc-solicitud-estado__completa { display: block; margin-top: 4px; font-weight: var(--prc-p-fuerte); }
+
+/* --- los pasos de la solicitud -------------------------------------------
+   Datos, personas y documentos, cada uno con «Hecho» o «Falta» escrito: el
+   color acompaña al texto, nunca lo sustituye. El primero que falta lleva
+   `aria-current="step"` y un filete. */
+.prc-pasos-caja { margin: 0 0 20px; }
+
+.prc-pasos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: prc-paso;
+}
+
+.prc-paso {
+  counter-increment: prc-paso;
+  padding: 6px 10px;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso::before { content: counter(prc-paso) ". "; font-weight: var(--prc-p-fuerte); }
+.prc-paso[aria-current="step"] { box-shadow: inset 3px 0 0 var(--prc-avi-texto); }
+
+.prc-paso__estado {
+  display: inline-block;
+  padding: 0 6px;
+  margin-left: 4px;
+  font-weight: var(--prc-p-fuerte);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso--hecho .prc-paso__estado { color: var(--prc-ok-texto); background: var(--prc-ok-fondo); }
+.prc-paso--falta .prc-paso__estado { color: var(--prc-avi-texto); background: var(--prc-avi-fondo); }
+
+/* El paso 2 anunciado encima del botón que cierra el paso 1. */
+.prc-form__siguiente {
+  margin: 20px 0 0;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+}
+
+.prc-personas__plazo { margin: 0 0 8px; color: var(--prc-c-titulo); }
+
+/* --- el justificante -----------------------------------------------------
+   Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
+   solo sirve en pantalla. Sin JavaScript. */
+.prc-justificante__datos { margin-bottom: 20px; }
+
+@media print {
+  body:has(.prc-justificante) .prc-top,
+  body:has(.prc-justificante) .prc-tabs,
+  body:has(.prc-justificante) .prc-pie,
+  body:has(.prc-justificante) #wpadminbar,
+  .prc-justificante .prc-no-imprimir { display: none !important; }
+
+  .prc-justificante { color: #000; }
+}

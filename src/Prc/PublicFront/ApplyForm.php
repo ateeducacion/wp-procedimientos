@@ -635,6 +635,8 @@ final class ApplyForm {
 		$m['people'] = PeopleForm::model( $m );
 		// Retirar y la prórroga, también aparte (PLAN-0003, PR 9).
 		$m['withdraw'] = WithdrawForm::model( $m );
+		// Los pasos, lo que falta y el justificante: después de las personas.
+		$m['progress'] = ApplicationProgress::model( $m );
 		return ApplyFormView::html( $m );
 	}
 }

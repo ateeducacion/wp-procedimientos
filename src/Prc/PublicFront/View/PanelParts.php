@@ -47,14 +47,20 @@ final class PanelParts {
 	/**
 	 * The discreet «¿Dudas?» line that takes a screen to its section of the help.
 	 *
-	 * @param string $url Help URL with its anchor, from Help::url().
+	 * Cada pantalla puede decirlo a su manera —«Cómo se solicita», «¿Dudas al
+	 * rellenar?»—, pero la línea es la misma y sale de la misma fuente.
+	 *
+	 * @param string $url   Help URL with its anchor, from Help::url().
+	 * @param string $lead  Words before the link; empty for none.
+	 * @param string $label Text of the link.
 	 * @return string Empty when there is no help page.
 	 */
-	public static function help_link( string $url ): string {
+	public static function help_link( string $url, string $lead = '¿Dudas?', string $label = 'Consulte la ayuda' ): string {
 		if ( '' === $url ) {
 			return '';
 		}
-		return '<p class="prc-ayuda-enlace">¿Dudas? <a href="' . esc_url( $url ) . '">Consulte la ayuda</a></p>';
+		return '<p class="prc-ayuda-enlace">' . ( '' !== $lead ? esc_html( $lead ) . ' ' : '' )
+			. '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></p>';
 	}
 
 	/**

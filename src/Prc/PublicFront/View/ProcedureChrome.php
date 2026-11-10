@@ -151,11 +151,6 @@ final class ProcedureChrome {
 						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
 						Editar procedimiento</a>
 				<?php endif; ?>
-				<p class="prc-ficha-meta">
-					<?php foreach ( self::footer_meta( $m ) as $linea ) : ?>
-						<?php echo esc_html( $linea ); ?><br />
-					<?php endforeach; ?>
-				</p>
 			</div>
 		</div>
 		<?php
@@ -338,6 +333,7 @@ final class ProcedureChrome {
 	 */
 	private static function summary_rows( array $m ): array {
 		$crudas = array(
+			array( 'Pueden solicitar', (string) ( $m['who_can_apply'] ?? '' ), '' ),
 			array( 'Curso', (string) $m['courses'], '' ),
 			array( 'Inscripción', (string) $m['dates'], '' ),
 			array( 'Subsanación', (string) $m['amend_dates'], '' ),
@@ -440,34 +436,40 @@ final class ProcedureChrome {
 	}
 
 	/**
-	 * The access card, with the button that says what pressing it will do.
+	 * The access card: who applies and with which account, and the button.
 	 *
 	 * Tres columnas iguales de las que solo se rellena una: es la retícula del
-	 * original. El botón es contextual (mejora M4) y **no se pinta** cuando no
-	 * hay nada que hacer: sin plazo y sin solicitud, la tarjeta se queda con
-	 * el texto, que es lo que hacía el original.
+	 * original. El rótulo y el texto dependen de a quién se dirige: la
+	 * dirección del centro, con su cuenta personal y no con la genérica del
+	 * centro, o cada docente con la suya. El botón es contextual (mejora M4);
+	 * cuando quien ha entrado no tiene botón con el plazo abierto, en su sitio
+	 * va el motivo ({@see why_not()}), no un hueco.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function access( array $m ): string {
-		$accion = (array) $m['action'];
-		$icono  = (string) ( $accion['icon'] ?? '' );
-		$manda  = ! empty( $accion['primary'] );
-		$clases = Assets::button_class( $manda ) . ( $manda ? '' : ' prc-btn--sec' );
+		$accion   = (array) $m['action'];
+		$icono    = (string) ( $accion['icon'] ?? '' );
+		$manda    = ! empty( $accion['primary'] );
+		$clases   = Assets::button_class( $manda ) . ( $manda ? '' : ' prc-btn--sec' );
+		$docentes = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['audience_key'] ?? '' );
 
 		ob_start();
 		?>
 		<div class="prc-accesos">
 			<div class="prc-acceso">
-				<h2 class="prc-acceso__rotulo">Acceso con la cuenta del equipo directivo</h2>
-				<?php if ( '' !== (string) $m['ownership'] ) : ?>
-					<p class="prc-acceso__cifra"><?php echo esc_html( (string) $m['ownership'] ); ?></p>
-				<?php endif; ?>
-				<p class="prc-acceso__texto">Solicita la dirección del centro, validándose con su
-					<strong>cuenta personal</strong> en el enlace de acceso de la cabecera.</p>
-				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php if ( '' !== (string) $accion['url'] ) : ?>
+				<h2 class="prc-acceso__rotulo"><?php echo esc_html( $docentes ? 'Lo solicita cada docente' : 'Lo solicita la dirección del centro' ); ?></h2>
+				<p class="prc-acceso__texto">
+					<?php if ( $docentes ) : ?>
+						Cada docente entra con su <strong>cuenta personal</strong> y presenta su propia solicitud. No lo presenta el centro.
+					<?php else : ?>
+						Entre con su <strong>cuenta personal</strong> de la dirección, no con la cuenta genérica del centro.
+					<?php endif; ?>
+				</p>
+				<?php if ( '' !== (string) ( $m['why_not'] ?? '' ) ) : ?>
+					<?php echo self::why_not( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escapado dentro. ?>
+				<?php elseif ( '' !== (string) $accion['url'] ) : ?>
 					<p class="prc-acceso__accion">
 						<a class="<?php echo esc_attr( $clases ); ?>" href="<?php echo esc_url( (string) $accion['url'] ); ?>">
 							<?php if ( '' !== $icono ) : ?>
@@ -477,6 +479,7 @@ final class ProcedureChrome {
 						</a>
 					</p>
 				<?php endif; ?>
+				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ), '', 'Cómo se solicita' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</div>
 		</div>
 		<?php
@@ -484,18 +487,40 @@ final class ProcedureChrome {
 	}
 
 	/**
-	 * The three lines of the footer meta: audience, ownership and state.
+	 * Why there is no button for whoever came in, where the button would be.
+	 *
+	 * Es la consulta que más se repite: «no veo el botón». Dice el motivo, con
+	 * qué cuenta se ha entrado —la genérica del centro es la causa más
+	 * frecuente— y cómo salir y entrar con otra, sin JavaScript: el enlace
+	 * cierra la sesión y vuelve al acceso con esta ficha de destino.
 	 *
 	 * @param array<string, mixed> $m Model.
-	 * @return string[] Only the ones with something to say.
+	 * @return string
 	 */
-	private static function footer_meta( array $m ): array {
-		$lineas = array(
-			(string) $m['audience'],
-			(string) $m['ownership'],
-			(string) $m['state_label'],
-		);
-		return array_values( array_filter( $lineas, static fn( string $l ): bool => '' !== $l ) );
+	private static function why_not( array $m ): string {
+		$cuenta = (array) ( $m['account'] ?? array() );
+		$nombre = (string) ( $cuenta['name'] ?? '' );
+		$correo = (string) ( $cuenta['email'] ?? '' );
+
+		ob_start();
+		?>
+		<div class="<?php echo esc_attr( Assets::alert_class( 'warning' ) ); ?> prc-acceso__motivo" role="status">
+			<p class="prc-acceso__motivo-tit"><strong>No puede solicitar con esta cuenta</strong></p>
+			<p><?php echo esc_html( (string) $m['why_not'] ); ?></p>
+			<?php if ( '' !== $nombre || '' !== $correo ) : ?>
+				<p>Ha entrado como <strong><?php echo esc_html( '' !== $nombre ? $nombre : $correo ); ?></strong><?php echo '' !== $nombre && '' !== $correo ? esc_html( ' (' . $correo . ')' ) : ''; ?>.</p>
+			<?php endif; ?>
+			<ul class="prc-acceso__salidas">
+				<?php if ( '' !== (string) ( $m['switch_url'] ?? '' ) ) : ?>
+					<li><a href="<?php echo esc_url( (string) $m['switch_url'] ); ?>">Salir y entrar con otra cuenta</a></li>
+				<?php endif; ?>
+				<?php if ( '' !== (string) ( $m['faq_url'] ?? '' ) ) : ?>
+					<li><a href="<?php echo esc_url( (string) $m['faq_url'] ); ?>">¿Por qué no veo el botón «Solicitar»?</a></li>
+				<?php endif; ?>
+			</ul>
+		</div>
+		<?php
+		return (string) ob_get_clean();
 	}
 
 	/**

@@ -11567,11 +11567,17 @@ final class PanelParts {
 
 
 
-	public static function help_link( string $url ): string {
+
+
+
+
+
+	public static function help_link( string $url, string $lead = '¿Dudas?', string $label = 'Consulte la ayuda' ): string {
 		if ( '' === $url ) {
 			return '';
 		}
-		return '<p class="prc-ayuda-enlace">¿Dudas? <a href="' . esc_url( $url ) . '">Consulte la ayuda</a></p>';
+		return '<p class="prc-ayuda-enlace">' . ( '' !== $lead ? esc_html( $lead ) . ' ' : '' )
+			. '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></p>';
 	}
 
 
@@ -19075,11 +19081,6 @@ final class ProcedureChrome {
 						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
 						Editar procedimiento</a>
 				<?php endif; ?>
-				<p class="prc-ficha-meta">
-					<?php foreach ( self::footer_meta( $m ) as $linea ) : ?>
-						<?php echo esc_html( $linea ); ?><br />
-					<?php endforeach; ?>
-				</p>
 			</div>
 		</div>
 		<?php
@@ -19262,6 +19263,7 @@ final class ProcedureChrome {
 
 	private static function summary_rows( array $m ): array {
 		$crudas = array(
+			array( 'Pueden solicitar', (string) ( $m['who_can_apply'] ?? '' ), '' ),
 			array( 'Curso', (string) $m['courses'], '' ),
 			array( 'Inscripción', (string) $m['dates'], '' ),
 			array( 'Subsanación', (string) $m['amend_dates'], '' ),
@@ -19374,24 +19376,30 @@ final class ProcedureChrome {
 
 
 
+
+
 	private static function access( array $m ): string {
-		$accion = (array) $m['action'];
-		$icono  = (string) ( $accion['icon'] ?? '' );
-		$manda  = ! empty( $accion['primary'] );
-		$clases = Assets::button_class( $manda ) . ( $manda ? '' : ' prc-btn--sec' );
+		$accion   = (array) $m['action'];
+		$icono    = (string) ( $accion['icon'] ?? '' );
+		$manda    = ! empty( $accion['primary'] );
+		$clases   = Assets::button_class( $manda ) . ( $manda ? '' : ' prc-btn--sec' );
+		$docentes = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['audience_key'] ?? '' );
 
 		ob_start();
 		?>
 		<div class="prc-accesos">
 			<div class="prc-acceso">
-				<h2 class="prc-acceso__rotulo">Acceso con la cuenta del equipo directivo</h2>
-				<?php if ( '' !== (string) $m['ownership'] ) : ?>
-					<p class="prc-acceso__cifra"><?php echo esc_html( (string) $m['ownership'] ); ?></p>
-				<?php endif; ?>
-				<p class="prc-acceso__texto">Solicita la dirección del centro, validándose con su
-					<strong>cuenta personal</strong> en el enlace de acceso de la cabecera.</p>
-				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) );?>
-				<?php if ( '' !== (string) $accion['url'] ) : ?>
+				<h2 class="prc-acceso__rotulo"><?php echo esc_html( $docentes ? 'Lo solicita cada docente' : 'Lo solicita la dirección del centro' ); ?></h2>
+				<p class="prc-acceso__texto">
+					<?php if ( $docentes ) : ?>
+						Cada docente entra con su <strong>cuenta personal</strong> y presenta su propia solicitud. No lo presenta el centro.
+					<?php else : ?>
+						Entre con su <strong>cuenta personal</strong> de la dirección, no con la cuenta genérica del centro.
+					<?php endif; ?>
+				</p>
+				<?php if ( '' !== (string) ( $m['why_not'] ?? '' ) ) : ?>
+					<?php echo self::why_not( $m );?>
+				<?php elseif ( '' !== (string) $accion['url'] ) : ?>
 					<p class="prc-acceso__accion">
 						<a class="<?php echo esc_attr( $clases ); ?>" href="<?php echo esc_url( (string) $accion['url'] ); ?>">
 							<?php if ( '' !== $icono ) : ?>
@@ -19401,6 +19409,7 @@ final class ProcedureChrome {
 						</a>
 					</p>
 				<?php endif; ?>
+				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ), '', 'Cómo se solicita' );?>
 			</div>
 		</div>
 		<?php
@@ -19413,13 +19422,35 @@ final class ProcedureChrome {
 
 
 
-	private static function footer_meta( array $m ): array {
-		$lineas = array(
-			(string) $m['audience'],
-			(string) $m['ownership'],
-			(string) $m['state_label'],
-		);
-		return array_values( array_filter( $lineas, static fn( string $l ): bool => '' !== $l ) );
+
+
+
+
+
+	private static function why_not( array $m ): string {
+		$cuenta = (array) ( $m['account'] ?? array() );
+		$nombre = (string) ( $cuenta['name'] ?? '' );
+		$correo = (string) ( $cuenta['email'] ?? '' );
+
+		ob_start();
+		?>
+		<div class="<?php echo esc_attr( Assets::alert_class( 'warning' ) ); ?> prc-acceso__motivo" role="status">
+			<p class="prc-acceso__motivo-tit"><strong>No puede solicitar con esta cuenta</strong></p>
+			<p><?php echo esc_html( (string) $m['why_not'] ); ?></p>
+			<?php if ( '' !== $nombre || '' !== $correo ) : ?>
+				<p>Ha entrado como <strong><?php echo esc_html( '' !== $nombre ? $nombre : $correo ); ?></strong><?php echo '' !== $nombre && '' !== $correo ? esc_html( ' (' . $correo . ')' ) : ''; ?>.</p>
+			<?php endif; ?>
+			<ul class="prc-acceso__salidas">
+				<?php if ( '' !== (string) ( $m['switch_url'] ?? '' ) ) : ?>
+					<li><a href="<?php echo esc_url( (string) $m['switch_url'] ); ?>">Salir y entrar con otra cuenta</a></li>
+				<?php endif; ?>
+				<?php if ( '' !== (string) ( $m['faq_url'] ?? '' ) ) : ?>
+					<li><a href="<?php echo esc_url( (string) $m['faq_url'] ); ?>">¿Por qué no veo el botón «Solicitar»?</a></li>
+				<?php endif; ?>
+			</ul>
+		</div>
+		<?php
+		return (string) ob_get_clean();
 	}
 
 
@@ -19532,6 +19563,7 @@ namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -19650,6 +19682,8 @@ final class ProcedureView {
 		$mia       = self::mine( $post_id, $user_id );
 		$audiencia = ProcedureMetaKeys::in_list( $meta[ ProcedureMetaKeys::AUDIENCE ], ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
 		$contenido = (string) apply_filters( 'the_content', (string) get_post_field( 'post_content', $post_id ) );
+		$accion    = self::action( $post_id, $state, $user_id, $mia );
+		$gestion   = self::manage_url( $post_id, $user_id );
 
 		return array_merge(
 			$m,
@@ -19683,7 +19717,9 @@ final class ProcedureView {
 				'areas'                => self::terms( $post_id, ProcedureTaxonomies::AREA ),
 				'courses'              => self::terms( $post_id, ProcedureTaxonomies::COURSE ),
 				'audience'             => (string) ( ProcedureMetaKeys::audiences()[ $audiencia ] ?? '' ),
+				'audience_key'         => $audiencia,
 				'ownership'            => ProcedureChrome::ownership_label( $ownership ),
+				'who_can_apply'        => self::who_can_apply( $post_id, $audiencia ),
 				'coordinator_count'    => Applications::coordinator_count( $post_id ),
 				'requires_coordinator' => Applications::coordinator_count( $post_id ) > 0,
 
@@ -19697,8 +19733,11 @@ final class ProcedureView {
 				'image'                => $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'large' ) : '',
 				'image_alt'            => $cartel > 0 ? (string) get_post_meta( $cartel, '_wp_attachment_image_alt', true ) : '',
 				'mine'                 => $mia,
-				'action'               => self::action( $post_id, $state, $user_id, $mia ),
-				'manage_url'           => self::manage_url( $post_id, $user_id ),
+				'action'               => $accion,
+				'manage_url'           => $gestion,
+				'why_not'              => '' === $gestion ? self::why_not( $post_id, $state, $user_id, $accion ) : '',
+				'account'              => self::account( $user_id ),
+				'switch_url'           => $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '',
 			)
 		);
 	}
@@ -19729,7 +19768,9 @@ final class ProcedureView {
 			'areas'                => '',
 			'courses'              => '',
 			'audience'             => '',
+			'audience_key'         => '',
 			'ownership'            => '',
+			'who_can_apply'        => '',
 			'requires_coordinator' => false,
 			'coordinator_count'    => 0,
 			'contact_emails'       => array(),
@@ -19744,7 +19785,16 @@ final class ProcedureView {
 			'action'               => self::no_action(),
 			'manage_url'           => '',
 
+			'why_not'              => '',
+			'account'              => array(
+				'name'  => '',
+				'email' => '',
+			),
+			'switch_url'           => '',
+
 			'help_url'             => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
+
+			'faq_url'              => Help::url( HelpContent::GUIDE_FAQ, 'no-veo-el-boton-solicitar' ),
 		);
 	}
 
@@ -20011,7 +20061,7 @@ final class ProcedureView {
 
 		if ( $user_id <= 0 ) {
 			return $abierto ? array(
-				'label'   => 'Solicitar',
+				'label'   => 'Entrar y solicitar',
 				'url'     => wp_login_url( $apply ),
 				'icon'    => 'edit_note',
 				'primary' => true,
@@ -20043,6 +20093,67 @@ final class ProcedureView {
 			);
 		}
 		return $vacio;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function why_not( int $post_id, string $state, int $user_id, array $action ): string {
+		if ( $user_id <= 0 || '' !== (string) $action['url'] || ! ProcedureState::accepts_applications( $state )
+			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
+			return '';
+		}
+		return ProcedureAccess::why_not_apply( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function account( int $user_id ): array {
+		$quien = $user_id > 0 ? get_userdata( $user_id ) : false;
+		return array(
+			'name'  => $quien instanceof \WP_User ? (string) $quien->display_name : '',
+			'email' => $quien instanceof \WP_User ? (string) $quien->user_email : '',
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function who_can_apply( int $post_id, string $audience ): string {
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience ) {
+			return 'Profesorado: cada docente con su cuenta';
+		}
+		if ( ! in_array( ProcedureMetaKeys::KIND_SCHOOL, ProcedureAccess::centre_kinds( $post_id ), true ) ) {
+			return 'Agrupaciones de escuelas rurales (CER), como colectivo';
+		}
+		return CentreEligibility::describe( ProcedureAccess::eligibility( $post_id ) );
 	}
 
 
@@ -34051,21 +34162,15 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   padding: 12px 20px;
 }
 
-/* A quién se dirige, en grande y centrado: en el original es la línea que
-   distingue una tarjeta de acceso de la de al lado. */
-.prc-acceso__cifra {
-  font-family: var(--prc-fuente-cifras);
-  font-size: var(--prc-t-h2);
-  line-height: var(--prc-i-h2);
-  font-weight: var(--prc-p-fuerte);
-  color: var(--prc-c-azul);
-  text-align: center;
-  margin: 0;
-  padding: 0 0 10px;
-}
-
 .prc-acceso__texto { margin: 0; padding: 0 0 16px; }
 .prc-acceso__accion { margin: 0; padding: 0; }
+
+/* Por qué no hay botón, en su sitio: el motivo, la cuenta con la que se ha
+   entrado y las dos salidas. Texto a 14 px como mínimo: es lo que se lee. */
+.prc-acceso__motivo { margin: 0 0 16px; font-size: 14px; }
+.prc-acceso__motivo p { margin: 0 0 8px; }
+.prc-acceso__salidas { margin: 0; padding-left: 1.2em; }
+.prc-acceso__salidas li + li { margin-top: 4px; }
 
 /* El botón de consulta —«Ver mi solicitud», cuando el plazo ya cerró— va en
    blanco con el contorno azul: una pantalla con el botón principal relleno y
@@ -34107,14 +34212,6 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   flex-wrap: wrap;
 }
 
-.prc-ficha-meta {
-  font-size: var(--prc-t-meta);
-  line-height: normal;
-  text-align: right;
-  margin: 0;
-  padding: 0;
-}
-
 /* --- estrecho -------------------------------------------------------------- */
 
 @media (max-width: 640px) {
@@ -34123,7 +34220,6 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   .prc-tabs-ficha__barra a { width: auto; flex: 1 1 auto; padding: 0 12px; }
   .prc-tabs-ficha__panel { padding: 16px; }
   .prc-ficha-pie { justify-content: flex-start; }
-  .prc-ficha-meta { text-align: left; }
 }
 ',
   'css/prc-formulario.css' => '/* Aplicativo de procedimientos: **la piel de formulario de la solicitud**.

@@ -54,6 +54,7 @@ return array(
 	'PublicFront/People.php',
 	'PublicFront/PeopleExport.php',
 	'PublicFront/ApplicationExport.php',
+	'PublicFront/ApplicationQuery.php',
 	'PublicFront/PeopleSpecPanel.php',
 	'PublicFront/View/HomeView.php',
 	'PublicFront/Home.php',

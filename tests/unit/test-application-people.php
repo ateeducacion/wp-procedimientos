@@ -387,6 +387,26 @@ class Test_Application_People extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Hasta cuándo se cambia la lista, para decirlo en la pantalla y en el
+	 * acuse: su último día propio o, sin fechas, el cierre del plazo de
+	 * solicitud. Lo que ya pasó, o un plazo sin final, no se dice.
+	 */
+	public function test_until_is_the_last_day_the_list_can_be_changed() {
+		$propia = $this->spec(
+			array(
+				'opens_at'  => '2026-11-10',
+				'closes_at' => '2026-11-20',
+			)
+		);
+		$this->assertSame( '2026-11-20', PeopleSpec::until( $propia, '2026-11-15', '2026-11-12' ), 'la fecha propia manda' );
+		$this->assertSame( '2026-11-15', PeopleSpec::until( $this->spec(), '2026-11-15', '2026-11-12' ), 'sin fechas, la de la solicitud' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec(), '2026-11-15', '2026-11-16' ), 'pasada, no se dice' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec( array( 'opens_at' => '2026-11-10' ) ), '2026-11-15', '2026-11-12' ), 'abierta sin final' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec( array( 'enabled' => false ) ), '2026-11-15', '2026-11-12' ), 'sin lista' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec(), '', '2026-11-12' ), 'sin plazo' );
+	}
+
+	/**
 	 * Histórico, excluida, profesorado o apagada: nunca; con «solo admitidas»,
 	 * solo admitida.
 	 */

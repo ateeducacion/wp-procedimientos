@@ -2558,6 +2558,21 @@ final class ProcedureInput {
 
 
 
+
+
+
+
+	public static function stored_ownership( $stored ): array {
+		$titular = self::ownership( $stored );
+		return array() === $titular ? array_keys( ProcedureMetaKeys::ownerships() ) : $titular;
+	}
+
+
+
+
+
+
+
 	public static function centre_kinds( $raw ): array {
 		$seleccionados = self::keys_of(
 			$raw,
@@ -24300,23 +24315,6 @@ final class ProcedureEditor {
 
 
 
-
-
-
-
-
-
-	private static function ownership_value( int $procedure_id ): array {
-		$guardada = $procedure_id > 0 ? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ) : array();
-		return $procedure_id > 0 && array() === $guardada ? array_keys( ProcedureMetaKeys::ownerships() ) : $guardada;
-	}
-
-
-
-
-
-
-
 	private static function submitted_data( int $procedure_id = 0 ): array {
 
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
@@ -24414,7 +24412,7 @@ final class ProcedureEditor {
 					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => self::ownership_value( $procedure_id ),
+					'ownership'            => ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ),
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -25261,7 +25259,11 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::AUDIENCE             => $procedure_id > 0
 				? ProcedureMetaKeys::in_list( self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS )
 				: ProcedureMetaKeys::AUDIENCE_SCHOOLS,
-			ProcedureMetaKeys::OWNERSHIP            => self::ownership_value( $procedure_id ),
+
+
+			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
+				? ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
+				: array(),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),

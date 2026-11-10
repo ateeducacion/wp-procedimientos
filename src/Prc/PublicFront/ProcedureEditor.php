@@ -708,23 +708,6 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * The ownerships the «Dirigido a» boxes start with.
-	 *
-	 * Uno nuevo empieza **sin ninguna**: quien no las toca no abre el
-	 * procedimiento a todos sin querer, y guardar sin elegir se rechaza
-	 * ({@see ProcedureInput::validate()}). Uno de antes sin titularidad
-	 * guardada se dirige a todos —es lo que hace `can_apply()`—, y así se
-	 * enseña: las dos marcadas.
-	 *
-	 * @param int $procedure_id Procedure post ID, 0 for a new one.
-	 * @return string[]
-	 */
-	private static function ownership_value( int $procedure_id ): array {
-		$guardada = $procedure_id > 0 ? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ) : array();
-		return $procedure_id > 0 && array() === $guardada ? array_keys( ProcedureMetaKeys::ownerships() ) : $guardada;
-	}
-
-	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
 	 * @param int $procedure_id Existing procedure, or 0 on creation.
@@ -827,7 +810,7 @@ final class ProcedureEditor {
 					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => self::ownership_value( $procedure_id ),
+					'ownership'            => ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ),
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -1674,7 +1657,11 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::AUDIENCE             => $procedure_id > 0
 				? ProcedureMetaKeys::in_list( self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS )
 				: ProcedureMetaKeys::AUDIENCE_SCHOOLS,
-			ProcedureMetaKeys::OWNERSHIP            => self::ownership_value( $procedure_id ),
+			// Uno nuevo empieza sin titularidad: quien no la elige no abre el
+			// procedimiento a todos sin querer, y guardar sin elegir se rechaza.
+			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
+				? ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
+				: array(),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),

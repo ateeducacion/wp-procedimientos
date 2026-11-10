@@ -157,15 +157,31 @@ copia de todo `procedure_created` y `application_received`). Con
 - `ApplicationExport::csv( int $procedure_id, array $columns, string $shape ): string`
   — `$shape` es `application` (una fila por solicitud) o `person` (una por
   persona). Mismo formato de hoy: `;`, BOM, CRLF, celdas neutralizadas.
-- `ApplicationExport::moodle( int $procedure_id, array $options ): string`.
-- Coordinación con `surname` además de `name`. Lo ya guardado, sin `surname`,
-  se parte por el primer espacio al exportar.
+- `ApplicationExport::moodle( int $procedure_id, array $options ): string`
+  — `$options['who']`: claves de `who()`; vacío, todas.
+- `ApplicationExport::who(): array<string,string>` — fuentes de personas del
+  fichero de usuarios (`coordinators`, `applicant`). **Punto de extensión del
+  PR 4**: sus personas entran aquí y en el `switch` privado `from_source()`.
+- `ApplicationExport::people( int $procedure_id, array $who ): array{people:array, skipped:int}`
+  — las personas sin repetir `username` y cuántas se quedan fuera por no
+  tener correo válido (lo que el diálogo cuenta antes de descargar).
+- `ApplicationExport::sanitize_choice()`, `choice()` y `remember()` — la
+  elección del diálogo, validada, en la meta de usuario `prc_export_{id}`
+  (`{columns, shape, format, who}`; `columns` vacío es «todas»).
+- Coordinación con `surname` además de `name` (obligatorio en el formulario;
+  `ApplicationMetaRegistration::full_name()` los junta para leer). Lo ya
+  guardado, sin `surname`, se parte por el primer espacio al exportar
+  (`ApplicationExport::split_name()`).
+- Campos del diálogo en `ProcedureEditor`: `FIELD_EXPORT_ALL`,
+  `FIELD_EXPORT_COLUMNS`, `FIELD_EXPORT_SHAPE`, `FIELD_EXPORT_FORMAT` y
+  `FIELD_EXPORT_WHO`.
 
 **Decisiones:**
 - El botón «Exportar» abre un diálogo: casillas por grupo, «marcar todo»,
   forma y formato. La última elección se recuerda por persona y procedimiento
-  (meta de usuario `prc_export_{id}`). Sin JavaScript, el diálogo es una
-  página con el mismo formulario.
+  (meta de usuario `prc_export_{id}`). Sin JavaScript, el diálogo es un
+  desplegable con el mismo formulario, y «Todas las columnas» es un campo que
+  lee el servidor.
 - Sin columnas elegidas se exportan todas: el comportamiento de hoy no cambia.
 - Formato de alta de usuarios: exactamente la cabecera
   `username,firstname,lastname,email`, coma, UTF-8 sin BOM, LF y sin salto

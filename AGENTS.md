@@ -124,6 +124,8 @@ src/Prc/
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]
+├── Notifications/Messages.php              Asunto y cuerpo de cada correo, en texto plano. Puro
+├── Notifications/Mailer.php                La única salida de correo; escucha las acciones de las pantallas
 ├── Admin/ProcedureAdmin.php                Columnas, filtro por ámbito y acotado del listado
 ├── Admin/Settings.php                      Ajustes y diagnóstico (capacidad prc_manage_app)
 └── App.php                                 Idempotente. Registra CPT, taxonomías y el register() de cada módulo

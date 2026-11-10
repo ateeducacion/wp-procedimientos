@@ -4273,6 +4273,38 @@ final class ApplicationMetaRegistration {
 
 
 
+
+
+
+
+
+	public static function split_name( string $full ): array {
+		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
+		return array( $partes[0], $partes[1] ?? '' );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function with_surname( array $coordinator ): array {
+		if ( '' === (string) ( $coordinator['surname'] ?? '' ) && '' !== (string) ( $coordinator['name'] ?? '' ) ) {
+			list( $coordinator['name'], $coordinator['surname'] ) = self::split_name( (string) $coordinator['name'] );
+		}
+		return $coordinator;
+	}
+
+
+
+
+
+
+
 	public static function full_names( array $coordinators ): string {
 		return implode( ', ', array_filter( array_map( array( self::class, 'full_name' ), $coordinators ) ) );
 	}
@@ -16256,7 +16288,12 @@ final class ApplyForm {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+
+
+		$coordinators = array_map(
+			array( ApplicationMetaRegistration::class, 'with_surname' ),
+			ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() )
+		);
 		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),

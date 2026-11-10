@@ -26,6 +26,8 @@ return array(
 	'Domain/QuestionChanges.php',
 	'Domain/ProcedureInput.php',
 	'Domain/ApplicationInput.php',
+	'Domain/PeopleSpec.php',
+	'Domain/ApplicationPeople.php',
 	'Centre/CentreCatalogue.php',
 	'Centre/CentreCatalogueSync.php',
 	'Domain/CentreCatalog.php',

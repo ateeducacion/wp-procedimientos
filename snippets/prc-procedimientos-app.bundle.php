@@ -2650,6 +2650,686 @@ final class ApplicationInput {
 
 
 
+namespace Prc\Domain;
+
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\PeopleSpec', false ) ) {
+final class PeopleSpec {
+
+
+	public const MAX_ROLES = 10;
+
+
+	public const MAX_GROUPS = 20;
+
+
+	public const MAX_PEOPLE = 200;
+
+
+
+
+	public const GROUP_MARK = 'grupo';
+
+
+
+
+
+
+
+	public static function sanitize( $raw ): array {
+		$raw    = is_array( $raw ) ? $raw : array();
+		$roles  = self::keyed( $raw['roles'] ?? array(), 'r', (int) ( $raw['role_seq'] ?? 0 ), self::MAX_ROLES );
+		$groups = self::keyed( $raw['groups'] ?? array(), 'g', (int) ( $raw['group_seq'] ?? 0 ), self::MAX_GROUPS );
+		$max    = self::number( $raw['max'] ?? null );
+		$min    = self::number( $raw['min'] ?? null );
+		return array(
+			'enabled'          => ! empty( $raw['enabled'] ),
+			'roles'            => array_map(
+				static function ( array $role ): array {
+					return array(
+						'key'         => $role['key'],
+						'label'       => $role['label'],
+						'needs_group' => ! empty( $role['needs_group'] ),
+					);
+				},
+				$roles['items']
+			),
+			'role_seq'         => $roles['seq'],
+			'groups'           => array_map(
+				static function ( array $group ): array {
+					return array(
+						'key'   => $group['key'],
+						'label' => $group['label'],
+					);
+				},
+				$groups['items']
+			),
+			'group_seq'        => $groups['seq'],
+			'min'              => null === $min ? 0 : max( 0, min( $min, self::MAX_PEOPLE ) ),
+			'max'              => null === $max || $max <= 0 ? self::MAX_PEOPLE : min( $max, self::MAX_PEOPLE ),
+			'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+			'opens_at'         => self::date( $raw['opens_at'] ?? '' ),
+			'closes_at'        => self::date( $raw['closes_at'] ?? '' ),
+			'admitted_only'    => ! empty( $raw['admitted_only'] ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function keyed( $raw, string $prefix, int $seq, int $max ): array {
+		$items = array();
+		$mayor = max( 0, $seq );
+		foreach ( is_array( $raw ) ? $raw : array() as $item ) {
+			$item  = is_array( $item ) ? $item : array( 'label' => $item );
+			$label = is_scalar( $item['label'] ?? null ) ? trim( (string) $item['label'] ) : '';
+			$key   = is_scalar( $item['key'] ?? null ) ? strtolower( trim( (string) $item['key'] ) ) : '';
+			if ( '' === $label || in_array( $label, array_column( $items, 'label' ), true ) || count( $items ) >= $max ) {
+				continue;
+			}
+			$key     = preg_match( '/^' . $prefix . '[1-9]\d{0,3}$/', $key ) && ! in_array( $key, array_column( $items, 'key' ), true ) ? $key : '';
+			$mayor   = max( $mayor, (int) substr( $key, 1 ) );
+			$items[] = array(
+				'key'         => $key,
+				'label'       => $label,
+				'needs_group' => ! empty( $item['needs_group'] ),
+			);
+		}
+		foreach ( $items as $i => $item ) {
+			if ( '' === $item['key'] ) {
+				++$mayor;
+				$items[ $i ]['key'] = $prefix . $mayor;
+			}
+		}
+		return array(
+			'items' => $items,
+			'seq'   => $mayor,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function from_input( array $raw, array $previous ): array {
+		$previous = self::sanitize( $previous );
+		$roles    = self::typed_roles( self::text( $raw, 'roles' ), $previous['roles'] );
+		$groups   = QuestionGrid::match_rows( self::text( $raw, 'groups' ), $previous['groups'] );
+		$min      = self::text( $raw, 'min' );
+		$max      = self::text( $raw, 'max' );
+		$spec     = self::sanitize(
+			array(
+				'enabled'          => ! empty( $raw['enabled'] ),
+				'roles'            => $roles,
+				'role_seq'         => $previous['role_seq'],
+				'groups'           => $groups,
+				'group_seq'        => $previous['group_seq'],
+				'min'              => $min,
+				'max'              => $max,
+				'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+				'opens_at'         => self::text( $raw, 'opens_at' ),
+				'closes_at'        => self::text( $raw, 'closes_at' ),
+				'admitted_only'    => ! empty( $raw['admitted_only'] ),
+			)
+		);
+		$error    = self::input_error( $raw, $spec, count( $roles ), count( $groups ) );
+		return array(
+			'spec'  => $spec,
+			'error' => $spec['enabled'] || '' === $error ? $error : '',
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function typed_roles( string $text, array $previous ): array {
+		$marcas = array();
+		$lineas = array();
+		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
+			$partes = array_map( 'trim', explode( '|', (string) $linea ) );
+			$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
+			if ( $marca ) {
+				array_pop( $partes );
+			}
+			$rotulo   = implode( ' | ', $partes );
+			$lineas[] = $rotulo;
+			$marcas[] = $marca;
+		}
+		$out = array();
+		$i   = 0;
+		foreach ( QuestionGrid::match_rows( implode( "\n", $lineas ), $previous ) as $role ) {
+
+			while ( isset( $lineas[ $i ] ) && $lineas[ $i ] !== $role['label'] ) {
+				++$i;
+			}
+			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
+			++$i;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function input_error( array $raw, array $spec, int $roles, int $groups ): string {
+		$fechas = array( self::text( $raw, 'opens_at' ), self::text( $raw, 'closes_at' ) );
+		$checks = array(
+			'Caben como mucho ' . self::MAX_ROLES . ' papeles.' => $roles > self::MAX_ROLES,
+			'Caben como mucho ' . self::MAX_GROUPS . ' grupos.' => $groups > self::MAX_GROUPS,
+			'Escriba al menos un papel, uno por línea.' => array() === $spec['roles'],
+			'Un papel exige grupo, pero no hay grupos: escriba los grupos o quite «| grupo».' => array() === $spec['groups'] && in_array( true, array_column( $spec['roles'], 'needs_group' ), true ),
+			'El mínimo y el máximo de personas tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
+			'El máximo de personas no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,
+			'El mínimo de personas no puede ser mayor que el máximo.' => $spec['min'] > $spec['max'],
+			'Las fechas de la lista de personas tienen que ser días que existen.' => ( '' !== $fechas[0] && '' === $spec['opens_at'] ) || ( '' !== $fechas[1] && '' === $spec['closes_at'] ),
+			'La lista de personas no puede cerrarse antes de abrirse.' => '' !== $spec['opens_at'] && '' !== $spec['closes_at'] && $spec['closes_at'] < $spec['opens_at'],
+		);
+		foreach ( $checks as $texto => $falla ) {
+			if ( $falla ) {
+				return $texto;
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function refusal( array $before, array $after, array $used ): string {
+		foreach ( array(
+			'roles'  => 'El papel',
+			'groups' => 'El grupo',
+		) as $lista => $nombre ) {
+			$quedan = array_column( (array) ( $after[ $lista ] ?? array() ), 'key' );
+			foreach ( (array) ( $before[ $lista ] ?? array() ) as $item ) {
+				if ( ! in_array( $item['key'], $quedan, true ) && ! empty( $used[ $lista ][ $item['key'] ] ) ) {
+					return $nombre . ' «' . $item['label'] . '» tiene personas dadas de alta en alguna solicitud: no se puede quitar. Puede cambiarle el nombre. No se ha guardado nada.';
+				}
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+	public static function roles_text( array $spec ): string {
+		$lineas = array();
+		foreach ( (array) ( $spec['roles'] ?? array() ) as $role ) {
+			$lineas[] = (string) $role['label'] . ( ! empty( $role['needs_group'] ) ? ' | ' . self::GROUP_MARK : '' );
+		}
+		return implode( "\n", $lineas );
+	}
+
+
+
+
+
+
+
+	public static function groups_text( array $spec ): string {
+		return implode( "\n", array_column( (array) ( $spec['groups'] ?? array() ), 'label' ) );
+	}
+
+
+
+
+
+
+
+
+
+	public static function label( array $spec, string $which, string $key ): string {
+		foreach ( (array) ( $spec[ $which ] ?? array() ) as $item ) {
+			if ( $key === (string) $item['key'] ) {
+				return (string) $item['label'];
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_closed( array $spec, array $ctx ): string {
+		$spec   = self::sanitize( $spec );
+		$review = (string) ( $ctx['review'] ?? '' );
+		$checks = array(
+			'Este procedimiento no pide una lista de personas.' => ! $spec['enabled'] || ! empty( $ctx['teacher'] ),
+			'El procedimiento está marcado como histórico: la lista de personas ya no se cambia.' => ! empty( $ctx['archived'] ),
+			'La solicitud está excluida: su lista de personas ya no se cambia.' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review,
+			'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.' => $spec['admitted_only'] && ApplicationMetaKeys::REVIEW_ADMITTED !== $review,
+		);
+		foreach ( $checks as $texto => $cierra ) {
+			if ( $cierra ) {
+				return $texto;
+			}
+		}
+		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review );
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function window( array $spec, string $today, string $state, string $review ): string {
+		$abre   = (string) $spec['opens_at'];
+		$cierra = (string) $spec['closes_at'];
+		if ( '' === $abre && '' === $cierra ) {
+			return self::application_editable( $state, $review )
+				? ''
+				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
+		}
+		if ( '' !== $abre && $today < $abre ) {
+			return 'La lista de personas se abre el ' . self::day( $abre ) . '.';
+		}
+		if ( '' !== $cierra && $today > $cierra ) {
+			return 'El plazo de la lista de personas terminó el ' . self::day( $cierra ) . '.';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+	public static function application_editable( string $state, string $review ): bool {
+		return ProcedureState::accepts_applications( $state )
+			|| ( ProcedureMetaKeys::STATE_AMENDMENT === $state && ApplicationMetaKeys::REVIEW_AMEND === $review );
+	}
+
+
+
+
+
+
+
+	private static function day( string $ymd ): string {
+		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
+	}
+
+
+
+
+
+
+
+	private static function date( $value ): string {
+		$value = is_scalar( $value ) ? trim( (string) $value ) : '';
+		return ProcedureInput::is_valid_date( $value ) ? $value : '';
+	}
+
+
+
+
+
+
+
+	private static function number( $value ): ?int {
+		if ( is_int( $value ) ) {
+			return $value;
+		}
+		return is_scalar( $value ) ? ProcedureQuestions::integer( (string) $value ) : null;
+	}
+
+
+
+
+
+
+
+	private static function is_count( string $value ): bool {
+		$n = ProcedureQuestions::integer( $value );
+		return '' === $value || ( null !== $n && $n >= 0 );
+	}
+
+
+
+
+
+
+
+
+	private static function text( array $raw, string $key ): string {
+		$value = $raw[ $key ] ?? '';
+		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ApplicationPeople', false ) ) {
+final class ApplicationPeople {
+
+
+
+
+
+
+	public const FIELDS = array( 'id', 'name', 'surname', 'dni', 'email', 'phone', 'role', 'group' );
+
+
+
+
+
+
+
+	public static function row( $raw ): array {
+		$raw = is_array( $raw ) ? $raw : array();
+		$out = array();
+		foreach ( self::FIELDS as $campo ) {
+			$valor         = $raw[ $campo ] ?? '';
+			$out[ $campo ] = is_scalar( $valor ) ? trim( (string) preg_replace( '/\s+/u', ' ', (string) $valor ) ) : '';
+		}
+		$out['id']    = preg_match( '/^[a-z0-9]{1,32}$/', strtolower( $out['id'] ) ) ? strtolower( $out['id'] ) : '';
+		$out['dni']   = strtoupper( (string) preg_replace( '/[ -]/', '', $out['dni'] ) );
+		$out['email'] = strtolower( $out['email'] );
+		$out['role']  = strtolower( $out['role'] );
+		$out['group'] = strtolower( $out['group'] );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function rows( $raw ): array {
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $item ) {
+			$fila = self::row( $item );
+			if ( '' === $fila['id'] || isset( $out[ $fila['id'] ] ) ) {
+				continue;
+			}
+			$out[ $fila['id'] ] = $fila;
+		}
+		return array_slice( array_values( $out ), 0, PeopleSpec::MAX_PEOPLE );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function validate( array $spec, array $people, array $row ): array {
+		$spec   = PeopleSpec::sanitize( $spec );
+		$row    = self::row( $row );
+		$otras  = array_values(
+			array_filter(
+				self::rows( $people ),
+				static function ( array $otra ) use ( $row ): bool {
+					return '' === $row['id'] || $otra['id'] !== $row['id'];
+				}
+			)
+		);
+		$errors = self::fields( $spec, $row );
+		if ( array() !== $errors ) {
+			return $errors;
+		}
+		return self::against( $spec, $otras, $row );
+	}
+
+
+
+
+
+
+
+
+	private static function fields( array $spec, array $row ): array {
+		$papel  = self::find( $spec['roles'], $row['role'] );
+		$checks = array(
+			'name'    => array( '' !== $row['name'], 'el nombre' ),
+			'surname' => array( '' !== $row['surname'], 'los apellidos' ),
+			'dni'     => array( ApplicationInput::is_dni( $row['dni'] ), 'el DNI o NIE, completo y con su letra' ),
+			'email'   => array( ProcedureInput::is_email( $row['email'] ), 'el correo electrónico' ),
+			'phone'   => array( '' === $row['phone'] || (bool) preg_match( '/^\+?[0-9][0-9 ()-]{5,19}$/', $row['phone'] ), 'el teléfono, solo con cifras' ),
+			'role'    => array( array() !== $papel, 'el papel' ),
+		);
+		if ( array() !== $papel ) {
+			$grupo           = '' === $row['group'] || array() !== self::find( $spec['groups'], $row['group'] );
+			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que este papel exige' );
+		}
+		$out = array();
+		foreach ( $checks as $clave => list( $bien, $texto ) ) {
+			if ( ! $bien ) {
+				$out[ $clave ] = $texto;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function against( array $spec, array $otras, array $row ): array {
+		foreach ( $otras as $otra ) {
+			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+			if ( $mismo_sitio && $otra['dni'] === $row['dni'] ) {
+				return array( 'duplicate' => 'Esa persona ya está en la lista con el mismo papel y grupo.' );
+			}
+			if ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
+				return array( 'unique_group' => 'Ese papel ya lo tiene otra persona en ese grupo: solo cabe una por papel y grupo.' );
+			}
+		}
+		if ( '' === $row['id'] && count( $otras ) + 1 > (int) $spec['max'] ) {
+			return array( 'max' => 'La lista ya tiene ' . count( $otras ) . ' personas, que es el máximo que admite este procedimiento.' );
+		}
+		return array();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function is_complete( array $spec, array $people ): bool {
+		$spec = PeopleSpec::sanitize( $spec );
+		return ! $spec['enabled'] || count( self::rows( $people ) ) >= $spec['min'];
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function fingerprint( array $row ): string {
+		$row = self::row( $row );
+		return substr( hash( 'sha256', implode( "\x1f", $row ) ), 0, 16 );
+	}
+
+
+
+
+
+
+
+
+
+	public static function describe( array $spec, array $row ): string {
+		$row = self::row( $row );
+		return implode(
+			' · ',
+			array_filter(
+				array(
+					trim( $row['name'] . ' ' . $row['surname'] ),
+					$row['email'],
+					$row['phone'],
+					PeopleSpec::label( $spec, 'roles', $row['role'] ),
+					PeopleSpec::label( $spec, 'groups', $row['group'] ),
+				),
+				'strlen'
+			)
+		);
+	}
+
+
+
+
+
+
+
+	public static function masked_dni( string $dni ): string {
+		$dni = trim( $dni );
+		return strlen( $dni ) <= 4 ? $dni : str_repeat( '•', strlen( $dni ) - 4 ) . substr( $dni, -4 );
+	}
+
+
+
+
+
+
+
+
+	private static function find( array $items, string $key ): array {
+		foreach ( $items as $item ) {
+			if ( '' !== $key && $key === (string) $item['key'] ) {
+				return $item;
+			}
+		}
+		return array();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\Centre;
 
 use Prc\Meta\ProcedureMetaKeys;

@@ -9,6 +9,8 @@
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -660,6 +662,37 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * The centre rules of a procedure as the «Datos» form holds them.
+	 *
+	 * La lista cerrada, un código por línea: es como se teclea.
+	 *
+	 * @param int $procedure_id Procedure post ID, 0 for a new one.
+	 * @return array{centre_types:string[], islands:string[], allowed_centres:string}
+	 */
+	private static function stored_eligibility( int $procedure_id ): array {
+		$reglas = $procedure_id > 0 ? ProcedureAccess::eligibility( $procedure_id ) : CentreEligibility::rules( array() );
+		return array(
+			'centre_types'    => $reglas['types'],
+			'islands'         => $reglas['islands'],
+			'allowed_centres' => implode( "\n", $reglas['codes'] ),
+		);
+	}
+
+	/**
+	 * What the «Quién puede solicitar» section offers: the types and islands
+	 * of the catalogue, and the chosen ones even if the catalogue lost them.
+	 *
+	 * @param array<string, mixed> $values Field values.
+	 * @return array{types:string[], islands:string[]}
+	 */
+	private static function centre_options( array $values ): array {
+		return array(
+			'types'   => CentreEligibility::values( array_merge( CentreCatalog::values( 'type' ), (array) ( $values[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() ) ) ),
+			'islands' => CentreEligibility::values( array_merge( CentreCatalog::values( 'island' ), (array) ( $values[ ProcedureMetaKeys::ISLANDS ] ?? array() ) ) ),
+		);
+	}
+
+	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
 	 * @param int $procedure_id Existing procedure, or 0 on creation.
@@ -692,6 +725,10 @@ final class ProcedureEditor {
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- textos: CentreEligibility::values() los limpia y la meta los sanea al guardar.
+		$tipos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- textos: CentreEligibility::values() los limpia y la meta los sanea al guardar.
+		$islas = (array) wp_unslash( $_POST[ ProcedureMetaKeys::ISLANDS ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$datos                      = array(
@@ -710,6 +747,9 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'centre_types'         => $tipos,
+			'islands'              => $islas,
+			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -759,7 +799,8 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
+				),
+				self::stored_eligibility( $procedure_id )
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
@@ -789,6 +830,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
+			ProcedureMetaKeys::CENTRE_TYPES         => $limpio['centre_types'],
+			ProcedureMetaKeys::ISLANDS              => $limpio['islands'],
+			ProcedureMetaKeys::ALLOWED_CENTRES      => $limpio['allowed_centres'],
 		);
 		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
@@ -1346,6 +1390,10 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_options'          => array(
+				'types'   => array(),
+				'islands' => array(),
+			),
 			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
 			'audiences'               => ProcedureMetaKeys::audiences(),
 			'header_colors'           => ProcedureMetaKeys::header_colors(),
@@ -1474,6 +1522,9 @@ final class ProcedureEditor {
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		if ( self::PANEL_DATA === $m['panel'] ) {
+			$m['centre_options'] = self::centre_options( (array) $m['values'] );
+		}
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// Las solicitudes se leen una vez: la tabla y los recuentos del
@@ -1542,6 +1593,10 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		$acotados                                       = self::stored_eligibility( $procedure_id );
+		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
+		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
@@ -1564,6 +1619,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
 			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
+			ProcedureMetaKeys::CENTRE_TYPES    => 'centre_types',
+			ProcedureMetaKeys::ISLANDS         => 'islands',
+			ProcedureMetaKeys::ALLOWED_CENTRES => 'allowed_centres',
 		);
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se repinta lo tecleado; el nonce lo comprobó handle().
 		$enviados                 = array_keys( (array) $_POST );

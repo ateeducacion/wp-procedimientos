@@ -764,8 +764,12 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		wp_set_object_terms( $otro, array( $this->curso() ), ProcedureTaxonomies::COURSE );
 
 		$this->acting_as( $uid );
-		$_GET = array();
-		$html = WorkspaceView::html( Workspace::model() );
+		$_GET   = array();
+		$modelo = Workspace::model();
+		foreach ( $modelo['rows'] as $fila ) {
+			$this->assertSame( ProcedureAccess::can_duplicate( $uid, (int) $fila['id'] ), $fila['can_duplicate'], 'lo mismo que dice el guardián' );
+		}
+		$html = WorkspaceView::html( $modelo );
 
 		$this->assertSame( 2, substr_count( $html, 'value="' . ProcedureEditor::OP_DUPLICATE . '"' ) );
 		$this->assertStringContainsString( '¿Duplicar «Red de prueba»?', $html );
@@ -774,5 +778,9 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'action="' . esc_url( ProcedureEditor::url( $id ) ) . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html );
 		$this->assertStringNotContainsString( 'id="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html, 'sin id repetido en cada fila' );
+
+		// Una fila que no se puede duplicar no lleva el botón.
+		$modelo['rows'][0]['can_duplicate'] = false;
+		$this->assertSame( 1, substr_count( WorkspaceView::html( $modelo ), 'value="' . ProcedureEditor::OP_DUPLICATE . '"' ) );
 	}
 }

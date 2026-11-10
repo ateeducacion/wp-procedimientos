@@ -16872,12 +16872,13 @@ final class WorkspaceView {
 				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
 			</td>
 			<td class="prc-celda-accion" data-rotulo="Duplicar">
-				<?php self::duplicate( $row ); ?>
+				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+					<?php self::duplicate( $row ); ?>
+				<?php endif; ?>
 			</td>
 		</tr>
 		<?php
 	}
-
 
 
 
@@ -17240,9 +17241,15 @@ final class Workspace {
 
 	private static function collect( int $user_id ): array {
 		$rows = array();
+
+
+
+		$crea = ProcedureAccess::can_manage_procedures( $user_id );
 		foreach ( self::scope( $user_id ) as $post ) {
 			if ( ProcedureAccess::can_open( $user_id, (int) $post->ID ) ) {
-				$rows[] = self::row( $post );
+				$fila                  = self::row( $post );
+				$fila['can_duplicate'] = $crea && 'trash' !== $post->post_status;
+				$rows[]                = $fila;
 			}
 		}
 		return $rows;

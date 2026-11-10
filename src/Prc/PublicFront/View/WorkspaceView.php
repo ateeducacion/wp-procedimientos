@@ -384,7 +384,9 @@ final class WorkspaceView {
 				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
 			</td>
 			<td class="prc-celda-accion" data-rotulo="Duplicar">
-				<?php self::duplicate( $row ); ?>
+				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+					<?php self::duplicate( $row ); ?>
+				<?php endif; ?>
 			</td>
 		</tr>
 		<?php
@@ -393,8 +395,7 @@ final class WorkspaceView {
 	/**
 	 * «Duplicar» de una fila: el mismo POST que el del taller.
 	 *
-	 * Cada fila que sale aquí es de un procedimiento que esta persona abre, y
-	 * la pantalla entera es de quien puede crear: puede duplicarlos todos. El
+	 * Solo en las filas que el modelo marca con `can_duplicate`. El
 	 * formulario va al taller del original, que es quien explica un rechazo.
 	 * El nonce va sin `id`: hay uno por fila y un `id` repetido no es HTML.
 	 *

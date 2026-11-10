@@ -162,16 +162,25 @@ copia de todo `procedure_created` y `application_received`). Con
 - `ApplicationExport::who(): array<string,string>` — fuentes de personas del
   fichero de usuarios (`coordinators`, `applicant`). **Punto de extensión del
   PR 4**: sus personas entran aquí y en el `switch` privado `from_source()`.
-- `ApplicationExport::people( int $procedure_id, array $who ): array{people:array, skipped:int}`
-  — las personas sin repetir `username` y cuántas se quedan fuera por no
-  tener correo válido (lo que el diálogo cuenta antes de descargar).
+- `ApplicationExport::people( int $procedure_id, array $who = array() ): array{people:array, left_out:array{email:int, incomplete:int, conflict:int}}`
+  — las personas sin repetir `username` y, aparte, cuántas se quedan fuera
+  por no tener correo válido, por estar incompletas (sin nombre, apellidos o
+  usuario) o por compartir usuario con otra de distinto correo.
+- `ApplicationExport::who_counts( array $applications, array $who = array() ): array<string, array{count:int, email:int, incomplete:int, conflict:int}>`
+  — lo mismo por fuente y en una sola pasada sobre las solicitudes ya
+  cargadas: es lo que el diálogo cuenta antes de descargar.
+  `Applications::rows( int $procedure_id, ?array $applications = null )`
+  acepta las solicitudes ya leídas para no leerlas dos veces.
 - `ApplicationExport::sanitize_choice()`, `choice()` y `remember()` — la
   elección del diálogo, validada, en la meta de usuario `prc_export_{id}`
   (`{columns, shape, format, who}`; `columns` vacío es «todas»).
 - Coordinación con `surname` además de `name` (obligatorio en el formulario;
   `ApplicationMetaRegistration::full_name()` los junta para leer). Lo ya
-  guardado, sin `surname`, se parte por el primer espacio al exportar
-  (`ApplicationExport::split_name()`).
+  guardado, sin `surname`, se parte por el primer espacio al exportar y al
+  abrirlo en el formulario (`ApplicationMetaRegistration::split_name()` y
+  `with_surname()`).
+- `prc_export_{id}` se borra de todas las personas al borrar el
+  procedimiento para siempre (`ApplicationExport::on_delete()`).
 - Campos del diálogo en `ProcedureEditor`: `FIELD_EXPORT_ALL`,
   `FIELD_EXPORT_COLUMNS`, `FIELD_EXPORT_SHAPE`, `FIELD_EXPORT_FORMAT` y
   `FIELD_EXPORT_WHO`.

@@ -51,6 +51,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 | Las opciones que pide la convocatoria: cuatro pares título/indicaciones, un subformulario y, si no basta, un formulario clonado | Núcleo fijo (`Domain/ApplicationInput`) más hasta cuarenta preguntas en `prc_questions` (`Domain/ProcedureQuestions`) |
 | La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una |
 | El catálogo de centros es un formulario más | El filtro `prc_centres`; en local lo contesta el mu-plugin con centros inventados |
+| A qué centros se dirige una convocatoria lo dice su texto, y la titularidad del catálogo no se mira | `prc_ownership`, `prc_centre_types`, `prc_islands` y `prc_allowed_centres`, que decide `ProcedureAccess`; la titularidad se deriva del tipo (ADR-0042) |
 
 **Las solicitudes y los documentos ya presentados no se migran en la fase 1**
 (ADR-0024). **No se lee nada del gestor de formularios anterior** ni se añade
@@ -102,7 +103,8 @@ src/Prc/
 ├── Domain/ApplicationInput.php             Valida la solicitud. Puro
 ├── Domain/PeopleSpec.php                   Lo que pide el procedimiento de la lista de personas y su ventana. Puro
 ├── Domain/ApplicationPeople.php            Valida cada persona de la lista; huella de la fila. Puro
-├── Domain/CentreCatalog.php                Filtro prc_centres, find/search
+├── Domain/CentreEligibility.php            Qué centros admite un procedimiento: titularidad, tipo, isla, lista. Puro
+├── Domain/CentreCatalog.php                Filtro prc_centres, find/search; titularidad derivada del tipo y zona
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
 ├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, map_meta_cap, pre_get_posts
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
@@ -418,6 +420,15 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   que se pintó. Sin lista escrita, ni historial ni aviso. Quién y cuándo, siempre
   `ProcedureAccess::can_edit_people()`. Tocarla no devuelve la solicitud a
   «presentada», y el DNI no va nunca en un correo.
+- **Un centro que no está en el catálogo no solicita a un procedimiento
+  acotado** (ADR-0042): con titularidad, tipos, islas o lista cerrada, el
+  código tiene que estar en el catálogo; sin acotados, solicita igual. La
+  titularidad se deriva del tipo (`prc_private_centre_types`, vacío por
+  defecto); la zona es el código de otro centro del catálogo, `zone` en el
+  código —su rótulo, del filtro `prc_zone_label`— y nunca el nombre que le dé
+  una instalación. Isla, tipo y zona se leen del catálogo al pintar
+  (`Applications::centre_attributes()`); la solicitud solo guarda código y
+  nombre.
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.
 - Diffs pequeños y enfocados. No inventar ficheros que nadie ha pedido.
 

@@ -408,6 +408,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 				'email'      => 1,
 				'incomplete' => 0,
 				'conflict'   => 0,
+				'invalid'    => 0,
 			),
 			$personas['left_out'],
 			'la misma persona repetida no es una omisión'
@@ -459,6 +460,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 				'email'      => 0,
 				'incomplete' => 1,
 				'conflict'   => 0,
+				'invalid'    => 0,
 			),
 			$coordinacion['left_out']
 		);
@@ -466,6 +468,56 @@ class Test_Application_Export extends WP_UnitTestCase {
 
 		$cuenta = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_APPLICANT ) );
 		$this->assertSame( 1, $cuenta['left_out']['incomplete'], 'una cuenta cuyo nombre público es una palabra' );
+	}
+
+	/**
+	 * Un correo que se acepta como válido pero empieza por `=` daría un
+	 * usuario y un correo que una hoja de cálculo ejecuta como fórmula: esa
+	 * persona no sale y se cuenta como usuario no válido. Una normal sí sale.
+	 */
+	public function test_a_username_or_email_a_spreadsheet_would_run_is_left_out() {
+		$procedimiento = $this->procedimiento();
+		$this->solicitud(
+			$procedimiento,
+			'C0001',
+			array(
+				$this->persona( 'Ana', 'Pérez', 'ana@example.org' ),
+				$this->persona( 'Uno', 'Más', '=1+1@example.org' ),
+				$this->persona( 'Calc', 'Ulo', "=cmd|'/ccalc'!a0@example.org" ),
+			)
+		);
+
+		$personas = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
+		$this->assertSame( array( 'ana' ), array_column( $personas['people'], 'username' ) );
+		$this->assertSame(
+			array(
+				'email'      => 0,
+				'incomplete' => 0,
+				'conflict'   => 0,
+				'invalid'    => 2,
+			),
+			$personas['left_out']
+		);
+		$fichero = ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) );
+		$this->assertSame( "username,firstname,lastname,email\nana,Ana,Pérez,ana@example.org", $fichero );
+	}
+
+	/**
+	 * El filtro del usuario no abre la puerta: lo que devuelva tiene que ser
+	 * un usuario válido para la plataforma.
+	 */
+	public function test_a_filtered_username_a_spreadsheet_would_run_is_left_out() {
+		$procedimiento = $this->procedimiento();
+		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ) );
+		$filtro = static function (): string {
+			return '+SUM(1)';
+		};
+		add_filter( 'prc_export_username', $filtro );
+		$personas = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
+		remove_filter( 'prc_export_username', $filtro );
+
+		$this->assertSame( array(), $personas['people'] );
+		$this->assertSame( 1, $personas['left_out']['invalid'] );
 	}
 
 	/**
@@ -498,12 +550,14 @@ class Test_Application_Export extends WP_UnitTestCase {
 					'email'      => 1,
 					'incomplete' => 0,
 					'conflict'   => 0,
+					'invalid'    => 0,
 				),
 				ApplicationExport::WHO_APPLICANT    => array(
 					'count'      => 0,
 					'email'      => 0,
 					'incomplete' => 2,
 					'conflict'   => 0,
+					'invalid'    => 0,
 				),
 			),
 			ApplicationExport::who_counts( $solicitudes ),
@@ -541,7 +595,20 @@ class Test_Application_Export extends WP_UnitTestCase {
 			)
 		);
 
+		// Las cuentas de prueba se llaman «User N», con un espacio que la
+		// plataforma no acepta: aquí llevan un usuario corporativo.
+		global $wpdb;
+		foreach ( array(
+			'C0001' => 'CSosa',
+			'C0002' => 'jamora',
+		) as $codigo => $usuario ) {
+			$cuenta = (int) get_post_field( 'post_author', (int) Applications::find( $procedimiento, $codigo ) );
+			$wpdb->update( $wpdb->users, array( 'user_login' => $usuario ), array( 'ID' => $cuenta ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			clean_user_cache( $cuenta );
+		}
+
 		$login = (string) get_userdata( (int) get_post_field( 'post_author', (int) Applications::find( $procedimiento, 'C0001' ) ) )->user_login;
+		$this->assertSame( 'CSosa', $login );
 		$filas = explode( "\n", ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_APPLICANT ) ) ) );
 		$this->assertCount( 3, $filas );
 		$this->assertSame( ApplicationExport::MOODLE_HEADER, $filas[0] );
@@ -610,15 +677,17 @@ class Test_Application_Export extends WP_UnitTestCase {
 			"username,firstname,lastname,email\nana,\"'=HYPERLINK(\"\"x\"\")\",'-Pérez,ana@example.org",
 			ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) )
 		);
-		// El usuario y el correo salen tal cual: ya están validados, y una
-		// comilla delante los convertiría en otro usuario y en otro correo.
+		// El usuario y el correo no se neutralizan: una comilla delante los
+		// convertiría en otro usuario y en otro correo. Quien los tiene así
+		// no sale, y se cuenta.
 		add_filter(
 			'prc_export_username',
 			static function (): string {
 				return '-ana';
 			}
 		);
-		$this->assertStringEndsWith( "\n-ana,\"'=HYPERLINK(\"\"x\"\")\",'-Pérez,ana@example.org", ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) ) );
+		$this->assertSame( ApplicationExport::MOODLE_HEADER, ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) ) );
+		$this->assertSame( 1, ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) )['left_out']['invalid'] );
 		$this->assertSame( "'@x", ApplicationExport::neutralize( '@x' ) );
 		$this->assertSame( "'+1", ApplicationExport::neutralize( '+1' ) );
 		$this->assertSame( 'normal', ApplicationExport::neutralize( 'normal' ) );
@@ -744,6 +813,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 			array(
 				$this->persona( 'Ana', 'Pérez', 'ana@example.org' ),
 				$this->persona( 'Sin', 'Correo', '' ),
+				$this->persona( 'Uno', 'Más', '=1+1@example.org' ),
 			)
 		);
 		$quien = $this->administrator();
@@ -771,7 +841,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$this->assertDoesNotMatchRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="q3"[^>]*checked/', $html );
 		$this->assertMatchesRegularExpression( '/value="' . ApplicationExport::SHAPE_PERSON . '"[^>]*checked/', $html );
 		$this->assertMatchesRegularExpression( '/value="' . ApplicationExport::FORMAT_MOODLE . '"/', $html );
-		$this->assertStringContainsString( 'Coordinación (1 persona. No saldrán: 1 sin correo válido)', $html );
+		$this->assertStringContainsString( 'Coordinación (1 persona. No saldrán: 1 sin correo válido, 1 con un usuario no válido para la plataforma)', $html );
 		$this->assertStringContainsString( 'Quien presenta la solicitud (0 personas. No saldrán: 1 incompleta)', $html );
 	}
 

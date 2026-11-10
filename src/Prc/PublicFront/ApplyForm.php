@@ -612,7 +612,12 @@ final class ApplyForm {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+		// Lo guardado antes de los apellidos abre ya partido: si «Nombre»
+		// llevara el nombre entero, al guardar los apellidos saldrían dos veces.
+		$coordinators = array_map(
+			array( ApplicationMetaRegistration::class, 'with_surname' ),
+			ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() )
+		);
 		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),

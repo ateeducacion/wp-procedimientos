@@ -375,6 +375,34 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
 	}
 
+	/**
+	 * Una solicitud guardada antes de los apellidos abre con el nombre partido
+	 * por el primer espacio: sin esto, «Nombre» llevaría el nombre entero y
+	 * los apellidos saldrían dos veces al guardar.
+	 */
+	public function test_an_old_coordinator_without_surname_opens_split() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
+		$uid       = $this->school_head( 'C0001' );
+		Applications::save(
+			$procedure,
+			$uid,
+			$this->nucleo(
+				array(
+					'coordinator' => array(
+						'name'  => 'Ana García López',
+						'dni'   => '12345678Z',
+						'email' => 'ana@example.org',
+					),
+				)
+			)
+		);
+		$this->acting_as( $uid );
+		$html = $this->pintar( $procedure );
+
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-name-0"[^>]*value="Ana"/s', $html );
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-surname-0"[^>]*value="García López"/s', $html );
+	}
+
 	/** Multiple coordinator rows are validated and saved together. */
 	public function test_multiple_coordinators_are_saved_on_the_application() {
 		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 2 ) );

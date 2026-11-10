@@ -181,6 +181,38 @@ final class ApplicationMetaRegistration {
 	}
 
 	/**
+	 * Split a full name at its first space: first name, then the rest.
+	 *
+	 * Para lo que se guardó antes de que la coordinación tuviera apellidos
+	 * (ADR-0039) y para el nombre público de una cuenta sin nombre ni
+	 * apellidos. Un nombre compuesto sale mal partido; por eso ahora se piden
+	 * aparte.
+	 *
+	 * @param string $full Full name.
+	 * @return array{0:string, 1:string}
+	 */
+	public static function split_name( string $full ): array {
+		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
+		return array( $partes[0], $partes[1] ?? '' );
+	}
+
+	/**
+	 * A stored coordinator with name and surname apart.
+	 *
+	 * Lo guardado antes de los apellidos lleva el nombre entero en `name`; se
+	 * parte por el primer espacio. Lo que ya tiene apellidos no se toca.
+	 *
+	 * @param array<string, mixed> $coordinator One stored coordinator.
+	 * @return array<string, mixed>
+	 */
+	public static function with_surname( array $coordinator ): array {
+		if ( '' === (string) ( $coordinator['surname'] ?? '' ) && '' !== (string) ( $coordinator['name'] ?? '' ) ) {
+			list( $coordinator['name'], $coordinator['surname'] ) = self::split_name( (string) $coordinator['name'] );
+		}
+		return $coordinator;
+	}
+
+	/**
 	 * Every coordinator's full name, joined for one cell.
 	 *
 	 * @param array<int, array<string, mixed>> $coordinators Stored coordinators.

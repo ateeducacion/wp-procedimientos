@@ -253,7 +253,7 @@ final class ApplyForm {
 			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
 			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = Applications::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
+			self::$rejected = ApplicationOperations::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
 			return;
 		}
 

@@ -11634,17 +11634,6 @@ final class Applications {
 
 
 
-	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
-
-
-
-
-
-
-	private static $refusal = '';
-
-
-
 
 
 
@@ -11946,8 +11935,8 @@ final class Applications {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
-		$centro        = self::centre_of( $user_id, $code );
-		self::$refusal = '';
+		$centro = self::centre_of( $user_id, $code );
+		ApplicationOperations::forget_refusal();
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}
@@ -11980,7 +11969,7 @@ final class Applications {
 		}
 
 
-		if ( $created && self::lost_race( $id, $procedure_id, $centro['code'] ) ) {
+		if ( $created && ApplicationOperations::lost_race( $id, $procedure_id, $centro['code'] ) ) {
 			return 0;
 		}
 
@@ -12037,54 +12026,6 @@ final class Applications {
 		}
 		self::saved( $id, $created, $user_id, $antes );
 		return $id;
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
-		$ids = get_posts(
-			array(
-				'post_type'        => ApplicationPostType::POST_TYPE,
-				'post_parent'      => $procedure_id,
-				'post_status'      => 'publish',
-				'numberposts'      => 1,
-				'orderby'          => 'ID',
-				'order'            => 'ASC',
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
-				'meta_value'       => $code,
-				'suppress_filters' => true,
-			)
-		);
-		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
-			return false;
-		}
-		wp_delete_post( $id, true );
-		self::$refusal = self::DUPLICATE;
-		return true;
-	}
-
-
-
-
-
-
-
-	public static function why_not_saved( string $generic ): string {
-		return '' !== self::$refusal ? self::$refusal : $generic;
 	}
 
 
@@ -13529,11 +13470,82 @@ final class ApplicationOperations {
 
 
 
+	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
+
+
+
+
+
+
+	private static $refusal = '';
+
+
+
+
 
 
 	public static function register(): void {
 		add_action( 'trashed_post', array( self::class, 'on_trashed' ) );
 		add_action( 'untrashed_post', array( self::class, 'on_untrashed' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'orderby'          => 'ID',
+				'order'            => 'ASC',
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $code,
+				'suppress_filters' => true,
+			)
+		);
+		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
+			return false;
+		}
+		wp_delete_post( $id, true );
+		self::$refusal = self::DUPLICATE;
+		return true;
+	}
+
+
+
+
+
+
+
+	public static function why_not_saved( string $generic ): string {
+		return '' !== self::$refusal ? self::$refusal : $generic;
+	}
+
+
+
+
+
+
+	public static function forget_refusal(): void {
+		self::$refusal = '';
 	}
 
 
@@ -13796,7 +13808,7 @@ final class ApplicationOperations {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
 
-		if ( Applications::lost_race( $id, $procedure_id, $codigo ) ) {
+		if ( self::lost_race( $id, $procedure_id, $codigo ) ) {
 			return 0;
 		}
 
@@ -16762,7 +16774,7 @@ final class ApplicationActionsPanel {
 			return $porque;
 		}
 		if ( ApplicationOperations::submit_for( $procedure_id, $user_id, self::$posted['code'], self::$posted['late'], $fuera ) <= 0 ) {
-			return Applications::why_not_saved( 'No se ha podido crear la solicitud. Vuelva a intentarlo.' );
+			return ApplicationOperations::why_not_saved( 'No se ha podido crear la solicitud. Vuelva a intentarlo.' );
 		}
 		$codigo = (string) ( ApplicationActions::catalogue_centre( self::$posted['code'] )['code'] ?? '' );
 		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( array() ), array( ProcedureEditor::ARG_NOTICE => 'en-nombre' ), array( 'search' => $codigo ) ) );
@@ -26096,7 +26108,7 @@ final class ApplyForm {
 			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
 			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = Applications::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
+			self::$rejected = ApplicationOperations::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
 			return;
 		}
 

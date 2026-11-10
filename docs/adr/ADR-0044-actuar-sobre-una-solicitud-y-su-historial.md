@@ -241,7 +241,7 @@ filtro de incompletas.
 
 **Una por centro, también con dos envíos a la vez.** Después de crear una
 solicitud —el alta normal del centro o en su nombre—,
-`Applications::lost_race()` vuelve a mirar: si hay otra publicada de ese centro
+`ApplicationOperations::lost_race()` vuelve a mirar: si hay otra publicada de ese centro
 con un ID más bajo, la nueva se borra para siempre y se rechaza con «ya hay una
 solicitud de este centro».
 

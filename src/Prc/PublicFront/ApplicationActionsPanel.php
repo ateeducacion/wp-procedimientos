@@ -221,7 +221,7 @@ final class ApplicationActionsPanel {
 			return $porque;
 		}
 		if ( ApplicationOperations::submit_for( $procedure_id, $user_id, self::$posted['code'], self::$posted['late'], $fuera ) <= 0 ) {
-			return Applications::why_not_saved( 'No se ha podido crear la solicitud. Vuelva a intentarlo.' );
+			return ApplicationOperations::why_not_saved( 'No se ha podido crear la solicitud. Vuelva a intentarlo.' );
 		}
 		$codigo = (string) ( ApplicationActions::catalogue_centre( self::$posted['code'] )['code'] ?? '' );
 		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( array() ), array( ProcedureEditor::ARG_NOTICE => 'en-nombre' ), array( 'search' => $codigo ) ) );

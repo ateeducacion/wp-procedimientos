@@ -7,6 +7,7 @@
 
 namespace Prc\Domain;
 
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 
 /**
@@ -209,6 +210,60 @@ final class ProcedureState {
 	 */
 	public static function accepts_applications( string $state ): bool {
 		return ProcedureMetaKeys::STATE_OPEN === $state;
+	}
+
+	/**
+	 * Whether a school may submit or edit its application right now, and why not.
+	 *
+	 * La tabla de la SDD, en código: abierto se presenta o se edita; en
+	 * subsanación solo edita quien tiene la solicitud «a subsanar»; en el
+	 * resto se mira y ya. Una prórroga viva de esa solicitud ({@see late_open()})
+	 * abre el formulario entero aunque el plazo general esté cerrado.
+	 *
+	 * @param string $state           One of ProcedureMetaKeys::states().
+	 * @param string $review_state    Review state of the existing application, '' when there is none.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
+	 * @param bool   $late            Whether the existing application has a live extension.
+	 * @return string Empty when the form is open; otherwise why it is not.
+	 */
+	public static function application_window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		if ( $late || self::accepts_applications( $state ) ) {
+			return '';
+		}
+		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
+			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
+				? ''
+				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
+		}
+		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
+			return 'El plazo de solicitud todavía no está abierto.';
+		}
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
+	}
+
+	/**
+	 * Whether the extension of one application still lets the school edit it.
+	 *
+	 * La prórroga de una solicitud (`prc_late_until`, PLAN-0003, PR 9) deja
+	 * editarla entera hasta ese día, los dos incluidos, aunque el plazo
+	 * general esté cerrado; no afecta a ninguna otra. Nunca en un
+	 * procedimiento histórico (ADR-0023) ni en uno sin publicar. Vencida, no
+	 * deja nada.
+	 *
+	 * @param string $state      State of the procedure, one of ProcedureMetaKeys::states().
+	 * @param string $late_until Last day of the extension, Y-m-d; empty for none.
+	 * @param string $today      Reference day, Y-m-d.
+	 * @return bool
+	 */
+	public static function late_open( string $state, string $late_until, string $today ): bool {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_ARCHIVED, ProcedureMetaKeys::STATE_DRAFT ), true ) ) {
+			return false;
+		}
+		$late_until = trim( $late_until );
+		return 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $late_until ) && trim( $today ) <= $late_until;
 	}
 
 	/**

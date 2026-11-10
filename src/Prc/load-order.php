@@ -48,6 +48,7 @@ return array(
 	'PublicFront/ApplicationLog.php',
 	'PublicFront/People.php',
 	'PublicFront/ApplicationExport.php',
+	'PublicFront/PeopleSpecPanel.php',
 	'PublicFront/View/HomeView.php',
 	'PublicFront/Home.php',
 	'PublicFront/View/ProcedureChrome.php',

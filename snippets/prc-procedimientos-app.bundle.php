@@ -11052,6 +11052,152 @@ final class ApplicationExport {
 
 
 
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\PeopleSpec;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\PeopleSpecPanel', false ) ) {
+final class PeopleSpecPanel {
+
+	public const FIELD_ENABLED  = 'prc_people_enabled';
+	public const FIELD_ROLES    = 'prc_people_roles';
+	public const FIELD_GROUPS   = 'prc_people_groups';
+	public const FIELD_MIN      = 'prc_people_min';
+	public const FIELD_MAX      = 'prc_people_max';
+	public const FIELD_UNIQUE   = 'prc_people_unique';
+	public const FIELD_OPENS    = 'prc_people_opens_at';
+	public const FIELD_CLOSES   = 'prc_people_closes_at';
+	public const FIELD_ADMITTED = 'prc_people_admitted_only';
+
+
+
+
+
+
+	private const FIELDS = array(
+		'enabled'          => self::FIELD_ENABLED,
+		'roles'            => self::FIELD_ROLES,
+		'groups'           => self::FIELD_GROUPS,
+		'min'              => self::FIELD_MIN,
+		'max'              => self::FIELD_MAX,
+		'unique_per_group' => self::FIELD_UNIQUE,
+		'opens_at'         => self::FIELD_OPENS,
+		'closes_at'        => self::FIELD_CLOSES,
+		'admitted_only'    => self::FIELD_ADMITTED,
+	);
+
+
+
+
+
+
+
+	public static function save( int $procedure_id ): string {
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 'Los procedimientos para profesorado no tienen lista de personas: cada solicitud es de una sola persona.';
+		}
+		$antes = People::spec( $procedure_id );
+		$res   = PeopleSpec::from_input( self::typed(), $antes );
+		if ( '' !== $res['error'] ) {
+			return $res['error'] . ' No se ha guardado nada.';
+		}
+		$porque = PeopleSpec::refusal( $antes, $res['spec'], People::used_keys( $procedure_id ) );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, wp_slash( $res['spec'] ) );
+		return '';
+	}
+
+
+
+
+
+
+	private static function typed(): array {
+		$out = array();
+		foreach ( self::FIELDS as $clave => $campo ) {
+
+			$valor         = isset( $_POST[ $campo ] ) && is_string( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : '';
+			$out[ $clave ] = in_array( $clave, array( 'roles', 'groups' ), true ) ? sanitize_textarea_field( $valor ) : sanitize_text_field( $valor );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function model( int $procedure_id, bool $rejected ): array {
+		$spec    = People::spec( $procedure_id );
+		$valores = array(
+			'enabled'          => $spec['enabled'] ? '1' : '',
+			'roles'            => PeopleSpec::roles_text( $spec ),
+			'groups'           => PeopleSpec::groups_text( $spec ),
+			'min'              => (string) $spec['min'],
+			'max'              => (string) $spec['max'],
+			'unique_per_group' => $spec['unique_per_group'] ? '1' : '',
+			'opens_at'         => (string) $spec['opens_at'],
+			'closes_at'        => (string) $spec['closes_at'],
+			'admitted_only'    => $spec['admitted_only'] ? '1' : '',
+		);
+
+
+		$de_aqui = $rejected && isset( $_POST[ self::FIELD_ROLES ] );
+		return array(
+			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
+			'values'     => $de_aqui ? self::typed() : $valores,
+			'max_people' => PeopleSpec::MAX_PEOPLE,
+			'max_roles'  => PeopleSpec::MAX_ROLES,
+			'max_groups' => PeopleSpec::MAX_GROUPS,
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function reviews( array $applications ): array {
+		$out = array();
+		foreach ( $applications as $solicitud ) {
+			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID );
+		}
+		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Shell;
@@ -14083,6 +14229,8 @@ final class ProcedureEditorView {
 			echo self::publish_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_NOTICES === $panel ) {
 			echo self::notices_panel( $m );
+		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
+			echo PeopleView::spec_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 
 			echo self::custom_code_panel( $m );
@@ -15139,6 +15287,7 @@ final class ProcedureEditorView {
 					<dd><?php echo $respuesta;?></dd>
 				<?php endforeach; ?>
 			</dl>
+			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
@@ -15722,6 +15871,7 @@ final class ProcedureEditor {
 	public const PANEL_PUBLISH      = 'publicacion';
 	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
+	public const PANEL_PEOPLE       = 'personas';
 
 	public const OP_REVIEW              = 'review';
 	public const OP_EXPORT              = 'export';
@@ -15734,6 +15884,7 @@ final class ProcedureEditor {
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_NOTIFY              = 'notify';
 	public const OP_MOVE_QUESTION       = 'move_question';
+	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -15816,6 +15967,7 @@ final class ProcedureEditor {
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
+		self::OP_PEOPLE_SPEC,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
@@ -15840,6 +15992,7 @@ final class ProcedureEditor {
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
 		'avisos'       => 'Avisos por correo guardados.',
+		'personas'     => 'Lista de personas guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -15944,6 +16097,7 @@ final class ProcedureEditor {
 			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
+			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_CODE         => 'Código',
@@ -16052,22 +16206,21 @@ final class ProcedureEditor {
 			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
-		if ( self::OP_NOTIFY === $op ) {
+
+
+
+		$sueltas = array(
+			self::OP_NOTIFY         => 'save_notify',
+			self::OP_DELIVERY_DATES => 'save_delivery_dates',
+			self::OP_PEOPLE_SPEC    => 'save_people_spec',
+		);
+		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
 			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
 				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
 				return;
 			}
-			self::save_notify( $procedure_id );
-			return;
-		}
-		if ( self::OP_DELIVERY_DATES === $op ) {
-			EditLock::require_available( $procedure_id );
-			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
-				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
-				return;
-			}
-			self::save_delivery_dates( $procedure_id );
+			call_user_func( array( self::class, $sueltas[ $op ] ), $procedure_id );
 			return;
 		}
 
@@ -16638,6 +16791,19 @@ final class ProcedureEditor {
 
 
 
+	private static function save_people_spec( int $procedure_id ): void {
+		self::$rejected = PeopleSpecPanel::save( $procedure_id );
+		if ( '' === self::$rejected ) {
+			Shell::leave( self::url( $procedure_id, self::PANEL_PEOPLE, array( self::ARG_NOTICE => 'personas' ) ) );
+		}
+	}
+
+
+
+
+
+
+
 	private static function save_links( int $procedure_id ): void {
 		$claves = array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL );
 		$urls   = array();
@@ -16998,6 +17164,8 @@ final class ProcedureEditor {
 			'export'                  => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
+			'people_spec'             => array(),
+			'people'                  => array(),
 		);
 	}
 
@@ -17112,6 +17280,7 @@ final class ProcedureEditor {
 		$m['terms']         = self::term_lists( $user_id );
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -17120,6 +17289,7 @@ final class ProcedureEditor {
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
 			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
 			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
+			$m['people']       = PeopleSpecPanel::reviews( $solicitudes );
 		}
 		return $m;
 	}
@@ -17523,6 +17693,8 @@ namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\PeopleSpecPanel;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
 
@@ -17817,6 +17989,103 @@ final class PeopleView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	public static function spec_panel( array $m ): string {
+		$p  = (array) ( $m['people_spec'] ?? array() );
+		$v  = (array) ( $p['values'] ?? array() );
+		$op = ProcedureEditor::OP_PEOPLE_SPEC;
+		if ( ! empty( $p['teachers'] ) ) {
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Personas de la solicitud</h2>'
+				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de personas.</p></section>';
+		}
+
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
+				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' );?>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-people-roles">Papeles</label>
+					<textarea class="prc-control" id="prc-people-roles" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_ROLES ); ?>" rows="5" aria-describedby="prc-people-roles-ayuda"><?php echo esc_textarea( (string) ( $v['roles'] ?? '' ) ); ?></textarea>
+					<p class="prc-campo__ayuda" id="prc-people-roles-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Coordinación». Escriba «| grupo» detrás del que exija grupo: «Participante | grupo». Para quitar uno, deje su línea en blanco; cambiarle el nombre no cambia a nadie de papel.', (int) ( $p['max_roles'] ?? 0 ) ) ); ?></p>
+				</div>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
+					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
+					<p class="prc-campo__ayuda" id="prc-people-groups-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Eje 1». Para quitar uno, deje su línea en blanco.', (int) ( $p['max_groups'] ?? 0 ) ) ); ?></p>
+				</div>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de personas', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) );?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de personas', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) );?>
+				<?php echo self::day_field( PeopleSpecPanel::FIELD_OPENS, 'La lista se abre el', $v, 'opens_at' );?>
+				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' );?>
+				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
+				<?php echo self::check( PeopleSpecPanel::FIELD_UNIQUE, 'Una sola persona por papel y grupo', $v, 'unique_per_group' );?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' );?>
+			</fieldset>
+			<?php echo PanelParts::submit( 'Guardar la lista de personas' );?>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function check( string $name, string $rotulo, array $v, string $clave ): string {
+		return '<div class="prc-campo prc-campo--completo"><div class="prc-opciones prc-opciones--vertical"><div class="prc-opcion">'
+			. '<input type="checkbox" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="1"' . checked( '' !== (string) ( $v[ $clave ] ?? '' ), true, false ) . ' />'
+			. '<label for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label></div></div></div>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function number( string $name, string $rotulo, array $v, string $clave, string $ayuda, int $max ): string {
+		return '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label>'
+			. '<input class="prc-control" type="number" min="0" max="' . esc_attr( (string) $max ) . '" step="1" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '"'
+			. ' value="' . esc_attr( (string) ( $v[ $clave ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $name . '-ayuda' ) . '" />'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $name . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</p></div>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function day_field( string $name, string $rotulo, array $v, string $clave ): string {
+		return '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label>'
+			. '<input class="prc-control" type="date" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( (string) ( $v[ $clave ] ?? '' ) ) . '" /></div>';
 	}
 }
 

@@ -9,6 +9,8 @@ namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\PeopleSpecPanel;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
 /**
@@ -302,5 +304,102 @@ final class PeopleView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The «Personas» panel of the workshop: what the procedure asks about the
+	 * people of each application.
+	 *
+	 * @param array<string, mixed> $m What ProcedureEditor::model() returned.
+	 * @return string
+	 */
+	public static function spec_panel( array $m ): string {
+		$p  = (array) ( $m['people_spec'] ?? array() );
+		$v  = (array) ( $p['values'] ?? array() );
+		$op = ProcedureEditor::OP_PEOPLE_SPEC;
+		if ( ! empty( $p['teachers'] ) ) {
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Personas de la solicitud</h2>'
+				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de personas.</p></section>';
+		}
+
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
+				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-people-roles">Papeles</label>
+					<textarea class="prc-control" id="prc-people-roles" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_ROLES ); ?>" rows="5" aria-describedby="prc-people-roles-ayuda"><?php echo esc_textarea( (string) ( $v['roles'] ?? '' ) ); ?></textarea>
+					<p class="prc-campo__ayuda" id="prc-people-roles-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Coordinación». Escriba «| grupo» detrás del que exija grupo: «Participante | grupo». Para quitar uno, deje su línea en blanco; cambiarle el nombre no cambia a nadie de papel.', (int) ( $p['max_roles'] ?? 0 ) ) ); ?></p>
+				</div>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
+					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
+					<p class="prc-campo__ayuda" id="prc-people-groups-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Eje 1». Para quitar uno, deje su línea en blanco.', (int) ( $p['max_groups'] ?? 0 ) ) ); ?></p>
+				</div>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de personas', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de personas', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::day_field( PeopleSpecPanel::FIELD_OPENS, 'La lista se abre el', $v, 'opens_at' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
+				<?php echo self::check( PeopleSpecPanel::FIELD_UNIQUE, 'Una sola persona por papel y grupo', $v, 'unique_per_group' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			</fieldset>
+			<?php echo PanelParts::submit( 'Guardar la lista de personas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * A checkbox of the workshop panel.
+	 *
+	 * @param string               $name   Field name.
+	 * @param string               $rotulo Label.
+	 * @param array<string, mixed> $v      Values.
+	 * @param string               $clave  Key in the values.
+	 * @return string
+	 */
+	private static function check( string $name, string $rotulo, array $v, string $clave ): string {
+		return '<div class="prc-campo prc-campo--completo"><div class="prc-opciones prc-opciones--vertical"><div class="prc-opcion">'
+			. '<input type="checkbox" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="1"' . checked( '' !== (string) ( $v[ $clave ] ?? '' ), true, false ) . ' />'
+			. '<label for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label></div></div></div>';
+	}
+
+	/**
+	 * A whole number field of the workshop panel.
+	 *
+	 * @param string               $name   Field name.
+	 * @param string               $rotulo Label.
+	 * @param array<string, mixed> $v      Values.
+	 * @param string               $clave  Key in the values.
+	 * @param string               $ayuda  Help.
+	 * @param int                  $max    Highest value.
+	 * @return string
+	 */
+	private static function number( string $name, string $rotulo, array $v, string $clave, string $ayuda, int $max ): string {
+		return '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label>'
+			. '<input class="prc-control" type="number" min="0" max="' . esc_attr( (string) $max ) . '" step="1" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '"'
+			. ' value="' . esc_attr( (string) ( $v[ $clave ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $name . '-ayuda' ) . '" />'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $name . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</p></div>';
+	}
+
+	/**
+	 * A day field of the workshop panel.
+	 *
+	 * @param string               $name   Field name.
+	 * @param string               $rotulo Label.
+	 * @param array<string, mixed> $v      Values.
+	 * @param string               $clave  Key in the values.
+	 * @return string
+	 */
+	private static function day_field( string $name, string $rotulo, array $v, string $clave ): string {
+		return '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $name ) . '">' . esc_html( $rotulo ) . '</label>'
+			. '<input class="prc-control" type="date" id="' . esc_attr( $name ) . '" name="' . esc_attr( $name ) . '" value="' . esc_attr( (string) ( $v[ $clave ] ?? '' ) ) . '" /></div>';
 	}
 }

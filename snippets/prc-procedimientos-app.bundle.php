@@ -176,6 +176,13 @@ final class ProcedureMetaKeys {
 
 	public const NOTIFY = 'prc_notify';
 
+
+
+
+
+
+	public const PEOPLE_SPEC = 'prc_people_spec';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -232,6 +239,7 @@ final class ProcedureMetaKeys {
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
 			self::NOTIFY,
+			self::PEOPLE_SPEC,
 		);
 	}
 
@@ -251,6 +259,7 @@ final class ProcedureMetaKeys {
 			'application_received'  => 'Aviso a los correos de contacto de cada solicitud recibida o modificada',
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
+			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
 		);
 	}
 
@@ -480,6 +489,20 @@ final class ApplicationMetaKeys {
 
 	public const REVIEW_NOTE = 'prc_review_note';
 
+
+
+
+
+
+	public const PEOPLE = 'prc_people';
+
+
+
+
+
+
+	public const LOG = 'prc_log';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -507,6 +530,8 @@ final class ApplicationMetaKeys {
 			self::FILES,
 			self::REVIEW_STATE,
 			self::REVIEW_NOTE,
+			self::PEOPLE,
+			self::LOG,
 		);
 	}
 
@@ -5199,6 +5224,7 @@ final class ProcedureAccess {
 namespace Prc\Meta;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\PostType\ProcedurePostType;
@@ -5322,6 +5348,10 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::NOTIFY               => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_notify' ),
+			),
+			ProcedureMetaKeys::PEOPLE_SPEC          => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_people_spec' ),
 			),
 		);
 	}
@@ -5572,6 +5602,22 @@ final class ProcedureMetaRegistration {
 		}
 		return $preguntas;
 	}
+
+
+
+
+
+
+
+	public static function sanitize_people_spec( $value ): array {
+		$spec = PeopleSpec::sanitize( $value );
+		foreach ( array( 'roles', 'groups' ) as $lista ) {
+			foreach ( $spec[ $lista ] as $i => $item ) {
+				$spec[ $lista ][ $i ]['label'] = sanitize_text_field( (string) $item['label'] );
+			}
+		}
+		return $spec;
+	}
 }
 
 }
@@ -5585,10 +5631,12 @@ final class ProcedureMetaRegistration {
 
 namespace Prc\Meta;
 
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
+use Prc\PublicFront\ApplicationLog;
 
 
 
@@ -5652,6 +5700,14 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::REVIEW_NOTE        => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',
+			),
+			ApplicationMetaKeys::PEOPLE             => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_people' ),
+			),
+			ApplicationMetaKeys::LOG                => array(
+				'type'     => 'array',
+				'sanitize' => array( ApplicationLog::class, 'sanitize' ),
 			),
 		);
 	}
@@ -5735,6 +5791,20 @@ final class ApplicationMetaRegistration {
 				'dni'     => strtoupper( (string) preg_replace( '/[ -]/', '', self::text( $coordinator, 'dni' ) ) ),
 				'email'   => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function sanitize_people( $value ): array {
+		$out = array();
+		foreach ( ApplicationPeople::rows( $value ) as $fila ) {
+			$out[] = array_map( 'sanitize_text_field', $fila );
 		}
 		return $out;
 	}
@@ -9803,6 +9873,132 @@ final class ApplicationFiles {
 			WP_Filesystem();
 		}
 		return $wp_filesystem instanceof \WP_Filesystem_Base ? $wp_filesystem : null;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationLog', false ) ) {
+final class ApplicationLog {
+
+
+	public const MAX = 500;
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function add( int $application_id, string $event, array $data ): void {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
+			return;
+		}
+		wp_cache_delete( $application_id, 'post_meta' );
+		$todo   = self::all( $application_id );
+		$todo[] = array(
+			'at'    => gmdate( 'Y-m-d\TH:i:s\Z' ),
+			'user'  => get_current_user_id(),
+			'event' => $event,
+			'data'  => $data,
+		);
+		update_post_meta( $application_id, ApplicationMetaKeys::LOG, wp_slash( array_slice( $todo, -self::MAX ) ) );
+	}
+
+
+
+
+
+
+
+	public static function all( int $application_id ): array {
+		return self::sanitize( get_post_meta( $application_id, ApplicationMetaKeys::LOG, true ) );
+	}
+
+
+
+
+
+
+
+
+
+	public static function sanitize( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $entrada ) {
+			$evento = is_array( $entrada ) && is_string( $entrada['event'] ?? null ) ? $entrada['event'] : '';
+			if ( ! preg_match( '/^[a-z][a-z0-9_]{0,39}$/', $evento ) ) {
+				continue;
+			}
+			$momento = is_string( $entrada['at'] ?? null ) ? $entrada['at'] : '';
+			$out[]   = array(
+				'at'    => preg_match( '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $momento ) ? $momento : '',
+				'user'  => absint( $entrada['user'] ?? 0 ),
+				'event' => $evento,
+				'data'  => self::data( is_array( $entrada['data'] ?? null ) ? $entrada['data'] : array(), 3 ),
+			);
+		}
+		return array_slice( $out, -self::MAX );
+	}
+
+
+
+
+
+
+
+
+	private static function data( array $data, int $depth ): array {
+		$out = array();
+		foreach ( $data as $clave => $valor ) {
+			$clave = is_int( $clave ) ? (string) $clave : sanitize_key( (string) $clave );
+			if ( is_array( $valor ) ) {
+				$out[ $clave ] = $depth > 1 ? self::data( $valor, $depth - 1 ) : array();
+			} elseif ( is_int( $valor ) || is_bool( $valor ) ) {
+				$out[ $clave ] = $valor;
+			} elseif ( is_scalar( $valor ) ) {
+				$out[ $clave ] = sanitize_text_field( (string) $valor );
+			}
+		}
+		return $out;
 	}
 }
 

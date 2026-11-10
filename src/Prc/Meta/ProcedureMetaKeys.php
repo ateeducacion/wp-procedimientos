@@ -148,6 +148,13 @@ final class ProcedureMetaKeys {
 	 */
 	public const NOTIFY = 'prc_notify';
 
+	/**
+	 * Lo que el procedimiento pide de la lista de personas de cada solicitud
+	 * ({@see \Prc\Domain\PeopleSpec}): papeles, grupos, mínimo, máximo y
+	 * su ventana propia (ADR-0041). Sin ella, la solicitud no tiene lista.
+	 */
+	public const PEOPLE_SPEC = 'prc_people_spec';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -204,6 +211,7 @@ final class ProcedureMetaKeys {
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
 			self::NOTIFY,
+			self::PEOPLE_SPEC,
 		);
 	}
 
@@ -223,6 +231,7 @@ final class ProcedureMetaKeys {
 			'application_received'  => 'Aviso a los correos de contacto de cada solicitud recibida o modificada',
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
+			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
 		);
 	}
 

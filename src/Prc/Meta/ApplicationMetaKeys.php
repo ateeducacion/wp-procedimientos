@@ -70,6 +70,20 @@ final class ApplicationMetaKeys {
 	 */
 	public const REVIEW_NOTE = 'prc_review_note';
 
+	/**
+	 * Personas que participan, si el procedimiento pide la lista: una fila
+	 * por persona ({@see \Prc\Domain\ApplicationPeople}). La gestiona el
+	 * centro con su propia ventana, aparte del resto de la solicitud (ADR-0041).
+	 */
+	public const PEOPLE = 'prc_people';
+
+	/**
+	 * Historial de la solicitud: quién, cuándo y qué, con el antes y el
+	 * después en los cambios ({@see \Prc\PublicFront\ApplicationLog}).
+	 * Lo escribe el aplicativo y no se edita.
+	 */
+	public const LOG = 'prc_log';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -97,6 +111,8 @@ final class ApplicationMetaKeys {
 			self::FILES,
 			self::REVIEW_STATE,
 			self::REVIEW_NOTE,
+			self::PEOPLE,
+			self::LOG,
 		);
 	}
 

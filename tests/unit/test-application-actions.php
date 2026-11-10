@@ -414,7 +414,7 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
-	 * La pantalla ofrece retirar con confirmación, y «Mi centro» la enlaza.
+	 * La pantalla ofrece retirar con confirmación, y «Mi centro» no lo pega a «Ver la solicitud».
 	 */
 	public function test_the_screens_offer_withdrawing_with_a_confirmation() {
 		$c    = $this->caso();
@@ -426,7 +426,9 @@ class Test_Application_Actions extends WP_UnitTestCase {
 
 		$this->acting_as( $c['head'] );
 		$_GET = array();
-		$this->assertStringContainsString( '#' . WithdrawForm::ANCHOR, MyCentreView::html( MyCentre::model() ) );
+		// «Mi centro» no lo ofrece pegado a «Ver la solicitud»: está al final
+		// de la solicitud, con su confirmación.
+		$this->assertStringNotContainsString( '#' . WithdrawForm::ANCHOR, MyCentreView::html( MyCentre::model() ) );
 
 		update_post_meta( $c['procedure'], ProcedureMetaKeys::CLOSES_AT, $this->dia( -1 ) );
 		$this->assertStringNotContainsString( 'data-prc-confirm="¿Retirar su solicitud?', $this->solicitud( $c['head'], $c['procedure'] ) );

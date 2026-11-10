@@ -23,6 +23,30 @@ use Prc\PublicFront\Shell;
 final class ApplicationProgressView {
 
 	/**
+	 * Tone of the notice strip, by review state.
+	 *
+	 * @var array<string, string>
+	 */
+	private const REVISION_TONO = array(
+		ApplicationMetaKeys::REVIEW_SUBMITTED => 'info',
+		ApplicationMetaKeys::REVIEW_AMEND     => 'warning',
+		ApplicationMetaKeys::REVIEW_ADMITTED  => 'success',
+		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'danger',
+	);
+
+	/**
+	 * Icon of the notice strip, by review state.
+	 *
+	 * @var array<string, string>
+	 */
+	private const REVISION_ICONO = array(
+		ApplicationMetaKeys::REVIEW_SUBMITTED => 'description',
+		ApplicationMetaKeys::REVIEW_AMEND     => 'edit_note',
+		ApplicationMetaKeys::REVIEW_ADMITTED  => 'task_alt',
+		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'error',
+	);
+
+	/**
 	 * The numbered steps, with «Hecho» or «Falta».
 	 *
 	 * @param array<string, mixed> $p What ApplicationProgress::model() returned.
@@ -65,6 +89,71 @@ final class ApplicationProgressView {
 		);
 		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
 			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
+	}
+
+	/**
+	 * The application as it stands: when, in what review state, and the note.
+	 *
+	 * Una tira sobre el formulario, con el tono y el icono del estado de
+	 * revisión: quien tiene que subsanar lee el motivo encima del formulario
+	 * que tiene que corregir, y no en un correo.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	public static function card( array $m ): string {
+		$s = (array) $m['application'];
+		if ( array() === $s ) {
+			return '';
+		}
+
+		$estado = (string) $s['state'];
+		$tono   = self::REVISION_TONO[ $estado ] ?? 'info';
+		$icono  = self::REVISION_ICONO[ $estado ] ?? 'description';
+		$rotulo = (string) $s['state_label'];
+
+		if ( ApplicationMetaKeys::REVIEW_AMEND === $estado && '' !== (string) $m['amend_closes_at'] ) {
+			$rotulo .= ' · hasta el ' . PanelParts::day( (string) $m['amend_closes_at'] );
+		}
+
+		ob_start();
+		?>
+		<div class="prc-solicitud-estado <?php echo esc_attr( Assets::alert_class( $tono ) ); ?>" role="status">
+			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $icono ); ?></span>
+			<span class="prc-solicitud-estado__cuerpo">
+				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
+				<?php if ( array() !== (array) ( $m['progress'] ?? array() ) ) : ?>
+					<?php echo self::status( (array) $m['progress'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php else : ?>
+					<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) $s['note'] ) : ?>
+					<span class="prc-solicitud-estado__nota"><?php echo esc_html( (string) $s['note'] ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) $m['final_list_url'] ) : ?>
+					<span class="prc-solicitud-estado__enlace"><a href="<?php echo esc_url( (string) $m['final_list_url'] ); ?>" rel="noopener">Listado definitivo de admitidos</a></span>
+				<?php endif; ?>
+			</span>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The submit button, with the second step announced before the first one ends.
+	 *
+	 * @param array<string, mixed> $m     Model.
+	 * @param bool                 $nueva Whether there is no application yet.
+	 * @return string
+	 */
+	public static function submit( array $m, bool $nueva ): string {
+		$personas = (array) ( $m['people'] ?? array() );
+		$aviso    = $nueva && ! empty( $personas['show'] )
+			? '<p class="prc-form__siguiente">' . esc_html( sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) ) ) . '</p>'
+			: '';
+		return '<div class="prc-form__envio">' . $aviso
+			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
 	}
 
 	/**

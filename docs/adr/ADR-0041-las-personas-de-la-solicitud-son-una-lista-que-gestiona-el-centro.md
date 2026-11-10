@@ -116,12 +116,10 @@ releyendo la meta en el momento de escribir.
   demás metas, ya en caché.
 - **Pro:** no pasa por el formulario de la solicitud: ni su plazo ni su
   vuelta a «presentada».
-- **Contra:** es la objeción de la ADR-0018 en pequeño. Releer justo antes de
-  escribir estrecha la ventana a milisegundos, pero leer, añadir y escribir
-  una meta **sigue sin ser atómico**: dos altas en el mismo instante pueden
-  perder una. Se acepta con la escala real —un centro, dos o tres cuentas— y
-  porque lo que sí se pisaría en silencio, cambiar la misma fila, se para con
-  la huella (abajo).
+- **Contra:** es la objeción de la ADR-0018 en pequeño: leer, añadir y
+  escribir una meta no es atómico. Se resuelve escribiendo con condición
+  —comparar y cambiar, abajo— y con la huella de cada fila; cuesta un
+  reintento y, si se vuelve a perder, un aviso a quien la estaba cambiando.
 - **Contra:** la meta es un array serializado que se reescribe entero en cada
   operación; con el tope de 200 filas, pocos kilobytes.
 
@@ -211,11 +209,26 @@ revisión, ni la nota, ni la fecha de presentación.
 ### Dos cuentas a la vez
 
 Cada operación actúa sobre una fila por su `id`, relee la meta sin caché en el
-momento de escribir y escribe la lista entera con ese cambio y nada más. El
-cambio y la baja llevan en un campo oculto la **huella** de la fila tal como
-se pintó (`ApplicationPeople::fingerprint()`, un SHA-256 recortado de sus
-datos): si al escribir la fila ya no está, o su huella es otra, se rechaza con
-un aviso que lo dice, y no se pisa lo que hizo la otra cuenta.
+momento de escribir y escribe la lista entera con ese cambio y nada más, **solo
+si la meta sigue como se leyó**
+([`Meta/MetaSwap`](../../src/Prc/Meta/MetaSwap.php)): con la meta guardada,
+`update_post_meta( $id, 'prc_people', $nueva, $leida )`, que actualiza
+`WHERE meta_value = $leida`; sin ella, `add_post_meta( …, true )`, que no la
+crea si otra petición la creó entretanto; y para vaciarla,
+`delete_post_meta( …, $leida )`. Si no casa, se relee, se recalcula y se
+revalida el cambio —el máximo, el duplicado— y se reintenta una vez; si
+vuelve a perder, se rechaza con un aviso que lo dice. **Solo con la lista
+escrita** se anota en el historial y se emite `prc_people_changed`: un alta
+perdida no deja ni entrada ni correo.
+
+El cambio y la baja llevan además, en un campo oculto, la **huella** de la
+fila tal como se pintó (`ApplicationPeople::fingerprint()`, un SHA-256
+recortado de sus datos): si al escribir la fila ya no está, o su huella es
+otra, se rechaza, y la pantalla repinta el formulario de esa fila con lo que
+hay guardado ahora y su huella nueva —no con lo tecleado—, para que un segundo
+envío sea una decisión y no un pisotón. Un cambio que deja la fila igual no
+escribe, ni anota, ni avisa. El nonce de cada formulario es de su operación y
+de su solicitud (`prc_people_{op}_{id}`).
 
 ### El historial
 
@@ -223,9 +236,19 @@ un aviso que lo dice, y no se pisa lo que hizo la otra cuenta.
 `add( $application_id, $event, $data )` y `all( $application_id )`, en la meta
 `prc_log` de la solicitud, con quién, cuándo (UTC, ISO 8601) y qué; en las
 personas, `person_added`, `person_changed` y `person_removed` con la fila de
-antes y la de después. Tope de 500 entradas por solicitud: al llenarse se van
-las más antiguas, como pedía la ADR-0005. Es el primer registro de la ADR-0005
+antes y la de después. Se escribe con la misma condición que la lista, con
+hasta tres intentos. Tope de 500 entradas por solicitud, como pedía la
+ADR-0005: al pasar de ahí **se descartan las más antiguas** y la primera pasa
+a ser una entrada `log_trimmed` que dice cuántas se han ido en total, así que
+el historial no esconde que le faltan. Es el primer registro de la ADR-0005
 que se escribe, y el PR 9 lo usa para el resto de actuaciones.
+
+El coste de guardarlo en una meta: cada entrada reescribe el array entero, y
+leerlo es leer todo. Medido con `serialize()` sobre un cambio de una persona
+con todos sus campos —antes y después—, una entrada ocupa unos 580 bytes y
+500, unos 290 KB por solicitud en su tope. Por eso el panel «Solicitudes» **no** lee ningún historial al
+pintar la tabla: cada revisión lleva un enlace, y solo se lee el de la
+solicitud que se abre, con los nombres de sus cuentas en una consulta.
 
 ### El aviso
 
@@ -246,9 +269,13 @@ DNI**. Se apaga en el panel «Avisos», como los demás.
   lista y su historial en solo lectura.
 - En la exportación (ADR-0039), con la lista encendida, el grupo de columnas
   «Personas»; la forma por persona da una fila por cada persona de la lista,
-  además de las de la coordinación. El fichero de alta de usuarios gana la
-  fuente `people`, con la parte local del correo como usuario. Sin lista, el
-  diálogo y el CSV son los de siempre.
+  además de las de la coordinación, pero cada grupo solo da filas si alguna
+  de sus columnas se exporta. En una fila por solicitud, las personas de una
+  columna se juntan con « · ». El teléfono que empieza por «+» sale sin la
+  comilla de las fórmulas: solo admite cifras, espacios y ese «+». El
+  fichero de alta de usuarios gana la fuente `people`, con la parte local del
+  correo como usuario, y no la lleva si el procedimiento apagó la lista. Sin
+  lista, el diálogo y el CSV son los de siempre.
 
 ### Datos personales
 
@@ -271,16 +298,20 @@ caracteres, y **nunca** en un correo.
 
 ### Negativas
 
-- **Dos altas en el mismo instante pueden perder una.** Releer antes de
-  escribir lo hace improbable, no imposible; lo que se pisaría de verdad —el
-  mismo cambio sobre la misma fila— sí se para. Si ocurre, la persona no sale
-  en la lista ni en el historial y el centro la vuelve a dar de alta. No está
-  medido que ocurra.
+- **Dos altas en el mismo instante cuestan un reintento**, y si otra cuenta
+  vuelve a escribir en medio, una se rechaza con aviso: no se pierde en
+  silencio, pero hay que volver a darla de alta. Queda un hueco: si otra
+  petición **vacía** la lista entera entre la lectura y la escritura,
+  `update_post_meta()` la vuelve a crear con lo calculado antes, y la persona
+  dada de baja reaparece. Es una baja de la última persona a la vez que otro
+  cambio; no está medido que ocurra.
+- **Cada cambio reescribe la meta entera**, y el historial crece con cada uno
+  hasta su tope.
 - **El DNI está en tres sitios** de la solicitud: la coordinación, la lista y
   el historial. El historial es interno, pero existe, y cualquier copia de
   seguridad de la base de datos lo lleva.
 - **El historial tiene tope** y no es un archivo: una solicitud con más de 500
-  cambios pierde los primeros.
+  cambios pierde los primeros, y solo queda dicho cuántos.
 - **Quitar un papel en uso no se puede**: hay que cambiar antes de papel a sus
   personas, solicitud por solicitud, o dejarlo con otro nombre.
 - **La ventana propia es otra fecha que poner.** Sin ella, la lista se cierra

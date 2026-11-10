@@ -15921,6 +15921,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
+					<?php echo self::centre_warning( $m, 'ownership' );?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -16239,7 +16240,10 @@ final class ProcedureEditorView {
 		ob_start();
 		?>
 		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
-			<div class="prc-campo prc-campo--completo"><p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con cualquier límite, solo los centros del catálogo que lo cumplan; las solicitudes ya presentadas no se tocan.</p></div>
+			<div class="prc-campo prc-campo--completo">
+				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<?php echo self::centre_warning( $m, 'catalogue' );?>
+			</div>
 			<?php foreach ( $listas as $nombre => $lista ) : ?>
 				<div class="prc-campo prc-campo--medio">
 					<fieldset>
@@ -16270,6 +16274,18 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function centre_warning( array $m, string $key ): string {
+		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
+		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
 
 
@@ -18550,6 +18566,9 @@ final class ProcedureEditor {
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+
+
+		$m['centre_warnings'] = CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() );
 		return $m;
 	}
 
@@ -18599,6 +18618,7 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_warnings'         => array(),
 			'centre_options'          => array(
 				'types'   => array(),
 				'islands' => array(),
@@ -23135,6 +23155,7 @@ use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -23298,6 +23319,61 @@ final class Settings {
 
 			self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function catalogue_dependencies(): void {
+		$centros  = count( CentreCatalog::all() );
+		$privados = CentreCatalog::private_types();
+		$dependen = self::dependents();
+		$lineas   = array( sprintf( 'Centros que sirve el aplicativo: %d.', $centros ) );
+		if ( 0 === $centros ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen del catálogo: acotan qué centros solicitan y, con el catálogo vacío, no se pueden comprobar.', $dependen['catalogue'] );
+		}
+		if ( array() === $privados ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen de los tipos privados: se dirigen a una sola titularidad y no hay ningún tipo de centro marcado como privado.', $dependen['private'] );
+		}
+		echo '<p style="margin-top:0.75rem;max-width:46rem">' . implode( '<br />', array_map( 'esc_html', $lineas ) ) . '</p>';
+	}
+
+
+
+
+
+
+
+	public static function dependents(): array {
+		$out = array(
+			'catalogue' => 0,
+			'private'   => 0,
+		);
+		$ids = get_posts(
+			array(
+				'post_type'      => ProcedurePostType::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			)
+		);
+		foreach ( $ids as $id ) {
+			if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( (int) $id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+				continue;
+			}
+			$reglas            = ProcedureAccess::eligibility( (int) $id );
+			$out['catalogue'] += CentreEligibility::restricted( $reglas ) ? 1 : 0;
+			$out['private']   += 1 === count( $reglas['ownership'] ) ? 1 : 0;
+		}
+		return $out;
 	}
 
 
@@ -23511,8 +23587,9 @@ final class Settings {
 			$status       = CentreCatalogue::status();
 			$total_count  = CentreCatalogue::count();
 			$active_count = CentreCatalogue::active_count();
-			$is_ready     = $total_count > 0;
-			$has_source   = '' !== CentreCatalogueSync::manifest_url();
+
+			$is_ready   = array() !== CentreCatalog::all();
+			$has_source = '' !== CentreCatalogueSync::manifest_url();
 			?>
 			<table class="widefat striped" style="max-width:46rem">
 				<tbody>
@@ -23582,6 +23659,7 @@ final class Settings {
 					</button>
 				</form>
 			</div>
+			<?php self::catalogue_dependencies(); ?>
 			<?php self::private_types_form(); ?>
 			<p style="margin-top:0.75rem;">
 				La clave de usuario con el código de centro es <code><?php echo esc_html( CentreScope::meta_key() ); ?></code>.

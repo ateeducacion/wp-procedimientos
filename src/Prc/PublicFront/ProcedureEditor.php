@@ -1313,6 +1313,9 @@ final class ProcedureEditor {
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+		// Lo que el taller tiene que avisar de los acotados guardados: un
+		// catálogo vacío o ningún tipo de centro marcado como privado (ADR-0042).
+		$m['centre_warnings'] = CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() );
 		return $m;
 	}
 
@@ -1362,6 +1365,7 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_warnings'         => array(),
 			'centre_options'          => array(
 				'types'   => array(),
 				'islands' => array(),

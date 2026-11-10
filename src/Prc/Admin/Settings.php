@@ -13,6 +13,7 @@ use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -175,6 +176,61 @@ final class Settings {
 
 			self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 		}
+	}
+
+	/**
+	 * What the domain really serves, and which published procedures need it.
+	 *
+	 * El catálogo que cuenta es el que contesta `CentreCatalog::all()` —la copia
+	 * sincronizada, el fichero o el filtro—, no solo la copia sincronizada.
+	 * Sin él, los procedimientos acotados no se pueden medir; sin tipos
+	 * privados, una sola titularidad no acota lo que dice (ADR-0042).
+	 *
+	 * @return void
+	 */
+	private static function catalogue_dependencies(): void {
+		$centros  = count( CentreCatalog::all() );
+		$privados = CentreCatalog::private_types();
+		$dependen = self::dependents();
+		$lineas   = array( sprintf( 'Centros que sirve el aplicativo: %d.', $centros ) );
+		if ( 0 === $centros ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen del catálogo: acotan qué centros solicitan y, con el catálogo vacío, no se pueden comprobar.', $dependen['catalogue'] );
+		}
+		if ( array() === $privados ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen de los tipos privados: se dirigen a una sola titularidad y no hay ningún tipo de centro marcado como privado.', $dependen['private'] );
+		}
+		echo '<p style="margin-top:0.75rem;max-width:46rem">' . implode( '<br />', array_map( 'esc_html', $lineas ) ) . '</p>';
+	}
+
+	/**
+	 * How many published procedures for schools need the catalogue, and how
+	 * many need the private types.
+	 *
+	 * @return array{catalogue:int, private:int}
+	 */
+	public static function dependents(): array {
+		$out = array(
+			'catalogue' => 0,
+			'private'   => 0,
+		);
+		$ids = get_posts(
+			array(
+				'post_type'      => ProcedurePostType::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			)
+		);
+		foreach ( $ids as $id ) {
+			if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( (int) $id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+				continue;
+			}
+			$reglas            = ProcedureAccess::eligibility( (int) $id );
+			$out['catalogue'] += CentreEligibility::restricted( $reglas ) ? 1 : 0;
+			$out['private']   += 1 === count( $reglas['ownership'] ) ? 1 : 0;
+		}
+		return $out;
 	}
 
 	/**
@@ -388,8 +444,9 @@ final class Settings {
 			$status       = CentreCatalogue::status();
 			$total_count  = CentreCatalogue::count();
 			$active_count = CentreCatalogue::active_count();
-			$is_ready     = $total_count > 0;
-			$has_source   = '' !== CentreCatalogueSync::manifest_url();
+			// Disponible es lo que sirve el dominio, venga de donde venga.
+			$is_ready   = array() !== CentreCatalog::all();
+			$has_source = '' !== CentreCatalogueSync::manifest_url();
 			?>
 			<table class="widefat striped" style="max-width:46rem">
 				<tbody>
@@ -459,6 +516,7 @@ final class Settings {
 					</button>
 				</form>
 			</div>
+			<?php self::catalogue_dependencies(); ?>
 			<?php self::private_types_form(); ?>
 			<p style="margin-top:0.75rem;">
 				La clave de usuario con el código de centro es <code><?php echo esc_html( CentreScope::meta_key() ); ?></code>.

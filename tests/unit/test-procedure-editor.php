@@ -502,6 +502,48 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El panel «Datos» avisa de lo que cierra sin verse: el catálogo vacío y
+	 * una sola titularidad sin ningún tipo de centro marcado como privado.
+	 */
+	public function test_the_data_panel_warns_about_silent_closures() {
+		remove_all_filters( 'prc_private_centre_types' );
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::OWNERSHIP    => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ),
+			)
+		);
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $html );
+		$this->assertStringContainsString( 'El catálogo de centros está vacío', $html );
+		$this->assertStringContainsString( 'ningún centro puede solicitar hasta que se cargue', $html );
+		$this->assertStringContainsString( 'un centro que ya la presentó la sigue editando o subsanando', $html );
+
+		// Con catálogo y con tipos privados, nada que avisar.
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Escuela Inventada',
+						'type' => 'CEIP',
+					),
+				);
+			}
+		);
+		add_filter(
+			'prc_private_centre_types',
+			static function () {
+				return array( 'Colegio privado inventado' );
+			}
+		);
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringNotContainsString( 'prc-aviso-centros', $html );
+	}
+
+	/**
 	 * Un procedimiento se convoca desde varios ámbitos, y se vuelven a leer todos.
 	 */
 	public function test_the_data_panel_saves_several_areas() {

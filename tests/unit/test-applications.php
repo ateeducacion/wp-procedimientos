@@ -312,12 +312,13 @@ class Test_Applications extends WP_UnitTestCase {
 
 		$v = ApplicationInput::validate(
 			array(
-				'position'          => ApplicationMetaKeys::POSITION_HEAD,
-				'coordinator_name'  => 'Ana Pérez',
-				'coordinator_dni'   => '12345678Z',
-				'coordinator_email' => 'ana@example.org',
-				'accept'            => '1',
-				'answers'           => array( 'q1' => 'B' ),
+				'position'            => ApplicationMetaKeys::POSITION_HEAD,
+				'coordinator_name'    => 'Ana',
+				'coordinator_surname' => 'Pérez',
+				'coordinator_dni'     => '12345678Z',
+				'coordinator_email'   => 'ana@example.org',
+				'accept'              => '1',
+				'answers'             => array( 'q1' => 'B' ),
 			),
 			$spec
 		);

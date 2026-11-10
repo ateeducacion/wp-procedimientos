@@ -289,6 +289,25 @@ class Test_Mailer extends WP_UnitTestCase {
 	}
 
 	/**
+	 * La coordinación sale en el acuse con nombre y apellidos (ADR-0039).
+	 */
+	public function test_the_acknowledgement_names_the_coordination_with_surname() {
+		$procedimiento         = $this->procedimiento();
+		$nucleo                = $this->nucleo();
+		$nucleo['coordinator'] = array(
+			array(
+				'name'    => 'Ana',
+				'surname' => 'Pérez Díaz',
+				'dni'     => '12345678Z',
+				'email'   => 'ana@example.org',
+			),
+		);
+		Applications::save( $procedimiento, $this->direccion(), $nucleo );
+
+		$this->assertStringContainsString( 'Ana Pérez Díaz', (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'] );
+	}
+
+	/**
 	 * Guardar otra vez la misma es «modificada», a quien presenta y a los contactos.
 	 */
 	public function test_saving_again_sends_the_updated_mail() {

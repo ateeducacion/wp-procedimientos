@@ -370,6 +370,8 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Persona coordinadora 2', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][email]"', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][dni]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][surname]"', $html );
+		$this->assertStringContainsString( 'for="prc-coordinator-surname-1"', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
 	}
 
@@ -383,14 +385,16 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array(
 				ApplyForm::FIELD_COORDINATORS => array(
 					array(
-						'name'  => 'Ana Pérez',
-						'dni'   => '12345678Z',
-						'email' => 'ana@example.org',
+						'name'    => 'Ana',
+						'surname' => 'Pérez',
+						'dni'     => '12345678Z',
+						'email'   => 'ana@example.org',
 					),
 					array(
-						'name'  => 'Luis Díaz',
-						'dni'   => 'X0000000T',
-						'email' => 'luis@example.org',
+						'name'    => 'Luis',
+						'surname' => 'Díaz',
+						'dni'     => 'X0000000T',
+						'email'   => 'luis@example.org',
 					),
 				),
 			)
@@ -400,14 +404,16 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertSame(
 			array(
 				array(
-					'name'  => 'Ana Pérez',
-					'dni'   => '12345678Z',
-					'email' => 'ana@example.org',
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
 				),
 				array(
-					'name'  => 'Luis Díaz',
-					'dni'   => 'X0000000T',
-					'email' => 'luis@example.org',
+					'name'    => 'Luis',
+					'surname' => 'Díaz',
+					'dni'     => 'X0000000T',
+					'email'   => 'luis@example.org',
 				),
 			),
 			Applications::meta( (int) $id )[ ApplicationMetaKeys::COORDINATOR ]
@@ -508,10 +514,11 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array_merge(
 				$respuestas,
 				array(
-					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
-					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
-					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
-					ApplyForm::FIELD_ACCEPT      => '1',
+					ApplyForm::FIELD_COORD_NAME    => 'Ana',
+					ApplyForm::FIELD_COORD_SURNAME => 'Pérez',
+					ApplyForm::FIELD_COORD_DNI     => '12345678Z',
+					ApplyForm::FIELD_COORD_EMAIL   => 'ana@example.org',
+					ApplyForm::FIELD_ACCEPT        => '1',
 				)
 			)
 		);
@@ -541,11 +548,12 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array_merge(
 				$respuestas,
 				array(
-					ApplyForm::FIELD_POSITION    => ApplicationMetaKeys::POSITION_SECRETARY,
-					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
-					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
-					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
-					ApplyForm::FIELD_ACCEPT      => '1',
+					ApplyForm::FIELD_POSITION      => ApplicationMetaKeys::POSITION_SECRETARY,
+					ApplyForm::FIELD_COORD_NAME    => 'Ana',
+					ApplyForm::FIELD_COORD_SURNAME => 'Pérez',
+					ApplyForm::FIELD_COORD_DNI     => '12345678Z',
+					ApplyForm::FIELD_COORD_EMAIL   => 'ana@example.org',
+					ApplyForm::FIELD_ACCEPT        => '1',
 				)
 			)
 		);

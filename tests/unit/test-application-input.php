@@ -51,12 +51,13 @@ class Test_Application_Input extends WP_UnitTestCase {
 	public function test_a_complete_application_is_accepted_and_trimmed() {
 		$r = ApplicationInput::validate(
 			array(
-				'position'          => 'head',
-				'coordinator_name'  => '  Ana Pérez ',
-				'coordinator_dni'   => ' 12345678z ',
-				'coordinator_email' => ' Ana@Example.org ',
-				'accept'            => '1',
-				'answers'           => array(
+				'position'            => 'head',
+				'coordinator_name'    => '  Ana ',
+				'coordinator_surname' => ' Pérez Díaz ',
+				'coordinator_dni'     => ' 12345678z ',
+				'coordinator_email'   => ' Ana@Example.org ',
+				'accept'              => '1',
+				'answers'             => array(
 					'q1' => 'B',
 					'q2' => ' nada ',
 				),
@@ -70,9 +71,10 @@ class Test_Application_Input extends WP_UnitTestCase {
 		$this->assertSame(
 			array(
 				array(
-					'name'  => 'Ana Pérez',
-					'dni'   => '12345678Z',
-					'email' => 'ana@example.org',
+					'name'    => 'Ana',
+					'surname' => 'Pérez Díaz',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
 				),
 			),
 			$r['data']['coordinator']
@@ -111,6 +113,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 			$this->procedimiento()
 		);
 		$this->assertContains( 'coordinator_name', $r['errors'] );
+		$this->assertContains( 'coordinator_surname', $r['errors'], 'los apellidos van aparte y se piden' );
 		$this->assertContains( 'coordinator_email', $r['errors'] );
 
 		$r = ApplicationInput::validate(
@@ -146,14 +149,16 @@ class Test_Application_Input extends WP_UnitTestCase {
 				'position'     => 'head',
 				'coordinators' => array(
 					array(
-						'name'  => 'Ana Pérez',
-						'dni'   => '12345678Z',
-						'email' => 'ANA@example.org',
+						'name'    => 'Ana',
+						'surname' => 'Pérez',
+						'dni'     => '12345678Z',
+						'email'   => 'ANA@example.org',
 					),
 					array(
-						'name'  => 'Luis Díaz',
-						'dni'   => 'X0000000T',
-						'email' => 'luis@example.org',
+						'name'    => 'Luis',
+						'surname' => 'Díaz',
+						'dni'     => 'X0000000T',
+						'email'   => 'luis@example.org',
 					),
 				),
 				'accept'       => '1',
@@ -164,7 +169,8 @@ class Test_Application_Input extends WP_UnitTestCase {
 		$this->assertTrue( $valid['ok'], implode( ', ', $valid['errors'] ) );
 		$this->assertSame( 'ana@example.org', $valid['data']['coordinator'][0]['email'] );
 		$this->assertSame( '12345678Z', $valid['data']['coordinator'][0]['dni'] );
-		$this->assertSame( 'Luis Díaz', $valid['data']['coordinator'][1]['name'] );
+		$this->assertSame( 'Luis', $valid['data']['coordinator'][1]['name'] );
+		$this->assertSame( 'Díaz', $valid['data']['coordinator'][1]['surname'] );
 
 		$invalid = ApplicationInput::validate(
 			array(
@@ -183,6 +189,7 @@ class Test_Application_Input extends WP_UnitTestCase {
 		);
 		$this->assertContains( 'coordinator_name', $invalid['errors'], 'se exige la segunda persona' );
 		$this->assertContains( 'coordinator_dni', $invalid['errors'], 'el DNI debe tener una letra válida' );
+		$this->assertContains( 'coordinator_surname', $invalid['errors'], 'sin apellidos no vale' );
 		$this->assertSame(
 			array(),
 			ApplicationInput::validate(
@@ -278,5 +285,6 @@ class Test_Application_Input extends WP_UnitTestCase {
 			ApplicationInput::why( array( 'coordinator_name', 'coordinator_email', 'answer:q1', 'answer:q1' ), $preguntas )
 		);
 		$this->assertSame( 'No se ha podido presentar la solicitud.', ApplicationInput::why( array( 'answer:q1' ) ), 'sin las preguntas no se sabe cuál es' );
+		$this->assertSame( 'Revise los apellidos de cada persona coordinadora.', ApplicationInput::why( array( 'coordinator_surname' ) ) );
 	}
 }

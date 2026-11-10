@@ -214,7 +214,7 @@ final class MyCentre {
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator'  => ApplicationMetaRegistration::full_names( $coord ),
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,

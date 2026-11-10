@@ -63,6 +63,23 @@ class Test_Provision extends WP_UnitTestCase {
 		$this->assertTrue( get_role( 'prc_manager' )->has_cap( 'edit_prc_procedures' ), 'las del tipo las reparte el aplicativo en la misma pasada' );
 		$this->assertTrue( get_role( 'prc_school_head' )->has_cap( 'prc_apply' ) );
 		$this->assertTrue( get_role( 'prc_teacher' )->has_cap( 'prc_apply_as_teacher' ) );
+		$this->assertTrue( get_role( 'prc_observer' )->has_cap( 'prc_view_applications' ) );
+	}
+
+	/**
+	 * La cuenta de consulta tiene su zona y un procedimiento observable con
+	 * solicitudes de sus centros: se ve funcionando en local (ADR-0043).
+	 */
+	public function test_the_observer_account_sees_its_zone() {
+		$user = get_user_by( 'login', 'consulta' );
+		$this->assertInstanceOf( WP_User::class, $user );
+		$this->assertNotSame( array(), ProcedureAccess::observer_zones( $user->ID ) );
+		$this->assertTrue( ProcedureAccess::can_observe( $user->ID ) );
+
+		$this->acting_as( $user->ID );
+		$lista = \Prc\PublicFront\Observe::model( array() )['procedures'];
+		$this->assertNotEmpty( $lista, 'hay al menos un procedimiento que consultar' );
+		$this->assertGreaterThan( 0, $lista[0]['count'] );
 	}
 
 	/**

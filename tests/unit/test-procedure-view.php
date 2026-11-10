@@ -411,7 +411,7 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$lista = $this->procedure(
 			$this->administrator(),
 			array( $area ),
-			array_merge( $this->abierto(), $solo, array( ProcedureMetaKeys::ALLOWED_CENTRES => array( '38000001' ) ) )
+			array_merge( $this->abierto(), $solo, array( ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0099' ) ) )
 		);
 		$this->acting_as( 0 );
 

@@ -421,7 +421,7 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->procedure( $quien, array( $area ), $this->abierto(), array( 'post_title' => 'De antes' ) );
 		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) ), array( 'post_title' => 'Para docentes' ) );
 		// Acotado sin una sola titularidad: la pastilla dice lo mismo que la ficha, no «Todos los centros».
-		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::ALLOWED_CENTRES => array( '38000001' ) ) ), array( 'post_title' => 'Lista cerrada' ) );
+		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0099' ) ) ), array( 'post_title' => 'Lista cerrada' ) );
 
 		$this->acting_as( $quien );
 		$html = Workspace::render();

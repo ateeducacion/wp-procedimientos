@@ -631,6 +631,8 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertContains( 'ambito@example.org', $destinos, 'a los contactos copiados' );
 		$this->assertSame( array_unique( $destinos ), $destinos, 'una vez a cada destinatario' );
 		$this->assertStringContainsString( (string) $copia, (string) $altas[0]['message'], 'con el enlace al taller del duplicado' );
+		$this->assertStringContainsString( 'Falta el curso', (string) $altas[0]['message'], 'y lo que falta para publicarlo' );
+		$this->assertStringContainsString( 'La entrega «Memoria final» no tiene fechas', (string) $altas[0]['message'] );
 	}
 
 	// ─── después ───────────────────────────────────────────────────────────

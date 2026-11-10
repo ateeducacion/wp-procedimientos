@@ -11,6 +11,7 @@ use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -26,6 +27,7 @@ use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
+use Prc\Taxonomy\ProcedureTaxonomies;
 
 /**
  * Los correos del aplicativo: una sola salida y los eventos que la usan.
@@ -624,7 +626,9 @@ final class Mailer {
 		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
 			$falta[] = 'Enlace a la resolución';
 		}
-		return $falta;
+		// Lo que impide publicarlo: el curso y las fechas de las entregas.
+		$curso = wp_get_post_terms( $procedure_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) );
+		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ) ) );
 	}
 
 	/**

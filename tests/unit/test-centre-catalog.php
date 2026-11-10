@@ -97,7 +97,7 @@ class Test_Centre_Catalog extends WP_UnitTestCase {
 
 		$todos = CentreCatalog::all();
 		$this->assertCount( 3, $todos );
-		$this->assertSame( array( 'code', 'name', 'ownership', 'kind' ), array_keys( $todos[0] ) );
+		$this->assertSame( array( 'code', 'name', 'ownership', 'kind', 'island', 'municipality', 'type', 'zone', 'zone_name', 'active' ), array_keys( $todos[0] ) );
 		$this->assertSame( 'public', $todos[2]['ownership'], 'sin titularidad, público' );
 		$this->assertSame( 'school', $todos[2]['kind'], 'sin clase, un centro' );
 	}
@@ -128,10 +128,16 @@ class Test_Centre_Catalog extends WP_UnitTestCase {
 		$this->assertSame(
 			array(
 				array(
-					'code'      => 'C0001',
-					'name'      => 'Uno',
-					'ownership' => 'public',
-					'kind'      => 'school',
+					'code'         => 'C0001',
+					'name'         => 'Uno',
+					'ownership'    => 'public',
+					'kind'         => 'school',
+					'island'       => '',
+					'municipality' => '',
+					'type'         => '',
+					'zone'         => '',
+					'zone_name'    => '',
+					'active'       => true,
 				),
 			),
 			CentreCatalog::all()
@@ -220,5 +226,45 @@ class Test_Centre_Catalog extends WP_UnitTestCase {
 			}
 		);
 		$this->assertSame( array( 'F0001', 'F0002' ), wp_list_pluck( CentreCatalog::all(), 'code' ) );
+	}
+
+	/**
+	 * La zona se resuelve en el propio catálogo, en memoria; los valores que
+	 * ofrece el taller son los que hay, sin repetir y en orden.
+	 */
+	public function test_zone_names_and_values_come_from_the_catalogue() {
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code'   => 'Z0001',
+						'name'   => 'Zona Inventada Uno',
+						'type'   => 'ZONA',
+						'island' => 'Isla Uno',
+					),
+					array(
+						'code'   => 'C0001',
+						'name'   => 'Escuela Uno',
+						'type'   => 'ceip',
+						'island' => 'Isla Dos',
+						'zone'   => 'Z0001',
+					),
+					array(
+						'code'   => 'C0002',
+						'name'   => 'Escuela Dos',
+						'type'   => 'CEIP',
+						'island' => 'Isla Uno',
+						'zone'   => 'Z9999',
+					),
+				);
+			}
+		);
+
+		$this->assertSame( 'Zona Inventada Uno', CentreCatalog::find( 'C0001' )['zone_name'] );
+		$this->assertSame( '', CentreCatalog::find( 'C0002' )['zone_name'], 'una zona que no está en el catálogo no tiene nombre' );
+		$this->assertSame( array( 'ceip', 'ZONA' ), CentreCatalog::values( 'type' ), 'sin repetir en otra caja' );
+		$this->assertSame( array( 'Isla Dos', 'Isla Uno' ), CentreCatalog::values( 'island' ) );
+		$this->assertSame( array( 'Z0001', 'C0001', 'C0002' ), array_keys( CentreCatalog::index() ) );
 	}
 }

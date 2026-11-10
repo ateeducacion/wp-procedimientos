@@ -748,7 +748,7 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertFalse( $m['can_edit'] );
 
 		$html = ProcedureEditorView::html( $m );
-		$this->assertMatchesRegularExpression( '/<form[^>]+data-prc-confirm="¿Duplicar «Red de prueba»\?[^"]*"[^>]+data-prc-confirm-ok="Duplicar"/u', $html );
+		$this->assertMatchesRegularExpression( '/<form[^>]+data-prc-confirm="¿Duplicar «Red de prueba»\?[^"]*"[^>]+data-prc-confirm-ok="Duplicar" data-prc-once>/u', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_DO . '" value="' . ProcedureEditor::OP_DUPLICATE . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html );
 		$this->assertLessThan( strpos( $html, 'prc-solo-lectura' ), strpos( $html, ProcedureEditor::OP_DUPLICATE ), 'fuera de lo que el solo lectura apaga' );
@@ -774,6 +774,7 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$html = WorkspaceView::html( $modelo );
 
 		$this->assertSame( 2, substr_count( $html, 'value="' . ProcedureEditor::OP_DUPLICATE . '"' ) );
+		$this->assertSame( 2, substr_count( $html, 'data-prc-once' ), 'un solo envío por botón' );
 		$this->assertStringContainsString( '¿Duplicar «Red de prueba»?', $html );
 		$this->assertStringContainsString( '¿Duplicar «Otro programa»?', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_PROCEDURE . '" value="' . $otro . '"', $html );

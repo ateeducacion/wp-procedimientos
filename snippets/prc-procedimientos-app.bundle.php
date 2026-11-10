@@ -16958,7 +16958,7 @@ final class WorkspaceView {
 		?>
 		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
 			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
-			data-prc-confirm-ok="Duplicar">
+			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
@@ -18680,7 +18680,7 @@ final class ProcedureEditorView {
 		?>
 		<form class="prc-acciones" method="post" action=""
 			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
-			data-prc-confirm-ok="Duplicar">
+			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -31160,6 +31160,50 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 				} );
 			}
 		}
+	} );
+
+	/* --- 8. Un solo envío ------------------------------------------------ */
+
+	/*
+	 * `data-prc-once` en el formulario: en cuanto el envío sale —ya
+	 * confirmado— se apagan sus botones y un segundo envío no sale. Es para lo
+	 * que, repetido, hace dos veces lo mismo: duplicar, por ejemplo. En
+	 * `window` y no en `document` para ir detrás de la confirmación, que para
+	 * el primer envío mientras pregunta. Sin guion se acepta el doble envío.
+	 * Al volver con «Atrás» de la caché del navegador se encienden otra vez.
+	 */
+	function botones( form, apagados ) {
+		Array.prototype.forEach.call( form.querySelectorAll( \'button[type="submit"], input[type="submit"]\' ), function ( boton ) {
+			boton.disabled = apagados;
+		} );
+	}
+
+	window.addEventListener( \'submit\', function ( e ) {
+		var form = e.target;
+		// Una vez por envío, aunque el guion se haya cargado dos veces.
+		if ( e.prcUnaVez || ! ( form instanceof HTMLFormElement ) || ! form.hasAttribute( \'data-prc-once\' ) ) {
+			return;
+		}
+		e.prcUnaVez = true;
+		if ( \'1\' === form.dataset.prcEnviado ) {
+			e.preventDefault();
+			return;
+		}
+		if ( e.defaultPrevented ) {
+			return;
+		}
+		form.dataset.prcEnviado = \'1\';
+		botones( form, true );
+	} );
+
+	window.addEventListener( \'pageshow\', function ( e ) {
+		if ( ! e.persisted ) {
+			return;
+		}
+		Array.prototype.forEach.call( document.querySelectorAll( \'form[data-prc-once]\' ), function ( form ) {
+			delete form.dataset.prcEnviado;
+			botones( form, false );
+		} );
 	} );
 }() );
 ',

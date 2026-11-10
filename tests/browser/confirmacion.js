@@ -237,7 +237,7 @@ async function abrir( ctx, conSwal ) {
 <table><tbody><tr><td class="prc-celda-accion" data-rotulo="Duplicar">
 <form class="prc-acciones" method="post" action="/enviado"
       data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes."
-      data-prc-confirm-ok="Duplicar">
+      data-prc-confirm-ok="Duplicar" data-prc-once>
   <input type="hidden" name="prc_nonce_duplicate_0" value="abc123" />
   <input type="hidden" name="prc_do" value="duplicate" />
   <input type="hidden" name="prc_procedure" value="42" />
@@ -288,6 +288,7 @@ async function abrir( ctx, conSwal ) {
 		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#dup' ) ] );
 		ok( lleva( envio.cuerpo ), 'al aceptar el confirm() se duplica' );
 		await page.close();
+
 
 		// Con SweetAlert2.
 		( { page, envio } = await abrirDuplicar( ctx, true ) );

@@ -350,7 +350,7 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
-		self::saved( $id, $created );
+		self::saved( $id, $created, $user_id );
 		return $id;
 	}
 
@@ -398,7 +398,7 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created );
+		self::saved( $id, $created, $user_id );
 		return $id;
 	}
 
@@ -409,18 +409,24 @@ final class Applications {
 	 * ejemplo (ADR-0038)— lee la solicitud ya entera. Lo que haga no cambia lo
 	 * que esta función devuelve: la solicitud ya está guardada.
 	 *
+	 * La cuenta que guarda viaja con la acción porque la solicitud de un
+	 * centro es del centro y no de quien la presentó: otra persona del mismo
+	 * centro puede modificarla, y el aviso es para ella.
+	 *
 	 * @param int  $id      Application post ID.
 	 * @param bool $created Whether it did not exist before.
+	 * @param int  $user_id Account that stored it.
 	 * @return void
 	 */
-	private static function saved( int $id, bool $created ): void {
+	private static function saved( int $id, bool $created, int $user_id ): void {
 		/**
 		 * An application has just been stored, new or edited.
 		 *
 		 * @param int  $id      Application post ID.
 		 * @param bool $created Whether it did not exist before.
+		 * @param int  $user_id Account that stored it.
 		 */
-		do_action( 'prc_application_saved', $id, $created );
+		do_action( 'prc_application_saved', $id, $created, $user_id );
 	}
 
 	/**
@@ -499,21 +505,25 @@ final class Applications {
 			return self::refused( 'note' );
 		}
 
-		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
+		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
 
 		/**
 		 * The review state of an application has just been set.
 		 *
-		 * Se emite también cuando el estado no cambia —se reescribe la nota—:
-		 * quien escucha decide si eso le importa. El correo, no (ADR-0038).
+		 * Se emite en cada revisión, cambie o no algo: quien escucha decide
+		 * con el estado y la nota de antes si hay algo nuevo que contar
+		 * (ADR-0038). Un estado de antes vacío es una solicitud anterior a
+		 * la revisión, no un estado.
 		 *
 		 * @param int    $application_id Application post ID.
 		 * @param string $state          New review state.
-		 * @param string $previous       Review state before.
+		 * @param string $previous       Review state before; may be empty.
+		 * @param string $previous_note  Review note before.
 		 */
-		do_action( 'prc_application_reviewed', $application_id, $state, $previous );
+		do_action( 'prc_application_reviewed', $application_id, $state, $previous, $previous_note );
 
 		return array(
 			'ok'    => true,

@@ -1444,25 +1444,60 @@ class Test_Application_Files extends WP_UnitTestCase {
 		return $this->exit_url( array( ApplyForm::class, 'handle' ) );
 	}
 
-	/** A stored delivery announces itself once, with its question key; a refused one does not. */
+	/** A stored delivery announces itself once, with its question key and who delivers; a refused one does not. */
 	public function test_a_delivery_emits_its_action() {
 		$data  = $this->delivery_fixture();
 		$visto = array();
 		add_action(
 			'prc_delivery_saved',
-			static function ( int $application_id, string $key ) use ( &$visto ): void {
-				$visto[] = array( $application_id, $key );
+			static function ( int $application_id, string $key, int $quien ) use ( &$visto ): void {
+				$visto[] = array( $application_id, $key, $quien );
+			},
+			10,
+			3
+		);
+
+		$this->assertFalse( ApplicationFiles::deliver( $data['application'], 'q1', array(), $data['head'] ), 'sin documento no hay entrega' );
+		$this->assertSame( array(), $visto );
+
+		$this->en_files( array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ) );
+		$this->assertNotNull( $this->deliver_document( $data ) );
+		$this->assertSame( array( array( $data['application'], 'q1', $data['head'] ) ), $visto );
+	}
+
+	/**
+	 * A delivery stored by ApplicationFiles::deliver() mails whoever delivers
+	 * —not the account that submitted the application— and the contacts.
+	 */
+	public function test_a_delivery_mails_whoever_delivers_and_the_contacts() {
+		$data = $this->delivery_fixture();
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::CONTACT_EMAILS, array( 'ambito@example.org' ) );
+		$otra = $this->school_head( 'C0001' );
+		wp_update_user(
+			array(
+				'ID'         => $otra,
+				'user_email' => 'jefatura@example.org',
+			)
+		);
+		$enviados = array();
+		add_filter(
+			'pre_wp_mail',
+			static function ( $corto, array $atts ) use ( &$enviados ): bool {
+				unset( $corto );
+				$enviados[] = $atts;
+				return true;
 			},
 			10,
 			2
 		);
 
-		$this->assertFalse( ApplicationFiles::deliver( $data['application'], 'q1', array() ), 'sin documento no hay entrega' );
-		$this->assertSame( array(), $visto );
+		$this->assertTrue( ApplicationFiles::deliver( $data['application'], 'q1', array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ), $otra ) );
 
-		$this->en_files( array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ) );
-		$this->assertNotNull( $this->deliver_document( $data ) );
-		$this->assertSame( array( array( $data['application'], 'q1' ) ), $visto );
+		$destinos = array_column( $enviados, 'to' );
+		sort( $destinos );
+		$this->assertSame( array( 'ambito@example.org', 'jefatura@example.org' ), $destinos );
+		$this->assertStringContainsString( 'Memoria', (string) $enviados[0]['subject'] );
+		$this->assertStringContainsString( 'memoria.pdf', (string) $enviados[0]['message'] );
 	}
 
 	/** A resolved procedure accepts its document without reopening or resetting review. */

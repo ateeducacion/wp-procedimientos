@@ -367,9 +367,10 @@ final class ApplicationFiles {
 	 * @param int                                 $application_id Application post ID.
 	 * @param string                              $question_key   Key of the delivery question.
 	 * @param array<string, array<string, mixed>> $files          What submitted() returned for it.
+	 * @param int                                 $user_id        Account that delivers.
 	 * @return bool
 	 */
-	public static function deliver( int $application_id, string $question_key, array $files ): bool {
+	public static function deliver( int $application_id, string $question_key, array $files, int $user_id ): bool {
 		if ( ! isset( $files[ $question_key ] ) || ! self::store_all( $application_id, array( $question_key => $files[ $question_key ] ) ) ) {
 			return false;
 		}
@@ -379,8 +380,9 @@ final class ApplicationFiles {
 		 *
 		 * @param int    $application_id Application post ID.
 		 * @param string $question_key   Key of the delivery question.
+		 * @param int    $user_id        Account that delivers.
 		 */
-		do_action( 'prc_delivery_saved', $application_id, $question_key );
+		do_action( 'prc_delivery_saved', $application_id, $question_key, $user_id );
 		return true;
 	}
 

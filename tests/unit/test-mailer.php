@@ -5,6 +5,7 @@
  * @package Prc
  */
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
@@ -197,6 +198,23 @@ class Test_Mailer extends WP_UnitTestCase {
 				'ID'           => $uid,
 				'user_email'   => 'direccion@example.org',
 				'display_name' => 'Persona de prueba',
+			)
+		);
+		return $uid;
+	}
+
+	/**
+	 * Otra cuenta del mismo centro, con su correo.
+	 *
+	 * @return int
+	 */
+	private function companera(): int {
+		$uid = $this->school_head( 'C0001' );
+		wp_update_user(
+			array(
+				'ID'           => $uid,
+				'user_email'   => 'jefatura@example.org',
+				'display_name' => 'Otra persona de prueba',
 			)
 		);
 		return $uid;
@@ -445,19 +463,19 @@ class Test_Mailer extends WP_UnitTestCase {
 	/**
 	 * La acción de revisión lleva el estado nuevo y el de antes.
 	 */
-	public function test_the_review_action_carries_both_states() {
-		$id    = $this->application( $this->procedimiento(), $this->direccion() );
+	public function test_the_review_action_carries_what_there_was_before() {
+		$id    = $this->application( $this->procedimiento(), $this->direccion(), '', array( ApplicationMetaKeys::REVIEW_NOTE => 'Nota de antes.' ) );
 		$visto = array();
 		add_action(
 			'prc_application_reviewed',
-			static function ( int $app, string $estado, string $antes ) use ( &$visto ): void {
-				$visto[] = array( $app, $estado, $antes );
+			static function ( int $app, string $estado, string $antes, string $nota_antes ) use ( &$visto ): void {
+				$visto[] = array( $app, $estado, $antes, $nota_antes );
 			},
 			10,
-			3
+			4
 		);
 		Applications::review( $id, ApplicationMetaKeys::REVIEW_ADMITTED, '' );
-		$this->assertSame( array( array( $id, ApplicationMetaKeys::REVIEW_ADMITTED, ApplicationMetaKeys::REVIEW_SUBMITTED ) ), $visto );
+		$this->assertSame( array( array( $id, ApplicationMetaKeys::REVIEW_ADMITTED, ApplicationMetaKeys::REVIEW_SUBMITTED, 'Nota de antes.' ) ), $visto );
 	}
 
 	// ─── direcciones ───────────────────────────────────────────────────────
@@ -594,49 +612,136 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'unidad de apoyo', (string) $this->enviados[0]['message'] );
 	}
 
-	// ─── la entrega ────────────────────────────────────────────────────────
+	// ─── quién actúa ───────────────────────────────────────────────────────
 
 	/**
-	 * Una entrega avisa a quien la presentó y a los contactos, con el documento.
+	 * Modificar la solicitud de su centro avisa a quien la modifica, no a quien
+	 * la presentó: la solicitud es del centro, no de la cuenta.
 	 */
-	public function test_a_delivery_tells_the_applicant_and_the_contacts() {
-		$procedimiento = $this->procedimiento(
-			array(
-				ProcedureMetaKeys::QUESTIONS => array(
-					array(
-						'key'       => 'q1',
-						'label'     => 'Memoria final',
-						'type'      => ProcedureQuestions::TYPE_FILE,
-						'delivery'  => true,
-						'opens_at'  => $this->dia( -1 ),
-						'closes_at' => $this->dia( 1 ),
-					),
-				),
-			)
-		);
-		$id            = $this->application(
-			$procedimiento,
-			$this->direccion(),
-			'C0001',
-			array(
-				ApplicationMetaKeys::FILES => array(
-					'q1' => array(
-						'id'     => str_repeat( 'a', 32 ),
-						'name'   => 'memoria.pdf',
-						'sha256' => str_repeat( 'b', 64 ),
-						'stored' => 'aa/aa/' . str_repeat( 'a', 32 ) . '.pdf',
-					),
-				),
-			)
-		);
-
-		// Cambiar el correo de una cuenta ya avisa a la dirección anterior.
+	public function test_the_update_goes_to_whoever_acts_for_the_centre() {
+		$procedimiento  = $this->procedimiento();
+		$autora         = $this->direccion();
+		$otra           = $this->companera();
+		$id             = Applications::save( $procedimiento, $autora, $this->nucleo() );
 		$this->enviados = array();
-		do_action( 'prc_delivery_saved', $id, 'q1' );
 
-		$this->assertSame( array( 'ambito@example.org', 'apoyo@example.org', 'direccion@example.org' ), $this->destinos( $this->enviados ) );
-		$this->assertStringContainsString( 'Memoria final', (string) $this->enviados[0]['subject'] );
-		$this->assertStringContainsString( 'memoria.pdf', (string) $this->enviados[0]['message'] );
+		$this->assertSame( $id, Applications::save( $procedimiento, $otra, $this->nucleo() ) );
+
+		$this->assertSame( array( 'jefatura@example.org' ), $this->destinos( $this->con_asunto( 'Solicitud modificada: ' ) ) );
+		$this->assertStringContainsString( 'Otra persona de prueba', (string) $this->con_asunto( 'Solicitud modificada —' )[0]['message'], 'los contactos leen quién la modificó' );
+	}
+
+	/**
+	 * La acción del guardado lleva la cuenta que actúa.
+	 */
+	public function test_the_saved_action_carries_the_acting_account() {
+		$procedimiento = $this->procedimiento();
+		$visto         = array();
+		add_action(
+			'prc_application_saved',
+			static function ( int $id, bool $creada, int $quien ) use ( &$visto ): void {
+				$visto[] = array( $creada, $quien );
+			},
+			10,
+			3
+		);
+		$autora = $this->direccion();
+		$otra   = $this->companera();
+		Applications::save( $procedimiento, $autora, $this->nucleo() );
+		Applications::save( $procedimiento, $otra, $this->nucleo() );
+
+		$this->assertSame( array( array( true, $autora ), array( false, $otra ) ), $visto );
+	}
+
+	/**
+	 * La revisión va a la cuenta autora mientras siga pudiendo ver la
+	 * solicitud; si ha dejado el centro, a nadie.
+	 */
+	public function test_the_review_only_goes_to_an_author_who_still_sees_it() {
+		$procedimiento = $this->procedimiento();
+		$autora        = $this->direccion();
+		$this->companera();
+		$id = Applications::save( $procedimiento, $autora, $this->nucleo() );
+
+		$this->enviados = array();
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_ADMITTED, '' );
+		$this->assertSame( array( 'direccion@example.org' ), $this->destinos( $this->enviados ) );
+
+		delete_user_meta( $autora, CentreScope::meta_key() );
+		$this->enviados = array();
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_EXCLUDED, 'No cumple los requisitos.' );
+		$this->assertSame( array(), $this->enviados, 'ni respuestas ni nota a quien ya no es del centro' );
+	}
+
+	// ─── la nota y el estado de antes ──────────────────────────────────────
+
+	/**
+	 * Cambiar la nota de un estado que la exige es algo nuevo que contar;
+	 * reescribir la misma, no.
+	 */
+	public function test_a_new_note_on_the_same_state_is_sent() {
+		$id = Applications::save( $this->procedimiento(), $this->direccion(), $this->nucleo() );
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_AMEND, 'Falta el acta.' );
+
+		$this->enviados = array();
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_AMEND, 'Falta el acta.' );
+		$this->assertSame( array(), $this->enviados, 'misma nota, nada nuevo' );
+
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_AMEND, 'Falta el acta firmada.' );
+		$this->assertCount( 1, $this->enviados );
+		$this->assertStringContainsString( 'Falta el acta firmada.', (string) $this->enviados[0]['message'] );
+
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_ADMITTED, '' );
+		$this->enviados = array();
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_ADMITTED, 'Comentario interno.' );
+		$this->assertSame( array(), $this->enviados, 'admitida no lleva nota: cambiarla no se cuenta' );
+	}
+
+	/**
+	 * Una solicitud antigua sin estado guardado que se marca «presentada» no
+	 * ha cambiado de nada: no se dice «ha pasado a Presentada».
+	 */
+	public function test_an_empty_previous_state_to_submitted_is_no_change() {
+		$id = $this->application( $this->procedimiento(), $this->direccion() );
+		delete_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE );
+		$this->enviados = array();
+
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_SUBMITTED, '' );
+		$this->assertSame( array(), $this->enviados );
+
+		delete_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE );
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_ADMITTED, '' );
+		$this->assertCount( 1, $this->enviados, 'a otro estado, sí' );
+	}
+
+	// ─── profesorado ───────────────────────────────────────────────────────
+
+	/**
+	 * La solicitud individual avisa a quien la presenta al crearla y al
+	 * modificarla, sin línea de centro.
+	 */
+	public function test_a_teacher_application_is_acknowledged_without_centre() {
+		$procedimiento = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$docente       = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'user_email'   => 'docente@example.org',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+
+		$id = Applications::save_teacher( $procedimiento, $docente, array( 'answers' => array( 'q1' => 'Huerto en el patio' ) ) );
+		$this->assertGreaterThan( 0, $id );
+		$acuse = $this->con_asunto( 'Solicitud presentada' );
+		$this->assertSame( array( 'docente@example.org' ), $this->destinos( $acuse ) );
+		$this->assertStringContainsString( 'Presentada por: Docente de prueba', (string) $acuse[0]['message'] );
+		$this->assertStringContainsString( '- Observaciones: Huerto en el patio', (string) $acuse[0]['message'] );
+		$this->assertStringNotContainsString( 'Centro:', (string) $acuse[0]['message'] );
+
+		$this->enviados = array();
+		Applications::save_teacher( $procedimiento, $docente, array( 'answers' => array() ) );
+		$this->assertSame( array( 'docente@example.org' ), $this->destinos( $this->con_asunto( 'Solicitud modificada: ' ) ) );
+		$this->assertCount( 2, $this->con_asunto( 'Solicitud modificada —' ) );
 	}
 
 	// ─── el cableado ───────────────────────────────────────────────────────
@@ -647,6 +752,10 @@ class Test_Mailer extends WP_UnitTestCase {
 	public function test_register_listens_to_the_actions() {
 		$this->assertSame( 10, has_action( 'prc_procedure_created', array( Mailer::class, 'on_procedure_created' ) ) );
 		$this->assertSame( 10, has_action( 'prc_application_saved', array( Mailer::class, 'on_application_saved' ) ) );
+		global $wp_filter;
+		$this->assertSame( 3, $wp_filter['prc_application_saved']->callbacks[10][ Mailer::class . '::on_application_saved' ]['accepted_args'] );
+		$this->assertSame( 4, $wp_filter['prc_application_reviewed']->callbacks[10][ Mailer::class . '::on_application_reviewed' ]['accepted_args'] );
+		$this->assertSame( 3, $wp_filter['prc_delivery_saved']->callbacks[10][ Mailer::class . '::on_delivery_saved' ]['accepted_args'] );
 		$this->assertSame( 10, has_action( 'prc_application_reviewed', array( Mailer::class, 'on_application_reviewed' ) ) );
 		$this->assertSame( 10, has_action( 'prc_delivery_saved', array( Mailer::class, 'on_delivery_saved' ) ) );
 	}

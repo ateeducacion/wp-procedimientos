@@ -7012,7 +7012,7 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
-		self::saved( $id, $created );
+		self::saved( $id, $created, $user_id );
 		return $id;
 	}
 
@@ -7060,7 +7060,7 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created );
+		self::saved( $id, $created, $user_id );
 		return $id;
 	}
 
@@ -7075,14 +7075,20 @@ final class Applications {
 
 
 
-	private static function saved( int $id, bool $created ): void {
+
+
+
+
+
+	private static function saved( int $id, bool $created, int $user_id ): void {
 
 
 
 
 
 
-		do_action( 'prc_application_saved', $id, $created );
+
+		do_action( 'prc_application_saved', $id, $created, $user_id );
 	}
 
 
@@ -7161,7 +7167,8 @@ final class Applications {
 			return self::refused( 'note' );
 		}
 
-		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
+		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
 
@@ -7175,7 +7182,10 @@ final class Applications {
 
 
 
-		do_action( 'prc_application_reviewed', $application_id, $state, $previous );
+
+
+
+		do_action( 'prc_application_reviewed', $application_id, $state, $previous, $previous_note );
 
 		return array(
 			'ok'    => true,
@@ -7760,7 +7770,8 @@ final class ApplicationFiles {
 
 
 
-	public static function deliver( int $application_id, string $question_key, array $files ): bool {
+
+	public static function deliver( int $application_id, string $question_key, array $files, int $user_id ): bool {
 		if ( ! isset( $files[ $question_key ] ) || ! self::store_all( $application_id, array( $question_key => $files[ $question_key ] ) ) ) {
 			return false;
 		}
@@ -7771,7 +7782,8 @@ final class ApplicationFiles {
 
 
 
-		do_action( 'prc_delivery_saved', $application_id, $question_key );
+
+		do_action( 'prc_delivery_saved', $application_id, $question_key, $user_id );
 		return true;
 	}
 
@@ -15355,7 +15367,7 @@ final class ApplyForm {
 				self::$rejected = ApplicationFiles::why( $files['errors'] );
 				return;
 			}
-			if ( ! ApplicationFiles::deliver( (int) $id, $key, $files['files'] ) ) {
+			if ( ! ApplicationFiles::deliver( (int) $id, $key, $files['files'], $user_id ) ) {
 				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
 				return;
 			}
@@ -16383,9 +16395,9 @@ final class Mailer {
 
 	public static function register(): void {
 		add_action( 'prc_procedure_created', array( self::class, 'on_procedure_created' ) );
-		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 2 );
-		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 3 );
-		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 2 );
+		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 3 );
+		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
+		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
 	}
 
 
@@ -16612,10 +16624,15 @@ final class Mailer {
 
 
 
-	public static function on_application_saved( $application_id, $created = false ): void {
+
+
+
+
+
+	public static function on_application_saved( $application_id, $created = false, $user_id = 0 ): void {
 		self::safely(
-			static function () use ( $application_id, $created ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $created, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -16623,7 +16640,7 @@ final class Mailer {
 
 				self::send(
 					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
-					array( self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) ) ),
+					array( self::email_of( (int) $user_id ) ),
 					$ctx
 				);
 
@@ -16646,13 +16663,22 @@ final class Mailer {
 
 
 
-	public static function on_application_reviewed( $application_id, $state = '', $previous = '' ): void {
-		if ( (string) $state === (string) $previous ) {
+
+
+
+
+	public static function on_application_reviewed( $application_id, $state = '', $previous = '', $previous_note = '' ): void {
+		$nota = (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		if ( ! self::review_news( (string) $state, (string) $previous, $nota, (string) $previous_note ) ) {
+			return;
+		}
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id ) ) {
 			return;
 		}
 		self::safely(
-			static function () use ( $application_id, $state ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $state, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -16660,11 +16686,7 @@ final class Mailer {
 				$ctx['note']  = in_array( $state, ApplicationMetaKeys::states_needing_note(), true )
 					? (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true )
 					: '';
-				self::send(
-					self::EVENT_REVIEW_CHANGED,
-					array( self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) ) ),
-					$ctx
-				);
+				self::send( self::EVENT_REVIEW_CHANGED, array( self::email_of( $autor ) ), $ctx );
 			}
 		);
 	}
@@ -16676,10 +16698,37 @@ final class Mailer {
 
 
 
-	public static function on_delivery_saved( $application_id, $question_key = '' ): void {
+
+
+
+
+
+
+	public static function review_news( string $state, string $previous, string $note, string $previous_note ): bool {
+		if ( '' === $previous ) {
+			$previous = ApplicationMetaKeys::REVIEW_SUBMITTED;
+		}
+		if ( $state !== $previous ) {
+			return true;
+		}
+		return in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) && trim( $note ) !== trim( $previous_note );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_delivery_saved( $application_id, $question_key = '', $user_id = 0 ): void {
 		self::safely(
-			static function () use ( $application_id, $question_key ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $question_key, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -16693,7 +16742,7 @@ final class Mailer {
 				unset( $ctx['answers'] );
 
 				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
-				$destinos[] = self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) );
+				$destinos[] = self::email_of( (int) $user_id );
 				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
 			}
 		);
@@ -16712,13 +16761,18 @@ final class Mailer {
 
 
 
-	private static function application_context( int $application_id ): array {
+
+
+
+
+
+	private static function application_context( int $application_id, int $user_id ): array {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return array();
 		}
 		$procedure_id = (int) get_post_field( 'post_parent', $application_id );
 		$meta         = Applications::meta( $application_id );
-		$autor        = get_userdata( (int) get_post_field( 'post_author', $application_id ) );
+		$autor        = $user_id > 0 ? get_userdata( $user_id ) : false;
 		$docente      = ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] );
 		$codigo       = (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ];
 		$nombre       = (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ];

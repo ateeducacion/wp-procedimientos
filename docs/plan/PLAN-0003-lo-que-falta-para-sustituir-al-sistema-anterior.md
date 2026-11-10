@@ -27,7 +27,8 @@ personas de la solicitud, atributos del centro, tabla de solicitudes, consulta
 de solo lectura, duplicado y actuaciones sobre una solicitud.
 
 **Arquitectura:** nueve PR pequeños, cada uno apilado sobre el anterior y el
-primero sobre `main`. Ninguno añade una capa: son
+primero sobre la rama que reúne la pila anterior, pendiente de fusionar en
+`main`. Ninguno añade una capa: son
 clases `final` con métodos `static` en `src/Prc/`, dadas de alta en
 `load-order.php`. Los módulos se hablan por acciones de WordPress
 (`do_action`), de modo que el correo no sabe de pantallas ni las pantallas de
@@ -51,8 +52,8 @@ de uso del sistema anterior; el material está en `.local/` (ADR-0009).
   `?aviso=`. Borrar es enviar a la papelera (ADR-0007).
 - Todo «puede o no puede» pasa por `Access/ProcedureAccess`, y se protege en
   `map_meta_cap`, no solo escondiendo.
-- Nada de ninguna organización concreta: ni nombres de programas, ni de
-  plataformas, ni direcciones (`make check-public`).
+- Nada de ninguna organización concreta: ni nombres de programas, ni de las
+  plataformas de una instalación, ni direcciones (`make check-public`).
 - Cada PR: prueba primero, `make check` en verde, `make bundle` y
   `make snippet-check`, CHANGELOG, y ADR nueva si la tabla de la §2 la pide.
 - Los PR no se fusionan desde aquí: los revisa otra persona.
@@ -95,9 +96,11 @@ dispara correos de 1 y añade filas a 2; 6 y 7 filtran por los atributos de 5;
   — texto plano, asunto con prefijo `[Procedimientos]` (filtro
   `prc_mail_subject_prefix`).
 - Acciones: `prc_procedure_created( int $id )`,
-  `prc_application_saved( int $id, bool $created )`,
-  `prc_application_reviewed( int $id, string $state, string $previous )`,
-  `prc_delivery_saved( int $id, string $question_key )`.
+  `prc_application_saved( int $id, bool $created, int $user_id )`,
+  `prc_application_reviewed( int $id, string $state, string $previous, string $previous_note )`,
+  `prc_delivery_saved( int $id, string $question_key, int $user_id )`.
+  `$user_id` es la cuenta que actúa: la solicitud de un centro es del centro,
+  y el aviso va a quien guarda o entrega, no a quien la presentó.
 - Meta `prc_notify` del procedimiento: lista de eventos **apagados**; vacía
   significa todos encendidos.
 
@@ -106,10 +109,10 @@ dispara correos de 1 y añade filas a 2; 6 y 7 filtran por los atributos de 5;
 | Evento | Cuándo | A quién |
 |---|---|---|
 | `application_submitted` | se crea la solicitud | quien la presenta: acuse con el resumen de lo presentado y el enlace |
-| `application_updated` | se guarda una ya existente | quien la presenta |
+| `application_updated` | se guarda una ya existente | la cuenta que la guarda |
 | `application_received` | las dos anteriores | correos de contacto del procedimiento (`prc_contact_emails`) |
-| `review_changed` | cambia el estado de revisión | quien la presentó; con la nota si es «a subsanar» o «excluida» |
-| `delivery_received` | se entrega un documento con plazo propio | quien lo entrega y contactos |
+| `review_changed` | cambia el estado de revisión, o la nota de un estado que la exige | la cuenta autora, si todavía puede ver la solicitud; con la nota si es «a subsanar» o «excluida» |
+| `delivery_received` | se entrega un documento con plazo propio | la cuenta que lo entrega y contactos |
 | `procedure_created` | se crea un procedimiento en borrador | contactos del procedimiento y quienes gestionan sus ámbitos: qué falta por completar, los dos pasos (completar los datos; el día de la publicación, poner fechas y enlazar la resolución) y los enlaces al taller y a «Gestión» |
 
 **Remitente y copias: son configuración, no código** (ADR-0009). En
@@ -364,5 +367,5 @@ Lo más probable que falle y que ninguna prueba de arriba cubre por sí sola:
 | D-1 | Fichero de usuarios | Cuatro columnas: `username,firstname,lastname,email`; `username` es el usuario corporativo |
 | D-2 | De dónde sale la zona de cada centro | Del campo `cep` del catálogo externo (ADR-0029) |
 | D-3 | Remitente de los correos (P-05 del PLAN-0001) | Opciones de ajustes; cada instalación pone el suyo |
-| D-4 | Base de la pila | `main`, con la pila anterior ya fusionada |
+| D-4 | Base de la pila | El primero sobre la rama que reúne la pila anterior, pendiente de fusionar en `main` |
 | D-5 | Certificación de participantes | Fuera: sigue necesitando ADR propia |

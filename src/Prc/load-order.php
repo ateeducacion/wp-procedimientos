@@ -27,6 +27,7 @@ return array(
 	'Domain/ProcedureInput.php',
 	'Domain/ApplicationInput.php',
 	'Domain/PeopleSpec.php',
+	'Domain/ProcedureCopy.php',
 	'Domain/ApplicationPeople.php',
 	'Domain/ApplicationFilter.php',
 	'Domain/ApplicationCompleteness.php',

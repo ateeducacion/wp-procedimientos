@@ -397,11 +397,13 @@ class Test_People_List extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Concurrencia: un cambio sobre una fila que otra cuenta cambió o quitó
-	 * desde que se pintó el formulario se rechaza y no pisa nada; dos altas
-	 * seguidas de dos cuentas quedan las dos.
+	 * Huella: un cambio sobre una fila que otra cuenta cambió o quitó desde
+	 * que se pintó el formulario se rechaza y no pisa nada; dos altas
+	 * seguidas de dos cuentas quedan las dos. Es secuencial: la carrera de
+	 * verdad, con una escritura entre la lectura y la escritura, está en
+	 * {@see test_a_write_in_between_is_not_lost()}.
 	 */
-	public function test_two_accounts_do_not_overwrite_each_other() {
+	public function test_a_change_on_a_row_changed_since_it_was_painted_is_refused() {
 		$procedimiento = $this->procedimiento();
 		$una           = $this->school_head( 'C0001' );
 		$otra          = $this->school_head( 'C0001' );
@@ -499,5 +501,164 @@ class Test_People_List extends WP_UnitTestCase {
 			),
 			People::used_keys( $procedimiento )
 		);
+	}
+
+	/**
+	 * Hace que otra cuenta escriba la lista entre la lectura y la escritura:
+	 * en las `$veces` primeras escrituras de `prc_people`, mete antes, por
+	 * debajo de WordPress, la lista que se le da.
+	 *
+	 * @param int                               $solicitud Application ID.
+	 * @param array<int, array<string, string>> $lista     What the other account writes.
+	 * @param int                               $veces     How many writes to get in front of.
+	 * @return void
+	 */
+	private function otra_escribe_entremedias( int $solicitud, array $lista, int $veces ): void {
+		$hechas  = 0;
+		$colarse = static function ( $corto, $object_id ) use ( $solicitud, $lista, $veces, &$hechas ) {
+			global $wpdb;
+			if ( (int) $object_id !== $solicitud || $hechas >= $veces ) {
+				return $corto;
+			}
+			++$hechas;
+			// Cada vez otra cosa: la otra cuenta sigue escribiendo.
+			$suya                                = $lista;
+			$suya[ count( $suya ) - 1 ]['phone'] = '60000000' . $hechas;
+			$valor                               = maybe_serialize( $suya );
+			if ( null === get_metadata_raw( 'post', $solicitud, ApplicationMetaKeys::PEOPLE, true ) ) {
+				$wpdb->insert( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
+					$wpdb->postmeta,
+					array(
+						'post_id'    => $solicitud,
+						'meta_key'   => ApplicationMetaKeys::PEOPLE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+						'meta_value' => $valor, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					)
+				);
+			} else {
+				$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
+					$wpdb->postmeta,
+					array( 'meta_value' => $valor ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+					array(
+						'post_id'  => $solicitud,
+						'meta_key' => ApplicationMetaKeys::PEOPLE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+					)
+				);
+			}
+			return $corto;
+		};
+		add_filter( 'update_post_metadata', $colarse, 10, 2 );
+		add_filter( 'add_post_metadata', $colarse, 10, 2 );
+	}
+
+	/**
+	 * Carrera: otra cuenta escribe la lista entre la lectura y la escritura.
+	 * La escritura no casa, se relee, se revalida y se reintenta: quedan las
+	 * dos personas. Vale para la primera escritura, sin meta todavía, y para
+	 * las siguientes.
+	 */
+	public function test_a_write_in_between_is_not_lost() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$otra          = ApplicationPeople::row(
+			array( 'id' => 'otra00000001' ) + $this->persona(
+				array(
+					'name'  => 'Luis',
+					'dni'   => '11111111H',
+					'email' => 'luis@example.org',
+				)
+			)
+		);
+
+		$primera = $this->application( $procedimiento, $director );
+		$this->otra_escribe_entremedias( $primera, array( $otra ), 1 );
+		$this->assertTrue( People::add( $primera, $director, $this->persona() )['ok'] );
+		$this->assertSame( array( 'Luis', 'Ana' ), array_column( People::of( $primera ), 'name' ), 'sin meta: ninguna se pierde' );
+
+		remove_all_filters( 'update_post_metadata' );
+		remove_all_filters( 'add_post_metadata' );
+		$segunda = $this->application( $procedimiento, $this->school_head( 'C0002' ), 'C0002' );
+		$uid     = (int) get_post_field( 'post_author', $segunda );
+		$this->assertTrue( People::add( $segunda, $uid, $this->persona( array( 'group' => 'g2' ) ) )['ok'] );
+		$ya = People::of( $segunda );
+		$this->otra_escribe_entremedias( $segunda, array_merge( $ya, array( $otra ) ), 1 );
+		$this->assertTrue( People::add( $segunda, $uid, $this->persona() )['ok'] );
+		$this->assertSame( array( 'Ana', 'Luis', 'Ana' ), array_column( People::of( $segunda ), 'name' ), 'con meta: ninguna se pierde' );
+	}
+
+	/**
+	 * Si otra cuenta vuelve a escribir en el reintento, se rechaza con aviso,
+	 * y ni se anota en el historial ni se avisa por correo.
+	 */
+	public function test_a_lost_race_is_refused_without_log_or_mail() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$otra          = ApplicationPeople::row(
+			array( 'id' => 'otra00000001' ) + $this->persona(
+				array(
+					'name'  => 'Luis',
+					'dni'   => '11111111H',
+					'email' => 'luis@example.org',
+				)
+			)
+		);
+		$avisos        = 0;
+		add_action(
+			'prc_people_changed',
+			static function () use ( &$avisos ) {
+				++$avisos;
+			}
+		);
+		$this->otra_escribe_entremedias( $solicitud, array( $otra ), 5 );
+
+		$res = People::add( $solicitud, $director, $this->persona() );
+		$this->assertFalse( $res['ok'] );
+		$this->assertStringContainsString( 'a la vez', $res['error'] );
+		$this->assertSame( array( 'Luis' ), array_column( People::of( $solicitud ), 'name' ) );
+		$this->assertSame( array(), ApplicationLog::all( $solicitud ), 'sin lista escrita, sin historial' );
+		$this->assertSame( 0, $avisos );
+		$this->assertSame( array(), $this->enviados );
+	}
+
+	/**
+	 * Un «cambio» que deja la fila igual no escribe, no anota y no avisa.
+	 */
+	public function test_a_change_without_differences_does_nothing() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$this->enviados = array();
+		$fila           = People::of( $solicitud )[0];
+
+		$res = People::change( $solicitud, $director, $fila['id'], ApplicationPeople::fingerprint( $fila ), $this->persona() );
+		$this->assertTrue( $res['ok'] );
+		$this->assertFalse( $res['changed'] );
+		$this->assertCount( 1, ApplicationLog::all( $solicitud ) );
+		$this->assertSame( array(), $this->enviados );
+	}
+
+	/**
+	 * Tocar personas no es guardar la solicitud: ni `prc_application_saved`,
+	 * ni cambia su fecha de modificación.
+	 */
+	public function test_people_do_not_save_the_application() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$antes         = get_post_field( 'post_modified_gmt', $solicitud );
+		$guardadas     = 0;
+		add_action(
+			'prc_application_saved',
+			static function () use ( &$guardadas ) {
+				++$guardadas;
+			}
+		);
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		People::change( $solicitud, $director, $fila['id'], ApplicationPeople::fingerprint( $fila ), $this->persona( array( 'phone' => '611111111' ) ) );
+		clean_post_cache( $solicitud );
+		$this->assertSame( 0, $guardadas );
+		$this->assertSame( $antes, get_post_field( 'post_modified_gmt', $solicitud ) );
 	}
 }

@@ -35,6 +35,7 @@ return array(
 	'Access/ProcedureAccess.php',
 	'Meta/ProcedureMetaRegistration.php',
 	'Meta/ApplicationMetaRegistration.php',
+	'Meta/MetaSwap.php',
 	'PostType/ProcedurePostType.php',
 	'PostType/ApplicationPostType.php',
 	'Taxonomy/ProcedureTaxonomies.php',

@@ -826,10 +826,31 @@ acotada para la consulta de solo lectura):
   `::late_until( int $application_id ): string`, `::is_late_open( int $application_id ): bool`,
   `::late_notice( int $application_id ): string`, `::why_not_late_date( string $until, string $today ): string`,
   `::live_twin( int $application_id ): ?int`, `::catalogue_centre( string $code ): array`,
-  `::day()`; filtros `pre_untrash_post` (`guard_untrash()`) y
+  `::may_delete( int $user_id, int $application_id ): bool` (lo que
+  `map_meta_cap()` contesta a `delete_post` sobre una solicitud: nadie en
+  histórico, solo `prc_manage_app` en la papelera, quien revisa si está
+  publicada), `::day()`; filtros `pre_untrash_post` (`guard_untrash()`: ni la
+  que haría dos ni en histórico), `pre_delete_post` (`guard_delete()`: una
+  retirada solo la borra administración, tampoco el vaciado automático) y
   `wp_untrash_post_status` (`untrash_status()`).
+- `PeopleSpec::application_editable( string $state, string $review, bool $late = false )`
+  y el contexto `late` de `PeopleSpec::why_closed()`: la prórroga abre la
+  lista de personas que sigue el plazo de la solicitud.
+- `Applications::lost_race( int $id, int $procedure_id, string $code ): bool`,
+  `::why_not_saved( string $generic ): string` y `Applications::DUPLICATE`:
+  una por centro también con dos altas a la vez.
+- `ApplicationCompleteness::reasons( …, bool $pending = false )`: «Pendiente de
+  que el centro la complete»; `ApplicationQuery` lee `prc_created_by` en el
+  censo.
+- `prc_application_saved( int $id, bool $created, int $user_id, string $previous )`:
+  el cuarto argumento es el estado de revisión de antes, y el historial anota
+  la vuelta a «presentada» como revisión hecha por el guardado.
+- `ProcedureEditor::nonce_action( string $op, int $row = 0 )`: las operaciones
+  de fila llevan nonce de su operación y de su solicitud.
 - `ProcedureAccess::can_view_application()` solo da por propia una solicitud
   **publicada**: una retirada solo la ve quien revisa.
+- Al retirar, `ApplicationOperations::on_trashed()` quita
+  `_wp_trash_meta_time`: el vaciado automático de la papelera no la ve.
 - `PublicFront/ApplicationOperations`: `withdraw( int $id, int $user_id, string $by, string $reason = '' ): bool`
   (`BY_APPLICANT`, `BY_REVIEWER`, `BY_DESK`), `restore( int $id ): bool`,
   `extend( int $id, int $user_id, string $until ): bool`,
@@ -858,8 +879,8 @@ acotada para la consulta de solo lectura):
   nonce `NONCE_FIELD` (`_prc_withdraw_nonce`) con `nonce_action( $id )`
   (`prc_withdraw_{id}`); ancla `ANCHOR` (`prc-retirar`); aviso `retirada` de
   `ApplyForm`; `::model( array $m )`, `::link( int $id, string $url )`.
-- Operaciones del taller (`ProcedureEditor`, nonce por solicitud salvo la
-  última): `ApplicationActionsPanel::OP_RETIRE` (`retire_application`,
+- Operaciones del taller (`ProcedureEditor`, nonce de operación y de
+  solicitud salvo la última): `ApplicationActionsPanel::OP_RETIRE` (`retire_application`,
   `FIELD_REASON` = `prc_retire_reason`), `OP_RESTORE` (`restore_application`),
   `OP_EXTEND` (`extend_application`, `FIELD_LATE` = `prc_late_until`,
   `FIELD_LATE_REMOVE` = `prc_late_remove`) y `OP_SUBMIT_FOR`
@@ -883,8 +904,11 @@ acotada para la consulta de solo lectura):
 - Retirar es la papelera: el centro, en plazo o en su prórroga; quien revisa,
   por error y con motivo. Se restaura si el centro no tiene otra; ningún
   borrado definitivo desde el aplicativo; la revisión en bloque no retira.
-- La prórroga abre esa solicitud entera hasta su último día; nunca en
-  histórico, tampoco para administración.
+- La prórroga abre esa solicitud entera —y su lista de personas, si sigue su
+  plazo— hasta su último día; nunca en histórico, tampoco para
+  administración; en un procedimiento resuelto, con aviso. Guardar con
+  prórroga la devuelve a «presentada», con aviso en el formulario.
+- Las retiradas no caducan en la papelera y solo las borra administración.
 - En nombre de un centro: vacía, con prórroga obligatoria, sin correo al
   centro (el catálogo no trae su dirección); el buscador es de servidor —no
   había un patrón de sugerencias con guion que reutilizar—.

@@ -199,9 +199,10 @@ coincide con `prc_centre_code` de la solicitud.
 | Ver las solicitudes de un procedimiento | `prc_review_applications` en su ámbito, o `prc_manage_all_areas` | Que el procedimiento no esté archivado |
 | Admitir, excluir, pedir subsanar | Los mismos | Excluir y pedir subsanar exigen nota |
 | Exportar el CSV | Los mismos | — |
-| Retirar una solicitud por error | Los mismos (`delete_post`) | Con motivo obligatorio, que queda en el historial; nunca histórico. La revisión en bloque no retira |
+| Retirar una solicitud por error | Los mismos (`delete_post`) | Con motivo obligatorio, que queda en el historial; nunca histórico, tampoco administración por el escritorio. La revisión en bloque no retira, y una retirada no se revisa |
 | Restaurar una retirada | Los mismos (`prc_restore_application`) | Si el centro no ha presentado otra; nunca histórico, tampoco por el escritorio |
-| Conceder, cambiar o quitar una prórroga | Los mismos (`prc_extend_application`) | Nunca en histórico, tampoco administración |
+| Borrar para siempre una retirada | Solo `prc_manage_app` (`delete_post` en la papelera) | Nunca en histórico. La papelera no se vacía sola para las solicitudes |
+| Conceder, cambiar o quitar una prórroga | Los mismos (`prc_extend_application`) | Nunca en histórico, tampoco administración; en un procedimiento resuelto se permite, con aviso. Abre también la lista de personas que sigue el plazo de la solicitud |
 | Presentar en nombre de un centro | Los mismos (`prc_submit_for_centre`, sobre el procedimiento) | Un centro del catálogo y activo, sin solicitud —tampoco retirada—, en un procedimiento para centros; los acotados del procedimiento salvo «aunque no cumpla los requisitos» |
 | Ver el historial y la nota interna de una solicitud | Los mismos | Ni quien solicita ni quien consulta |
 | Ver una solicitud en el escritorio | Los mismos, más `prc_manage_app` | Solo diagnóstico: `prc_application` no es público |

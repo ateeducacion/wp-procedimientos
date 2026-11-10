@@ -3396,6 +3396,370 @@ final class ApplicationPeople {
 
 namespace Prc\Domain;
 
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ApplicationFilter', false ) ) {
+final class ApplicationFilter {
+
+
+	public const ARG_REVIEW = 'revision';
+
+
+	public const ARG_ISLAND = 'isla';
+
+
+	public const ARG_ZONE = 'zona';
+
+
+	public const ARG_INCOMPLETE = 'incompletas';
+
+
+	public const ARG_SEARCH = 'buscar';
+
+
+	public const ARG_PAGE = 'pagina';
+
+
+	public const PER_PAGE = 50;
+
+
+	public const MAX_SEARCH = 100;
+
+
+
+
+
+
+	private const ARGS = array(
+		'review'     => self::ARG_REVIEW,
+		'island'     => self::ARG_ISLAND,
+		'zone'       => self::ARG_ZONE,
+		'incomplete' => self::ARG_INCOMPLETE,
+		'search'     => self::ARG_SEARCH,
+		'page'       => self::ARG_PAGE,
+	);
+
+
+
+
+
+
+
+
+
+	private const FOLD = array(
+		'á' => 'a',
+		'à' => 'a',
+		'â' => 'a',
+		'ä' => 'a',
+		'é' => 'e',
+		'è' => 'e',
+		'ê' => 'e',
+		'ë' => 'e',
+		'í' => 'i',
+		'ì' => 'i',
+		'î' => 'i',
+		'ï' => 'i',
+		'ó' => 'o',
+		'ò' => 'o',
+		'ô' => 'o',
+		'ö' => 'o',
+		'ú' => 'u',
+		'ù' => 'u',
+		'û' => 'u',
+		'ü' => 'u',
+		'ñ' => 'n',
+		'ç' => 'c',
+	);
+
+
+
+
+
+
+	public static function args(): array {
+		return self::ARGS;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( array $raw ): array {
+		$estado = self::text( $raw, self::ARG_REVIEW, 32 );
+		$pagina = self::text( $raw, self::ARG_PAGE, 9 );
+		return array(
+			'review'     => isset( ApplicationMetaKeys::review_states()[ $estado ] ) ? $estado : '',
+			'island'     => self::text( $raw, self::ARG_ISLAND, 100 ),
+			'zone'       => self::text( $raw, self::ARG_ZONE, 32 ),
+			'incomplete' => '1' === self::text( $raw, self::ARG_INCOMPLETE, 1 ),
+			'search'     => self::text( $raw, self::ARG_SEARCH, self::MAX_SEARCH ),
+			'page'       => ctype_digit( $pagina ) && (int) $pagina > 0 ? (int) $pagina : 1,
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function against( array $filter, array $options ): array {
+		foreach ( array(
+			'island' => 'islands',
+			'zone'   => 'zones',
+		) as $clave => $lista ) {
+			if ( '' !== $filter[ $clave ] && ! isset( $options[ $lista ][ $filter[ $clave ] ] ) ) {
+				$filter[ $clave ] = '';
+			}
+		}
+		return $filter;
+	}
+
+
+
+
+
+
+
+	public static function active( array $filter ): bool {
+		return '' !== $filter['review'] || '' !== $filter['island'] || '' !== $filter['zone']
+			|| true === $filter['incomplete'] || '' !== $filter['search'];
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function query( array $filter, array $changes = array() ): array {
+		if ( array() !== $changes && ! array_key_exists( 'page', $changes ) ) {
+			$changes['page'] = 1;
+		}
+		$f   = array_merge( $filter, $changes );
+		$out = array();
+		foreach ( self::ARGS as $clave => $arg ) {
+			$valor = $f[ $clave ] ?? '';
+			if ( 'incomplete' === $clave ) {
+				$valor = true === $valor ? '1' : '';
+			} elseif ( 'page' === $clave ) {
+				$valor = (int) $valor > 1 ? (string) (int) $valor : '';
+			}
+			if ( '' !== (string) $valor ) {
+				$out[ $arg ] = (string) $valor;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function window( int $total, int $page, int $per_page = self::PER_PAGE ): array {
+		$total  = max( 0, $total );
+		$pages  = max( 1, (int) ceil( $total / max( 1, $per_page ) ) );
+		$page   = min( max( 1, $page ), $pages );
+		$offset = ( $page - 1 ) * $per_page;
+		return array(
+			'page'   => $page,
+			'pages'  => $pages,
+			'offset' => $offset,
+			'from'   => 0 === $total ? 0 : $offset + 1,
+			'to'     => min( $total, $offset + $per_page ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function matches( string $term, array $texts ): bool {
+		$term = self::fold( $term );
+		if ( '' === $term ) {
+			return true;
+		}
+		foreach ( $texts as $texto ) {
+			if ( false !== strpos( self::fold( (string) $texto ), $term ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+	private static function fold( string $text ): string {
+		$text = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text, 'UTF-8' ) : strtolower( $text );
+		return strtr( trim( $text ), self::FOLD );
+	}
+
+
+
+
+
+
+
+
+
+	private static function text( array $raw, string $key, int $max ): string {
+		$valor = $raw[ $key ] ?? '';
+		if ( ! is_string( $valor ) && ! is_int( $valor ) ) {
+			return '';
+		}
+		$valor = trim( (string) preg_replace( '/[\s\x00-\x1f]+/u', ' ', (string) $valor ) );
+		return function_exists( 'mb_substr' ) ? mb_substr( $valor, 0, $max, 'UTF-8' ) : substr( $valor, 0, $max );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ApplicationCompleteness', false ) ) {
+final class ApplicationCompleteness {
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review ): array {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
+			return array();
+		}
+		$out  = array();
+		$spec = PeopleSpec::sanitize( $spec );
+		$hay  = ApplicationPeople::rows( $people );
+		if ( ! ApplicationPeople::is_complete( $spec, $hay ) ) {
+			$faltan = (int) $spec['min'] - count( $hay );
+			$out[]  = 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan );
+		}
+		$files = is_array( $files ) ? $files : array();
+		foreach ( self::overdue( $questions, $today ) as $pregunta ) {
+			$doc = $files[ (string) $pregunta['key'] ] ?? null;
+			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+				$out[] = 'Falta: ' . (string) $pregunta['label'];
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function overdue( array $questions, string $today ): array {
+		$out = array();
+		foreach ( $questions as $pregunta ) {
+			if ( ! empty( $pregunta['required'] ) && ProcedureQuestions::valid_delivery( $pregunta )
+				&& ProcedureInput::is_valid_date( $today ) && (string) $pregunta['closes_at'] < $today ) {
+				$out[] = $pregunta;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function may_be_incomplete( array $spec, array $questions, string $today ): bool {
+		return true === PeopleSpec::sanitize( $spec )['enabled'] || array() !== self::overdue( $questions, $today );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
 use Prc\Meta\ProcedureMetaKeys;
 
 

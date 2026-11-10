@@ -137,6 +137,96 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// --- 4. La revisión en bloque: casillas fuera del formulario ------------
+	//
+	// Las casillas de las filas están en la tabla y apuntan al formulario con
+	// el atributo `form`; «Marcar las de esta página» es un campo que lee el
+	// servidor. Se comprueba qué viaja en el envío en los tres escalones.
+	{
+		const BLOQUE = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<form id="prc-bloque" class="prc-bloque__form" method="post" action="/enviado"
+      data-prc-confirm="¿Cambiar la revisión de las solicitudes marcadas? Cada una recibe el mismo estado y la misma nota, y a cada centro le llega su aviso por correo."
+      data-prc-confirm-ok="Cambiar la revisión">
+  <input type="hidden" name="prc_do" value="bulk_review" />
+  <input type="hidden" name="prc_page_rows" value="11,12" />
+  <input type="hidden" name="revision" value="submitted" />
+  <label><input type="checkbox" id="pagina" name="prc_rows_page" value="1" data-prc-bulk-page /> Marcar las de esta página (2)</label>
+  <select name="prc_state"><option value="admitted">Admitida</option></select>
+  <button id="enviar" type="submit">Cambiar la revisión de las marcadas</button>
+</form>
+<table><tbody>
+  <tr><td><input type="checkbox" id="f11" form="prc-bloque" name="prc_rows[]" value="11" data-prc-bulk-row /></td></tr>
+  <tr><td><input type="checkbox" id="f12" form="prc-bloque" name="prc_rows[]" value="12" data-prc-bulk-row /></td></tr>
+</tbody></table>
+</body>`;
+		const abrirBloque = async ( contexto, conSwal ) => {
+			const page = await contexto.newPage();
+			const envio = { cuerpo: null };
+			await page.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				if ( url.includes( '/enviado' ) ) {
+					envio.cuerpo = decodeURIComponent( ( route.request().postData() || '' ).replace( /\+/g, ' ' ) );
+				}
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						'<style>' + CSS + '</style>' + BLOQUE + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
+				} );
+			} );
+			await page.goto( 'https://prc.test/panel' );
+			return { page, envio };
+		};
+
+		// Sin JavaScript: la casilla de la página viaja y el servidor revisa la página.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		let { page, envio } = await abrirBloque( sinJs, true );
+		await page.check( '#pagina' );
+		ok( ! ( await page.isChecked( '#f11' ) ), 'sin guion, marcar la página no toca las filas' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#enviar' ) ] );
+		ok( /prc_rows_page=1/.test( envio.cuerpo ) && /prc_page_rows=11,12/.test( envio.cuerpo ),
+			'sin guion se envía la casilla de la página con sus solicitudes: ' + envio.cuerpo );
+		ok( /revision=submitted/.test( envio.cuerpo ), 'y el filtro vuelve con el envío' );
+		await sinJs.close();
+
+		// Con el confirm() del navegador: el guion marca las filas.
+		( { page, envio } = await abrirBloque( ctx, false ) );
+		await page.check( '#pagina' );
+		ok( await page.isChecked( '#f11' ) && await page.isChecked( '#f12' ), 'con guion, la casilla de la página marca las filas' );
+		await page.uncheck( '#f12' );
+		ok( ! ( await page.isChecked( '#pagina' ) ), 'y se desmarca sola en cuanto falta una' );
+		let pregunta = null;
+		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.dismiss(); } );
+		await page.click( '#enviar' );
+		await page.waitForTimeout( 300 );
+		ok( null !== pregunta && pregunta.startsWith( '¿Cambiar la revisión' ), 'sin SweetAlert se pregunta con confirm()' );
+		ok( null === envio.cuerpo, 'al cancelar no se envía' );
+		page.removeAllListeners( 'dialog' );
+		page.on( 'dialog', ( d ) => d.accept() );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#enviar' ) ] );
+		ok( /prc_rows\[\]=11/.test( envio.cuerpo ) && ! /prc_rows\[\]=12/.test( envio.cuerpo ) && ! /prc_rows_page/.test( envio.cuerpo ),
+			'al aceptar viaja solo la fila marcada: ' + envio.cuerpo );
+		await page.close();
+
+		// Con SweetAlert2.
+		( { page, envio } = await abrirBloque( ctx, true ) );
+		page.on( 'dialog', async ( d ) => { ok( false, 'no debería salir el confirm() del navegador' ); await d.dismiss(); } );
+		await page.check( '#f12' );
+		await page.click( '#enviar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		const verbo = ( await page.textContent( '.swal2-confirm' ) ).trim();
+		ok( 'Cambiar la revisión' === verbo, 'el botón del diálogo dice el verbo: ' + verbo );
+		await page.click( '.swal2-cancel' );
+		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
+		ok( null === envio.cuerpo, 'Cancelar no envía' );
+		await page.click( '#enviar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
+		ok( /prc_rows\[\]=12/.test( envio.cuerpo ), 'confirmar envía la fila marcada fuera del formulario: ' + envio.cuerpo );
+		await page.close();
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

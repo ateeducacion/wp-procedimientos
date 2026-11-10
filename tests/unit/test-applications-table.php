@@ -547,6 +547,12 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Solo las incompletas', $html, 'sin lista ni entregas no hay incompletas que buscar' );
 		$this->assertStringContainsString( 'prc-contadores', $html );
 		$this->assertStringContainsString( 'Isla Uno', $html );
+		// La revisión en bloque: casillas que apuntan a su formulario, y la confirmación de siempre.
+		$this->assertStringContainsString( 'id="prc-bloque"', $html );
+		$this->assertStringContainsString( 'data-prc-confirm="¿Cambiar la revisión de las solicitudes marcadas?', $html );
+		$this->assertStringContainsString( 'data-prc-confirm-ok="Cambiar la revisión"', $html );
+		$this->assertSame( 4, substr_count( $html, 'form="prc-bloque" name="' . ApplicationsPanel::FIELD_ROWS . '[]"' ) );
+		$this->assertStringContainsString( 'name="' . ApplicationsPanel::FIELD_PAGE_ROWS . '" value="' . implode( ',', $ids ) . '"', $html );
 	}
 
 	/**

@@ -1,7 +1,7 @@
 <?php
 /**
  * Snippet Name: PRC — Roles y perfiles
- * Description: Registra los roles del aplicativo de procedimientos (prc_manager, prc_school_head, prc_teacher), sus capacidades propias y los campos de perfil «Ámbitos» y «Código de centro» que acotan lo que cada persona ve, edita o solicita. La administración es el rol nativo de WordPress y solo recibe capacidades. Las capacidades de los tipos de contenido las reparte el aplicativo, no este snippet. Los roles se revisan en WPFront User Role Editor.
+ * Description: Registra los roles del aplicativo de procedimientos (prc_manager, prc_school_head, prc_teacher, prc_observer), sus capacidades propias y los campos de perfil «Ámbitos», «Código de centro» y «Zonas de consulta» que acotan lo que cada persona ve, edita, solicita o consulta. La administración es el rol nativo de WordPress y solo recibe capacidades. Las capacidades de los tipos de contenido las reparte el aplicativo, no este snippet. Los roles se revisan en WPFront User Role Editor.
  * Scope: global
  * Priority: 5
  *
@@ -22,7 +22,7 @@ if ( ! function_exists( 'prc_role_slugs' ) ) {
 	 * @return string[]
 	 */
 	function prc_role_slugs(): array {
-		return array( 'prc_manager', 'prc_school_head', 'prc_teacher' );
+		return array( 'prc_manager', 'prc_school_head', 'prc_teacher', 'prc_observer' );
 	}
 }
 
@@ -61,6 +61,15 @@ if ( ! function_exists( 'prc_role_definitions' ) ) {
 					'read',
 					'prc_apply',
 					'prc_apply_as_teacher',
+				),
+			),
+			// Solo leer, y solo lo de su zona (ADR-0043): ni el escritorio
+			// más allá de su perfil, ni el taller, ni crear o editar nada.
+			'prc_observer'    => array(
+				'label' => 'Consulta de solicitudes',
+				'caps'  => array(
+					'read',
+					'prc_view_applications',
 				),
 			),
 		);

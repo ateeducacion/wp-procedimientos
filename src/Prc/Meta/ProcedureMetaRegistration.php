@@ -7,6 +7,7 @@
 
 namespace Prc\Meta;
 
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -148,6 +149,26 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::PEOPLE_SPEC          => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_people_spec' ),
+			),
+			ProcedureMetaKeys::OBSERVABLE           => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+			),
+			ProcedureMetaKeys::OBSERVER_FILES       => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
 		);
 	}
@@ -347,6 +368,28 @@ final class ProcedureMetaRegistration {
 	 */
 	public static function sanitize_text_list( $value ): array {
 		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
+	}
+
+	/**
+	 * The columns a consultation shows: column keys, without repeats, and
+	 * never one a consultation must not show (ADR-0043).
+	 *
+	 * Solo la forma de una clave de columna —`code`, `q4`, `q4:r1`—: si existe
+	 * lo decide quien la lee, con las columnas que el procedimiento tenga ese
+	 * día.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string[]
+	 */
+	public static function sanitize_observer_columns( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $clave ) {
+			$clave = is_string( $clave ) ? trim( $clave ) : '';
+			if ( preg_match( '/^[a-z][a-z0-9_]*(:[a-z0-9_]+)?$/', $clave ) && ! in_array( $clave, ObserverScope::FORBIDDEN_COLUMNS, true ) ) {
+				$out[ $clave ] = $clave;
+			}
+		}
+		return array_values( $out );
 	}
 
 	/**

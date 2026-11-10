@@ -854,7 +854,12 @@ final class ProcedureEditor {
 			);
 		}
 
-		$questions = ProcedureQuestions::sanitize( $crudas );
+		self::$rejected = QuestionChanges::input_errors( $crudas );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
+		$seq       = Applications::question_seq( $procedure_id );
+		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
 				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
@@ -865,6 +870,7 @@ final class ProcedureEditor {
 		if ( '' !== self::$rejected ) {
 			return;
 		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, $seq );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
 	}

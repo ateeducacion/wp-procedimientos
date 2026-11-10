@@ -15106,6 +15106,7 @@ final class Workspace {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -15422,6 +15423,7 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
+			$secciones .= PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo );
 		}
 
 		ob_start();
@@ -15796,6 +15798,60 @@ final class ProcedureEditorView {
 			<textarea class="prc-control" id="prc-commitments" name="<?php echo esc_attr( ProcedureMetaKeys::COMMITMENTS ); ?>" rows="5"
 				aria-describedby="prc-commitments-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::COMMITMENTS ] ); ?></textarea>
 			<p class="prc-campo__ayuda" id="prc-commitments-ayuda">Lo que el centro acepta al solicitar, con una casilla obligatoria. En blanco, no se pide nada.</p>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function eligibility_fields( array $m, array $v ): string {
+		$opciones = (array) ( $m['centre_options'] ?? array() );
+		$listas   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+		);
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--completo"><p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con cualquier límite, solo los centros del catálogo que lo cumplan; las solicitudes ya presentadas no se tocan.</p></div>
+			<?php foreach ( $listas as $nombre => $lista ) : ?>
+				<div class="prc-campo prc-campo--medio">
+					<fieldset>
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
+						<?php if ( array() === $lista[1] ) : ?>
+							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php endif; ?>
+						<div class="prc-opciones prc-opciones--vertical">
+							<?php foreach ( $lista[1] as $i => $valor ) : ?>
+								<div class="prc-opcion">
+									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
+										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
+										<?php checked( in_array( (string) $valor, (array) $v[ $nombre ], true ) ); ?> />
+									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
+								</div>
+							<?php endforeach; ?>
+						</div>
+						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
+					</fieldset>
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-campo--completo">
+				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
+				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
+					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
+			</div>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -16769,6 +16825,8 @@ final class ProcedureEditorView {
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -17426,6 +17484,37 @@ final class ProcedureEditor {
 
 
 
+
+
+	private static function stored_eligibility( int $procedure_id ): array {
+		$reglas = $procedure_id > 0 ? ProcedureAccess::eligibility( $procedure_id ) : CentreEligibility::rules( array() );
+		return array(
+			'centre_types'    => $reglas['types'],
+			'islands'         => $reglas['islands'],
+			'allowed_centres' => implode( "\n", $reglas['codes'] ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function centre_options( array $values ): array {
+		return array(
+			'types'   => CentreEligibility::values( array_merge( CentreCatalog::values( 'type' ), (array) ( $values[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() ) ) ),
+			'islands' => CentreEligibility::values( array_merge( CentreCatalog::values( 'island' ), (array) ( $values[ ProcedureMetaKeys::ISLANDS ] ?? array() ) ) ),
+		);
+	}
+
+
+
+
+
+
+
 	private static function submitted_data( int $procedure_id = 0 ): array {
 
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
@@ -17454,6 +17543,10 @@ final class ProcedureEditor {
 
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
 
+		$tipos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() );
+
+		$islas = (array) wp_unslash( $_POST[ ProcedureMetaKeys::ISLANDS ] ?? array() );
+
 
 		$datos                      = array(
 			'title'                => self::field( self::FIELD_TITLE ),
@@ -17471,6 +17564,9 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'centre_types'         => $tipos,
+			'islands'              => $islas,
+			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -17520,7 +17616,8 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
+				),
+				self::stored_eligibility( $procedure_id )
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
@@ -17550,6 +17647,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
+			ProcedureMetaKeys::CENTRE_TYPES         => $limpio['centre_types'],
+			ProcedureMetaKeys::ISLANDS              => $limpio['islands'],
+			ProcedureMetaKeys::ALLOWED_CENTRES      => $limpio['allowed_centres'],
 		);
 		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
@@ -18107,6 +18207,10 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_options'          => array(
+				'types'   => array(),
+				'islands' => array(),
+			),
 			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
 			'audiences'               => ProcedureMetaKeys::audiences(),
 			'header_colors'           => ProcedureMetaKeys::header_colors(),
@@ -18235,6 +18339,9 @@ final class ProcedureEditor {
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		if ( self::PANEL_DATA === $m['panel'] ) {
+			$m['centre_options'] = self::centre_options( (array) $m['values'] );
+		}
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -18303,6 +18410,10 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		$acotados                                       = self::stored_eligibility( $procedure_id );
+		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
+		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
@@ -18325,6 +18436,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
 			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
+			ProcedureMetaKeys::CENTRE_TYPES    => 'centre_types',
+			ProcedureMetaKeys::ISLANDS         => 'islands',
+			ProcedureMetaKeys::ALLOWED_CENTRES => 'allowed_centres',
 		);
 
 		$enviados                 = array_keys( (array) $_POST );

@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -322,6 +323,7 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
+			$secciones .= PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo );
 		}
 
 		ob_start();
@@ -696,6 +698,60 @@ final class ProcedureEditorView {
 			<textarea class="prc-control" id="prc-commitments" name="<?php echo esc_attr( ProcedureMetaKeys::COMMITMENTS ); ?>" rows="5"
 				aria-describedby="prc-commitments-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::COMMITMENTS ] ); ?></textarea>
 			<p class="prc-campo__ayuda" id="prc-commitments-ayuda">Lo que el centro acepta al solicitar, con una casilla obligatoria. En blanco, no se pide nada.</p>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Qué centros pueden solicitar»: tipos, islas y una lista cerrada de códigos.
+	 *
+	 * Las casillas son los tipos y las islas que trae el catálogo, más los ya
+	 * elegidos aunque el catálogo los haya perdido. Ninguna marcada es «todos»
+	 * (ADR-0042).
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @param array<string, mixed> $v Field values.
+	 * @return string
+	 */
+	private static function eligibility_fields( array $m, array $v ): string {
+		$opciones = (array) ( $m['centre_options'] ?? array() );
+		$listas   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+		);
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--completo"><p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con cualquier límite, solo los centros del catálogo que lo cumplan; las solicitudes ya presentadas no se tocan.</p></div>
+			<?php foreach ( $listas as $nombre => $lista ) : ?>
+				<div class="prc-campo prc-campo--medio">
+					<fieldset>
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
+						<?php if ( array() === $lista[1] ) : ?>
+							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php endif; ?>
+						<div class="prc-opciones prc-opciones--vertical">
+							<?php foreach ( $lista[1] as $i => $valor ) : ?>
+								<div class="prc-opcion">
+									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
+										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
+										<?php checked( in_array( (string) $valor, (array) $v[ $nombre ], true ) ); ?> />
+									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
+								</div>
+							<?php endforeach; ?>
+						</div>
+						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
+					</fieldset>
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-campo--completo">
+				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
+				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
+					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
+			</div>
 		</div>
 		<?php
 		return (string) ob_get_clean();

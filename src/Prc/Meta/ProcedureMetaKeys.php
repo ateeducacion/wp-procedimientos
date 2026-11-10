@@ -100,6 +100,12 @@ final class ProcedureMetaKeys {
 	 */
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
+	/** Number of coordinators requested; the legacy boolean remains readable. */
+	public const COORDINATOR_COUNT = 'prc_coordinator_count';
+
+	// shortcut: diez personas como máximo; ampliar cuando una convocatoria necesite más.
+	public const COORDINATOR_COUNT_MAX = 10;
+
 	/**
 	 * Las preguntas del procedimiento ({@see \Prc\Domain\ProcedureQuestions}).
 	 */
@@ -171,6 +177,7 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
+			self::COORDINATOR_COUNT,
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,

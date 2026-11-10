@@ -13,6 +13,7 @@ use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
@@ -64,13 +65,15 @@ final class ApplyForm {
 	public const OP_DELIVER     = 'deliver';
 	public const FIELD_DELIVERY = 'prc_delivery';
 
-	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
-	public const FIELD_CENTRE      = 'prc_apply_centre';
-	public const FIELD_POSITION    = 'prc_position';
-	public const FIELD_COORD_NAME  = 'prc_coordinator_name';
-	public const FIELD_COORD_EMAIL = 'prc_coordinator_email';
-	public const FIELD_ACCEPT      = 'prc_accept';
-	public const FIELD_ANSWERS     = 'prc_q';
+	public const FIELD_PROCEDURE    = 'prc_apply_procedure';
+	public const FIELD_CENTRE       = 'prc_apply_centre';
+	public const FIELD_POSITION     = 'prc_position';
+	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
+	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
+	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
+	public const FIELD_COORDINATORS = 'prc_coordinators';
+	public const FIELD_ACCEPT       = 'prc_accept';
+	public const FIELD_ANSWERS      = 'prc_q';
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
@@ -267,15 +270,18 @@ final class ApplyForm {
 	 * @return array<string, mixed>
 	 */
 	private static function submitted(): array {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- el nonce lo comprobó handle(); ApplicationInput valida cada fila.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- las respuestas las valida ProcedureQuestions contra las preguntas, y el sanitize de la meta las limpia al guardar.
-		$respuestas = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
-		$acepta     = ! empty( $_POST[ self::FIELD_ACCEPT ] );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
-
+		$respuestas   = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
+		$acepta       = ! empty( $_POST[ self::FIELD_ACCEPT ] );
+		$coordinators = wp_unslash( $_POST[ self::FIELD_COORDINATORS ] ?? array() );
+		$coordinators = is_array( $coordinators ) ? self::clean_coordinators( $coordinators ) : array();
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		return array(
 			'position'          => self::field( self::FIELD_POSITION ),
+			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
 			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
 			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
 			'accept'            => $acepta,
 			'answers'           => self::clean_answers( $respuestas ),
@@ -296,6 +302,28 @@ final class ApplyForm {
 			} elseif ( is_scalar( $valor ) ) {
 				$out[ (string) $key ] = sanitize_textarea_field( (string) $valor );
 			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Clean coordinator fields before they are shown again after a rejected submit.
+	 *
+	 * @param array<mixed> $raw Submitted rows.
+	 * @return array<int, array{name:string, dni:string, email:string}>
+	 */
+	private static function clean_coordinators( array $raw ): array {
+		$out = array();
+		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
+			$row   = is_array( $row ) ? $row : array();
+			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
+			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
+			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
+			$out[] = array(
+				'name'  => $name,
+				'dni'   => $dni,
+				'email' => $email,
+			);
 		}
 		return $out;
 	}
@@ -389,9 +417,9 @@ final class ApplyForm {
 			'can_submit'      => false,
 			'why'             => '',
 			'spec'            => array(
-				'requires_coordinator' => false,
-				'commitments'          => '',
-				'questions'            => array(),
+				'coordinator_count' => 0,
+				'commitments'       => '',
+				'questions'         => array(),
 			),
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
@@ -461,7 +489,7 @@ final class ApplyForm {
 				'state_label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 				'note'        => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 				'position'    => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-				'coordinator' => (array) $meta[ ApplicationMetaKeys::COORDINATOR ],
+				'coordinator' => ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] ),
 				'answers'     => (array) $meta[ ApplicationMetaKeys::ANSWERS ],
 				'files'       => ApplicationFiles::descriptors( $existente ),
 			);
@@ -564,18 +592,20 @@ final class ApplyForm {
 	 * What every form field shows: what was typed on a refused submit, or what is stored.
 	 *
 	 * @param array<string, mixed> $application The existing application, empty for none.
-	 * @return array{position:string, coordinator_name:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
+	 * @return array{position:string, coordinators:array<int, array<string, mixed>>, coordinator_name:string, coordinator_dni:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
 	 */
 	private static function values( array $application ): array {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coord = (array) ( $application['coordinator'] ?? array() );
-		$meta  = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
+		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
-			'coordinator_name'  => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinators'      => $coordinators,
+			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
+			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
+			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 			// Una solicitud ya presentada ya aceptó los compromisos.
 			'accept'            => array() !== $application,
 			'answers'           => (array) ( $application['answers'] ?? array() ),

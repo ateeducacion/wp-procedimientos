@@ -217,3 +217,18 @@ opciones con `;`.
   fase 2, con su ADR.
 - Ampliar el núcleo es una versión del aplicativo, como cualquier cambio de
   código.
+
+## Adenda — 2026-11-07
+
+La coordinación puede pedir cero, una o varias personas. Cada persona aporta
+nombre y apellidos, DNI o NIE y correo. El aplicativo comprueba en el servidor
+el formato y la letra de control del DNI/NIE antes de guardar; la lista y la
+exportación de solicitudes incluyen los tres datos. Lo habitual es pedir una
+persona, aunque algunos procedimientos necesitan varias.
+
+La comprobación del DNI divide el número entre 23 y contrasta la letra
+resultante; para NIE sustituye X, Y o Z por 0, 1 o 2 antes del cálculo, según
+el [Ministerio del Interior](https://www.interior.gob.es/opencms/eu/servicios-al-ciudadano/tramites-y-gestiones/dni/calculo-del-digito-de-control-del-nif-nie/index.html).
+Este control detecta errores de escritura; no verifica que el documento exista
+ni quién lo presenta. El DNI/NIE queda protegido con los datos de la solicitud
+y solo se muestra en esta, en la revisión y en la exportación autorizada.

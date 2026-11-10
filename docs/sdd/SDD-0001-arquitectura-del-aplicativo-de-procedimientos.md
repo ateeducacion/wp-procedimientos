@@ -165,7 +165,7 @@ en `Meta/ApplicationMetaKeys`:
 | `prc_centre_code` | string | Código del centro que solicita (viene de la persona, ADR-0016) |
 | `prc_centre_name` | string | Nombre del centro en el momento de solicitar (foto, no referencia) |
 | `prc_applicant_position` | string | Cargo: `head`, `deputy_head`, `head_of_studies`, `secretary`, `other`; lista cerrada `ApplicationMetaKeys::positions()` |
-| `prc_coordinator` | array `{name, email}` | Persona coordinadora, si el procedimiento la pide |
+| `prc_coordinator` | lista `{name, dni, email}` | Ninguna, una o varias personas coordinadoras, según el procedimiento; DNI/NIE validado en servidor |
 | `prc_answers` | array | Respuestas, indexadas por la `key` de cada pregunta; **sin ficheros** |
 | `prc_files` | array | Descriptores de los documentos privados, indexados por la `key` de su pregunta: `{id, name, mime, size, sha256, stored}`, con `stored` **relativo** a la raíz privada. Ni ruta absoluta, ni URL, ni identificador de adjunto (ADR-0028) |
 | `prc_review_state` | string | `submitted` (presentada), `amend` (a subsanar), `admitted`, `excluded`; lista cerrada `ApplicationMetaKeys::review_states()` |

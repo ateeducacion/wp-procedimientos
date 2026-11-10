@@ -136,7 +136,8 @@ final class ProcedureView {
 				'courses'              => self::terms( $post_id, ProcedureTaxonomies::COURSE ),
 				'audience'             => (string) ( ProcedureMetaKeys::audiences()[ $audiencia ] ?? '' ),
 				'ownership'            => ProcedureChrome::ownership_label( $ownership ),
-				'requires_coordinator' => (bool) $meta[ ProcedureMetaKeys::REQUIRES_COORDINATOR ],
+				'coordinator_count'    => Applications::coordinator_count( $post_id ),
+				'requires_coordinator' => Applications::coordinator_count( $post_id ) > 0,
 				// `contact_email` es el primero de la lista: la caja resumen
 				// pinta uno solo, el que atiende.
 				'contact_emails'       => $correos,
@@ -182,6 +183,7 @@ final class ProcedureView {
 			'audience'             => '',
 			'ownership'            => '',
 			'requires_coordinator' => false,
+			'coordinator_count'    => 0,
 			'contact_emails'       => array(),
 			'contact_email'        => '',
 			'header_color'         => ProcedureMetaKeys::header_hex( '' ),

@@ -81,9 +81,9 @@ final class Mailer {
 	 */
 	public static function register(): void {
 		add_action( 'prc_procedure_created', array( self::class, 'on_procedure_created' ) );
-		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 2 );
-		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 3 );
-		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 2 );
+		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 3 );
+		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
+		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
 	}
 
 	/**
@@ -306,14 +306,19 @@ final class Mailer {
 	/**
 	 * An application has just been stored: new or edited.
 	 *
+	 * El acuse va a la cuenta que guarda, que no tiene por qué ser la que la
+	 * presentó: la solicitud de un centro la edita cualquiera de su equipo
+	 * directivo, y quien la presentó puede haber dejado el centro.
+	 *
 	 * @param int  $application_id Application ID.
 	 * @param bool $created        Whether it did not exist before.
+	 * @param int  $user_id        Account that stored it.
 	 * @return void
 	 */
-	public static function on_application_saved( $application_id, $created = false ): void {
+	public static function on_application_saved( $application_id, $created = false, $user_id = 0 ): void {
 		self::safely(
-			static function () use ( $application_id, $created ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $created, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -321,7 +326,7 @@ final class Mailer {
 
 				self::send(
 					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
-					array( self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) ) ),
+					array( self::email_of( (int) $user_id ) ),
 					$ctx
 				);
 
@@ -336,21 +341,30 @@ final class Mailer {
 	/**
 	 * The review state of an application has been set.
 	 *
-	 * Revisar sin cambiar de estado no manda nada. La nota viaja solo cuando
-	 * se pide subsanar o se excluye, que es cuando el centro tiene que leerla.
+	 * Sale cuando hay algo nuevo que contar ({@see review_news()}). La nota
+	 * viaja solo cuando se pide subsanar o se excluye, que es cuando el
+	 * centro tiene que leerla. Va a la cuenta que la presentó **mientras siga
+	 * pudiendo verla**: si ha dejado el centro, no se le cuentan ni las
+	 * respuestas ni la nota, y no se manda a nadie más.
 	 *
 	 * @param int    $application_id Application ID.
 	 * @param string $state          New review state.
-	 * @param string $previous       Review state before.
+	 * @param string $previous       Review state before; may be empty.
+	 * @param string $previous_note  Review note before.
 	 * @return void
 	 */
-	public static function on_application_reviewed( $application_id, $state = '', $previous = '' ): void {
-		if ( (string) $state === (string) $previous ) {
+	public static function on_application_reviewed( $application_id, $state = '', $previous = '', $previous_note = '' ): void {
+		$nota = (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		if ( ! self::review_news( (string) $state, (string) $previous, $nota, (string) $previous_note ) ) {
+			return;
+		}
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id ) ) {
 			return;
 		}
 		self::safely(
-			static function () use ( $application_id, $state ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $state, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -358,26 +372,49 @@ final class Mailer {
 				$ctx['note']  = in_array( $state, ApplicationMetaKeys::states_needing_note(), true )
 					? (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true )
 					: '';
-				self::send(
-					self::EVENT_REVIEW_CHANGED,
-					array( self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) ) ),
-					$ctx
-				);
+				self::send( self::EVENT_REVIEW_CHANGED, array( self::email_of( $autor ) ), $ctx );
 			}
 		);
 	}
 
 	/**
+	 * Whether a review has something new to tell the applicant.
+	 *
+	 * Un estado distinto, sí; uno de antes vacío —solicitud anterior a la
+	 * revisión— que pasa a «presentada», no: nadie la ha revisado. Con el
+	 * mismo estado, solo si es de los que exigen nota y la nota cambió.
+	 *
+	 * @param string $state         New state.
+	 * @param string $previous      State before.
+	 * @param string $note          Note now.
+	 * @param string $previous_note Note before.
+	 * @return bool
+	 */
+	public static function review_news( string $state, string $previous, string $note, string $previous_note ): bool {
+		if ( '' === $previous ) {
+			$previous = ApplicationMetaKeys::REVIEW_SUBMITTED;
+		}
+		if ( $state !== $previous ) {
+			return true;
+		}
+		return in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) && trim( $note ) !== trim( $previous_note );
+	}
+
+	/**
 	 * A document with its own deadline has just been delivered.
+	 *
+	 * A quien entrega, que puede no ser quien presentó la solicitud, y a
+	 * los contactos del procedimiento.
 	 *
 	 * @param int    $application_id Application ID.
 	 * @param string $question_key   Key of the delivery question.
+	 * @param int    $user_id        Account that delivers.
 	 * @return void
 	 */
-	public static function on_delivery_saved( $application_id, $question_key = '' ): void {
+	public static function on_delivery_saved( $application_id, $question_key = '', $user_id = 0 ): void {
 		self::safely(
-			static function () use ( $application_id, $question_key ): void {
-				$ctx = self::application_context( (int) $application_id );
+			static function () use ( $application_id, $question_key, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
 				if ( array() === $ctx ) {
 					return;
 				}
@@ -391,7 +428,7 @@ final class Mailer {
 				unset( $ctx['answers'] );
 
 				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
-				$destinos[] = self::email_of( (int) get_post_field( 'post_author', (int) $application_id ) );
+				$destinos[] = self::email_of( (int) $user_id );
 				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
 			}
 		);
@@ -407,16 +444,21 @@ final class Mailer {
 	 * orden, y las entregas con plazo propio no entran: no son de la
 	 * solicitud (ADR-0033).
 	 *
+	 * `applicant` es la cuenta que actúa —la que guarda, entrega o recibe el
+	 * aviso—, y de ella sale también el enlace: una cuenta con dos códigos
+	 * necesita decir con cuál se abre la solicitud.
+	 *
 	 * @param int $application_id Application ID.
+	 * @param int $user_id        Account the mail is about.
 	 * @return array<string, mixed> Empty when it is not an application.
 	 */
-	private static function application_context( int $application_id ): array {
+	private static function application_context( int $application_id, int $user_id ): array {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return array();
 		}
 		$procedure_id = (int) get_post_field( 'post_parent', $application_id );
 		$meta         = Applications::meta( $application_id );
-		$autor        = get_userdata( (int) get_post_field( 'post_author', $application_id ) );
+		$autor        = $user_id > 0 ? get_userdata( $user_id ) : false;
 		$docente      = ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] );
 		$codigo       = (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ];
 		$nombre       = (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ];

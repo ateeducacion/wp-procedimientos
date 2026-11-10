@@ -274,26 +274,75 @@ copia de todo `procedure_created` y `application_received`). Con
 ### PR 4 — Personas de la solicitud (`feature/application-people`)
 
 **Ficheros:**
-- Crear `src/Prc/Domain/ApplicationPeople.php` (puro),
-  `src/Prc/PublicFront/ApplicationLog.php`.
-- Modificar `Meta/*MetaKeys.php` y registros, `ApplyForm.php` y vista,
-  `ProcedureEditor.php` y vista (panel «Personas»), `ProcedureAccess.php`,
-  `ApplicationExport.php`, `Notifications/Messages.php`.
-- Pruebas: `test-application-people.php`, `test-application-log.php`.
+- Crear `Domain/PeopleSpec.php` y `Domain/ApplicationPeople.php` (puros),
+  `PublicFront/ApplicationLog.php`, `PublicFront/People.php` (la lista,
+  escrita de fila en fila), `PublicFront/PeopleForm.php` (la sección de la
+  solicitud y su POST), `PublicFront/PeopleSpecPanel.php` (el panel del
+  taller) y `PublicFront/View/PeopleView.php`: sin ellos `ApplyForm`,
+  `ProcedureEditor` y sus vistas pasan más del umbral de PHPMD.
+- Modificar `Meta/*MetaKeys.php` y registros, `ApplyForm.php` y su vista,
+  `ProcedureEditor.php` y su vista (panel «Personas» y revisión),
+  `MyCentre.php` y su vista, `ProcedureAccess.php`, `ApplicationExport.php`,
+  `Notifications/Mailer.php` y `Messages.php`, `App.php`, `load-order.php`.
+- Pruebas: `test-application-people.php` (dominio), `test-application-log.php`,
+  `test-people-list.php` (guardián, ventana, concurrencia, historial y
+  correo), `test-people-form.php`, `test-people-panel.php`; ampliar
+  `test-application-export.php` y `test-procedure-editor.php`.
 
 **Interfaces que produce:**
-- Meta `prc_people_spec` del procedimiento: `enabled`, `roles` (hasta 10),
-  `groups` (hasta 20, opcional), `min`, `max` (hasta 200),
-  `unique_per_group`, `opens_at`, `closes_at`, `admitted_only`.
-- Meta `prc_people` de la solicitud: filas `id`, `name`, `surname`, `dni`,
-  `email`, `phone`, `role`, `group`.
-- `ApplicationPeople::validate( array $spec, array $people, array $row ): array`
-  — errores por clave.
-- `ProcedureAccess::can_edit_people( int $user_id, int $application_id ): bool`.
-- Acción `prc_people_changed( int $id, string $change, array $before, array $after )`
-  y evento de correo `people_changed` a los contactos.
-- `ApplicationLog::add( int $application_id, string $event, array $data ): void`
+- Meta `prc_people_spec` del procedimiento (`ProcedureMetaKeys::PEOPLE_SPEC`,
+  sin REST): `{enabled, roles:[{key:'r1', label, needs_group}], role_seq,
+  groups:[{key:'g1', label}], group_seq, min, max, unique_per_group, opens_at,
+  closes_at, admitted_only}`; `PeopleSpec::MAX_ROLES = 10`, `MAX_GROUPS = 20`,
+  `MAX_PEOPLE = 200` (`max` 0 o vacío es 200).
+- Meta `prc_people` de la solicitud (`ApplicationMetaKeys::PEOPLE`, sin REST,
+  `auth_callback` falso): filas `{id, name, surname, dni, email, phone, role,
+  group}`; `id` de 12 caracteres hexadecimales, estable.
+- Meta `prc_log` de la solicitud (`ApplicationMetaKeys::LOG`): entradas
+  `{at:'Y-m-d\TH:i:s\Z', user:int, event, data}`, tope `ApplicationLog::MAX = 500`.
+- `PeopleSpec::sanitize( $raw ): array`,
+  `::from_input( array $raw, array $previous ): array{spec, error}`,
+  `::refusal( array $before, array $after, array $used ): string`,
+  `::why_closed( array $spec, array $ctx ): string` (`$ctx`: `today`,
+  `archived`, `teacher`, `review`, `state`),
+  `::application_editable( string $state, string $review ): bool`,
+  `::label( array $spec, string $which, string $key ): string`,
+  `::roles_text()`, `::groups_text()`.
+- `ApplicationPeople::validate( array $spec, array $people, array $row ): array<string,string>`
+  — errores por clave (`name`, `surname`, `dni`, `email`, `phone`, `role`,
+  `group`, `duplicate`, `unique_group`, `max`); `::is_complete( array $spec, array $people ): bool`;
+  `::row()`, `::rows()`, `::fingerprint( array $row ): string`,
+  `::describe( array $spec, array $row ): string` (sin DNI) y `::masked_dni()`.
+- `ProcedureAccess::can_edit_people( int $user_id, int $application_id ): bool`,
+  `::why_not_people( int $user_id, int $application_id ): string` y la meta
+  capacidad `ProcedureAccess::CAP_EDIT_PEOPLE` (`prc_edit_people`), resuelta en
+  `map_meta_cap`.
+- `People::add( int $application_id, int $user_id, array $raw ): array{ok, error, errors}`,
+  `::change( …, string $id, string $huella, array $raw )`,
+  `::remove( …, string $id, string $huella )`, `::of( int $application_id ): array`,
+  `::spec( int $procedure_id ): array`, `::enabled( int $procedure_id ): bool`,
+  `::used_keys( int $procedure_id ): array{roles, groups}`. Constantes
+  `People::ADDED`, `CHANGED`, `REMOVED`.
+- Acción `prc_people_changed( int $id, string $change, array $before, array $after, int $user_id )`
+  y evento de correo `Mailer::EVENT_PEOPLE_CHANGED` (`people_changed`), solo a
+  los contactos, apagable en «Avisos».
+- `ApplicationLog::add( int $application_id, string $event, array $data, int $user_id = 0 ): void`
   y `ApplicationLog::all( int $application_id ): array` — quién, cuándo y qué.
+  Eventos de las personas: `person_added`, `person_changed`, `person_removed`
+  con `{before, after}`.
+- `PeopleForm::model( array $apply ): array`, `::review( int $application_id ): array`,
+  `::url( int $application_id, array $args = array() ): string` (con el ancla
+  `#prc-personas`); campos `FIELD_OP`, `FIELD_APPLICATION`, `FIELD_ROW`,
+  `FIELD_PRINT`, `FIELD_PERSON`, nonce `prc_people`.
+- `ProcedureEditor::PANEL_PEOPLE` (`personas`) y `OP_PEOPLE_SPEC`; aviso
+  `personas`; `PeopleSpecPanel::save( int $procedure_id ): string`,
+  `::model()`, `::reviews( array $applications ): array`.
+- Exportación: `ApplicationExport::WHO_PEOPLE` (`people`), columnas
+  `person_name`, `person_surname`, `person_dni`, `person_email`,
+  `person_phone`, `person_role`, `person_group` en el grupo `people`;
+  `ApplicationExport::who( int $procedure_id = 0 )` y
+  `::group_labels( int $procedure_id = 0 )` dejan fuera la lista cuando el
+  procedimiento no la pide. «Mi centro» gana `people_url` y `people_count`.
 
 **Decisiones:**
 - La ventana de personas es propia: se puede dar de alta, cambiar o dar de
@@ -304,14 +353,23 @@ copia de todo `procedure_created` y `application_received`). Con
   `unique_per_group`, dos personas no comparten rol y grupo.
 - La coordinación de hoy (`prc_coordinator`) se queda como está: los
   procedimientos sencillos no necesitan la lista.
+- Sin fechas, la ventana es la de la solicitud. Histórico, excluida o
+  profesorado: nunca.
+- Dos cuentas del mismo centro: cada operación relee la lista al escribir, y
+  un cambio o una baja sobre una fila que cambió desde que se pintó se
+  rechaza con aviso (huella en un campo oculto).
+- Quitar un papel o un grupo que alguna solicitud usa se rechaza; renombrarlo,
+  no, porque la clave no cambia.
+- El correo `people_changed` va solo a los contactos y sin DNI; el historial
+  enseña el DNI tapado.
 
-- [ ] Prueba: misma persona (DNI) dos veces con el mismo rol y grupo, rechazada.
-- [ ] Prueba: fuera de la ventana no se escribe, tampoco por POST directo.
-- [ ] Prueba: con `admitted_only`, una solicitud «presentada» no puede.
-- [ ] Prueba: alta, cambio y baja dejan tres entradas en el historial y un
+- [x] Prueba: misma persona (DNI) dos veces con el mismo rol y grupo, rechazada.
+- [x] Prueba: fuera de la ventana no se escribe, tampoco por POST directo.
+- [x] Prueba: con `admitted_only`, una solicitud «presentada» no puede.
+- [x] Prueba: alta, cambio y baja dejan tres entradas en el historial y un
       correo cada una.
-- [ ] Prueba: por debajo de `min` la solicitud se marca incompleta, no se rechaza.
-- [ ] Implementar y ADR-0041 (por qué no es un tipo de contenido y qué cambia
+- [x] Prueba: por debajo de `min` la solicitud se marca incompleta, no se rechaza.
+- [x] Implementar y ADR-0041 (por qué no es un tipo de contenido y qué cambia
       respecto a las ADR-0019 y ADR-0023).
 
 ### PR 5 — Atributos del centro y elegibilidad (`feature/centre-attributes`)

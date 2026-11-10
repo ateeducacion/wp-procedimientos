@@ -196,3 +196,18 @@ decide permisos.
   ([ADR-0024](ADR-0024-las-solicitudes-de-hoy-no-se-migran.md)), esa ADR
   decidirá si llegan marcadas y si hace falta una segunda marca para el
   contenido congelado. Esta no lo prejuzga.
+
+## Adenda — 2026-11-10 (ADR-0041)
+
+La lista de personas de una solicitud
+([ADR-0041](ADR-0041-las-personas-de-la-solicitud-son-una-lista-que-gestiona-el-centro.md))
+es la primera escritura del centro que no depende del estado del procedimiento:
+con su ventana abierta se escribe con el plazo cerrado o con el procedimiento
+resuelto. **El histórico la cierra igual que todo lo demás**:
+`ProcedureAccess::can_edit_people()` dice que no en un procedimiento marcado,
+también a administración, porque la lista es del centro y no hay nada que
+rematar en ella. Y lo que la «Negativa» de esta ADR echaba en falta —quién
+cambió qué— existe ya para las personas, en el historial de la solicitud
+(`ApplicationLog`); marcar y desmarcar siguen sin registrarse.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

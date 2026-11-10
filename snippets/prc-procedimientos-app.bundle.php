@@ -20087,7 +20087,7 @@ final class ApplicationActionsView {
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php if ( ! empty( $fila['can'] ) ) : ?>
 										<form class="prc-acciones" method="post" action="">
-											<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, (int) $fila['id'] ), false ); ?>
+											<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, (int) $fila['id'] ), ProcedureEditor::nonce_name( $op, (int) $fila['id'] ), false ); ?>
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) (int) $fila['id'] ); ?>" />
@@ -20251,7 +20251,7 @@ final class ApplicationActionsView {
 
 
 	private static function hidden( array $m, string $op, int $id ): string {
-		return wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false, false )
+		return wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false, false )
 			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_DO ) . '" value="' . esc_attr( $op ) . '" />'
 			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_PROCEDURE ) . '" value="' . esc_attr( (string) (int) $m['procedure_id'] ) . '" />'
 			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_ROW ) . '" value="' . esc_attr( (string) $id ) . '" />'
@@ -20755,7 +20755,7 @@ final class ApplicationsPanelView {
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
@@ -22580,8 +22580,13 @@ final class ProcedureEditor {
 
 
 
-	public static function nonce_action( string $op ): string {
-		return 'prc_ed_' . $op;
+
+
+
+
+
+	public static function nonce_action( string $op, int $row = 0 ): string {
+		return 'prc_ed_' . $op . ( $row > 0 ? '_' . $row : '' );
 	}
 
 
@@ -22770,7 +22775,7 @@ final class ProcedureEditor {
 	private static function verify( string $op, int $row ): bool {
 
 		$valor = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::nonce_name( $op, $row ) ] ?? '' ) ) );
-		return false !== wp_verify_nonce( $valor, self::nonce_action( $op ) );
+		return false !== wp_verify_nonce( $valor, self::nonce_action( $op, $row ) );
 	}
 
 

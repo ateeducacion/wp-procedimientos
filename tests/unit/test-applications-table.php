@@ -514,7 +514,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 				),
 				$extra
 			),
-			ProcedureEditor::nonce_action( $op ),
+			ProcedureEditor::nonce_action( $op, ProcedureEditor::OP_REVIEW === $op ? $row : 0 ),
 			ProcedureEditor::nonce_name( $op, ProcedureEditor::OP_REVIEW === $op ? $row : 0 )
 		);
 		return $this->exit_url( array( ProcedureEditor::class, 'handle' ) );

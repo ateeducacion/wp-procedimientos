@@ -1062,6 +1062,16 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_publish_archive_and_unarchive() {
 		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
 		$this->acting_as( $uid );
+
+		// Sin curso no se publica: no se ofrece ni se acepta (PR 8 del PLAN-0003).
+		$m = $this->modelo( $procedimiento );
+		$this->assertFalse( $m['can_publish'] );
+		$this->assertStringContainsString( 'Falta el curso', implode( ' ', $m['not_ready'] ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_PUBLISH, $procedimiento ) );
+		$this->assertSame( 'draft', get_post_status( $procedimiento ) );
+		$this->olvidar_rechazo();
+
+		wp_set_object_terms( $procedimiento, array( $this->course() ), ProcedureTaxonomies::COURSE );
 		$this->assertTrue( $this->modelo( $procedimiento )['can_publish'] );
 
 		$url = $this->submit( $uid, ProcedureEditor::OP_PUBLISH, $procedimiento );
@@ -1584,6 +1594,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 */
 	public function test_the_empty_the_draft_and_the_archived_screens() {
 		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
+		wp_set_object_terms( $procedimiento, array( $this->course() ), ProcedureTaxonomies::COURSE );
 		$this->acting_as( $uid );
 
 		$this->assertStringContainsString( 'Todavía no hay solicitudes', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_APPLICATIONS ) ) );

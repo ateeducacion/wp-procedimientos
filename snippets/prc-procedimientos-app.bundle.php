@@ -19787,6 +19787,7 @@ final class ProcedureEditor {
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
+	public const OP_DUPLICATE           = 'duplicate';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -19880,6 +19881,7 @@ final class ProcedureEditor {
 		self::OP_TOGGLE_APPLICATIONS,
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
+		self::OP_DUPLICATE,
 	);
 
 
@@ -20086,6 +20088,12 @@ final class ProcedureEditor {
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			self::$rejected = 'Ese procedimiento ya no existe.';
+			return;
+		}
+
+
+		if ( self::OP_DUPLICATE === $op ) {
+			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
 			return;
 		}
 		if ( self::OP_CUSTOM_CODE === $op ) {
@@ -20753,6 +20761,13 @@ final class ProcedureEditor {
 			self::$rejected = 'Su perfil no publica procedimientos: puede editarlo, pero no publicarlo.';
 			return;
 		}
+
+
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		if ( array() !== $faltan ) {
+			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
+			return;
+		}
 		wp_update_post(
 			array(
 				'ID'          => $procedure_id,
@@ -21044,6 +21059,11 @@ final class ProcedureEditor {
 
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 
+
+		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
+		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
+
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 
 
@@ -21075,6 +21095,8 @@ final class ProcedureEditor {
 			'can_review'              => false,
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
+			'can_duplicate'           => false,
+			'not_ready'               => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -21256,6 +21278,10 @@ final class ProcedureEditor {
 				'tipo'  => 'error',
 				'texto' => self::$rejected,
 			);
+		}
+		if ( ProcedureDuplicate::NOTICE === $hecho ) {
+
+			return ProcedureDuplicate::notice( $_GET );
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 

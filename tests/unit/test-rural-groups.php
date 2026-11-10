@@ -212,6 +212,39 @@ class Test_Rural_Groups extends WP_UnitTestCase {
 	}
 
 	/**
+	 * La agrupación se mide por su propio código: su isla, su tipo, su sitio
+	 * en la lista y en el catálogo. La titularidad no la filtra (ADR-0031).
+	 */
+	public function test_a_rural_group_is_judged_by_its_own_code() {
+		add_filter(
+			'prc_centres',
+			static function ( $centros ) {
+				foreach ( $centros as $i => $centro ) {
+					$centros[ $i ]['island'] = 'G0001' === $centro['code'] ? 'Isla Dos' : 'Isla Uno';
+				}
+				return $centros;
+			},
+			20
+		);
+		$uid   = $this->coordinadora();
+		$ambos = array_keys( ProcedureMetaKeys::centre_kinds() );
+		$isla  = $this->procedimiento( $ambos );
+		$publ  = $this->procedimiento( $ambos );
+		$lista = $this->procedimiento( $ambos );
+		$fuera = $this->coordinadora( 'C0001', 'G0009' );
+		update_post_meta( $isla, ProcedureMetaKeys::ISLANDS, array( 'Isla Uno' ) );
+		update_post_meta( $publ, ProcedureMetaKeys::OWNERSHIP, array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ) );
+		update_post_meta( $lista, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'G0001', 'G0009' ) );
+
+		$this->assertSame( array( 'C0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $isla ) ), 'el centro está en la isla y la agrupación no' );
+		$this->assertSame( 'Este procedimiento es solo para centros de Isla Uno.', ProcedureAccess::why_not_eligible( $uid, $isla, 'G0001' ) );
+		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $publ ) ), 'la titularidad filtra al centro, no a la agrupación' );
+		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $lista ) ) );
+		$this->assertSame( array(), ProcedureAccess::apply_codes( $fuera, $lista ), 'una agrupación fuera del catálogo no solicita a uno acotado' );
+		$this->assertSame( array( 'C0001', 'G0009' ), array_keys( ProcedureAccess::apply_codes( $fuera, $this->procedimiento( $ambos ) ) ), 'sin acotados, sí' );
+	}
+
+	/**
 	 * El taller exige elegir al menos una clase y no guarda nada fuera de la lista.
 	 */
 	public function test_the_kinds_are_a_closed_required_list() {

@@ -420,12 +420,18 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, 'on' );
 		update_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, array( 'UNO@Example.org', 'roto' ) );
 		update_post_meta( $procedimiento, ProcedureMetaKeys::HEADER_COLOR, 'fucsia' );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( ' C0001 ', 'C0001', 'mal-formado', 'C0002' ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, array( ' CEIP ', 'ceip', '<b>IES</b>', '' ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, "Isla Uno\nIsla Dos" );
 
 		$this->assertSame( '', get_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, true ) );
 		$this->assertSame( array( 'public' ), get_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, true ) );
 		$this->assertSame( array( 'uno@example.org' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, true ) );
 		$this->assertSame( ProcedureMetaKeys::HEADER_COLOR_NEUTRAL, get_post_meta( $procedimiento, ProcedureMetaKeys::HEADER_COLOR, true ) );
 		$this->assertTrue( (bool) get_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true ) );
+		$this->assertSame( array( 'C0001', 'C0002' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array( 'Isla Uno', 'Isla Dos' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'la lista vacía es el valor por defecto' );
 	}
 }

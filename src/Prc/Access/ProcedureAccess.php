@@ -9,6 +9,7 @@
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -718,38 +719,114 @@ final class ProcedureAccess {
 	 * The codes of a person that this procedure takes, school first.
 	 *
 	 * Tiene que estar publicado, admitir la clase del código —centro o
-	 * agrupación de escuelas rurales, ADR-0031; sin la meta, todas— y
-	 * dirigirse a la titularidad del centro, si el catálogo lo conoce: un
-	 * centro que no está en el catálogo solicita igual, porque el catálogo
-	 * puede ir por detrás de la realidad.
+	 * agrupación de escuelas rurales, ADR-0031; sin la meta, todas— y que el
+	 * código pase los acotados del procedimiento: titularidad, tipo, isla y
+	 * lista cerrada ({@see CentreEligibility}). Cada código se mira con su
+	 * propia entrada del catálogo, también el de una agrupación, salvo la
+	 * titularidad, que a una agrupación como colectivo no la filtra
+	 * (ADR-0031). Con algún
+	 * acotado, un código que no está en el catálogo no solicita; sin ninguno,
+	 * sí, porque el catálogo puede ir por detrás de la realidad (ADR-0042).
 	 *
 	 * @param int $user_id User ID.
 	 * @param int $post_id Procedure ID.
 	 * @return array<string, string> Code => kind, as CentreScope::codes_for().
 	 */
 	public static function apply_codes( int $user_id, int $post_id ): array {
+		$out = array();
+		foreach ( self::kind_codes( $user_id, $post_id ) as $code => $kind ) {
+			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) ) {
+				$out[ $code ] = $kind;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The codes of a person whose kind this procedure takes, eligible or not.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return array<string, string> Code => kind; empty when it is not a published procedure for schools.
+	 */
+	private static function kind_codes( int $user_id, int $post_id ): array {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
 		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
 			return array();
 		}
-		$kinds     = self::centre_kinds( $post_id );
-		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
-		$ownership = is_array( $ownership ) ? $ownership : array();
+		return array_intersect( CentreScope::codes_for( $user_id ), self::centre_kinds( $post_id ) );
+	}
 
-		$out = array();
-		foreach ( CentreScope::codes_for( $user_id ) as $code => $kind ) {
-			$centro = CentreCatalog::find( $code );
-			if ( ! in_array( $kind, $kinds, true ) ) {
-				continue;
-			}
-			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
-				continue;
-			}
-			$out[ $code ] = $kind;
+	/**
+	 * The rules a procedure narrows its schools with, as stored.
+	 *
+	 * @param int $post_id Procedure ID.
+	 * @return array{ownership:string[], types:string[], islands:string[], codes:string[]}
+	 */
+	public static function eligibility( int $post_id ): array {
+		$leer = static function ( string $clave ) use ( $post_id ): array {
+			$valor = get_post_meta( $post_id, $clave, true );
+			return is_array( $valor ) ? $valor : array();
+		};
+		return CentreEligibility::rules(
+			array(
+				'ownership' => $leer( ProcedureMetaKeys::OWNERSHIP ),
+				'types'     => $leer( ProcedureMetaKeys::CENTRE_TYPES ),
+				'islands'   => $leer( ProcedureMetaKeys::ISLANDS ),
+				'codes'     => $leer( ProcedureMetaKeys::ALLOWED_CENTRES ),
+			)
+		);
+	}
+
+	/**
+	 * Why that code may not apply to this procedure by its rules, in words.
+	 *
+	 * Solo los acotados del centro: quién es la cuenta y qué clase de código
+	 * admite el procedimiento se miran antes. La titularidad no se le pide a
+	 * una agrupación de escuelas rurales que solicita como colectivo.
+	 *
+	 * @param int    $post_id Procedure ID.
+	 * @param string $code    School code.
+	 * @param string $kind    One of ProcedureMetaKeys::centre_kinds().
+	 * @return string Empty when it may.
+	 */
+	public static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
+		$rules = self::eligibility( $post_id );
+		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
+			$rules['ownership'] = array();
 		}
-		return $out;
+		return CentreEligibility::restricted( $rules )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ) )
+			: '';
+	}
+
+	/**
+	 * Why none of the person's codes —or that one— may apply by the procedure's rules.
+	 *
+	 * Es lo que lee el centro en su pantalla: «este procedimiento es solo
+	 * para…». Con un código, el motivo de ese; sin él, el del primero.
+	 *
+	 * @param int    $user_id User ID.
+	 * @param int    $post_id Procedure ID.
+	 * @param string $code    Code asked for; empty for any of the person's.
+	 * @return string Empty when some code may, or when the reason is not the rules.
+	 */
+	public static function why_not_eligible( int $user_id, int $post_id, string $code = '' ): string {
+		$codes = self::kind_codes( $user_id, $post_id );
+		if ( '' !== $code ) {
+			$codes = array_intersect_key( $codes, array( $code => true ) );
+		}
+		$primero = '';
+		foreach ( $codes as $uno => $kind ) {
+			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
+			if ( '' === $porque ) {
+				return '';
+			}
+			$primero = '' !== $primero ? $primero : $porque;
+		}
+		return $primero;
 	}
 
 	/**

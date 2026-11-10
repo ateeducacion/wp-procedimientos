@@ -126,6 +126,22 @@ final class ProcedureMetaKeys {
 
 
 
+	public const CENTRE_TYPES = 'prc_centre_types';
+
+
+
+
+	public const ISLANDS = 'prc_islands';
+
+
+
+
+
+	public const ALLOWED_CENTRES = 'prc_allowed_centres';
+
+
+
+
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
 
@@ -229,6 +245,9 @@ final class ProcedureMetaKeys {
 			self::AUDIENCE,
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
+			self::CENTRE_TYPES,
+			self::ISLANDS,
+			self::ALLOWED_CENTRES,
 			self::REQUIRES_COORDINATOR,
 			self::COORDINATOR_COUNT,
 			self::CUSTOM_CSS,
@@ -308,6 +327,20 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP_PUBLIC  => 'Centros públicos',
 			self::OWNERSHIP_PRIVATE => 'Centros privados y concertados',
 		);
+	}
+
+
+
+
+
+
+
+	public static function ownership_name( string $ownership ): string {
+		$nombres = array(
+			self::OWNERSHIP_PUBLIC  => 'Pública',
+			self::OWNERSHIP_PRIVATE => 'Privada',
+		);
+		return $nombres[ $ownership ] ?? '';
 	}
 
 
@@ -2157,6 +2190,8 @@ final class ProcedureInput {
 			? self::ownership( $raw['ownership'] ?? array() )
 			: array();
 		$urls         = array();
+		$acotados     = CentreEligibility::input( $raw, ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience );
+		$errors       = array_merge( $errors, $acotados['errors'] );
 
 		if ( '' === $title ) {
 			$errors[] = 'title';
@@ -2252,7 +2287,8 @@ final class ProcedureInput {
 					'requires_coordinator' => $coordinator_count > 0,
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
-				$urls
+				$urls,
+				$acotados['data']
 			),
 		);
 	}
@@ -2283,6 +2319,7 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
+			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
@@ -4623,6 +4660,7 @@ final class CentreScope {
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -5342,29 +5380,105 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
 	public static function apply_codes( int $user_id, int $post_id ): array {
+		$out = array();
+		foreach ( self::kind_codes( $user_id, $post_id ) as $code => $kind ) {
+			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) ) {
+				$out[ $code ] = $kind;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function kind_codes( int $user_id, int $post_id ): array {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
 		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
 			return array();
 		}
-		$kinds     = self::centre_kinds( $post_id );
-		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
-		$ownership = is_array( $ownership ) ? $ownership : array();
+		return array_intersect( CentreScope::codes_for( $user_id ), self::centre_kinds( $post_id ) );
+	}
 
-		$out = array();
-		foreach ( CentreScope::codes_for( $user_id ) as $code => $kind ) {
-			$centro = CentreCatalog::find( $code );
-			if ( ! in_array( $kind, $kinds, true ) ) {
-				continue;
-			}
-			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
-				continue;
-			}
-			$out[ $code ] = $kind;
+
+
+
+
+
+
+	public static function eligibility( int $post_id ): array {
+		$leer = static function ( string $clave ) use ( $post_id ): array {
+			$valor = get_post_meta( $post_id, $clave, true );
+			return is_array( $valor ) ? $valor : array();
+		};
+		return CentreEligibility::rules(
+			array(
+				'ownership' => $leer( ProcedureMetaKeys::OWNERSHIP ),
+				'types'     => $leer( ProcedureMetaKeys::CENTRE_TYPES ),
+				'islands'   => $leer( ProcedureMetaKeys::ISLANDS ),
+				'codes'     => $leer( ProcedureMetaKeys::ALLOWED_CENTRES ),
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
+		$rules = self::eligibility( $post_id );
+		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
+			$rules['ownership'] = array();
 		}
-		return $out;
+		return CentreEligibility::restricted( $rules )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ) )
+			: '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_eligible( int $user_id, int $post_id, string $code = '' ): string {
+		$codes = self::kind_codes( $user_id, $post_id );
+		if ( '' !== $code ) {
+			$codes = array_intersect_key( $codes, array( $code => true ) );
+		}
+		$primero = '';
+		foreach ( $codes as $uno => $kind ) {
+			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
+			if ( '' === $porque ) {
+				return '';
+			}
+			$primero = '' !== $primero ? $primero : $porque;
+		}
+		return $primero;
 	}
 
 
@@ -5667,6 +5781,7 @@ final class ProcedureAccess {
 namespace Prc\Meta;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -5749,6 +5864,18 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::CENTRE_KINDS         => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_centre_kinds' ),
+			),
+			ProcedureMetaKeys::CENTRE_TYPES         => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ISLANDS              => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ALLOWED_CENTRES      => array(
+				'type'     => 'array',
+				'sanitize' => array( CentreEligibility::class, 'codes' ),
 			),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => array(
 				'type'     => 'boolean',
@@ -5984,6 +6111,16 @@ final class ProcedureMetaRegistration {
 
 	public static function sanitize_centre_kinds( $value ): array {
 		return ProcedureInput::centre_kinds( $value );
+	}
+
+
+
+
+
+
+
+	public static function sanitize_text_list( $value ): array {
+		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
 	}
 
 
@@ -20012,7 +20149,8 @@ final class ApplyForm {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
 			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
 		}
-		return 'Este procedimiento no se dirige a centros de la titularidad del suyo.';
+		$porque = ProcedureAccess::why_not_eligible( $user_id, $procedure_id, $code );
+		return '' !== $porque ? $porque : 'Este procedimiento no se dirige a centros como el suyo.';
 	}
 
 

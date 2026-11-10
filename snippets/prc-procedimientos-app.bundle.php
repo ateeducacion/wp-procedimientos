@@ -22940,12 +22940,15 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
+
 
 
 
@@ -22976,6 +22979,11 @@ final class Settings {
 
 
 
+	public const CENTRES_GROUP = 'prc_centres';
+
+
+
+
 
 
 	public static function register(): void {
@@ -22985,6 +22993,7 @@ final class Settings {
 
 
 		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
+		add_filter( 'option_page_capability_' . self::CENTRES_GROUP, array( self::class, 'capability' ) );
 	}
 
 
@@ -23012,6 +23021,26 @@ final class Settings {
 				)
 			);
 		}
+		register_setting(
+			self::CENTRES_GROUP,
+			CentreCatalog::OPTION_PRIVATE_TYPES,
+			array(
+				'type'              => 'array',
+				'default'           => array(),
+				'sanitize_callback' => array( self::class, 'sanitize_private_types' ),
+				'show_in_rest'      => false,
+			)
+		);
+	}
+
+
+
+
+
+
+
+	public static function sanitize_private_types( $value ): array {
+		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
 	}
 
 
@@ -23085,6 +23114,32 @@ final class Settings {
 
 
 
+
+	private static function private_types_form(): void {
+		$tipos = get_option( CentreCatalog::OPTION_PRIVATE_TYPES, array() );
+		?>
+		<h3>Titularidad de los centros</h3>
+		<p style="max-width:46rem">
+			El catálogo no dice si un centro es público o privado: se deduce de su tipo. Los
+			tipos que escriba aquí, uno por línea y como los trae el catálogo, son privados;
+			los demás, públicos. En blanco, todos los centros son públicos.
+		</p>
+		<form method="post" action="options.php">
+			<?php settings_fields( self::CENTRES_GROUP ); ?>
+			<label class="screen-reader-text" for="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>">Tipos de centro privados</label>
+			<textarea class="large-text" rows="4" style="max-width:46rem" id="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>" name="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>"><?php echo esc_textarea( implode( "\n", is_array( $tipos ) ? array_map( 'strval', $tipos ) : array() ) ); ?></textarea>
+			<?php submit_button( 'Guardar los tipos privados' ); ?>
+		</form>
+		<?php
+	}
+
+
+
+
+
+
+
+
 	private static function leave( string $url ): void {
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
 
@@ -23123,7 +23178,7 @@ final class Settings {
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
-				que guarda es la configuración del correo.
+				que guarda es la configuración del correo y qué tipos de centro son privados.
 			</p>
 
 			<h2>Correo</h2>
@@ -23335,6 +23390,7 @@ final class Settings {
 					</button>
 				</form>
 			</div>
+			<?php self::private_types_form(); ?>
 			<p style="margin-top:0.75rem;">
 				La clave de usuario con el código de centro es <code><?php echo esc_html( CentreScope::meta_key() ); ?></code>.
 			</p>

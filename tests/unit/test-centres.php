@@ -1121,4 +1121,26 @@ class Test_Centres extends WP_UnitTestCase {
 		$this->assertSame( 'public', $centro['ownership'] );
 		$this->assertSame( 'Isla Inventada', $centro['island'] );
 	}
+
+	/**
+	 * Los tipos privados se escriben en los ajustes, uno por línea, y la
+	 * pantalla los repinta; la opción alimenta la titularidad derivada.
+	 */
+	public function test_settings_store_the_private_types(): void {
+		$this->assertSame( array( 'Tipo Privado A', 'tipo b' ), Settings::sanitize_private_types( "Tipo Privado A\n tipo b \n\nTIPO B\n<b></b>" ) );
+		$this->assertSame( array(), Settings::sanitize_private_types( 42 ) );
+
+		Settings::register_settings();
+		update_option( CentreCatalog::OPTION_PRIVATE_TYPES, "Tipo Privado A\nTipo B" );
+		$this->assertSame( array( 'Tipo Privado A', 'Tipo B' ), get_option( CentreCatalog::OPTION_PRIVATE_TYPES ) );
+		$this->assertSame( 'prc_manage_app', apply_filters( 'option_page_capability_' . Settings::CENTRES_GROUP, 'manage_options' ) );
+
+		$this->acting_as( $this->administrator() );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'name="' . CentreCatalog::OPTION_PRIVATE_TYPES . '"', $html );
+		$this->assertStringContainsString( "Tipo Privado A\nTipo B</textarea>", $html );
+		delete_option( CentreCatalog::OPTION_PRIVATE_TYPES );
+	}
 }

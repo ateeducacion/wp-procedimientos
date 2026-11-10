@@ -123,6 +123,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
+			ProcedureMetaKeys::NOTIFY               => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_notify' ),
+			),
 		);
 	}
 
@@ -335,6 +339,23 @@ final class ProcedureMetaRegistration {
 	public static function sanitize_coordinator_count( $value ): int {
 		$count = is_scalar( $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT ) ? (int) $value : 0;
 		return min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, max( 0, $count ) );
+	}
+
+	/**
+	 * The switched-off mail events of the closed list, once each.
+	 *
+	 * @param mixed $value Raw value: a list of event slugs.
+	 * @return string[]
+	 */
+	public static function sanitize_notify( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array( $value ) as $evento ) {
+			$evento = ProcedureMetaKeys::in_list( $evento, ProcedureMetaKeys::notify_events() );
+			if ( '' !== $evento && ! in_array( $evento, $out, true ) ) {
+				$out[] = $evento;
+			}
+		}
+		return $out;
 	}
 
 	/**

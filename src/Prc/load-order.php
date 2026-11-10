@@ -52,6 +52,8 @@ return array(
 	'PublicFront/ApplyForm.php',
 	'PublicFront/View/MyCentreView.php',
 	'PublicFront/MyCentre.php',
+	'Notifications/Messages.php',
+	'Notifications/Mailer.php',
 	'Admin/ProcedureAdmin.php',
 	'Admin/Settings.php',
 	'App.php',

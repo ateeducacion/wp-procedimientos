@@ -86,6 +86,19 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		);
 	}
 
+	/**
+	 * What the person sees of the consultation of a procedure.
+	 *
+	 * @param int $uid          User ID.
+	 * @param int $procedure_id Procedure ID.
+	 * @return array<string, string[]>|null
+	 */
+	private function scope( int $uid, int $procedure_id ): ?array {
+		$ambito = null;
+		ProcedureAccess::can_observe( $uid, $procedure_id, $ambito );
+		return $ambito;
+	}
+
 	// ─── la zona de la persona ─────────────────────────────────────────────
 
 	/**
@@ -139,9 +152,9 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$uid  = $this->observer();
 
 		$this->assertSame( array(), ProcedureAccess::observer_codes( $uid ) );
-		$this->assertFalse( ProcedureAccess::can_observe_any( $uid ) );
+		$this->assertFalse( ProcedureAccess::can_observe( $uid ) );
 		$this->assertFalse( ProcedureAccess::can_observe( $uid, $caso['procedure'] ) );
-		$this->assertNull( ProcedureAccess::observe_scope( $uid, $caso['procedure'] ) );
+		$this->assertNull( $this->scope( $uid, $caso['procedure'] ) );
 		foreach ( array( 'c1', 'c2', 'c3' ) as $clave ) {
 			$this->assertFalse( ProcedureAccess::can_view_application( $uid, $caso[ $clave ] ) );
 			$this->assertFalse( user_can( $uid, 'read_post', $caso[ $clave ] ) );
@@ -168,9 +181,9 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$caso = $this->caso();
 		$uid  = $this->observer( array( 'Z0002' ) );
 
-		$this->assertTrue( ProcedureAccess::can_observe_any( $uid ) );
+		$this->assertTrue( ProcedureAccess::can_observe( $uid ) );
 		$this->assertTrue( ProcedureAccess::can_observe( $uid, $caso['procedure'] ) );
-		$this->assertSame( array( 'codes' => array( 'C0002', 'C0003' ) ), ProcedureAccess::observe_scope( $uid, $caso['procedure'] ) );
+		$this->assertSame( array( 'codes' => array( 'C0002', 'C0003' ) ), $this->scope( $uid, $caso['procedure'] ) );
 		$this->assertFalse( user_can( $uid, 'read_post', $caso['c1'] ), 'otra zona: ni por enlace directo' );
 		$this->assertTrue( user_can( $uid, 'read_post', $caso['c2'] ) );
 		$this->assertTrue( user_can( $uid, 'read_post', $caso['c3'] ) );
@@ -211,13 +224,33 @@ class Test_Observer_Access extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Y el listado de solicitudes del escritorio, si llegara a pedirse, sale vacío.
+	 */
+	public function test_the_admin_list_shows_an_observer_no_application() {
+		$this->caso();
+		$this->acting_as( $this->observer( array( 'Z0002' ) ) );
+		set_current_screen( 'edit-prc_application' );
+		global $wp_the_query;
+		$antes        = $wp_the_query;
+		$consulta     = new WP_Query();
+		$wp_the_query = $consulta;
+		$consulta->set( 'post_type', \Prc\PostType\ApplicationPostType::POST_TYPE );
+		\Prc\Admin\ProcedureAdmin::scope_admin_query( $consulta );
+		$wp_the_query = $antes;
+		set_current_screen( 'front' );
+
+		$this->assertSame( array( 0 ), $consulta->get( 'post__in' ) );
+		$this->assertFalse( current_user_can( get_post_type_object( \Prc\PostType\ApplicationPostType::POST_TYPE )->cap->edit_posts ) );
+	}
+
+	/**
 	 * Sin `prc_observable` el procedimiento no se consulta, aunque la zona coincida.
 	 */
 	public function test_a_procedure_that_is_not_observable_is_not_observed() {
 		$caso = $this->caso( array( ProcedureMetaKeys::OBSERVABLE => false ) );
 		$uid  = $this->observer( array( 'Z0002' ) );
 
-		$this->assertFalse( ProcedureAccess::is_observable( $caso['procedure'] ) );
+		$this->assertFalse( ObserverScope::is_observable( $caso['procedure'] ) );
 		$this->assertFalse( ProcedureAccess::can_observe( $uid, $caso['procedure'] ) );
 		$this->assertFalse( user_can( $uid, 'read_post', $caso['c2'] ) );
 	}
@@ -246,7 +279,7 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$caso = $this->caso();
 		$uid  = $this->observer( array( 'Z0002' ), 'subscriber' );
 
-		$this->assertFalse( ProcedureAccess::can_observe_any( $uid ) );
+		$this->assertFalse( ProcedureAccess::can_observe( $uid ) );
 		$this->assertFalse( ProcedureAccess::can_observe( $uid, $caso['procedure'] ) );
 		$this->assertFalse( user_can( $uid, 'read_post', $caso['c2'] ) );
 	}
@@ -318,11 +351,11 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$ajeno  = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
 		$admin  = $this->administrator();
 
-		$this->assertSame( array(), ProcedureAccess::observe_scope( $propio, $caso['procedure'] ) );
-		$this->assertSame( array(), ProcedureAccess::observe_scope( $admin, $caso['procedure'] ) );
-		$this->assertNull( ProcedureAccess::observe_scope( $ajeno, $caso['procedure'] ) );
-		$this->assertTrue( ProcedureAccess::can_observe_any( $propio ) );
-		$this->assertTrue( ProcedureAccess::can_observe_any( $ajeno ), 'tiene su consulta, de sus procedimientos' );
+		$this->assertSame( array(), $this->scope( $propio, $caso['procedure'] ) );
+		$this->assertSame( array(), $this->scope( $admin, $caso['procedure'] ) );
+		$this->assertNull( $this->scope( $ajeno, $caso['procedure'] ) );
+		$this->assertTrue( ProcedureAccess::can_observe( $propio ) );
+		$this->assertTrue( ProcedureAccess::can_observe( $ajeno ), 'tiene su consulta, de sus procedimientos' );
 		foreach ( array( 'c1', 'c2', 'c3' ) as $clave ) {
 			$this->assertTrue( ProcedureAccess::can_observe_application( $propio, $caso[ $clave ] ) );
 			$this->assertFalse( ProcedureAccess::can_observe_application( $ajeno, $caso[ $clave ] ) );
@@ -359,8 +392,8 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->assertFalse( user_can( $uid, ProcedureAccess::CAP_EDIT_PEOPLE, $caso['c2'] ) );
 		$this->assertFalse( ProcedureAccess::can_deliver( $uid, $caso['c2'], array( 'key' => 'q1' ) ) );
 		$this->assertFalse( user_can( $uid, 'edit_post', $caso['c2'] ) );
-		$this->assertFalse( ProcedureAccess::can_download_files( $uid, $caso['c2'] ), 'sin documentos permitidos, ni los de su zona' );
-		$this->assertTrue( ProcedureAccess::can_download_files( $uid, $suya ), 'los de su centro, siempre' );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $caso['c2'], true ), 'sin documentos permitidos, ni los de su zona' );
+		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $suya, true ), 'los de su centro, siempre' );
 		$this->assertArrayNotHasKey( 'C0002', \Prc\Access\CentreScope::codes_for( $uid ) );
 	}
 
@@ -406,11 +439,11 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$sin = $this->caso();
 		$uid = $this->observer( array( 'Z0002' ) );
 		$this->assertTrue( user_can( $uid, 'read_post', $sin['c2'] ) );
-		$this->assertFalse( ProcedureAccess::can_download_files( $uid, $sin['c2'] ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], true ) );
 
 		update_post_meta( $sin['procedure'], ProcedureMetaKeys::OBSERVER_FILES, true );
-		$this->assertTrue( ProcedureAccess::can_download_files( $uid, $sin['c2'] ) );
-		$this->assertFalse( ProcedureAccess::can_download_files( $uid, $sin['c1'] ), 'ni con documentos permitidos, los de otra zona' );
+		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $sin['c2'], true ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c1'], true ), 'ni con documentos permitidos, los de otra zona' );
 	}
 
 	/**
@@ -419,11 +452,11 @@ class Test_Observer_Access extends WP_UnitTestCase {
 	public function test_export_follows_the_procedure() {
 		$caso = $this->caso();
 		$uid  = $this->observer( array( 'Z0002' ) );
-		$this->assertFalse( ProcedureAccess::can_export_observed( $uid, $caso['procedure'] ) );
+		$this->assertNull( \Prc\PublicFront\Observe::csv( $uid, $caso['procedure'], array() ) );
 
 		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_EXPORT, true );
-		$this->assertTrue( ProcedureAccess::can_export_observed( $uid, $caso['procedure'] ) );
-		$this->assertFalse( ProcedureAccess::can_export_observed( $this->observer(), $caso['procedure'] ), 'sin zona, no' );
+		$this->assertNotNull( \Prc\PublicFront\Observe::csv( $uid, $caso['procedure'], array() ) );
+		$this->assertNull( \Prc\PublicFront\Observe::csv( $this->observer(), $caso['procedure'], array() ), 'sin zona, no' );
 	}
 
 	/**
@@ -436,11 +469,11 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->observer( array( 'Z0002' ), 'subscriber' );
 		$this->observer();
 
-		$quienes = ProcedureAccess::zone_observers( 'C0002' );
+		$quienes = ObserverScope::observers_of( 'C0002' );
 		sort( $quienes );
 		$this->assertSame( array( $dos, $ambas ), $quienes );
-		$this->assertSame( array( $ambas, $uno ), ProcedureAccess::zone_observers( 'C0001' ) );
-		$this->assertSame( array(), ProcedureAccess::zone_observers( 'C9999' ), 'fuera del catálogo, nadie' );
-		$this->assertSame( array(), ProcedureAccess::zone_observers( '' ) );
+		$this->assertSame( array( $ambas, $uno ), ObserverScope::observers_of( 'C0001' ) );
+		$this->assertSame( array(), ObserverScope::observers_of( 'C9999' ), 'fuera del catálogo, nadie' );
+		$this->assertSame( array(), ObserverScope::observers_of( '' ) );
 	}
 }

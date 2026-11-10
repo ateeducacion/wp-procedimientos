@@ -8,6 +8,7 @@
 namespace Prc\Notifications;
 
 use Prc\Access\CentreScope;
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureQuestions;
@@ -19,6 +20,7 @@ use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\Observe;
 use Prc\PublicFront\People;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
@@ -442,8 +444,9 @@ final class Mailer {
 	/**
 	 * One person of the list of an application has been added, changed or removed.
 	 *
-	 * A los correos de contacto del procedimiento y a nadie más: ni la copia
-	 * de administración ni el centro, que es quien lo ha hecho (ADR-0041). El
+	 * A los correos de contacto del procedimiento y, si el procedimiento lo
+	 * pide, a quienes consultan la zona del centro (ADR-0043); ni la copia de
+	 * administración ni el centro, que es quien lo ha hecho (ADR-0041). El
 	 * antes y el después van legibles —papel y grupo por su rótulo— y **sin
 	 * el DNI**: un correo no es sitio para él.
 	 *
@@ -469,8 +472,36 @@ final class Mailer {
 				$ctx['url']    = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
+				self::send_to_zone( (int) $application_id, $ctx );
 			}
 		);
+	}
+
+	/**
+	 * The copy of the people mail to whoever observes the zone of the centre.
+	 *
+	 * Solo si el procedimiento admite la consulta y lo pide
+	 * (`prc_observer_notify`, apagado por defecto), y solo a las cuentas que
+	 * consultan la zona que el catálogo de hoy da al centro (ADR-0043). El
+	 * mismo texto, sin DNI, con el enlace a la consulta y no al taller.
+	 *
+	 * @param int                  $application_id Application ID.
+	 * @param array<string, mixed> $ctx            The context of the contacts' mail.
+	 * @return void
+	 */
+	private static function send_to_zone( int $application_id, array $ctx ): void {
+		$procedure_id = (int) $ctx['procedure_id'];
+		if ( ! ObserverScope::is_observable( $procedure_id ) || ! get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_NOTIFY, true ) ) {
+			return;
+		}
+		$codigo   = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		$destinos = array_map( array( self::class, 'email_of' ), ObserverScope::observers_of( $codigo ) );
+		if ( array() === array_filter( $destinos ) ) {
+			return;
+		}
+		$ctx['url']       = Observe::url( $procedure_id );
+		$ctx['url_label'] = 'Se consulta en la consulta de solicitudes:';
+		self::send( self::EVENT_PEOPLE_CHANGED, $destinos, $ctx );
 	}
 
 	// ─── el contexto ───────────────────────────────────────────────────────

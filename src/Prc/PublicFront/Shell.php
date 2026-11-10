@@ -42,6 +42,7 @@ final class Shell {
 		'editor'    => 'editar-procedimiento',
 		'apply'     => 'solicitud',
 		'mine'      => 'mi-centro',
+		'observe'   => 'consulta-de-solicitudes',
 	);
 
 	/**
@@ -60,6 +61,7 @@ final class Shell {
 		'editor'    => 'prc_editor',
 		'apply'     => 'prc_apply',
 		'mine'      => 'prc_mine',
+		'observe'   => 'prc_observe',
 	);
 
 	/**
@@ -456,6 +458,14 @@ final class Shell {
 				'url'   => self::url( 'mine' ),
 			);
 		}
+		// La consulta de solo lectura: quien consulta una zona y quien
+		// gestiona, que ve la de sus procedimientos entera (ADR-0043).
+		if ( ProcedureAccess::can_observe( $user_id ) ) {
+			$out['observe'] = array(
+				'label' => 'Consulta de solicitudes',
+				'url'   => self::url( 'observe' ),
+			);
+		}
 
 		// Una sección cuya página no existe todavía no se ofrece: una pestaña
 		// que lleva a un 404 es peor que no tenerla.
@@ -500,6 +510,12 @@ final class Shell {
 				'scope' => self::centre_name( $user_id ),
 			);
 		}
+		if ( $user_id > 0 && user_can( $user_id, ProcedureAccess::CAP_VIEW_APPLICATIONS ) ) {
+			return array(
+				'role'  => 'Consulta de solicitudes',
+				'scope' => self::zone_names( $user_id ),
+			);
+		}
 		return array(
 			'role'  => '',
 			'scope' => '',
@@ -521,6 +537,21 @@ final class Shell {
 			}
 		}
 		return array() === $nombres ? 'Sin ámbito asignado' : implode( ' · ', $nombres );
+	}
+
+	/**
+	 * The zones a person observes, by name when the catalogue knows them.
+	 *
+	 * @param int $user_id User ID.
+	 * @return string
+	 */
+	public static function zone_names( int $user_id ): string {
+		$nombres = array();
+		foreach ( ProcedureAccess::observer_zones( $user_id ) as $zona ) {
+			$centro    = CentreCatalog::find( $zona );
+			$nombres[] = array() !== $centro && '' !== (string) $centro['name'] ? $centro['name'] . ' (' . $zona . ')' : $zona;
+		}
+		return array() === $nombres ? 'Sin zona asignada' : implode( ' · ', $nombres );
 	}
 
 	/**
@@ -685,7 +716,9 @@ final class Shell {
 	 * y el modelo de cada una). Esto es solo la ayuda para navegar.
 	 *
 	 * Lo que se puede abrir sale de {@see sections()}, que es la única lista;
-	 * aquí solo se reparte en el árbol y se marca dónde se está.
+	 * aquí solo se reparte en el árbol y se marca dónde se está. La consulta
+	 * de solo lectura (ADR-0043) es una quinta entrada, que el sitio anterior
+	 * no tenía: allí era una hoja aparte por procedimiento.
 	 *
 	 * @param int $user_id User ID (0 = current).
 	 * @return array<int, array{label:string, url:string, active:bool, group:bool, items:array<int, array<string, mixed>>}>
@@ -729,6 +762,8 @@ final class Shell {
 			$menu[]           = $admin;
 		}
 
+		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ) );
+
 		// «Ayuda»: lo que haya puesto quien despliega, que es de quien son el
 		// tutorial y el buzón de incidencias. Sin configurar, no hay entrada
 		// (ADR-0009).
@@ -751,6 +786,23 @@ final class Shell {
 		}
 
 		return $menu;
+	}
+
+	/**
+	 * The entry of the read-only consultation, when the person has one.
+	 *
+	 * Aparte de {@see menu()} para que el árbol no crezca en ramas: una
+	 * entrada de primer nivel, sin desplegable.
+	 *
+	 * @param array<string, array{label:string, url:string}> $secciones What {@see sections()} returned.
+	 * @param string                                         $activa    Section being viewed.
+	 * @return array<int, array<string, mixed>> None or one entry.
+	 */
+	private static function observe_entry( array $secciones, string $activa ): array {
+		if ( ! isset( $secciones['observe'] ) ) {
+			return array();
+		}
+		return array( self::entry( 'Consulta', $secciones['observe']['url'], 'observe' === $activa ) );
 	}
 
 	/**

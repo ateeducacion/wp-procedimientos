@@ -111,7 +111,7 @@ final class ApplicationsPanelView {
 	 * @param array<string, mixed> $t Table model.
 	 * @return string
 	 */
-	private static function states( array $t ): string {
+	public static function states( array $t ): string {
 		$out = '<ul class="prc-contadores" aria-label="Solicitudes por estado de revisión">';
 		foreach ( (array) $t['states'] as $estado ) {
 			$out .= sprintf(
@@ -180,7 +180,7 @@ final class ApplicationsPanelView {
 	 * @param string                $selected Chosen value.
 	 * @return string
 	 */
-	private static function select( string $id, string $name, string $label, array $options, string $selected ): string {
+	public static function select( string $id, string $name, string $label, array $options, string $selected ): string {
 		$out = '<div class="prc-filtros__campo"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label>'
 			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
 		foreach ( $options as $valor => $rotulo ) {
@@ -332,7 +332,7 @@ final class ApplicationsPanelView {
 	 * @param array<string, mixed> $t Table model.
 	 * @return string
 	 */
-	private static function pager( array $t ): string {
+	public static function pager( array $t ): string {
 		if ( (int) $t['pages'] <= 1 ) {
 			return '';
 		}

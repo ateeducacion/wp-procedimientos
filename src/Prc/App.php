@@ -25,6 +25,7 @@ use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
+use Prc\PublicFront\Observe;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
@@ -77,6 +78,8 @@ final class App {
 		ApplyForm::class,
 		PeopleForm::class,
 		MyCentre::class,
+		// La consulta de solo lectura por zona (ADR-0043).
+		Observe::class,
 		Workspace::class,
 		ProcedureEditor::class,
 		Home::class,

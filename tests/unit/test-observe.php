@@ -750,6 +750,75 @@ class Test_Observe extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El correo a la zona solo dice quién hizo el cambio si la consulta
+	 * enseña «Quien presenta»; el de los contactos lo dice siempre.
+	 */
+	public function test_the_zone_mail_names_who_did_it_only_if_the_consultation_shows_it() {
+		$hoy  = \Prc\Domain\ProcedureState::today();
+		$caso = $this->caso(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Docente',
+						),
+					),
+				),
+				ProcedureMetaKeys::OPENS_AT    => gmdate( 'Y-m-d', (int) strtotime( $hoy . ' -1 day' ) ),
+				ProcedureMetaKeys::CLOSES_AT   => gmdate( 'Y-m-d', (int) strtotime( $hoy . ' +1 day' ) ),
+			)
+		);
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_NOTIFY, true );
+		$zona = $this->observer( array( 'Z0002' ) );
+		wp_update_user(
+			array(
+				'ID'         => $zona,
+				'user_email' => 'consulta-dos@example.org',
+			)
+		);
+		$director = (int) get_post_field( 'post_author', $caso['c2'] );
+		wp_update_user(
+			array(
+				'ID'           => $director,
+				'display_name' => 'Directora Inventada',
+			)
+		);
+		$persona = array(
+			'name'    => 'Ana',
+			'surname' => 'Pérez',
+			'dni'     => self::DNI_PERSONA,
+			'email'   => 'ana@example.org',
+			'phone'   => '',
+			'role'    => 'r1',
+			'group'   => '',
+		);
+
+		$this->enviados = array();
+		People::add( $caso['c2'], $director, $persona );
+		$this->assertSame( array( 'gestion@example.org', 'consulta-dos@example.org' ), array_column( $this->enviados, 'to' ) );
+		$this->assertStringContainsString( 'Hecho por: Directora Inventada', (string) $this->enviados[0]['message'], 'a los contactos, como siempre' );
+		$this->assertStringNotContainsString( 'Directora Inventada', (string) $this->enviados[1]['message'] );
+		$this->assertStringNotContainsString( 'Hecho por', (string) $this->enviados[1]['message'], 'sin línea vacía' );
+		$this->assertStringNotContainsString( 'Directora Inventada', (string) $this->enviados[1]['subject'] );
+		$this->assertStringContainsString( 'IES Dos', (string) $this->enviados[1]['subject'], 'el asunto lleva el centro' );
+
+		$this->enviados = array();
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'centre', 'applicant' ) );
+		People::add(
+			$caso['c2'],
+			$director,
+			array(
+				'dni'   => '33333333P',
+				'email' => 'otra@example.org',
+			) + $persona
+		);
+		$this->assertStringContainsString( 'Hecho por: Directora Inventada', (string) $this->enviados[1]['message'] );
+		$this->assertStringContainsString( 'Hecho por: Directora Inventada', (string) $this->enviados[0]['message'] );
+	}
+
+	/**
 	 * La nota de revisión va a quien presentó la solicitud solo si sigue
 	 * siendo de su centro; poder verla por la consulta no basta.
 	 */

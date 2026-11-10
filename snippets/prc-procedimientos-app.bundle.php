@@ -25959,16 +25959,29 @@ final class Mailer {
 		if ( array() === $destinos ) {
 			return;
 		}
-		$campos = array();
-		foreach ( array_keys( array_intersect_key( ObserveSettings::columns( $procedure_id ), PeopleExport::COLUMNS ) ) as $columna ) {
+		$columnas = ObserveSettings::columns( $procedure_id );
+		$campos   = array();
+		foreach ( array_keys( array_intersect_key( $columnas, PeopleExport::COLUMNS ) ) as $columna ) {
 			$campos[] = substr( (string) $columna, strlen( 'person_' ) );
 		}
-		$spec             = People::spec( $procedure_id );
-		$ctx['before']    = array() !== $before && array() !== $campos ? ApplicationPeople::describe( $spec, $before, $campos ) : '';
-		$ctx['after']     = array() !== $after && array() !== $campos ? ApplicationPeople::describe( $spec, $after, $campos ) : '';
-		$ctx['url']       = Observe::url( $procedure_id );
-		$ctx['url_label'] = 'Se consulta en la consulta de solicitudes:';
-		self::send( self::EVENT_PEOPLE_CHANGED, $destinos, $ctx );
+		$spec = People::spec( $procedure_id );
+
+
+		$zona = array(
+			'procedure'    => $ctx['procedure'] ?? '',
+			'procedure_id' => $procedure_id,
+			'centre'       => $ctx['centre'] ?? '',
+			'change'       => $ctx['change'] ?? '',
+			'date'         => $ctx['date'] ?? '',
+			'before'       => array() !== $before && array() !== $campos ? ApplicationPeople::describe( $spec, $before, $campos ) : '',
+			'after'        => array() !== $after && array() !== $campos ? ApplicationPeople::describe( $spec, $after, $campos ) : '',
+			'url'          => Observe::url( $procedure_id ),
+			'url_label'    => 'Se consulta en la consulta de solicitudes:',
+		);
+		if ( isset( $columnas['applicant'] ) ) {
+			$zona['applicant'] = $ctx['applicant'] ?? '';
+		}
+		self::send( self::EVENT_PEOPLE_CHANGED, $destinos, $zona );
 	}
 
 

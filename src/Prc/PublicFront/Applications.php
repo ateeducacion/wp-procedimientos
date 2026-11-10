@@ -236,13 +236,14 @@ final class Applications {
 	 * volver a mirarla (ADR-0020). La nota se conserva, para que se sepa qué
 	 * se pidió.
 	 *
-	 * @param int                  $procedure_id Procedure post ID.
-	 * @param int                  $user_id      Who submits.
-	 * @param array<string, mixed> $data         Validated core: position, coordinator, answers.
-	 * @param string               $code         One of the person's codes; empty for the school.
+	 * @param int                                 $procedure_id Procedure post ID.
+	 * @param int                                 $user_id      Who submits.
+	 * @param array<string, mixed>                $data         Validated core: position, coordinator, answers.
+	 * @param string                              $code         One of the person's codes; empty for the school.
+	 * @param array<string, array<string, mixed>> $files Validated uploads.
 	 * @return int Application post ID, 0 on failure.
 	 */
-	public static function save( int $procedure_id, int $user_id, array $data, string $code = '' ): int {
+	public static function save( int $procedure_id, int $user_id, array $data, string $code = '', array $files = array() ): int {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
@@ -251,8 +252,45 @@ final class Applications {
 			return 0;
 		}
 
+		$id = self::save_post( $procedure_id, $user_id, $centro, $files );
+		if ( 0 === $id ) {
+			return 0;
+		}
+
+		// `wp_slash()` porque `update_post_meta()` desescapa lo que le llega:
+		// sin esto una respuesta con una comilla llegaría rota a la base de datos.
+		$data += array(
+			'position'    => '',
+			'coordinator' => array(),
+			'answers'     => array(),
+		);
+		$metas = array(
+			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
+			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
+			ApplicationMetaKeys::APPLICANT_POSITION => (string) $data['position'],
+			ApplicationMetaKeys::COORDINATOR        => (array) $data['coordinator'],
+			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+		);
+		foreach ( $metas as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+		return $id;
+	}
+
+	/**
+	 * Store the post and documents before changing the application core.
+	 *
+	 * @param int                                 $procedure_id Procedure ID.
+	 * @param int                                 $user_id Applicant ID.
+	 * @param array<string, string>               $centro School snapshot.
+	 * @param array<string, array<string, mixed>> $files Validated uploads.
+	 * @return int Post ID, or zero on failure.
+	 */
+	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files ): int {
 		$titulo = self::title( $centro, $procedure_id );
 		$id     = self::find( $procedure_id, $centro['code'] );
+		$is_new = null === $id;
 		if ( null === $id ) {
 			$id = wp_insert_post(
 				array(
@@ -264,7 +302,18 @@ final class Applications {
 				),
 				true
 			);
-		} else {
+		}
+		if ( is_wp_error( $id ) || ! $id ) {
+			return 0;
+		}
+		$id = (int) $id;
+		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
+			if ( $is_new ) {
+				wp_delete_post( $id, true );
+			}
+			return 0;
+		}
+		if ( ! $is_new ) {
 			$id = wp_update_post(
 				array(
 					'ID'         => $id,
@@ -272,25 +321,11 @@ final class Applications {
 				),
 				true
 			);
+			if ( is_wp_error( $id ) || ! $id ) {
+				return 0;
+			}
 		}
-		if ( is_wp_error( $id ) || ! $id ) {
-			return 0;
-		}
-		$id = (int) $id;
 
-		// `wp_slash()` porque `update_post_meta()` desescapa lo que le llega:
-		// sin esto una respuesta con una comilla llegaría rota a la base de datos.
-		$metas = array(
-			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
-			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
-			ApplicationMetaKeys::APPLICANT_POSITION => (string) ( $data['position'] ?? '' ),
-			ApplicationMetaKeys::COORDINATOR        => (array) ( $data['coordinator'] ?? array() ),
-			ApplicationMetaKeys::ANSWERS            => (array) ( $data['answers'] ?? array() ),
-			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
-		);
-		foreach ( $metas as $clave => $valor ) {
-			update_post_meta( $id, $clave, wp_slash( $valor ) );
-		}
 		return $id;
 	}
 

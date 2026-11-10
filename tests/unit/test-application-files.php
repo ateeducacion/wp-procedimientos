@@ -1260,6 +1260,11 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$solicitud = $this->application( $datos['procedure'], $datos['head'], 'C0001' );
 		ApplicationFiles::store_all( $solicitud, array( 'q1' => $this->un_pdf( 'buena.pdf' ) ) );
 		$antes = ApplicationFiles::descriptors( $solicitud );
+		update_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		update_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, ApplicationMetaKeys::POSITION_SECRETARY );
+		update_post_meta( $solicitud, ApplicationMetaKeys::ANSWERS, array( 'q2' => 'Respuesta original' ) );
+		$metas  = get_post_meta( $solicitud );
+		$titulo = get_the_title( $solicitud );
 
 		$this->en_files( array( 'q1' => $this->un_pdf( 'segunda.pdf' ) ) );
 		$this->almacen_roto();
@@ -1268,6 +1273,25 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'no se ha presentado', $this->el_rechazo() );
 		$this->assertSame( $solicitud, Applications::find( $datos['procedure'], 'C0001' ), 'Sigue estando.' );
 		$this->assertSame( $antes, ApplicationFiles::descriptors( $solicitud ), 'Y con su documento de antes.' );
+		$this->assertSame( $metas, get_post_meta( $solicitud ), 'Ni el núcleo ni la revisión cambian cuando falla el documento.' );
+		$this->assertSame( $titulo, get_the_title( $solicitud ) );
+	}
+
+	/** A failed descriptor write keeps the original file and removes the new one. */
+	public function test_a_failed_descriptor_write_preserves_the_original_document() {
+		$data   = $this->un_documento_guardado();
+		$before = ApplicationFiles::descriptors( $data['application'] );
+		$refuse = static function ( $check, $id, $key ) {
+			return ApplicationMetaKeys::FILES === $key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $refuse, 10, 3 );
+		try {
+			$this->assertFalse( ApplicationFiles::store_all( $data['application'], array( 'q1' => $this->un_pdf( 'replacement.pdf' ) ) ) );
+		} finally {
+			remove_filter( 'update_post_metadata', $refuse, 10 );
+		}
+		$this->assertSame( $before, ApplicationFiles::descriptors( $data['application'] ) );
+		$this->assertNotNull( ApplicationFiles::read( $before['q1'] ) );
 	}
 
 	// ─── la tabla y el CSV ─────────────────────────────────────────────────

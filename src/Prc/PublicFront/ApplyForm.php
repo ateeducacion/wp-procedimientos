@@ -238,23 +238,12 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code );
+		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = 'No se ha podido guardar la solicitud. Vuelva a intentarlo.';
+			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
 		}
 
-		// Y si guardar un documento falla, la solicitud no puede quedarse a
-		// medias: una que acababa de nacer se borra entera; una que ya existía
-		// se queda **exactamente como estaba** —`store_all()` no ha tocado ni
-		// un descriptor anterior— y se dice que no.
-		if ( ! ApplicationFiles::store_all( $id, $ficheros['files'] ) ) {
-			if ( null === $existente ) {
-				wp_delete_post( $id, true );
-			}
-			self::$rejected = 'No se ha podido guardar el documento que adjuntó, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
-			return;
-		}
 		Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
 	}
 

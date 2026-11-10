@@ -521,6 +521,91 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con la papelera del núcleo desactivada (EMPTY_TRASH_DAYS a 0), retirar
+	 * sigue siendo enviar a la papelera: no se pierden ni los documentos ni el
+	 * historial, se anota y se avisa una vez, y se restaura.
+	 */
+	public function test_withdrawing_with_the_bin_switched_off_still_bins_it() {
+		add_filter( 'prc_trash_enabled', '__return_false' );
+		$this->assertFalse( ApplicationActions::trash_enabled() );
+		$c   = $this->caso();
+		$dir = ApplicationFiles::root();
+		wp_mkdir_p( $dir . '/ab/cd' );
+		$fichero = 'ab/cd/abcdef0123456789abcdef0123456789.pdf';
+		file_put_contents( $dir . '/' . $fichero, '%PDF-1.4 prueba' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- un fichero de prueba.
+		update_post_meta(
+			$c['application'],
+			ApplicationMetaKeys::FILES,
+			array(
+				'q1' => array(
+					'id'     => 'abcdef0123456789abcdef0123456789',
+					'name'   => 'memoria.pdf',
+					'stored' => $fichero,
+					'mime'   => 'application/pdf',
+					'size'   => 15,
+					'sha256' => hash( 'sha256', '%PDF-1.4 prueba' ),
+				),
+			)
+		);
+		$camino = ApplicationFiles::path( ApplicationFiles::descriptors( $c['application'] )['q1'] ?? array() );
+		$this->assertNotSame( '', $camino );
+
+		$this->assertNotNull( $this->retirar( $c['head'], $c['application'] ), $this->rechazo_retirar() );
+		$this->assertSame( 'trash', get_post_status( $c['application'] ), 'en la papelera, no borrada' );
+		$this->assertSame( 'publish', get_post_meta( $c['application'], '_wp_trash_meta_status', true ) );
+		$this->assertSame( '', get_post_meta( $c['application'], '_wp_trash_meta_time', true ), 'sin fecha de caducidad' );
+		$this->assertFileExists( $camino, 'el documento se conserva' );
+		$this->assertSame( array( ApplicationHistory::WITHDRAWN ), $this->eventos( $c['application'] ) );
+		$this->assertSame( array( 'contacto@example.org', 'direccion@example.org' ), $this->destinos(), 'un aviso a cada contacto' );
+
+		$this->acting_as( $c['reviewer'] );
+		$this->assertTrue( ApplicationOperations::restore( $c['application'] ) );
+		$this->assertSame( 'publish', get_post_status( $c['application'] ) );
+		$this->assertSame( array( ApplicationHistory::WITHDRAWN, ApplicationHistory::RESTORED ), $this->eventos( $c['application'] ) );
+	}
+
+	/**
+	 * Con la papelera desactivada, `wp_trash_post()` borraría para siempre:
+	 * con una solicitud viva no lo consigue, por la puerta que sea. El borrado
+	 * a propósito de administración sigue funcionando.
+	 */
+	public function test_the_core_bin_switched_off_never_deletes_a_live_application() {
+		add_filter( 'prc_trash_enabled', '__return_false' );
+		$c = $this->caso();
+		$this->acting_as( $this->administrator() );
+		// Lo que hace wp_trash_post() con EMPTY_TRASH_DAYS a 0: borrar desde dentro.
+		$borrar = static function ( $check, $post ) {
+			return wp_delete_post( (int) $post->ID, true ) ? $check : false;
+		};
+		add_filter( 'pre_trash_post', $borrar, 10, 2 );
+		wp_trash_post( $c['application'] );
+		remove_filter( 'pre_trash_post', $borrar, 10 );
+		$this->assertNotFalse( get_post_status( $c['application'] ), 'desde wp_trash_post() no se borra' );
+
+		$this->assertInstanceOf( WP_Post::class, wp_delete_post( $c['application'], true ), 'administración sí la borra a propósito' );
+		$this->assertFalse( get_post_status( $c['application'] ) );
+	}
+
+	/**
+	 * Con la papelera activa, retirar es `wp_trash_post()`, como siempre.
+	 */
+	public function test_withdrawing_with_the_bin_switched_on_uses_the_core_bin() {
+		add_filter( 'prc_trash_enabled', '__return_true' );
+		$c       = $this->caso();
+		$llamado = 0;
+		$contar  = static function ( $check ) use ( &$llamado ) {
+			++$llamado;
+			return $check;
+		};
+		add_filter( 'pre_trash_post', $contar );
+		ApplicationOperations::withdraw( $c['application'], $c['head'], ApplicationOperations::BY_APPLICANT );
+		remove_filter( 'pre_trash_post', $contar );
+		$this->assertSame( 1, $llamado );
+		$this->assertSame( 'trash', get_post_status( $c['application'] ) );
+		$this->assertSame( array( ApplicationHistory::WITHDRAWN ), $this->eventos( $c['application'] ) );
+	}
+
+	/**
 	 * Con el procedimiento histórico nadie retira ni restaura, tampoco
 	 * administración por el escritorio.
 	 */

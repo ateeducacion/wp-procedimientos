@@ -7625,10 +7625,42 @@ final class ApplicationActions {
 
 
 	public static function guard_delete( $delete, $post ) {
-		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type || 'trash' !== $post->post_status ) {
+		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
+		if ( 'trash' !== $post->post_status ) {
+
+
+
+			return self::trash_enabled() || ! self::inside_core_trash() ? $delete : false;
+		}
 		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function trash_enabled(): bool {
+		return (bool) apply_filters( 'prc_trash_enabled', (bool) EMPTY_TRASH_DAYS );
+	}
+
+
+
+
+
+
+
+
+
+	private static function inside_core_trash(): bool {
+		$pila = wp_debug_backtrace_summary( null, 0, false );
+		return is_array( $pila ) && in_array( 'wp_trash_post', $pila, true );
 	}
 
 
@@ -13221,6 +13253,7 @@ use Prc\PostType\ApplicationPostType;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\ApplicationOperations', false ) ) {
 final class ApplicationOperations {
 
@@ -13345,11 +13378,55 @@ final class ApplicationOperations {
 			'reason' => $reason,
 		);
 		try {
-			wp_trash_post( $application_id );
+			self::send_to_trash( $application_id );
 		} finally {
 			self::$context = null;
 		}
 		return 'trash' === get_post_status( $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function send_to_trash( int $application_id ): void {
+		if ( ApplicationActions::trash_enabled() ) {
+			wp_trash_post( $application_id );
+			return;
+		}
+		$post = get_post( $application_id );
+		if ( ! $post instanceof \WP_Post || 'trash' === $post->post_status ) {
+			return;
+		}
+		$previous_status = $post->post_status;
+
+		if ( null !== apply_filters( 'pre_trash_post', null, $post, $previous_status ) ) {
+			return;
+		}
+
+		do_action( 'wp_trash_post', $application_id, $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_status', $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_time', time() );
+		$updated = wp_update_post(
+			array(
+				'ID'          => $application_id,
+				'post_status' => 'trash',
+			)
+		);
+		if ( ! $updated ) {
+			return;
+		}
+		wp_trash_post_comments( $application_id );
+
+		do_action( 'trashed_post', $application_id, $previous_status );
 	}
 
 

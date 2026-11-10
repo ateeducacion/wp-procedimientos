@@ -309,10 +309,42 @@ final class ApplicationActions {
 	 * @return mixed
 	 */
 	public static function guard_delete( $delete, $post ) {
-		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type || 'trash' !== $post->post_status ) {
+		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
+		if ( 'trash' !== $post->post_status ) {
+			// Con la papelera desactivada, wp_trash_post() borra para siempre:
+			// quien quería retirarla perdería documentos e historial. Una
+			// solicitud viva solo se borra a propósito, con wp_delete_post().
+			return self::trash_enabled() || ! self::inside_core_trash() ? $delete : false;
+		}
 		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
+	}
+
+	/**
+	 * Whether the core bin keeps what goes to it, instead of deleting it for good.
+	 *
+	 * Con `EMPTY_TRASH_DAYS` a 0 —hay servidores que desactivan así la
+	 * papelera—, `wp_trash_post()` borra para siempre. La constante no se
+	 * puede cambiar en marcha; el filtro `prc_trash_enabled` sí.
+	 *
+	 * @return bool
+	 */
+	public static function trash_enabled(): bool {
+		return (bool) apply_filters( 'prc_trash_enabled', (bool) EMPTY_TRASH_DAYS );
+	}
+
+	/**
+	 * Whether the deletion under way comes from inside `wp_trash_post()`.
+	 *
+	 * El núcleo no deja ningún enganche antes de borrar con la papelera
+	 * desactivada: solo la pila de llamadas dice de dónde viene.
+	 *
+	 * @return bool
+	 */
+	private static function inside_core_trash(): bool {
+		$pila = wp_debug_backtrace_summary( null, 0, false ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_wp_debug_backtrace_summary -- no es depuración: distingue retirar de borrar.
+		return is_array( $pila ) && in_array( 'wp_trash_post', $pila, true );
 	}
 
 	/**

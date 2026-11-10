@@ -22,7 +22,8 @@ use Prc\PostType\ApplicationPostType;
  * historial ({@see ApplicationHistory}) y el correo las escuchan: ninguna
  * pantalla anota ni manda nada por su cuenta (ADR-0038).
  *
- * Retirar es `wp_trash_post()` (ADR-0007), y la acción
+ * Retirar es enviar a la papelera (ADR-0007), también donde el núcleo la
+ * tiene desactivada ({@see send_to_trash()}), y la acción
  * `prc_application_withdrawn` sale de `trashed_post`: así también se anota
  * una solicitud que administración manda a la papelera desde el escritorio.
  */
@@ -149,11 +150,55 @@ final class ApplicationOperations {
 			'reason' => $reason,
 		);
 		try {
-			wp_trash_post( $application_id );
+			self::send_to_trash( $application_id );
 		} finally {
 			self::$context = null;
 		}
 		return 'trash' === get_post_status( $application_id );
+	}
+
+	/**
+	 * Send an application to the bin, even where the core bin is switched off.
+	 *
+	 * Con la papelera activa es `wp_trash_post()`. Desactivada —`EMPTY_TRASH_DAYS`
+	 * a 0—, `wp_trash_post()` borraría para siempre la solicitud con sus
+	 * documentos y su historial; aquí se hace lo mismo que hace el núcleo con
+	 * la papelera activa, con los mismos filtros y acciones, para que retirar
+	 * siga siendo reversible (ADR-0044).
+	 *
+	 * @param int $application_id Application ID.
+	 * @return void
+	 */
+	private static function send_to_trash( int $application_id ): void {
+		if ( ApplicationActions::trash_enabled() ) {
+			wp_trash_post( $application_id );
+			return;
+		}
+		$post = get_post( $application_id );
+		if ( ! $post instanceof \WP_Post || 'trash' === $post->post_status ) {
+			return;
+		}
+		$previous_status = $post->post_status;
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- el filtro del núcleo, como en wp_trash_post().
+		if ( null !== apply_filters( 'pre_trash_post', null, $post, $previous_status ) ) {
+			return;
+		}
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- la acción del núcleo, como en wp_trash_post().
+		do_action( 'wp_trash_post', $application_id, $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_status', $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_time', time() );
+		$updated = wp_update_post(
+			array(
+				'ID'          => $application_id,
+				'post_status' => 'trash',
+			)
+		);
+		if ( ! $updated ) {
+			return;
+		}
+		wp_trash_post_comments( $application_id );
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- la acción del núcleo: el historial y el correo la escuchan.
+		do_action( 'trashed_post', $application_id, $previous_status );
 	}
 
 	/**

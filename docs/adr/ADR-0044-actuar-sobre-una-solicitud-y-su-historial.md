@@ -309,6 +309,15 @@ ADR-0005 pedía en meta del procedimiento y siguen sin escribirse.
   papelera del núcleo no la vacía sola. Sus documentos se borran entonces
   (`ApplicationFiles::on_delete()`, ADR-0028). Es a propósito —no perder
   documentos ni historial— y hay que saberlo.
+- **Retirar no se apoya en la papelera del núcleo cuando está desactivada**:
+  con `EMPTY_TRASH_DAYS` a 0, `wp_trash_post()` borra para siempre. El
+  aplicativo hace entonces a mano lo mismo que el núcleo con la papelera
+  activa —mismos filtros y acciones, así que el historial y el correo actúan
+  igual—, y `pre_delete_post` impide que una solicitud viva se borre desde
+  `wp_trash_post()`; administración la sigue pudiendo borrar a propósito. Para
+  saber de dónde viene el borrado hay que mirar la pila de llamadas, porque el
+  núcleo no deja enganche antes; y el filtro `prc_trash_enabled` decide si la
+  papelera está activa.
 - **El historial lo ve quien revisa, entero**, también el motivo de una
   retirada; no hay historial para el centro.
 - **La prórroga es por días**, no por horas, como todos los plazos del

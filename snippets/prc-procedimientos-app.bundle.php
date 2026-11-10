@@ -16496,6 +16496,7 @@ namespace Prc\PublicFront\View;
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\Workspace;
 
@@ -16776,7 +16777,7 @@ final class WorkspaceView {
 					<tr class="prc-tabla__grupos">
 						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
 						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="3" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
+						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
 					</tr>
 					<tr>
 						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
@@ -16792,6 +16793,7 @@ final class WorkspaceView {
 						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
+						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -16869,7 +16871,38 @@ final class WorkspaceView {
 				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
 				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
 			</td>
+			<td class="prc-celda-accion" data-rotulo="Duplicar">
+				<?php self::duplicate( $row ); ?>
+			</td>
 		</tr>
+		<?php
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function duplicate( array $row ): void {
+		$op = ProcedureEditor::OP_DUPLICATE;
+		?>
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
+			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar">
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
+			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
+				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+				<span class="screen-reader-text">Duplicar este procedimiento</span>
+			</button>
+		</form>
 		<?php
 	}
 
@@ -18369,6 +18402,8 @@ final class ProcedureEditorView {
 
 		echo Shell::notice( 'aviso', (string) $m['state_notice'] );
 
+		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) );
+
 
 
 		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
@@ -18549,11 +18584,53 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
 			<span class="prc-acciones">
 				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
+				<?php echo self::duplicate_form( $m );?>
 			</span>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function duplicate_form( array $m ): string {
+		if ( true !== $m['can_duplicate'] ) {
+			return '';
+		}
+		$op = ProcedureEditor::OP_DUPLICATE;
+		ob_start();
+		?>
+		<form class="prc-acciones" method="post" action=""
+			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Duplicar</button>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	public static function duplicate_question( string $title ): string {
+		return sprintf(
+			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes.',
+			'' !== $title ? $title : 'Procedimiento sin título'
+		);
 	}
 
 
@@ -21555,6 +21632,172 @@ final class ProcedureEditor {
 
 
 		return EditLock::render( EditLock::claim( (array) $m['lock'] ) ) . ProcedureEditorView::html( $m );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ProcedureCopy;
+use Prc\PostType\ProcedurePostType;
+use Prc\Taxonomy\ProcedureTaxonomies;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ProcedureDuplicate', false ) ) {
+final class ProcedureDuplicate {
+
+
+
+
+	public const NOTICE = 'duplicado';
+
+
+
+
+	public const ARG_SOURCE = 'origen';
+
+
+
+
+	public const ARG_NO_JS = 'sin_js';
+
+
+
+
+
+
+
+
+	public static function handle( int $procedure_id, int $user_id ): string {
+		$copia = self::duplicate( $procedure_id, $user_id );
+		if ( is_wp_error( $copia ) ) {
+			return $copia->get_error_message();
+		}
+		$args = array(
+			ProcedureEditor::ARG_NOTICE => self::NOTICE,
+			self::ARG_SOURCE            => $procedure_id,
+		);
+		if ( $copia['js_left'] ) {
+			$args[ self::ARG_NO_JS ] = 1;
+		}
+		Shell::leave( ProcedureEditor::url( $copia['id'], ProcedureEditor::PANEL_DATA, $args ) );
+		return '';
+	}
+
+
+
+
+
+
+
+
+	public static function duplicate( int $procedure_id, int $user_id ) {
+		$areas = null;
+		if ( ! ProcedureAccess::can_duplicate( $user_id, $procedure_id, $areas ) ) {
+			return new \WP_Error(
+				'prc_duplicate_forbidden',
+				ProcedureAccess::can_open( $user_id, $procedure_id )
+					? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
+					: ProcedureAccess::why_not_editable( $user_id, $procedure_id )
+			);
+		}
+
+		if ( array() === $areas ) {
+			return new \WP_Error( 'prc_duplicate_area', 'El duplicado necesita al menos un ámbito, y ni el original ni su perfil tienen uno que pueda usar.' );
+		}
+
+		$original = get_post( $procedure_id );
+		$id       = wp_insert_post(
+			array(
+				'post_type'    => ProcedurePostType::POST_TYPE,
+				'post_title'   => wp_slash( ProcedureCopy::title( (string) $original->post_title ) ),
+				'post_content' => wp_slash( (string) $original->post_content ),
+				'post_excerpt' => wp_slash( (string) $original->post_excerpt ),
+				'post_status'  => 'draft',
+				'post_author'  => $user_id,
+			),
+			true
+		);
+		if ( is_wp_error( $id ) ) {
+			return new \WP_Error( 'prc_duplicate_failed', 'No se ha podido duplicar el procedimiento: ' . $id->get_error_message() );
+		}
+		$id = (int) $id;
+
+
+		wp_set_object_terms( $id, $areas, ProcedureTaxonomies::AREA, false );
+		$copia = ProcedureCopy::meta( self::source( $procedure_id ), ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) );
+		foreach ( $copia['meta'] as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+		$imagen = (int) get_post_thumbnail_id( $procedure_id );
+		if ( $imagen > 0 ) {
+			update_post_meta( $id, '_thumbnail_id', $imagen );
+		}
+
+
+		do_action( 'prc_procedure_created', $id );
+
+		return array(
+			'id'      => $id,
+			'js_left' => $copia['js_left'],
+		);
+	}
+
+
+
+
+
+
+
+	private static function source( int $procedure_id ): array {
+		$out = array();
+		foreach ( array_keys( ProcedureCopy::policy() ) as $clave ) {
+			if ( metadata_exists( 'post', $procedure_id, $clave ) ) {
+				$out[ $clave ] = get_post_meta( $procedure_id, $clave, true );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function notice( array $request ): array {
+		$origen = absint( $request[ self::ARG_SOURCE ] ?? 0 );
+		$texto  = ProcedureAccess::can_open( get_current_user_id(), $origen )
+			? 'Has duplicado «' . get_post_field( 'post_title', $origen, 'raw' ) . '».'
+			: 'Has duplicado el procedimiento.';
+		$texto .= ' Revisa las fechas y el curso antes de publicar.'
+			. ' No se copian los plazos, el curso, los enlaces de la resolución y de los listados, ni las solicitudes.';
+		if ( ! empty( $request[ self::ARG_NO_JS ] ) ) {
+			$texto .= ' El JavaScript propio del original no se ha copiado: solo lo copia quien administra el aplicativo.';
+		}
+		return array(
+			'tipo'  => 'ok',
+			'texto' => $texto,
+		);
 	}
 }
 

@@ -69,6 +69,7 @@ return array(
 	'PublicFront/View/ApplicationsPanelView.php',
 	'PublicFront/View/ProcedureEditorView.php',
 	'PublicFront/ProcedureEditor.php',
+	'PublicFront/ProcedureDuplicate.php',
 	'PublicFront/View/MeasuredQuestionView.php',
 	'PublicFront/View/PeopleView.php',
 	'PublicFront/View/ApplyFormView.php',

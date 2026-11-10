@@ -138,6 +138,65 @@ class Test_Application_People extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una línea que acaba en «|» o lleva «||» no descoloca la marca «| grupo»
+	 * de las siguientes: cada marca va con el papel de su línea.
+	 */
+	public function test_a_stray_bar_does_not_move_the_group_mark_to_another_role() {
+		foreach ( array( "Coordinación |\nParticipante | grupo", "Coordinación ||\nParticipante | grupo" ) as $roles ) {
+			$res = PeopleSpec::from_input(
+				array(
+					'enabled' => true,
+					'roles'   => $roles,
+					'groups'  => 'Eje 1',
+					'min'     => '1',
+					'max'     => '20',
+				),
+				PeopleSpec::sanitize( array() )
+			);
+			$this->assertSame( '', $res['error'], $roles );
+			$this->assertSame(
+				array(
+					array(
+						'key'         => 'r1',
+						'label'       => 'Coordinación',
+						'needs_group' => false,
+					),
+					array(
+						'key'         => 'r2',
+						'label'       => 'Participante',
+						'needs_group' => true,
+					),
+				),
+				$res['spec']['roles'],
+				$roles
+			);
+		}
+
+		$res = PeopleSpec::from_input(
+			array(
+				'enabled' => true,
+				'roles'   => "A ||\nB | grupo",
+				'groups'  => 'Eje 1',
+			),
+			PeopleSpec::sanitize( array() )
+		);
+		$this->assertSame( array( 'A', 'B' ), array_column( $res['spec']['roles'], 'label' ) );
+		$this->assertSame( array( false, true ), array_column( $res['spec']['roles'], 'needs_group' ) );
+
+		// Una línea que solo lleva barras o la marca no es un papel.
+		$res = PeopleSpec::from_input(
+			array(
+				'enabled' => true,
+				'roles'   => "||\n| grupo\nB | grupo",
+				'groups'  => 'Eje 1',
+			),
+			PeopleSpec::sanitize( array() )
+		);
+		$this->assertSame( array( 'B' ), array_column( $res['spec']['roles'], 'label' ) );
+		$this->assertSame( array( true ), array_column( $res['spec']['roles'], 'needs_group' ) );
+	}
+
+	/**
 	 * Renombrar un papel o un grupo conserva su clave; uno nuevo no hereda la
 	 * de uno borrado.
 	 */

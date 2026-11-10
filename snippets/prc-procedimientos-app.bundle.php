@@ -2862,19 +2862,19 @@ final class PeopleSpec {
 			if ( $marca ) {
 				array_pop( $partes );
 			}
-			$rotulo   = implode( ' | ', $partes );
+
+
+			$rotulo   = trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) );
 			$lineas[] = $rotulo;
-			$marcas[] = $marca;
+			if ( '' !== $rotulo ) {
+				$marcas[] = $marca;
+			}
 		}
 		$out = array();
-		$i   = 0;
-		foreach ( QuestionGrid::match_rows( implode( "\n", $lineas ), $previous ) as $role ) {
 
-			while ( isset( $lineas[ $i ] ) && $lineas[ $i ] !== $role['label'] ) {
-				++$i;
-			}
+
+		foreach ( QuestionGrid::match_rows( implode( "\n", $lineas ), $previous ) as $i => $role ) {
 			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
-			++$i;
 		}
 		return $out;
 	}

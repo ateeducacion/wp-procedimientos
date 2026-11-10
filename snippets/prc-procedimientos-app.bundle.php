@@ -25741,6 +25741,61 @@ final class App {
 
 .prc-revision__form { min-width: 16rem; }
 
+/* La barra de la tabla de solicitudes: contadores por estado, que son atajos
+   de filtro; el filtro, un formulario GET; las páginas, enlaces (PLAN-0003,
+   PR 6). Todo funciona sin guion. */
+.prc-contadores { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.prc-contadores__enlace {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: var(--prc-t-tabla);
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo-accion);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.prc-contadores__enlace[aria-current] { font-weight: 700; border-color: var(--prc-c-azul); }
+.prc-contadores__cifra { font-weight: 700; }
+
+.prc-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--prc-c-fondo-barra);
+  border-radius: var(--prc-radio);
+}
+.prc-filtros__campo { display: flex; flex-direction: column; min-width: 10rem; max-width: 100%; }
+.prc-filtros__campo .prc-control { width: auto; }
+.prc-filtros__casilla { align-self: center; }
+.prc-filtros__acciones { display: flex; align-items: center; gap: 10px; }
+.prc-filtros__quitar { font-size: var(--prc-t-menudo); }
+
+.prc-bloque { margin: 0 0 10px; }
+.prc-bloque[open] > .prc-bloque__form {
+  margin-top: 8px;
+  padding: 12px;
+  max-width: 40rem;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-th--marca,
+.prc-celda--marca { width: 1%; text-align: center; }
+
+.prc-incompleta { margin: 4px 0 0; font-size: var(--prc-t-menudo); color: var(--prc-c-tabla); }
+.prc-incompleta__titulo { font-weight: 700; }
+.prc-incompleta__motivos { margin: 0; padding-left: 1.1em; }
+
+.prc-paginacion__lista { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
+.prc-paginacion__enlace,
+.prc-paginacion__actual,
+.prc-paginacion__hueco { display: inline-block; min-width: 2em; padding: 2px 8px; text-align: center; }
+.prc-paginacion__enlace { border: 1px solid var(--prc-c-linea); border-radius: var(--prc-radio); }
+.prc-paginacion__actual { font-weight: 700; border: 1px solid var(--prc-c-azul); border-radius: var(--prc-radio); }
+
 /* El diálogo de exportar (ADR-0039). Sin guion es un desplegable con el
    formulario dentro; con guion, `prc-app.js` mete el formulario en un
    `.prc-dialogo` y estas reglas valen igual en los dos sitios. */
@@ -28706,6 +28761,36 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 			window.setTimeout( function () {
 				cerrarDialogo( dialogo );
 			}, 0 );
+		}
+	} );
+
+	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
+
+	/*
+	 * `data-prc-bulk-page` es la casilla «Marcar las de esta página» y
+	 * `data-prc-bulk-row`, la de cada fila, que apunta al formulario del bloque
+	 * con el atributo `form`. Sin guion, la casilla de la página es un campo que
+	 * lee el servidor y revisa la página entera. Con guion, además, marca y
+	 * desmarca las de las filas, y se desmarca sola en cuanto falta alguna: así
+	 * lo que se ve marcado es lo que se envía.
+	 */
+	document.addEventListener( \'change\', function ( e ) {
+		var casilla = e.target;
+		if ( ! casilla || ! casilla.hasAttribute ) {
+			return;
+		}
+		var filas = document.querySelectorAll( \'[data-prc-bulk-row]\' );
+		if ( casilla.hasAttribute( \'data-prc-bulk-page\' ) ) {
+			Array.prototype.forEach.call( filas, function ( fila ) {
+				fila.checked = casilla.checked;
+			} );
+		} else if ( casilla.hasAttribute( \'data-prc-bulk-row\' ) ) {
+			var pagina = document.querySelector( \'[data-prc-bulk-page]\' );
+			if ( pagina ) {
+				pagina.checked = filas.length > 0 && Array.prototype.every.call( filas, function ( fila ) {
+					return fila.checked;
+				} );
+			}
 		}
 	} );
 }() );

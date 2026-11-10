@@ -414,4 +414,34 @@
 			}, 0 );
 		}
 	} );
+
+	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
+
+	/*
+	 * `data-prc-bulk-page` es la casilla «Marcar las de esta página» y
+	 * `data-prc-bulk-row`, la de cada fila, que apunta al formulario del bloque
+	 * con el atributo `form`. Sin guion, la casilla de la página es un campo que
+	 * lee el servidor y revisa la página entera. Con guion, además, marca y
+	 * desmarca las de las filas, y se desmarca sola en cuanto falta alguna: así
+	 * lo que se ve marcado es lo que se envía.
+	 */
+	document.addEventListener( 'change', function ( e ) {
+		var casilla = e.target;
+		if ( ! casilla || ! casilla.hasAttribute ) {
+			return;
+		}
+		var filas = document.querySelectorAll( '[data-prc-bulk-row]' );
+		if ( casilla.hasAttribute( 'data-prc-bulk-page' ) ) {
+			Array.prototype.forEach.call( filas, function ( fila ) {
+				fila.checked = casilla.checked;
+			} );
+		} else if ( casilla.hasAttribute( 'data-prc-bulk-row' ) ) {
+			var pagina = document.querySelector( '[data-prc-bulk-page]' );
+			if ( pagina ) {
+				pagina.checked = filas.length > 0 && Array.prototype.every.call( filas, function ( fila ) {
+					return fila.checked;
+				} );
+			}
+		}
+	} );
 }() );

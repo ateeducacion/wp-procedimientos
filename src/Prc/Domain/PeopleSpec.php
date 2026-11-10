@@ -191,19 +191,19 @@ final class PeopleSpec {
 			if ( $marca ) {
 				array_pop( $partes );
 			}
-			$rotulo   = implode( ' | ', $partes );
+			// Sin trozos vacíos: «Coordinación |» o «A ||» se quedan en su
+			// rótulo, y una línea que solo lleva barras no es un papel.
+			$rotulo   = trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) );
 			$lineas[] = $rotulo;
-			$marcas[] = $marca;
+			if ( '' !== $rotulo ) {
+				$marcas[] = $marca;
+			}
 		}
 		$out = array();
-		$i   = 0;
-		foreach ( QuestionGrid::match_rows( implode( "\n", $lineas ), $previous ) as $role ) {
-			// match_rows() se salta las líneas vacías: se avanza hasta la suya.
-			while ( isset( $lineas[ $i ] ) && $lineas[ $i ] !== $role['label'] ) {
-				++$i;
-			}
+		// match_rows() devuelve una fila por línea no vacía y en su orden:
+		// la marca se empareja por posición, no buscando el rótulo.
+		foreach ( QuestionGrid::match_rows( implode( "\n", $lineas ), $previous ) as $i => $role ) {
 			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
-			++$i;
 		}
 		return $out;
 	}

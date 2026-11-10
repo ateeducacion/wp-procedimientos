@@ -227,6 +227,87 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// --- 5. Duplicar, desde una fila de «Gestión» -----------------------------
+	//
+	// El mismo HTML que pinta `WorkspaceView::duplicate()`: un botón de icono
+	// dentro de una celda, con el nonce sin `id` y el procedimiento oculto.
+	{
+		const DUPLICAR = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<table><tbody><tr><td class="prc-celda-accion" data-rotulo="Duplicar">
+<form class="prc-acciones" method="post" action="/enviado"
+      data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes."
+      data-prc-confirm-ok="Duplicar">
+  <input type="hidden" name="prc_nonce_duplicate_0" value="abc123" />
+  <input type="hidden" name="prc_do" value="duplicate" />
+  <input type="hidden" name="prc_procedure" value="42" />
+  <button id="dup" type="submit" class="prc-accion" title="Duplicar este procedimiento">
+    <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+    <span class="screen-reader-text">Duplicar este procedimiento</span>
+  </button>
+</form>
+</td></tr></tbody></table>
+</body>`;
+		const abrirDuplicar = async ( contexto, conSwal ) => {
+			const page = await contexto.newPage();
+			const envio = { cuerpo: null };
+			await page.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				if ( url.includes( '/enviado' ) ) {
+					envio.cuerpo = decodeURIComponent( ( route.request().postData() || '' ).replace( /\+/g, ' ' ) );
+				}
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						'<style>' + CSS + '</style>' + DUPLICAR + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
+				} );
+			} );
+			await page.goto( 'https://prc.test/gestion' );
+			return { page, envio };
+		};
+		const lleva = ( cuerpo ) => /prc_do=duplicate/.test( cuerpo ) && /prc_procedure=42/.test( cuerpo ) && /prc_nonce_duplicate_0=abc123/.test( cuerpo );
+
+		// Sin JavaScript: el botón envía y la acción se hace.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		let { page, envio } = await abrirDuplicar( sinJs, true );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#dup' ) ] );
+		ok( lleva( envio.cuerpo ), 'duplicar sin JavaScript envía la operación, el procedimiento y el nonce: ' + envio.cuerpo );
+		await sinJs.close();
+
+		// Con el confirm() del navegador.
+		( { page, envio } = await abrirDuplicar( ctx, false ) );
+		let pregunta = null;
+		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.dismiss(); } );
+		await page.click( '#dup' );
+		await page.waitForTimeout( 300 );
+		ok( null !== pregunta && pregunta.startsWith( '¿Duplicar «Red de ejemplo»?' ), 'duplicar sin SweetAlert pregunta con confirm(): ' + JSON.stringify( pregunta ) );
+		ok( null === envio.cuerpo, 'al cancelar no se duplica' );
+		page.removeAllListeners( 'dialog' );
+		page.on( 'dialog', ( d ) => d.accept() );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#dup' ) ] );
+		ok( lleva( envio.cuerpo ), 'al aceptar el confirm() se duplica' );
+		await page.close();
+
+		// Con SweetAlert2.
+		( { page, envio } = await abrirDuplicar( ctx, true ) );
+		page.on( 'dialog', async ( d ) => { ok( false, 'no debería salir el confirm() del navegador' ); await d.dismiss(); } );
+		await page.click( '#dup' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		const titular = ( await page.textContent( '.swal2-title' ) ).trim();
+		ok( '¿Duplicar «Red de ejemplo»?' === titular, 'titular: ' + titular );
+		const verbo = ( await page.textContent( '.swal2-confirm' ) ).trim();
+		ok( 'Duplicar' === verbo, 'el botón del diálogo dice el verbo: ' + verbo );
+		await page.keyboard.press( 'Escape' );
+		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
+		ok( null === envio.cuerpo, 'Escape no duplica' );
+		await page.click( '#dup' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
+		ok( lleva( envio.cuerpo ), 'confirmar duplica' );
+		await page.close();
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

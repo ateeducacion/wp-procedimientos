@@ -305,6 +305,21 @@ final class ProcedureInput {
 	}
 
 	/**
+	 * The ownerships a stored procedure is really for: none stored is all.
+	 *
+	 * Uno de antes sin titularidad guardada se dirige a todos —es lo que hace
+	 * `ProcedureAccess::can_apply()`—, y así lo enseña y lo vuelve a guardar
+	 * el taller. Uno **nuevo** no pasa por aquí: empieza sin ninguna.
+	 *
+	 * @param mixed $stored Stored value of `prc_ownership`.
+	 * @return string[]
+	 */
+	public static function stored_ownership( $stored ): array {
+		$titular = self::ownership( $stored );
+		return array() === $titular ? array_keys( ProcedureMetaKeys::ownerships() ) : $titular;
+	}
+
+	/**
 	 * Keep only the centre kinds of the closed list, in list order.
 	 *
 	 * @param mixed $raw Raw value: an array or a comma-separated string.

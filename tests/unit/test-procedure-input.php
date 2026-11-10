@@ -333,4 +333,13 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$this->assertSame( 'Revise el título, los ámbitos convocantes y el curso.', ProcedureInput::why( array( 'title', 'areas', 'course', 'title' ) ) );
 		$this->assertSame( 'No se ha podido guardar el procedimiento.', ProcedureInput::why( array( 'inventado' ) ) );
 	}
+
+	/**
+	 * Uno de antes sin titularidad guardada se dirige a todos; uno con ella, a la suya.
+	 */
+	public function test_a_stored_procedure_without_ownership_is_for_everybody() {
+		$this->assertSame( array( 'public', 'private' ), ProcedureInput::stored_ownership( '' ) );
+		$this->assertSame( array( 'public', 'private' ), ProcedureInput::stored_ownership( array( 'otra' ) ) );
+		$this->assertSame( array( 'private' ), ProcedureInput::stored_ownership( array( 'private' ) ) );
+	}
 }

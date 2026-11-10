@@ -1594,21 +1594,21 @@ final class ProcedureEditor {
 		foreach ( ProcedureState::groups() as $grupo ) {
 			$m['groups'][ $grupo ] = true === $m['can_edit'] && ProcedureAccess::can_edit_group( $user_id, $procedure_id, $grupo );
 		}
-		$m['state_notice']  = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
-		$m['status']        = (string) $procedimiento->post_status;
-		$m['status_label']  = self::status_label( (string) $procedimiento->post_status );
-		$m['area_names']    = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
+		$m['state_notice']   = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
+		$m['status']         = (string) $procedimiento->post_status;
+		$m['status_label']   = self::status_label( (string) $procedimiento->post_status );
+		$m['area_names']     = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
 		$m['audience_label'] = ProcedureChrome::audience_label( (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ), (array) get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) );
-		$foreign_ids        = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
-		$all_labels         = ProcedureTaxonomies::area_options( 0, true );
-		$m['foreign_areas'] = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-		$m['view_url']      = (string) get_permalink( $procedimiento );
-		$m['values']        = self::values( $procedure_id );
-		$m['terms']         = self::term_lists( $user_id );
-		$m['questions']     = Applications::questions( $procedure_id );
-		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']       = ObserveSettings::model( $procedure_id );
+		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
+		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
+		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
+		$m['view_url']       = (string) get_permalink( $procedimiento );
+		$m['values']         = self::values( $procedure_id );
+		$m['terms']          = self::term_lists( $user_id );
+		$m['questions']      = Applications::questions( $procedure_id );
+		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']        = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de

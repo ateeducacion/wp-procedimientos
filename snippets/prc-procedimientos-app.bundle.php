@@ -6465,9 +6465,11 @@ final class ProcedureAccess {
 
 
 
+
 	public static function can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool {
 		$areas = null;
-		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
+
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'trash' === get_post_status( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
 			return false;
 		}
 		$suyos = self::post_areas( $post_id );

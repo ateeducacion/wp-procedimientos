@@ -602,7 +602,8 @@ final class ProcedureAccess {
 	/**
 	 * Whether the user may duplicate this procedure, and under which ámbitos (PR 8 del PLAN-0003).
 	 *
-	 * Quien lo abre en el taller y puede crear procedimientos: duplicar es
+	 * Quien lo abre en el taller y puede crear procedimientos —quien solo
+	 * consulta, no—, y nunca desde la papelera: duplicar es
 	 * leer el original y dar de alta otro. Por eso vale en cualquier estado,
 	 * histórico incluido —el original no se toca—, y quien no tiene ámbito no
 	 * duplica, igual que no crea.
@@ -618,7 +619,8 @@ final class ProcedureAccess {
 	 */
 	public static function can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool {
 		$areas = null;
-		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
+		// En la papelera no: primero se restaura, y luego se duplica.
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'trash' === get_post_status( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
 			return false;
 		}
 		$suyos = self::post_areas( $post_id );

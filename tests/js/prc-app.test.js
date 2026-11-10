@@ -569,6 +569,27 @@ describe( 'the export dialog', () => {
 		expect( Array.from( columnas ).map( ( c ) => c.checked ) ).toEqual( [ true, true ] );
 	} );
 
+	it( 'leaves the catalogue columns out of «Todas las columnas»', async () => {
+		// Isla, zona… no son del CSV de siempre: «Todas» no las marca, y
+		// marcarlas no cambia «Todas» (ADR-0042).
+		document.body.innerHTML = EXPORT.replace(
+			'<input type="checkbox" name="c[]" value="q1" data-prc-export-col checked>',
+			'<input type="checkbox" name="c[]" value="q1" data-prc-export-col checked><input type="checkbox" name="c[]" value="island" data-prc-export-extra>'
+		);
+		await load();
+		const todas = document.querySelector( '[data-prc-export-all]' );
+		const isla = document.querySelector( '[value="island"]' );
+
+		change( todas, false );
+		change( todas, true );
+		expect( isla.checked ).toBe( false );
+
+		change( isla, true );
+		expect( todas.checked ).toBe( true );
+		change( todas, false );
+		expect( isla.checked ).toBe( true );
+	} );
+
 	it( 'closes the dialog once the download has been sent', async () => {
 		vi.useFakeTimers();
 		document.body.innerHTML = EXPORT;

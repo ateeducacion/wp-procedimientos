@@ -75,5 +75,5 @@ versión global del aplicativo.
 | [ADR-0030](ADR-0030-editor-y-ambitos-jerarquicos.md) | Editor y ámbitos organizativos jerárquicos | Propuesta | 2026-09-20 |
 | [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md) | Quien coordina una agrupación de escuelas rurales solicita por su centro o por la agrupación | Propuesta | 2026-10-14 |
 | [ADR-0032](ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md) | El ámbito de la persona se guarda por sitio | Propuesta | 2026-11-17 |
+| [ADR-0033](ADR-0033-los-documentos-pueden-tener-un-plazo-de-entrega-propio.md) | Los documentos pueden tener un plazo de entrega propio | Propuesta | 2026-11-06 |
 | [ADR-0046](ADR-0046-el-bundle-protege-cada-declaracion-de-clase.md) | El bundle protege cada declaración de clase | Propuesta | 2026-11-06 |
-

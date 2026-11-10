@@ -1195,4 +1195,23 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertTrue( shortcode_exists( ProcedureEditor::SHORTCODE ) );
 		$this->assertSame( 20, has_action( 'init', array( ProcedureEditor::class, 'handle' ) ) );
 	}
+	/** The editor persists complete delivery windows and rejects malformed dates without replacing them. */
+	public function test_the_editor_saves_and_validates_delivery_dates() {
+		list( , $uid, $procedure ) = $this->mio();
+		$q                         = ProcedureEditor::FIELD_Q;
+		$fields                    = array(
+			$q . 'label'     => array( 'Memoria' ),
+			$q . 'type'      => array( 'file' ),
+			$q . 'delivery'  => array( '1' ),
+			$q . 'opens_at'  => array( '2027-06-01' ),
+			$q . 'closes_at' => array( '2027-06-30' ),
+		);
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
+		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertTrue( $before[0]['delivery'] );
+		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
+		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
 }

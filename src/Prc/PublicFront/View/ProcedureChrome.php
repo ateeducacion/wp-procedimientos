@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\DateRange;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
 
@@ -127,6 +128,17 @@ final class ProcedureChrome {
 			echo self::access( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escapado dentro.
 			?>
 
+			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
+				<section class="prc-seccion" aria-labelledby="prc-delivery-dates">
+					<h2 id="prc-delivery-dates">Entregas de documentación</h2>
+					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Mi centro», dentro de cada plazo.</p>
+					<ul>
+						<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+							<li><strong><?php echo esc_html( (string) $delivery['label'] ); ?></strong>: <?php echo esc_html( DateRange::of( (string) $delivery['opens_at'], (string) $delivery['closes_at'] ) ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</section>
+			<?php endif; ?>
 			<hr class="prc-filete" />
 			<div class="prc-ficha-pie">
 				<p class="prc-ficha-meta">

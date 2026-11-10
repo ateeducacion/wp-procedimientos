@@ -258,4 +258,58 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 		$this->assertSame( 'B', ProcedureQuestions::as_text( array( 'type' => 'single' ), 'B' ) );
 		$this->assertSame( '', ProcedureQuestions::as_text( array( 'type' => 'text' ), null ) );
 	}
+	/** Independent deliveries have inclusive calendar dates and never become application questions. */
+	public function test_delivery_windows_are_inclusive_and_separate_from_the_application() {
+		$questions = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'     => 'Memoria',
+					'type'      => 'file',
+					'delivery'  => true,
+					'opens_at'  => '2026-11-01',
+					'closes_at' => '2026-11-06',
+				),
+				array(
+					'label'    => 'Autorización',
+					'type'     => 'file',
+					'required' => true,
+				),
+			)
+		);
+		$this->assertTrue( ProcedureQuestions::delivery_is_open( $questions[0], '2026-11-01' ) );
+		$this->assertTrue( ProcedureQuestions::delivery_is_open( $questions[0], '2026-11-06' ) );
+		$this->assertFalse( ProcedureQuestions::delivery_is_open( $questions[0], '2026-10-31' ) );
+		$this->assertFalse( ProcedureQuestions::delivery_is_open( $questions[0], '2026-11-07' ) );
+		$this->assertSame( array( $questions[1] ), ProcedureQuestions::application_questions( $questions ) );
+	}
+
+	/** Invalid schedules fail closed and never turn into ordinary required uploads. */
+	public function test_invalid_delivery_dates_never_open_a_delivery() {
+		foreach ( array( array( '', '' ), array( '2026-02-30', '2026-03-01' ), array( '2026-12-01', '2026-11-01' ), array( array(), '2026-11-06' ) ) as $range ) {
+			$questions = ProcedureQuestions::sanitize(
+				array(
+					array(
+						'label'     => 'Memoria',
+						'type'      => 'file',
+						'delivery'  => true,
+						'opens_at'  => $range[0],
+						'closes_at' => $range[1],
+					),
+				)
+			);
+			$this->assertFalse( ProcedureQuestions::valid_delivery( $questions[0] ) );
+			$this->assertFalse( ProcedureQuestions::delivery_is_open( $questions[0], '2026-11-06' ) );
+			$this->assertSame( array(), ProcedureQuestions::application_questions( $questions ) );
+		}
+		$questions = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'    => 'Texto',
+					'type'     => 'text',
+					'delivery' => true,
+				),
+			)
+		);
+		$this->assertFalse( ProcedureQuestions::is_delivery( $questions[0] ) );
+	}
 }

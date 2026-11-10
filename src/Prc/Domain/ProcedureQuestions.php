@@ -51,7 +51,8 @@ final class ProcedureQuestions {
 	 * Añadido por la ADR-0028, que también decide dónde vive el fichero: en el
 	 * almacén privado del aplicativo y **no** como adjunto de WordPress. La
 	 * raya de la ADR-0019 sigue donde estaba: un `file` tiene rótulo,
-	 * indicaciones, tipo y si es obligatorio, **y nada más**. Ni tamaño, ni
+	 * indicaciones, tipo y si es obligatorio. La ADR-0033 añade un plazo propio
+	 * opcional para entregas independientes. Ni tamaño, ni
 	 * tipos, ni varios ficheros por pregunta: eso es del aplicativo entero y
 	 * vive en {@see \Prc\PublicFront\ApplicationFiles}.
 	 */
@@ -152,13 +153,71 @@ final class ProcedureQuestions {
 		}
 		$key = isset( $raw['key'] ) && is_scalar( $raw['key'] ) ? strtolower( trim( (string) $raw['key'] ) ) : '';
 
-		return array(
+		$question = array(
 			'key'      => self::is_key( $key ) ? $key : '',
 			'label'    => self::text( $raw, 'label' ),
 			'help'     => self::text( $raw, 'help' ),
 			'type'     => $type,
 			'required' => ! empty( $raw['required'] ),
 			'choices'  => self::has_choices( $type ) ? self::choices( $raw['choices'] ?? array() ) : array(),
+		);
+		if ( self::TYPE_FILE === $type && ! empty( $raw['delivery'] ) ) {
+			$question['delivery']  = true;
+			$question['opens_at']  = self::text( $raw, 'opens_at' );
+			$question['closes_at'] = self::text( $raw, 'closes_at' );
+		}
+		return $question;
+	}
+
+	/**
+	 * Whether a file question is a delivery separate from the application.
+	 *
+	 * @param array<string, mixed> $question Question.
+	 * @return bool
+	 */
+	public static function is_delivery( array $question ): bool {
+		return self::TYPE_FILE === ( $question['type'] ?? '' ) && ! empty( $question['delivery'] );
+	}
+
+	/**
+	 * Whether a delivery has a complete, ordered range of real calendar days.
+	 *
+	 * @param array<string, mixed> $question Question.
+	 * @return bool
+	 */
+	public static function valid_delivery( array $question ): bool {
+		$opens  = self::text( $question, 'opens_at' );
+		$closes = self::text( $question, 'closes_at' );
+		return self::is_delivery( $question ) && ProcedureInput::is_valid_date( $opens )
+			&& ProcedureInput::is_valid_date( $closes ) && $opens <= $closes;
+	}
+
+	/**
+	 * Whether a delivery accepts a document on this day, inclusive.
+	 *
+	 * @param array<string, mixed> $question Question.
+	 * @param string               $today Site calendar day, Y-m-d.
+	 * @return bool
+	 */
+	public static function delivery_is_open( array $question, string $today ): bool {
+		return self::valid_delivery( $question ) && ProcedureInput::is_valid_date( $today )
+			&& $question['opens_at'] <= $today && $today <= $question['closes_at'];
+	}
+
+	/**
+	 * Questions belonging to the application, excluding independent deliveries.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function application_questions( array $questions ): array {
+		return array_values(
+			array_filter(
+				$questions,
+				static function ( array $question ): bool {
+					return ! self::is_delivery( $question );
+				}
+			)
 		);
 	}
 

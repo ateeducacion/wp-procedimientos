@@ -95,7 +95,46 @@ final class ApplyFormView {
 			echo Shell::notice( 'aviso', (string) $m['why'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::summary( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
+		self::deliveries( $m );
 		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+	/**
+	 * Paint independent document deliveries, including their saved download.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return void
+	 */
+	private static function deliveries( array $m ): void {
+		foreach ( (array) ( $m['deliveries'] ?? array() ) as $question ) {
+			$key   = (string) $question['key'];
+			$dates = DateRange::of( (string) $question['opens_at'], (string) $question['closes_at'] );
+			?>
+			<section class="prc-seccion">
+				<h3 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h3>
+				<p><?php echo esc_html( '' !== $dates ? 'Plazo de entrega: ' . lcfirst( $dates ) . '.' : 'Plazo de entrega pendiente de configurar.' ); ?></p>
+				<p>Documento presentado: <?php echo wp_kses_post( self::attached( (array) $m['application'], $key ) ); ?></p>
+				<?php if ( ! empty( $question['can_submit'] ) ) : ?>
+					<form class="prc-form" method="post" action="<?php echo esc_url( ApplyForm::url_for_code( (int) $m['procedure_id'], (string) $m['centre']['code'] ) ); ?>" enctype="multipart/form-data">
+						<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_DELIVER ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $m['procedure_id'] ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $m['centre']['code'] ); ?>" />
+						<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_DELIVERY ); ?>" value="<?php echo esc_attr( $key ); ?>" />
+						<?php
+						$question['required'] = true;
+						// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- question() escapa cada valor según su contexto.
+						echo self::question( $question, array() );
+						?>
+						<p>Si ya entregó un documento, esta entrega lo sustituirá. La solicitud y su revisión se conservan.</p>
+						<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>">Entregar documento</button>
+					</form>
+				<?php else : ?>
+					<p>No se admiten entregas: hace falta una solicitud de su centro no excluida, un plazo abierto y un procedimiento publicado sin archivar.</p>
+				<?php endif; ?>
+			</section>
+			<?php
+		}
 	}
 
 	/**

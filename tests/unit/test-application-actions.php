@@ -611,6 +611,27 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * «Retiradas» dice de dónde viene cada una, y una retirada no se revisa.
+	 */
+	public function test_withdrawn_ones_say_where_from_and_are_not_reviewed() {
+		$c    = $this->caso();
+		$sur  = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$otra = $this->application( $c['procedure'], $this->school_head( 'C0003' ), 'C0003' );
+		ApplicationOperations::withdraw( $c['application'], $c['head'], ApplicationOperations::BY_APPLICANT );
+		ApplicationOperations::withdraw( $sur, $c['reviewer'], ApplicationOperations::BY_REVIEWER, 'Por error.' );
+		$this->acting_as( $this->administrator() );
+		wp_trash_post( $otra );
+		$html = $this->panel( $c['reviewer'], $c['procedure'], array( ApplicationActionsPanel::ARG_WITHDRAWN => '1' ) );
+		foreach ( array( 'Quien la presentó', 'Quien revisa', 'Desde el escritorio' ) as $origen ) {
+			$this->assertStringContainsString( '>' . $origen . '<', $html );
+		}
+
+		$this->assertNull( $this->taller( $c['reviewer'], ProcedureEditor::OP_REVIEW, $c['procedure'], $sur, array( ProcedureEditor::FIELD_STATE => ApplicationMetaKeys::REVIEW_ADMITTED ) ) );
+		$this->assertStringContainsString( 'retirada', $this->rechazo_taller() );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $sur, ApplicationMetaKeys::REVIEW_STATE, true ) );
+	}
+
+	/**
 	 * Restaurar la devuelve como estaba; con otra ya presentada, no.
 	 */
 	public function test_restoring_needs_the_school_to_have_no_other_application() {

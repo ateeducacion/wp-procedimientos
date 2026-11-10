@@ -1195,6 +1195,11 @@ final class ProcedureEditor {
 			self::$rejected = 'Esa solicitud no es de este procedimiento.';
 			return;
 		}
+		// Una retirada no se revisa: primero se restaura (PLAN-0003, PR 9).
+		if ( 'publish' !== get_post_status( $row_id ) ) {
+			self::$rejected = 'Esa solicitud está retirada: restáurela antes de revisarla.';
+			return;
+		}
 		$res = Applications::review( $row_id, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );
 		if ( ! $res['ok'] ) {
 			$textos         = array(

@@ -16345,6 +16345,15 @@ final class ApplicationActionsPanel {
 
 
 
+	private const ORIGINS = array(
+		ApplicationOperations::BY_APPLICANT => 'Quien la presentó',
+		ApplicationOperations::BY_REVIEWER  => 'Quien revisa',
+		ApplicationOperations::BY_DESK      => 'Desde el escritorio',
+	);
+
+
+
+
 
 
 	private static $posted = array();
@@ -16608,7 +16617,7 @@ final class ApplicationActionsPanel {
 				'id'      => $id,
 				'who'     => '' !== $codigo ? trim( ( '' !== $nombre ? $nombre : '(centro fuera del catálogo)' ) . ' (' . $codigo . ')' ) : ( false !== $autor ? (string) $autor->display_name : '' ),
 				'when'    => '' !== (string) ( $ultima['at'] ?? '' ) ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( (string) $ultima['at'] ) ) : (string) get_the_modified_date( 'd-m-Y H:i', $post ),
-				'by'      => ApplicationOperations::BY_APPLICANT === ( $ultima['data']['by'] ?? '' ) ? 'El centro' : 'Quien revisa',
+				'by'      => self::ORIGINS[ (string) ( $ultima['data']['by'] ?? '' ) ] ?? self::ORIGINS[ ApplicationOperations::BY_DESK ],
 				'reason'  => (string) ( $ultima['data']['reason'] ?? '' ),
 				'can'     => '' === $porque,
 				'why'     => $porque,
@@ -23415,6 +23424,11 @@ final class ProcedureEditor {
 	private static function review( int $procedure_id, int $row_id ): void {
 		if ( (int) get_post_field( 'post_parent', $row_id ) !== $procedure_id ) {
 			self::$rejected = 'Esa solicitud no es de este procedimiento.';
+			return;
+		}
+
+		if ( 'publish' !== get_post_status( $row_id ) ) {
+			self::$rejected = 'Esa solicitud está retirada: restáurela antes de revisarla.';
 			return;
 		}
 		$res = Applications::review( $row_id, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );

@@ -2838,9 +2838,11 @@ final class PeopleSpec {
 			)
 		);
 		$error    = self::input_error( $raw, $spec, count( $roles ), count( $groups ) );
+
+
 		return array(
 			'spec'  => $spec,
-			'error' => $spec['enabled'] || '' === $error ? $error : '',
+			'error' => $error,
 		);
 	}
 
@@ -2891,7 +2893,7 @@ final class PeopleSpec {
 		$checks = array(
 			'Caben como mucho ' . self::MAX_ROLES . ' papeles.' => $roles > self::MAX_ROLES,
 			'Caben como mucho ' . self::MAX_GROUPS . ' grupos.' => $groups > self::MAX_GROUPS,
-			'Escriba al menos un papel, uno por línea.' => array() === $spec['roles'],
+			'Escriba al menos un papel, uno por línea.' => $spec['enabled'] && array() === $spec['roles'],
 			'Un papel exige grupo, pero no hay grupos: escriba los grupos o quite «| grupo».' => array() === $spec['groups'] && in_array( true, array_column( $spec['roles'], 'needs_group' ), true ),
 			'El mínimo y el máximo de personas tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
 			'El máximo de personas no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,

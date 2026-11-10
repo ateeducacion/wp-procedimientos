@@ -300,9 +300,10 @@
 	/*
 	 * `data-prc-export` en un `<details>` con el formulario dentro: sin guion
 	 * se despliega y se envía igual, y «Todas las columnas» es un campo que
-	 * lee el servidor. Con guion, el formulario pasa a un `<dialog>` modal que
-	 * abre el mismo botón; «Todas» marca y desmarca las casillas, y solo se
-	 * ve lo del formato elegido. Nada se desactiva: lo escondido viaja igual y
+	 * lee el servidor. Con guion, el formulario pasa a un `<dialog>` modal y
+	 * el `<summary>` se cambia por un `<button>` con `aria-haspopup="dialog"`:
+	 * un desplegable que abre un diálogo se anunciaría como lo que no es.
+	 * «Todas» marca y desmarca las casillas, y solo se ve lo del formato elegido. Nada se desactiva: lo escondido viaja igual y
 	 * el servidor recuerda la elección entera (ADR-0039).
 	 */
 	function abrirDialogo( dialogo ) {
@@ -330,7 +331,8 @@
 
 	function prepararExportar( caja ) {
 		var form = caja.querySelector( 'form' );
-		if ( ! form || caja.dataset.prcDialog ) {
+		var resumen = caja.querySelector( 'summary' );
+		if ( ! form || ! resumen || caja.dataset.prcDialog ) {
 			return;
 		}
 		var dialogo = document.createElement( 'dialog' );
@@ -348,9 +350,19 @@
 		var acciones = form.querySelector( '.prc-acciones' ) || form;
 		acciones.appendChild( cancelar );
 
+		var abrir = document.createElement( 'button' );
+		abrir.type = 'button';
+		abrir.className = resumen.className;
+		abrir.textContent = resumen.textContent;
+		abrir.setAttribute( 'aria-haspopup', 'dialog' );
+		abrir.setAttribute( 'aria-controls', dialogo.id );
+		abrir.setAttribute( 'data-prc-export-open', dialogo.id );
+
 		dialogo.appendChild( form );
+		caja.parentNode.insertBefore( abrir, caja );
 		caja.parentNode.insertBefore( dialogo, caja.nextSibling );
 		caja.open = false;
+		caja.hidden = true;
 		caja.dataset.prcDialog = dialogo.id;
 		formatoElegido( form );
 	}
@@ -360,10 +372,9 @@
 	} );
 
 	document.addEventListener( 'click', function ( e ) {
-		var resumen = e.target.closest ? e.target.closest( '[data-prc-export] > summary' ) : null;
-		var dialogo = resumen ? document.getElementById( resumen.parentNode.dataset.prcDialog || '' ) : null;
+		var abrir = e.target.closest ? e.target.closest( '[data-prc-export-open]' ) : null;
+		var dialogo = abrir ? document.getElementById( abrir.getAttribute( 'data-prc-export-open' ) ) : null;
 		if ( dialogo ) {
-			e.preventDefault();
 			abrirDialogo( dialogo );
 			return;
 		}

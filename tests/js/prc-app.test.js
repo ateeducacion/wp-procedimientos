@@ -465,7 +465,7 @@ describe( 'the export dialog', () => {
 	const EXPORT = `
 		<div class="banda">
 			<details class="prc-exportar" data-prc-export open>
-				<summary>Exportar…</summary>
+				<summary class="prc-btn btn">Exportar…</summary>
 				<form class="prc-exportar__form" aria-labelledby="t">
 					<h2 id="t">Exportar las solicitudes</h2>
 					<input type="radio" name="f" value="csv" data-prc-export-format checked>
@@ -494,25 +494,31 @@ describe( 'the export dialog', () => {
 		input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 	}
 
-	it( 'moves the form into a modal dialog that the same button opens', async () => {
+	it( 'moves the form into a modal dialog opened by a button that says so', async () => {
 		document.body.innerHTML = EXPORT;
 		await load();
 		const caja = document.querySelector( '[data-prc-export]' );
 		const dialogo = document.querySelector( 'dialog.prc-dialogo--exportar' );
+		const boton = document.querySelector( '[data-prc-export-open]' );
 
 		expect( dialogo ).not.toBeNull();
 		expect( dialogo.querySelector( 'form.prc-exportar__form' ) ).not.toBeNull();
 		expect( caja.querySelector( 'form' ) ).toBeNull();
-		expect( caja.open ).toBe( false );
+		expect( caja.hidden ).toBe( true );
 		expect( dialogo.getAttribute( 'aria-labelledby' ) ).toBe( 't' );
 
-		dialogo.showModal = vi.fn( () => dialogo.setAttribute( 'open', '' ) );
-		const click = new MouseEvent( 'click', { bubbles: true, cancelable: true } );
-		caja.querySelector( 'summary' ).dispatchEvent( click );
+		// Un lector de pantalla oye «botón, abre un diálogo», no un desplegable.
+		expect( boton.tagName ).toBe( 'BUTTON' );
+		expect( boton.type ).toBe( 'button' );
+		expect( boton.getAttribute( 'aria-haspopup' ) ).toBe( 'dialog' );
+		expect( boton.getAttribute( 'aria-controls' ) ).toBe( dialogo.id );
+		expect( boton.textContent ).toBe( 'Exportar…' );
+		expect( boton.className ).toBe( 'prc-btn btn' );
 
-		expect( click.defaultPrevented ).toBe( true );
+		dialogo.showModal = vi.fn( () => dialogo.setAttribute( 'open', '' ) );
+		boton.click();
+
 		expect( dialogo.showModal ).toHaveBeenCalledTimes( 1 );
-		expect( caja.open ).toBe( false );
 	} );
 
 	it( 'falls back to the open attribute and closes with «Cancelar»', async () => {
@@ -522,7 +528,7 @@ describe( 'the export dialog', () => {
 		dialogo.showModal = undefined;
 		dialogo.close = undefined;
 
-		document.querySelector( '[data-prc-export] > summary' ).click();
+		document.querySelector( '[data-prc-export-open]' ).click();
 		expect( dialogo.hasAttribute( 'open' ) ).toBe( true );
 
 		dialogo.querySelector( '[data-prc-export-close]' ).click();
@@ -582,6 +588,8 @@ describe( 'the export dialog', () => {
 		document.body.innerHTML = '<details data-prc-export><summary>Nada</summary></details><input type="checkbox" id="x">';
 		await load();
 		expect( document.querySelector( 'dialog' ) ).toBeNull();
+		expect( document.querySelector( '[data-prc-export-open]' ) ).toBeNull();
+		expect( document.querySelector( '[data-prc-export]' ).hidden ).toBe( false );
 
 		const click = new MouseEvent( 'click', { bubbles: true, cancelable: true } );
 		document.querySelector( 'summary' ).dispatchEvent( click );

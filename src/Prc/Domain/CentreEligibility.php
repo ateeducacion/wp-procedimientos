@@ -69,7 +69,8 @@ final class CentreEligibility {
 	/**
 	 * Read a closed list of codes as typed: one per line, or separated by commas.
 	 *
-	 * Los espacios y los repetidos se van; lo que no tiene forma de código se
+	 * Los espacios y los repetidos se van, y los códigos pasan a mayúsculas:
+	 * la lista no distingue unas de otras. Lo que no tiene forma de código se
 	 * devuelve aparte, para decirlo en vez de perderlo.
 	 *
 	 * @param mixed $raw A text or a list.
@@ -85,7 +86,8 @@ final class CentreEligibility {
 				continue;
 			}
 			if ( self::is_code( $trozo ) ) {
-				$codes[ $trozo ] = true;
+				// Sin distinguir mayúsculas: se guarda como se compara.
+				$codes[ strtoupper( $trozo ) ] = true;
 			} else {
 				$malos[ $trozo ] = true;
 			}
@@ -190,22 +192,59 @@ final class CentreEligibility {
 	/**
 	 * Why a school may not apply to a procedure with those rules, in words.
 	 *
-	 * @param array<string, string[]> $rules  What {@see rules()} returned.
-	 * @param string                  $code   The code it applies with.
-	 * @param array<string, mixed>    $centre Its entry in the catalogue; empty when it is not there.
+	 * La lista cerrada se mira primero, sin distinguir mayúsculas. Si es el
+	 * único acotado, estar en ella basta, aunque el centro no esté en el
+	 * catálogo. Con cualquier otro, hace falta el catálogo para medirlo, salvo
+	 * un caso: con el catálogo **entero** vacío, la titularidad no se puede
+	 * comprobar con nada y no cierra, como antes de la ADR-0042.
+	 *
+	 * @param array<string, string[]> $rules     What {@see rules()} returned.
+	 * @param string                  $code      The code it applies with.
+	 * @param array<string, mixed>    $centre    Its entry in the catalogue; empty when it is not there.
+	 * @param bool                    $catalogue Whether the catalogue has any centre at all.
 	 * @return string Empty when it may.
 	 */
-	public static function why_not( array $rules, string $code, array $centre ): string {
+	public static function why_not( array $rules, string $code, array $centre, bool $catalogue = true ): string {
 		$rules = self::rules( $rules );
 		if ( ! self::restricted( $rules ) ) {
 			return '';
 		}
-		if ( array() !== $rules['codes'] && ! in_array( $code, $rules['codes'], true ) ) {
+		if ( array() !== $rules['codes'] && ! in_array( strtoupper( trim( $code ) ), $rules['codes'], true ) ) {
 			return 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.';
+		}
+		$resto = self::without_list( $rules, $catalogue );
+		if ( ! self::restricted( $resto ) ) {
+			return '';
 		}
 		if ( array() === $centre ) {
 			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos. Si cree que es un error, escriba a los correos de contacto del procedimiento.';
 		}
+		return self::why_not_attributes( $resto, $centre );
+	}
+
+	/**
+	 * The rules left to measure once the closed list is passed.
+	 *
+	 * @param array<string, string[]> $rules     Normalised rules.
+	 * @param bool                    $catalogue Whether the catalogue has any centre at all.
+	 * @return array<string, string[]>
+	 */
+	private static function without_list( array $rules, bool $catalogue ): array {
+		$rules['codes'] = array();
+		if ( ! $catalogue ) {
+			$rules['ownership'] = array();
+		}
+		return $rules;
+	}
+
+	/**
+	 * Ownership, type and island of a school of the catalogue against the rules.
+	 *
+	 * @param array<string, string[]> $rules  Normalised rules.
+	 * @param array<string, mixed>    $centre Its entry in the catalogue.
+	 * @return string Empty when it may.
+	 */
+	private static function why_not_attributes( array $rules, array $centre ): string {
 		$titular = $rules['ownership'];
 		if ( array() !== $titular && ! in_array( (string) ( $centre['ownership'] ?? '' ), $titular, true ) ) {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::ownerships(), array_flip( $titular ) ) );
@@ -218,6 +257,40 @@ final class CentreEligibility {
 			return 'Este procedimiento es solo para centros de ' . self::either( $rules['islands'] ) . '.';
 		}
 		return '';
+	}
+
+	/**
+	 * What the workshop has to warn about these rules today, in words.
+	 *
+	 * Dos cierres que no se ven desde el taller: un catálogo vacío, que deja
+	 * sin medir los acotados, y una sola titularidad sin ningún tipo de centro
+	 * marcado como privado en los ajustes, con la que todo centro es público.
+	 *
+	 * @param array<string, string[]> $rules         What {@see rules()} returned.
+	 * @param bool                    $empty_catalogue Whether the catalogue has no centre at all.
+	 * @param bool                    $no_private      Whether no centre type is marked as private.
+	 * @return array<string, string> `ownership` and `catalogue`, when there is something to say.
+	 */
+	public static function warnings( array $rules, bool $empty_catalogue, bool $no_private ): array {
+		$rules   = self::rules( $rules );
+		$out     = array();
+		$titular = $rules['ownership'];
+		if ( $no_private && 1 === count( $titular ) ) {
+			$out['ownership'] = ProcedureMetaKeys::OWNERSHIP_PUBLIC === $titular[0]
+				? 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy todos los centros cuentan como públicos, salvo los que el catálogo marque expresamente, así que este límite no deja fuera a casi nadie.'
+				: 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy ningún centro cuenta como privado, salvo los que el catálogo marque expresamente, así que nadie o casi nadie puede solicitar.';
+		}
+		if ( $empty_catalogue && self::restricted( $rules ) ) {
+			$resto = self::without_list( $rules, false );
+			if ( self::restricted( $resto ) ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: con los tipos o las islas que pide este procedimiento, ningún centro puede solicitar hasta que se cargue.';
+			} elseif ( array() !== $rules['codes'] ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: solo pueden solicitar los centros de la lista cerrada.';
+			} else {
+				$out['catalogue'] = 'El catálogo de centros está vacío, así que la titularidad no se puede comprobar: puede solicitar cualquier centro.';
+			}
+		}
+		return $out;
 	}
 
 	/**

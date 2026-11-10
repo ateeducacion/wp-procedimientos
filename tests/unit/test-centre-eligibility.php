@@ -123,6 +123,81 @@ class Test_Centre_Eligibility extends WP_UnitTestCase {
 		$lista = CentreEligibility::rules( array( 'codes' => array( 'C0001', 'X9999' ) ) );
 		$this->assertSame( '', CentreEligibility::why_not( $lista, 'C0001', $this->centro() ) );
 		$this->assertSame( 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.', CentreEligibility::why_not( $lista, 'C0002', $this->centro( array( 'code' => 'C0002' ) ) ) );
-		$this->assertStringContainsString( 'no está en el catálogo', CentreEligibility::why_not( $lista, 'X9999', array() ), 'en la lista pero fuera del catálogo, tampoco' );
+		$this->assertSame( '', CentreEligibility::why_not( $lista, 'X9999', array() ), 'la lista sola: en ella basta' );
+	}
+
+	/**
+	 * Con el catálogo entero vacío, la titularidad sola no cierra: no hay con
+	 * qué comprobarla y se hace lo de antes. Tipos e islas sí cierran.
+	 */
+	public function test_an_empty_catalogue_does_not_close_on_ownership_alone() {
+		$publico = CentreEligibility::rules( array( 'ownership' => array( 'public' ) ) );
+		$this->assertSame( '', CentreEligibility::why_not( $publico, 'X9999', array(), false ), 'catálogo vacío: como antes' );
+		$this->assertStringContainsString( 'no está en el catálogo', CentreEligibility::why_not( $publico, 'X9999', array(), true ), 'con catálogo, fuera de él no' );
+
+		$tipos = CentreEligibility::rules(
+			array(
+				'ownership' => array( 'public' ),
+				'types'     => array( 'CEIP' ),
+			)
+		);
+		$this->assertStringContainsString( 'no está en el catálogo', CentreEligibility::why_not( $tipos, 'X9999', array(), false ) );
+	}
+
+	/**
+	 * Un código de la lista cerrada solicita aunque no esté en el catálogo si
+	 * la lista es el único acotado; con más acotados, hace falta el catálogo.
+	 */
+	public function test_a_listed_code_needs_no_catalogue_when_the_list_is_alone() {
+		$lista = CentreEligibility::rules( array( 'codes' => array( 'X9999' ) ) );
+		$this->assertSame( '', CentreEligibility::why_not( $lista, 'X9999', array() ) );
+		$this->assertSame( '', CentreEligibility::why_not( $lista, 'X9999', array(), false ) );
+
+		$con_mas = CentreEligibility::rules(
+			array(
+				'codes'   => array( 'X9999' ),
+				'islands' => array( 'Isla Uno' ),
+			)
+		);
+		$this->assertStringContainsString( 'no está en el catálogo', CentreEligibility::why_not( $con_mas, 'X9999', array() ) );
+
+		// Titularidad «todas» más lista: la lista sola manda.
+		$todas = CentreEligibility::rules(
+			array(
+				'codes'     => array( 'X9999' ),
+				'ownership' => array( 'public', 'private' ),
+			)
+		);
+		$this->assertSame( '', CentreEligibility::why_not( $todas, 'X9999', array() ) );
+	}
+
+	/**
+	 * La lista cerrada no distingue mayúsculas: se guarda en mayúsculas y se compara igual.
+	 */
+	public function test_the_closed_list_ignores_case() {
+		$this->assertSame( array( 'AB001', 'C0002' ), CentreEligibility::codes( array( 'ab001', 'AB001', 'c0002' ) ) );
+		$lista = CentreEligibility::rules( array( 'codes' => array( 'ab001' ) ) );
+		$this->assertSame( '', CentreEligibility::why_not( $lista, 'Ab001', array( 'code' => 'Ab001' ) ) );
+		$this->assertSame( '', CentreEligibility::why_not( $lista, 'aB001', array() ) );
+	}
+
+	/**
+	 * Los avisos del taller dicen la consecuencia real.
+	 */
+	public function test_the_workshop_warnings() {
+		$publico = CentreEligibility::rules( array( 'ownership' => array( 'public' ) ) );
+		$privado = CentreEligibility::rules( array( 'ownership' => array( 'private' ) ) );
+		$tipos   = CentreEligibility::rules( array( 'types' => array( 'CEIP' ) ) );
+
+		$this->assertSame( array(), CentreEligibility::warnings( CentreEligibility::rules( array() ), true, true ) );
+		$this->assertSame( array(), CentreEligibility::warnings( $publico, false, false ) );
+
+		$aviso = CentreEligibility::warnings( $publico, false, true );
+		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $aviso['ownership'] );
+		$this->assertStringContainsString( 'todos los centros cuentan como públicos', $aviso['ownership'] );
+		$this->assertStringContainsString( 'nadie', CentreEligibility::warnings( $privado, false, true )['ownership'] );
+
+		$this->assertStringContainsString( 'puede solicitar cualquier centro', CentreEligibility::warnings( $publico, true, false )['catalogue'] );
+		$this->assertStringContainsString( 'ningún centro puede solicitar', CentreEligibility::warnings( $tipos, true, false )['catalogue'] );
 	}
 }

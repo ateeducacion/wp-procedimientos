@@ -240,7 +240,9 @@ class Test_Rural_Groups extends WP_UnitTestCase {
 		$this->assertSame( 'Este procedimiento es solo para centros de Isla Uno.', ProcedureAccess::why_not_eligible( $uid, $isla, 'G0001' ) );
 		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $publ ) ), 'la titularidad filtra al centro, no a la agrupación' );
 		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $lista ) ) );
-		$this->assertSame( array(), ProcedureAccess::apply_codes( $fuera, $lista ), 'una agrupación fuera del catálogo no solicita a uno acotado' );
+		$this->assertSame( array( 'G0009' ), array_keys( ProcedureAccess::apply_codes( $fuera, $lista ) ), 'con la lista sola, una agrupación de la lista solicita aunque no esté en el catálogo' );
+		update_post_meta( $lista, ProcedureMetaKeys::ISLANDS, array( 'Isla Dos' ) );
+		$this->assertSame( array(), ProcedureAccess::apply_codes( $fuera, $lista ), 'con más acotados, fuera del catálogo no' );
 		$this->assertSame( array( 'C0001', 'G0009' ), array_keys( ProcedureAccess::apply_codes( $fuera, $this->procedimiento( $ambos ) ) ), 'sin acotados, sí' );
 	}
 

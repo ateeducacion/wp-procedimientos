@@ -3465,6 +3465,7 @@ final class CentreEligibility {
 
 
 
+
 	public static function parse_codes( $raw ): array {
 		$trozos = is_array( $raw ) ? $raw : preg_split( '/[\s,;]+/u', is_scalar( $raw ) ? (string) $raw : '' );
 		$codes  = array();
@@ -3475,7 +3476,8 @@ final class CentreEligibility {
 				continue;
 			}
 			if ( self::is_code( $trozo ) ) {
-				$codes[ $trozo ] = true;
+
+				$codes[ strtoupper( $trozo ) ] = true;
 			} else {
 				$malos[ $trozo ] = true;
 			}
@@ -3585,17 +3587,54 @@ final class CentreEligibility {
 
 
 
-	public static function why_not( array $rules, string $code, array $centre ): string {
+
+
+
+
+
+
+
+	public static function why_not( array $rules, string $code, array $centre, bool $catalogue = true ): string {
 		$rules = self::rules( $rules );
 		if ( ! self::restricted( $rules ) ) {
 			return '';
 		}
-		if ( array() !== $rules['codes'] && ! in_array( $code, $rules['codes'], true ) ) {
+		if ( array() !== $rules['codes'] && ! in_array( strtoupper( trim( $code ) ), $rules['codes'], true ) ) {
 			return 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.';
+		}
+		$resto = self::without_list( $rules, $catalogue );
+		if ( ! self::restricted( $resto ) ) {
+			return '';
 		}
 		if ( array() === $centre ) {
 			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos. Si cree que es un error, escriba a los correos de contacto del procedimiento.';
 		}
+		return self::why_not_attributes( $resto, $centre );
+	}
+
+
+
+
+
+
+
+
+	private static function without_list( array $rules, bool $catalogue ): array {
+		$rules['codes'] = array();
+		if ( ! $catalogue ) {
+			$rules['ownership'] = array();
+		}
+		return $rules;
+	}
+
+
+
+
+
+
+
+
+	private static function why_not_attributes( array $rules, array $centre ): string {
 		$titular = $rules['ownership'];
 		if ( array() !== $titular && ! in_array( (string) ( $centre['ownership'] ?? '' ), $titular, true ) ) {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::ownerships(), array_flip( $titular ) ) );
@@ -3608,6 +3647,40 @@ final class CentreEligibility {
 			return 'Este procedimiento es solo para centros de ' . self::either( $rules['islands'] ) . '.';
 		}
 		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function warnings( array $rules, bool $empty_catalogue, bool $no_private ): array {
+		$rules   = self::rules( $rules );
+		$out     = array();
+		$titular = $rules['ownership'];
+		if ( $no_private && 1 === count( $titular ) ) {
+			$out['ownership'] = ProcedureMetaKeys::OWNERSHIP_PUBLIC === $titular[0]
+				? 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy todos los centros cuentan como públicos, salvo los que el catálogo marque expresamente, así que este límite no deja fuera a casi nadie.'
+				: 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy ningún centro cuenta como privado, salvo los que el catálogo marque expresamente, así que nadie o casi nadie puede solicitar.';
+		}
+		if ( $empty_catalogue && self::restricted( $rules ) ) {
+			$resto = self::without_list( $rules, false );
+			if ( self::restricted( $resto ) ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: con los tipos o las islas que pide este procedimiento, ningún centro puede solicitar hasta que se cargue.';
+			} elseif ( array() !== $rules['codes'] ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: solo pueden solicitar los centros de la lista cerrada.';
+			} else {
+				$out['catalogue'] = 'El catálogo de centros está vacío, así que la titularidad no se puede comprobar: puede solicitar cualquier centro.';
+			}
+		}
+		return $out;
 	}
 
 

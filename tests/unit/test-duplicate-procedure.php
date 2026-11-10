@@ -229,6 +229,21 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		return is_array( $existe ) ? (int) $existe['term_id'] : $this->course();
 	}
 
+	/**
+	 * Who got the creation mail.
+	 *
+	 * @return string[]
+	 */
+	private function destinos_de_alta(): array {
+		$destinos = array();
+		foreach ( $this->enviados as $correo ) {
+			if ( false !== strpos( (string) $correo['subject'], 'Procedimiento creado en borrador' ) ) {
+				$destinos = array_merge( $destinos, (array) $correo['to'] );
+			}
+		}
+		return $destinos;
+	}
+
 	// ─── lo que se copia ───────────────────────────────────────────────────
 
 	/**
@@ -263,6 +278,7 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertSame( ProcedureDuplicate::NOTICE, $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 		$this->assertSame( (string) $id, $this->query_arg( (string) $url, ProcedureDuplicate::ARG_SOURCE ) );
 		$this->assertSame( '1', $this->query_arg( (string) $url, ProcedureDuplicate::ARG_NO_JS ), 'quien gestiona no copia el JavaScript' );
+		$this->assertSame( '', $this->query_arg( (string) $url, ProcedureDuplicate::ARG_NO_CONTACTS ), 'con los mismos ámbitos, los contactos se copian' );
 
 		foreach ( array(
 			ProcedureMetaKeys::CONTACT_EMAILS,
@@ -464,8 +480,18 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		// Compartido entre el servicio y su área: quien está en el área se queda con la suya.
 		$de_hija = $this->manager( array( $hija ) );
 		$id      = $this->completo( $de_hija, array( $padre, $hija, $tia ) );
-		$copia   = $this->copia_de( $this->duplicar( $de_hija, $id ) );
+		$url     = $this->duplicar( $de_hija, $id );
+		$copia   = $this->copia_de( $url );
 		$this->assertSame( array( $hija ), ProcedureAccess::post_areas( $copia ) );
+
+		// Con menos ámbitos que el original, sus contactos no se copian: el
+		// correo de alta no llega a un ámbito que ya no participa.
+		$this->assertFalse( metadata_exists( 'post', $copia, ProcedureMetaKeys::CONTACT_EMAILS ) );
+		$this->assertSame( '1', $this->query_arg( (string) $url, ProcedureDuplicate::ARG_NO_CONTACTS ) );
+		$this->acting_as( $de_hija );
+		$aviso = ProcedureDuplicate::notice( wp_parse_args( (string) wp_parse_url( (string) $url, PHP_URL_QUERY ) ) );
+		$this->assertStringContainsString( 'indique los correos de contacto', $aviso['texto'] );
+		$this->assertNotContains( 'ambito@example.org', $this->destinos_de_alta() );
 
 		// Quien está en el servicio alcanza a sus áreas.
 		$de_padre = $this->manager( array( $padre ) );
@@ -608,8 +634,9 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$m    = ProcedureEditor::model();
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'] );
 		$this->assertSame( 'ok', $m['flash']['tipo'] );
-		$this->assertStringStartsWith( 'Has duplicado «Red de prueba». Revisa las fechas y el curso antes de publicar.', $m['flash']['texto'] );
-		$this->assertStringContainsString( 'JavaScript', $m['flash']['texto'] );
+		$this->assertStringStartsWith( 'Ha duplicado «Red de prueba». Revise las fechas y el curso antes de publicarlo.', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'no tiene permiso para el código JavaScript de este procedimiento', $m['flash']['texto'] );
+		$this->assertStringNotContainsString( 'administra', $m['flash']['texto'] );
 		$this->assertCount( 2, $m['not_ready'] );
 		$this->assertStringContainsString( 'curso', $m['not_ready'][0] );
 		$this->assertStringContainsString( '«Memoria final»', $m['not_ready'][1] );
@@ -674,14 +701,14 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 
 		$aviso = ProcedureDuplicate::notice( array( ProcedureDuplicate::ARG_SOURCE => (string) $id ) );
 		$this->assertSame( 'ok', $aviso['tipo'] );
-		$this->assertStringStartsWith( 'Has duplicado «Red de prueba».', $aviso['texto'] );
+		$this->assertStringStartsWith( 'Ha duplicado «Red de prueba».', $aviso['texto'] );
 		$this->assertStringNotContainsString( 'JavaScript', $aviso['texto'] );
 
 		$ajena = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
 		$this->acting_as( $ajena );
 		$aviso = ProcedureDuplicate::notice( array( ProcedureDuplicate::ARG_SOURCE => (string) $id ) );
 		$this->assertStringNotContainsString( 'Red de prueba', $aviso['texto'] );
-		$this->assertStringStartsWith( 'Has duplicado el procedimiento.', $aviso['texto'] );
+		$this->assertStringStartsWith( 'Ha duplicado el procedimiento.', $aviso['texto'] );
 	}
 
 	// ─── dónde está el botón ───────────────────────────────────────────────

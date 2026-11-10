@@ -9,6 +9,7 @@ namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureCopy;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -39,6 +40,11 @@ final class ProcedureDuplicate {
 	public const ARG_NO_JS = 'sin_js';
 
 	/**
+	 * Query arg that says the contact addresses were left behind.
+	 */
+	public const ARG_NO_CONTACTS = 'sin_contactos';
+
+	/**
 	 * Duplicate and open the duplicate's workshop on «Datos».
 	 *
 	 * @param int $procedure_id Original procedure ID.
@@ -57,6 +63,9 @@ final class ProcedureDuplicate {
 		if ( $copia['js_left'] ) {
 			$args[ self::ARG_NO_JS ] = 1;
 		}
+		if ( $copia['contacts_left'] ) {
+			$args[ self::ARG_NO_CONTACTS ] = 1;
+		}
 		Shell::leave( ProcedureEditor::url( $copia['id'], ProcedureEditor::PANEL_DATA, $args ) );
 		return '';
 	}
@@ -66,7 +75,7 @@ final class ProcedureDuplicate {
 	 *
 	 * @param int $procedure_id Original procedure ID.
 	 * @param int $user_id      Who duplicates.
-	 * @return array{id:int, js_left:bool}|\WP_Error
+	 * @return array{id:int, js_left:bool, contacts_left:bool}|\WP_Error
 	 */
 	public static function duplicate( int $procedure_id, int $user_id ) {
 		$areas = null;
@@ -103,6 +112,13 @@ final class ProcedureDuplicate {
 		// Sin curso: es lo primero que hay que elegir para la convocatoria nueva.
 		wp_set_object_terms( $id, $areas, ProcedureTaxonomies::AREA, false );
 		$copia = ProcedureCopy::meta( self::source( $procedure_id ), ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) );
+		// Con menos ámbitos que el original, sus contactos son de un ámbito
+		// que ya no participa: no se copian, y el correo de alta no les llega.
+		$sin_contactos = array() !== array_diff( ProcedureAccess::post_areas( $procedure_id ), $areas )
+			&& isset( $copia['meta'][ ProcedureMetaKeys::CONTACT_EMAILS ] );
+		if ( $sin_contactos ) {
+			unset( $copia['meta'][ ProcedureMetaKeys::CONTACT_EMAILS ] );
+		}
 		foreach ( $copia['meta'] as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
@@ -115,8 +131,9 @@ final class ProcedureDuplicate {
 		do_action( 'prc_procedure_created', $id );
 
 		return array(
-			'id'      => $id,
-			'js_left' => $copia['js_left'],
+			'id'            => $id,
+			'js_left'       => $copia['js_left'],
+			'contacts_left' => $sin_contactos,
 		);
 	}
 
@@ -147,12 +164,15 @@ final class ProcedureDuplicate {
 	public static function notice( array $request ): array {
 		$origen = absint( $request[ self::ARG_SOURCE ] ?? 0 );
 		$texto  = ProcedureAccess::can_open( get_current_user_id(), $origen )
-			? 'Has duplicado «' . get_post_field( 'post_title', $origen, 'raw' ) . '».'
-			: 'Has duplicado el procedimiento.';
-		$texto .= ' Revisa las fechas y el curso antes de publicar.'
+			? 'Ha duplicado «' . get_post_field( 'post_title', $origen, 'raw' ) . '».'
+			: 'Ha duplicado el procedimiento.';
+		$texto .= ' Revise las fechas y el curso antes de publicarlo.'
 			. ' No se copian los plazos, el curso, los enlaces de la resolución y de los listados, ni las solicitudes.';
+		if ( ! empty( $request[ self::ARG_NO_CONTACTS ] ) ) {
+			$texto .= ' Los correos de contacto no se han copiado, porque el duplicado no tiene todos los ámbitos del original: indique los correos de contacto en «Datos».';
+		}
 		if ( ! empty( $request[ self::ARG_NO_JS ] ) ) {
-			$texto .= ' El JavaScript propio del original no se ha copiado: solo lo copia quien administra el aplicativo.';
+			$texto .= ' El JavaScript propio del original no se ha copiado: no tiene permiso para el código JavaScript de este procedimiento.';
 		}
 		return array(
 			'tipo'  => 'ok',

@@ -12797,6 +12797,381 @@ final class ApplicationExport {
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\ApplicationFilter;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationQuery', false ) ) {
+final class ApplicationQuery {
+
+
+
+
+
+
+	private const CENSUS = array(
+		ApplicationMetaKeys::REVIEW_STATE,
+		ApplicationMetaKeys::CENTRE_CODE,
+		ApplicationMetaKeys::CENTRE_NAME,
+		ApplicationMetaKeys::APPLICANT_TYPE,
+		ApplicationMetaKeys::COORDINATOR,
+	);
+
+
+
+
+
+
+
+
+
+	public static function run( int $procedure_id, array $filter, array $scope = array() ): array {
+		$census = self::census( $procedure_id, $scope );
+
+		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
+		$opciones = self::options( $census['stored'], $catalogo );
+		$filter   = ApplicationFilter::against( $filter, $opciones );
+		$motivos  = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$ids      = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
+		$ventana  = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+
+		$filter['page'] = $ventana['page'];
+		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );
+		return array(
+			'filter'            => $filter,
+			'active'            => ApplicationFilter::active( $filter ),
+			'ids'               => $ids,
+			'all'               => count( $census['posts'] ),
+			'total'             => count( $ids ),
+			'counts'            => self::counts( $census['stored'] ),
+			'incomplete'        => count( $motivos ?? array() ),
+			'may_be_incomplete' => null !== $motivos,
+			'options'           => $opciones,
+			'posts'             => self::page( $pagina ),
+			'reasons'           => array_intersect_key( $motivos ?? array(), array_flip( $pagina ) ),
+			'stored'            => $census['stored'],
+		) + $ventana;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function ids( int $procedure_id, array $filter, array $scope = array() ): array {
+		return self::run( $procedure_id, $filter, $scope )['ids'];
+	}
+
+
+
+
+
+
+
+
+	public static function state_of( $state ): string {
+		$state = is_string( $state ) ? $state : '';
+		return isset( ApplicationMetaKeys::review_states()[ $state ] ) ? $state : ApplicationMetaKeys::REVIEW_SUBMITTED;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function census( int $procedure_id, array $scope ): array {
+		$vacio = array(
+			'posts'  => array(),
+			'stored' => array(),
+			'check'  => false,
+		);
+		if ( $procedure_id <= 0 ) {
+			return $vacio;
+		}
+		$posts = get_posts(
+			array(
+				'post_type'              => ApplicationPostType::POST_TYPE,
+				'post_parent'            => $procedure_id,
+				'post_status'            => 'publish',
+				'numberposts'            => -1,
+
+				'orderby'                => array(
+					'date' => 'ASC',
+					'ID'   => 'ASC',
+				),
+
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'suppress_filters'       => false,
+			)
+		);
+		if ( ! is_array( $posts ) || array() === $posts ) {
+			return $vacio;
+		}
+		$por_id = array();
+		foreach ( $posts as $post ) {
+			$por_id[ (int) $post->ID ] = $post;
+		}
+		$claves = self::CENSUS;
+		$mirar  = self::can_be_incomplete( $procedure_id );
+		if ( $mirar ) {
+			$claves[] = ApplicationMetaKeys::PEOPLE;
+			$claves[] = ApplicationMetaKeys::FILES;
+		}
+		$stored = self::stored( $procedure_id, $claves );
+		foreach ( array_keys( $por_id ) as $id ) {
+			$stored[ $id ] = ( $stored[ $id ] ?? array() ) + array_fill_keys( $claves, '' );
+		}
+		if ( array_key_exists( 'codes', $scope ) ) {
+			$codigos = array_flip( array_map( 'strval', (array) $scope['codes'] ) );
+			foreach ( $stored as $id => $meta ) {
+				if ( ! isset( $codigos[ (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ] ) ) {
+					unset( $stored[ $id ], $por_id[ $id ] );
+				}
+			}
+		}
+		return array(
+			'posts'  => $por_id,
+			'stored' => array_intersect_key( $stored, $por_id ),
+			'check'  => $mirar,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function stored( int $procedure_id, array $keys ): array {
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
+
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT m.post_id, m.meta_key, m.meta_value FROM {$wpdb->postmeta} m INNER JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE p.post_type = %s AND p.post_parent = %d AND p.post_status = 'publish' AND m.meta_key IN ({$huecos}) ORDER BY m.meta_id ASC",
+				array_merge( array( ApplicationPostType::POST_TYPE, $procedure_id ), $keys )
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			$id = (int) $fila->post_id;
+			if ( ! isset( $out[ $id ][ $fila->meta_key ] ) ) {
+				$out[ $id ][ (string) $fila->meta_key ] = maybe_unserialize( $fila->meta_value );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function can_be_incomplete( int $procedure_id ): bool {
+		return ApplicationCompleteness::may_be_incomplete( self::people_spec( $procedure_id ), Applications::questions( $procedure_id ), ProcedureState::today() );
+	}
+
+
+
+
+
+
+
+
+	private static function people_spec( int $procedure_id ): array {
+		return People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : array( 'enabled' => false );
+	}
+
+
+
+
+
+
+
+
+
+	private static function counts( array $stored ): array {
+		$out = array_fill_keys( array_keys( ApplicationMetaKeys::review_states() ), 0 );
+		foreach ( $stored as $meta ) {
+			++$out[ self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) ];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function options( array $stored, array $catalog ): array {
+		$islas = array();
+		$zonas = array();
+		foreach ( $stored as $meta ) {
+			$centro = CentreColumns::attributes( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalog );
+			if ( '' !== $centro['island'] ) {
+				$islas[ $centro['island'] ] = $centro['island'];
+			}
+			if ( '' !== $centro['zone'] ) {
+				$zonas[ $centro['zone'] ] = '' !== $centro['zone_name'] ? $centro['zone_name'] : $centro['zone'];
+			}
+		}
+		asort( $islas, SORT_NATURAL | SORT_FLAG_CASE );
+		asort( $zonas, SORT_NATURAL | SORT_FLAG_CASE );
+		return array(
+			'islands' => $islas,
+			'zones'   => $zonas,
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function reasons( int $procedure_id, array $stored ): array {
+		$spec      = self::people_spec( $procedure_id );
+		$preguntas = Applications::questions( $procedure_id );
+		$hoy       = ProcedureState::today();
+		$out       = array();
+		foreach ( $stored as $id => $meta ) {
+			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ], $preguntas, $meta[ ApplicationMetaKeys::FILES ], $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) );
+			if ( array() !== $motivos ) {
+				$out[ $id ] = $motivos;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function narrow( array $census, array $filter, array $catalog, array $incomplete ): array {
+		if ( '' !== $filter['search'] ) {
+
+			cache_users( array_unique( array_map( 'intval', wp_list_pluck( $census['posts'], 'post_author' ) ) ) );
+		}
+		$out = array();
+		foreach ( $census['stored'] as $id => $meta ) {
+			$centro = CentreColumns::attributes( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalog );
+			if ( ( '' !== $filter['review'] && self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) !== $filter['review'] )
+				|| ( '' !== $filter['island'] && $centro['island'] !== $filter['island'] )
+				|| ( '' !== $filter['zone'] && $centro['zone'] !== $filter['zone'] )
+				|| ( true === $filter['incomplete'] && ! isset( $incomplete[ $id ] ) )
+				|| ! ApplicationFilter::matches( (string) $filter['search'], self::searchable( $census['posts'][ $id ], $meta ) ) ) {
+				continue;
+			}
+			$out[] = (int) $id;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function searchable( \WP_Post $post, array $meta ): array {
+		$textos = array( (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ], (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
+		if ( ApplicationMetaKeys::TYPE_TEACHER === $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) {
+			$cuenta = get_userdata( (int) $post->post_author );
+			if ( false !== $cuenta ) {
+				$textos[] = (string) $cuenta->display_name;
+			}
+		}
+		return $textos;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function page( array $ids ): array {
+		if ( array() === $ids ) {
+			return array();
+		}
+		update_meta_cache( 'post', $ids );
+		$posts = array_values( array_filter( array_map( 'get_post', $ids ) ) );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) ) ) );
+		return $posts;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
 use Prc\Domain\PeopleSpec;
 use Prc\Meta\ProcedureMetaKeys;
 

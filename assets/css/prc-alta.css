@@ -376,6 +376,29 @@
 .prc-revision[open] .prc-revision__abrir { margin-bottom: 8px; }
 
 .prc-revision__form { min-width: 16rem; }
+
+/* El diálogo de exportar (ADR-0039). Sin guion es un desplegable con el
+   formulario dentro; con guion, `prc-app.js` mete el formulario en un
+   `.prc-dialogo` y estas reglas valen igual en los dos sitios. */
+.prc-exportar { margin: 0; }
+.prc-exportar > summary { list-style: none; cursor: pointer; }
+.prc-exportar > summary::-webkit-details-marker { display: none; }
+.prc-exportar[open] > .prc-exportar__form {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--prc-linea);
+  border-radius: var(--prc-r);
+  background: var(--prc-sup);
+}
+.prc-exportar__titulo { margin: 0 0 12px; font-size: 18px; }
+.prc-exportar__grupo,
+.prc-exportar__columnas { margin: 0 0 12px; padding: 0; border: 0; min-width: 0; }
+.prc-exportar__grupo > legend,
+.prc-exportar__columnas > legend { margin-bottom: 4px; font-weight: 700; font-size: 14px; }
+.prc-exportar__columnas { display: flex; flex-wrap: wrap; gap: 2px 16px; }
+.prc-exportar__columnas > legend { flex-basis: 100%; font-weight: 600; color: var(--prc-c-medio); }
+.prc-exportar .prc-casilla { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; font-size: 14px; }
+.prc-dialogo--exportar[open] { width: min(720px, calc(100vw - 32px)); }
 .prc-revision__form .prc-btn.prc-envio { margin: 10px 0 0; }
 
 .prc-respuestas {

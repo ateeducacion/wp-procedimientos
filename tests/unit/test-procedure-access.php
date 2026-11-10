@@ -549,8 +549,20 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $por_lista ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $uno, $por_lista ) );
-		$this->assertFalse( ProcedureAccess::can_apply( $fuera, $por_lista ), 'en la lista pero fuera del catálogo: no' );
-		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_eligible( $fuera, $por_lista ) );
+		$this->assertTrue( ProcedureAccess::can_apply( $fuera, $por_lista ), 'la lista sola: estar en ella basta, aunque no esté en el catálogo' );
+		$lista_e_isla = $this->procedure(
+			$admin,
+			array(),
+			array(
+				ProcedureMetaKeys::ALLOWED_CENTRES => array( 'IE002', 'XX999' ),
+				ProcedureMetaKeys::ISLANDS         => array( 'Isla Dos' ),
+			)
+		);
+		$this->assertTrue( ProcedureAccess::can_apply( $dos, $lista_e_isla ) );
+		$this->assertFalse( ProcedureAccess::can_apply( $fuera, $lista_e_isla ), 'lista y más acotados: hace falta el catálogo' );
+		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_eligible( $fuera, $lista_e_isla ) );
+		$minusculas = $this->school_head( 'ie002' );
+		$this->assertTrue( ProcedureAccess::can_apply( $minusculas, $por_lista ), 'la lista no distingue mayúsculas del código de la cuenta' );
 
 		foreach ( array( $por_tipo, $por_isla ) as $acotado ) {
 			$this->assertFalse( ProcedureAccess::can_apply( $fuera, $acotado ), 'acotado y fuera del catálogo: no' );
@@ -561,21 +573,59 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Una solicitud ya presentada sigue ahí y se ve aunque el procedimiento se
-	 * acote después; lo que se cierra es volver a presentarla.
+	 * La elegibilidad se mira al crear: quien ya presentó su solicitud la
+	 * sigue editando aunque el procedimiento se acote después; quien no la
+	 * tiene, no la crea.
 	 */
 	public function test_narrowing_later_keeps_what_was_submitted() {
 		$admin         = $this->administrator();
 		$procedimiento = $this->procedure( $admin );
 		$head          = $this->school_head( 'XX999' );
+		$nuevo         = $this->school_head( 'XX998' );
 		$solicitud     = $this->application( $procedimiento, $head );
 		$this->assertTrue( ProcedureAccess::can_apply( $head, $procedimiento ) );
 
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'C0001' ) );
 
-		$this->assertFalse( ProcedureAccess::can_apply( $head, $procedimiento ) );
+		$this->assertTrue( ProcedureAccess::can_apply( $head, $procedimiento ), 'la suya la sigue editando' );
+		$this->assertSame( '', ProcedureAccess::why_not_eligible( $head, $procedimiento ) );
+		$this->assertFalse( ProcedureAccess::can_apply( $nuevo, $procedimiento ), 'una nueva, no' );
+		wp_trash_post( $solicitud );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $procedimiento ), 'en la papelera ya no cuenta' );
+		wp_untrash_post( $solicitud );
+		wp_publish_post( $solicitud );
 		$this->assertTrue( ProcedureAccess::can_view_application( $head, $solicitud ) );
 		$this->assertSame( 'publish', get_post_status( $solicitud ) );
+	}
+
+	/**
+	 * Con el catálogo entero vacío, una sola titularidad no cierra a nadie
+	 * (como antes); con catálogo, quien no está en él no solicita.
+	 */
+	public function test_an_empty_catalogue_does_not_close_on_ownership() {
+		remove_all_filters( 'prc_centres' );
+		add_filter( 'prc_centres', '__return_empty_array' );
+		$admin        = $this->administrator();
+		$solo_publico = $this->procedure( $admin, array(), array( ProcedureMetaKeys::OWNERSHIP => array( 'public' ) ) );
+		$por_tipo     = $this->procedure( $admin, array(), array( ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ) ) );
+		$head         = $this->school_head( 'XX999' );
+
+		$this->assertTrue( ProcedureAccess::can_apply( $head, $solo_publico ), 'catálogo vacío: la titularidad no se puede comprobar' );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $por_tipo ), 'el tipo, sí cierra' );
+
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Escuela Inventada',
+					),
+				);
+			},
+			20
+		);
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $solo_publico ), 'con catálogo, fuera de él no' );
 	}
 
 	/**

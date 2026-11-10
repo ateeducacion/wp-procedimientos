@@ -286,11 +286,11 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Acotado después de presentar: la solicitud se queda como estaba, pero el
-	 * centro que ya no es elegible no la vuelve a enviar, tampoco por un POST
-	 * directo con el código en el campo.
+	 * Acotado después de presentar: la elegibilidad se mira al crear, así que
+	 * el centro que ya presentó su solicitud la sigue editando; otro que no la
+	 * tiene no la crea, tampoco por un POST directo.
 	 */
-	public function test_a_school_that_is_no_longer_eligible_cannot_resubmit() {
+	public function test_narrowing_after_submitting_keeps_editing_but_not_creating() {
 		$procedimiento = $this->procedimiento();
 		$norte         = $this->school_head( 'C0001' );
 		$this->assertNotNull( $this->enviar( $norte, $procedimiento ) );
@@ -301,12 +301,10 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->olvidar_rechazo();
 
 		$m = $this->modelo( $procedimiento );
-		$this->assertFalse( $m['can_submit'] );
-		$this->assertSame( 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.', $m['why'] );
-		$this->assertSame( $solicitud, (int) $m['application']['id'], 'la ve igual' );
+		$this->assertTrue( $m['can_submit'], 'la suya, sí' );
+		$this->assertSame( $solicitud, (int) $m['application']['id'] );
 
-		$antes = get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true );
-		$this->assertNull(
+		$this->assertNotNull(
 			$this->enviar(
 				$norte,
 				$procedimiento,
@@ -316,14 +314,68 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				)
 			)
 		);
-		$this->assertSame( $antes, get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true ), 'nada cambió' );
+		$this->assertSame( ApplicationMetaKeys::POSITION_SECRETARY, get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true ) );
 		$this->assertSame( 1, Applications::count( $procedimiento ) );
-		$this->assertSame( 'publish', get_post_status( $solicitud ) );
 
-		// Un centro fuera del catálogo, a uno acotado: tampoco.
+		// Un centro sin solicitud, del catálogo pero fuera de la lista: no la crea.
 		$this->olvidar_rechazo();
-		$this->assertNull( $this->enviar( $this->school_head( 'X0009' ), $procedimiento ) );
+		$publico = $this->school_head( 'C0002' );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'C0003' ) );
+		$this->acting_as( $publico );
+		$this->assertSame( 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.', $this->modelo( $procedimiento )['why'] );
+		$this->assertNull( $this->enviar( $publico, $procedimiento, array( ApplyForm::FIELD_CENTRE => 'C0002' ) ) );
 		$this->assertSame( 1, Applications::count( $procedimiento ) );
+	}
+
+	/**
+	 * Subsanar tras acotar: a quien se le pidió subsanar, subsana, aunque el
+	 * procedimiento ya no lo admitiría como solicitud nueva.
+	 */
+	public function test_amending_after_narrowing() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::OPENS_AT        => $this->dia( -20 ),
+				ProcedureMetaKeys::CLOSES_AT       => $this->dia( -10 ),
+				ProcedureMetaKeys::AMEND_OPENS_AT  => $this->dia( -1 ),
+				ProcedureMetaKeys::AMEND_CLOSES_AT => $this->dia( 1 ),
+				ProcedureMetaKeys::OWNERSHIP       => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+			)
+		);
+		$this->assertSame( ProcedureMetaKeys::STATE_AMENDMENT, ProcedureState::of_post( $procedimiento ) );
+		$norte     = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $norte, 'C0001', array( ApplicationMetaKeys::REVIEW_STATE => ApplicationMetaKeys::REVIEW_AMEND ) );
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ) );
+		$this->assertNotNull( $this->enviar( $norte, $procedimiento, array( ApplyForm::FIELD_POSITION => ApplicationMetaKeys::POSITION_SECRETARY ) ) );
+		$this->assertSame( ApplicationMetaKeys::POSITION_SECRETARY, get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true ) );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ), 'subsanada vuelve a presentada' );
+	}
+
+	/**
+	 * La pantalla de solicitud construye el catálogo una sola vez.
+	 */
+	public function test_the_screen_builds_the_catalogue_once() {
+		$procedimiento = $this->procedimiento( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) ) );
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$veces = 0;
+		add_filter(
+			'prc_centres',
+			static function ( $centros ) use ( &$veces ) {
+				++$veces;
+				return $centros;
+			},
+			99
+		);
+		\Prc\Domain\CentreCatalog::flush();
+
+		$m = $this->modelo( $procedimiento );
+		$this->assertTrue( $m['can_submit'] );
+		$this->assertSame( 1, $veces );
+
+		update_option( \Prc\Domain\CentreCatalog::OPTION_PRIVATE_TYPES, array( 'Otro' ) );
+		\Prc\Domain\CentreCatalog::find( 'C0001' );
+		$this->assertSame( 2, $veces, 'cambiar los tipos privados lo vacía' );
+		delete_option( \Prc\Domain\CentreCatalog::OPTION_PRIVATE_TYPES );
 	}
 
 	// ─── lo que pinta ──────────────────────────────────────────────────────

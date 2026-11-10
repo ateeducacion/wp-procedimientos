@@ -1933,4 +1933,125 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->application( $sin, $this->school_head( 'C0002' ) );
 		$this->assertStringNotContainsString( 'Puntos', ProcedureEditorView::html( $this->modelo( $sin, ProcedureEditor::PANEL_APPLICATIONS ) ) );
 	}
+
+	// ─── correcciones de la revisión ───────────────────────────────────────
+
+	/**
+	 * Borrar la última pregunta, contestada, y añadir otra de otro tipo en el
+	 * mismo envío no es un cambio de tipo; y la nueva no hereda su clave ni
+	 * sus respuestas, tampoco en un envío posterior.
+	 */
+	public function test_a_deleted_last_question_never_gives_its_key_away() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q3' => array( 'Huerto' ) ) ) );
+
+		$campos = $this->preguntas_tal_cual(
+			$procedimiento,
+			array(
+				'key'   => array( 3 => '' ),
+				'label' => array(
+					2 => '',
+					3 => 'Grupos nuevos',
+				),
+				'type'  => array( 3 => ProcedureQuestions::TYPE_NUMBER ),
+			)
+		);
+		$url    = $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $campos );
+		$this->assertSame( 'preguntas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), 'no es un cambio de tipo' );
+		$this->assertSame( array( 'q1', 'q2', 'q4' ), wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' ) );
+		$this->assertSame( 4, (int) get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS_SEQ, true ) );
+
+		// Se borra la nueva, que era la última, y se crea otra: tampoco hereda.
+		$campos = $this->preguntas_tal_cual(
+			$procedimiento,
+			array(
+				'label' => array( 2 => '' ),
+			)
+		);
+		$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $campos );
+		$campos = $this->preguntas_tal_cual(
+			$procedimiento,
+			array(
+				'key'   => array( 2 => '' ),
+				'label' => array( 2 => 'Otra' ),
+				'type'  => array( 2 => ProcedureQuestions::TYPE_TEXT ),
+			)
+		);
+		$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $campos );
+		$this->assertSame( array( 'q1', 'q2', 'q5' ), wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' ) );
+		$this->assertSame( '', \Prc\PublicFront\Applications::rows( $procedimiento )[0]['q5'], 'ninguna respuesta heredada' );
+	}
+
+	/**
+	 * Un procedimiento de antes, sin contador, empieza por la mayor clave
+	 * entre sus preguntas y las respuestas guardadas.
+	 */
+	public function test_an_old_procedure_starts_the_counter_from_its_answers() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		delete_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS_SEQ );
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q7' => 'de una pregunta borrada' ) ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_QUESTIONS,
+			$procedimiento,
+			0,
+			$this->preguntas_tal_cual(
+				$procedimiento,
+				array(
+					'key'   => array( 3 => '' ),
+					'label' => array( 3 => 'Nueva' ),
+					'type'  => array( 3 => ProcedureQuestions::TYPE_TEXT ),
+				)
+			)
+		);
+		$this->assertSame( 'q8', get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[3]['key'] );
+		$this->assertSame( 8, (int) get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS_SEQ, true ) );
+	}
+
+	/**
+	 * Unos puntos o un rango mal escritos no se guardan: se avisa.
+	 */
+	public function test_badly_written_points_or_range_are_refused() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$antes                       = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'choices' => array( 2 => "Huerto | 3\nRadio | -2" ) ) ) ) );
+		$this->assertStringContainsString( '«Radio | -2»', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		$campos = $this->preguntas_tal_cual(
+			$procedimiento,
+			array(
+				'type' => array( ProcedureQuestions::TYPE_NUMBER ),
+				'max'  => array( '1,5' ),
+			)
+		);
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $campos ) );
+		$this->assertStringContainsString( 'máximo', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+		$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/**
+	 * Una rejilla con todas las filas vacías no está contestada: su tipo cambia.
+	 */
+	public function test_an_empty_grid_is_not_an_answer() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$this->application(
+			$procedimiento,
+			$this->school_head( 'C0001' ),
+			'',
+			array(
+				ApplicationMetaKeys::ANSWERS => array(
+					'q2' => array(
+						'r1' => '',
+						'r2' => '',
+						'r3' => '',
+					),
+				),
+			)
+		);
+		$this->assertArrayNotHasKey( 'q2', \Prc\PublicFront\Applications::answered_keys( $procedimiento ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( 1 => ProcedureQuestions::TYPE_TEXT ) ) ) ) );
+	}
 }

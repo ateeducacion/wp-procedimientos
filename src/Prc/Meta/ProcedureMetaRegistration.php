@@ -110,6 +110,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
 			),
+			ProcedureMetaKeys::QUESTIONS_SEQ        => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 			ProcedureMetaKeys::COMMITMENTS          => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',

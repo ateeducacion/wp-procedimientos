@@ -146,6 +146,12 @@ final class ProcedureMetaKeys {
 
 
 
+
+	public const QUESTIONS_SEQ = 'prc_questions_seq';
+
+
+
+
 	public const COMMITMENTS = 'prc_commitments';
 
 
@@ -221,6 +227,7 @@ final class ProcedureMetaKeys {
 			self::CUSTOM_CSS,
 			self::CUSTOM_JS,
 			self::QUESTIONS,
+			self::QUESTIONS_SEQ,
 			self::COMMITMENTS,
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
@@ -4572,6 +4579,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
 			),
+			ProcedureMetaKeys::QUESTIONS_SEQ        => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 			ProcedureMetaKeys::COMMITMENTS          => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',
@@ -7792,18 +7803,45 @@ final class Applications {
 
 
 
+
 	public static function answered_keys( int $procedure_id ): array {
+		return array_fill_keys( self::stored_keys( $procedure_id, true ), true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function question_seq( int $procedure_id ): int {
+		$claves = array_column( self::questions( $procedure_id ), 'key' );
+		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
+			$claves = array_merge( $claves, self::stored_keys( $procedure_id, false ) );
+		}
+		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
+	}
+
+
+
+
+
+
+
+
+	private static function stored_keys( int $procedure_id, bool $answered ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
-			$respuestas = array_filter(
-				(array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ],
-				static function ( $valor ): bool {
-					return '' !== $valor && array() !== $valor && null !== $valor;
-				}
-			);
-			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
+			$respuestas = $answered ? array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) ) : $respuestas;
+			$out        = array_merge( $out, array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) );
 		}
-		return $out;
+		return array_map( 'strval', $out );
 	}
 
 
@@ -8139,7 +8177,7 @@ final class Applications {
 
 
 	public static function columns( array $questions ): array {
-		$out = array(
+		$out  = array(
 			'centre'            => 'Centro',
 			'code'              => 'Código',
 			'date'              => 'Fecha',
@@ -8152,9 +8190,7 @@ final class Applications {
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
 		);
-		if ( QuestionPoints::has_points( $questions ) ) {
-			$out['score'] = 'Puntos';
-		}
+		$out += QuestionPoints::heading( $questions );
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -8215,10 +8251,7 @@ final class Applications {
 
 
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
-		$puntos     = QuestionPoints::score( $questions, $respuestas );
-		if ( null !== $puntos ) {
-			$fila['score'] = (string) $puntos;
-		}
+		$fila      += QuestionPoints::cell( $questions, $respuestas );
 		$documentos = ApplicationFiles::descriptors( (int) $application->ID );
 		$adjuntos   = array();
 		foreach ( $questions as $pregunta ) {
@@ -15234,7 +15267,12 @@ final class ProcedureEditor {
 			);
 		}
 
-		$questions = ProcedureQuestions::sanitize( $crudas );
+		self::$rejected = QuestionChanges::input_errors( $crudas );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
+		$seq       = Applications::question_seq( $procedure_id );
+		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
 				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
@@ -15245,6 +15283,7 @@ final class ProcedureEditor {
 		if ( '' !== self::$rejected ) {
 			return;
 		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, $seq );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
 	}

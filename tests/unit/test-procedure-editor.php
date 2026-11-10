@@ -6,6 +6,7 @@
  */
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -339,6 +340,76 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->assertSame( (string) $id, $this->query_arg( (string) $url, ProcedureEditor::ARG_PROCEDURE ), 'y abre su taller' );
 		$this->assertSame( 'creado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+	}
+
+	// ─── a quién se dirige ─────────────────────────────────────────────────
+
+	/**
+	 * «Dirigido a» nace sin nada marcado: quien no lo toca no abre el
+	 * procedimiento a todos sin querer, y crear sin elegir se rechaza.
+	 */
+	public function test_a_new_procedure_starts_without_an_ownership() {
+		$area  = $this->area( 'Área de prueba' );
+		$curso = $this->course();
+		$uid   = $this->manager( array( $area ) );
+		$this->acting_as( $uid );
+
+		$_GET = array();
+		$html = ProcedureEditorView::html( ProcedureEditor::model() );
+		foreach ( array_keys( ProcedureMetaKeys::ownerships() ) as $clave ) {
+			$this->assertDoesNotMatchRegularExpression( '#id="prc-ownership-' . $clave . '"[^>]*checked#s', $html, 'nada marcado de antemano: ' . $clave );
+		}
+
+		$sin = $this->datos( $area, $curso, array( ProcedureMetaKeys::OWNERSHIP => array() ) );
+		unset( $sin[ ProcedureMetaKeys::OWNERSHIP ] );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, 0, 0, $sin ), 'sin elegir no se crea' );
+		$this->assertStringContainsString( 'públicos, privados y concertados, o los dos', ProcedureInput::why( array( 'ownership' ) ) );
+	}
+
+	/**
+	 * Uno de antes sin titularidad guardada se dirige a todos, y el taller lo
+	 * enseña así: se puede abrir y guardar sin que nadie lo descubra a la fuerza.
+	 */
+	public function test_an_old_procedure_without_ownership_shows_both() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		delete_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP );
+		$this->acting_as( $uid );
+
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA );
+		$this->assertSame( array_keys( ProcedureMetaKeys::ownerships() ), $m['values'][ ProcedureMetaKeys::OWNERSHIP ] );
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ) );
+		$this->assertSame( array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ), $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA )['values'][ ProcedureMetaKeys::OWNERSHIP ] );
+	}
+
+	/**
+	 * La ayuda de «Quién solicita» dice lo que toca a la opción elegida, y la
+	 * de centros avisa de la cuenta personal y del cargo de dirección.
+	 */
+	public function test_the_audience_help_follows_the_choice() {
+		$area = $this->area( 'Área de prueba' );
+		$this->acting_as( $this->manager( array( $area ) ) );
+		$_GET = array();
+		$html = ProcedureEditorView::html( ProcedureEditor::model() );
+
+		$this->assertMatchesRegularExpression( '#<p class="prc-campo__ayuda" id="prc-audience-ayuda">\s*<span data-prc-schools-only\s*>[^<]*cuenta personal[^<]*cuenta genérica del centro[^<]*cargo de dirección[^<]*</span>\s*<span class="prc-solo-docentes">Cada docente presenta su propia solicitud con su cuenta personal\.</span>#u', $html );
+
+		list( , $uid, $docentes ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $docentes, ProcedureEditor::PANEL_DATA ) );
+		$this->assertMatchesRegularExpression( '#<span data-prc-schools-only hidden>#', $html, 'sin guion se ve la que toca a lo guardado' );
+	}
+
+	/**
+	 * La cabecera del taller dice a quién se dirige, junto al estado.
+	 */
+	public function test_the_workshop_head_says_who_may_apply() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) ) );
+		$this->acting_as( $uid );
+		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Centros públicos</span>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::AUDIENCE, ProcedureMetaKeys::AUDIENCE_TEACHERS );
+		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Profesorado</span>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
 	}
 
 	/**
@@ -1324,6 +1395,31 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->assertSame( $estado, ProcedureState::of_post( $procedimiento ), 'la fixture no está en el estado que dice' );
 		return array( $area, $uid, $procedimiento, $curso );
+	}
+
+	/**
+	 * Un procedimiento de antes sin titularidad guardada sigue guardando sus
+	 * fechas con los datos cerrados: la casilla que nadie puede tocar no
+	 * tumba el envío.
+	 */
+	public function test_an_old_procedure_without_ownership_still_saves_its_dates() {
+		list( $area, $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
+		delete_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP );
+
+		$sin = $this->datos(
+			$area,
+			$this->course( '2099-2100' ),
+			array(
+				ProcedureMetaKeys::OPENS_AT  => '2026-01-07',
+				ProcedureMetaKeys::CLOSES_AT => '2026-01-20',
+			)
+		);
+		unset( $sin[ ProcedureMetaKeys::OWNERSHIP ] );
+		$url = $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $sin );
+
+		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( '2026-01-20', get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
+		$this->assertSame( 'Todos los centros', \Prc\PublicFront\View\ProcedureChrome::ownership_label( (array) get_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, true ) ) );
 	}
 
 	/**

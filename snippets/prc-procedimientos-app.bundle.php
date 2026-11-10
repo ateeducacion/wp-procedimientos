@@ -2431,7 +2431,7 @@ final class ProcedureInput {
 			'final_list_url'       => 'el enlace al listado definitivo',
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
-			'ownership'            => 'a qué centros se dirige',
+			'ownership'            => 'a qué centros se dirige («Dirigido a»): públicos, privados y concertados, o los dos',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
 			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
@@ -19171,6 +19171,19 @@ final class ProcedureChrome {
 
 
 
+
+	public static function audience_label( string $audience, array $ownership ): string {
+		return ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience
+			? (string) ProcedureMetaKeys::audiences()[ ProcedureMetaKeys::AUDIENCE_TEACHERS ]
+			: self::ownership_label( $ownership );
+	}
+
+
+
+
+
+
+
 	public static function ownership_label( array $ownership ): string {
 		$lista  = ProcedureMetaKeys::ownerships();
 		$nombre = array();
@@ -20219,6 +20232,9 @@ final class WorkspaceView {
 			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
 				<span class="material-symbols-outlined prc-icono-azul" aria-hidden="true"><?php echo esc_html( ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) $row['audience'] ? 'group' : 'home_work' ); ?></span>
 				<br /><?php echo esc_html( (string) $row['audience_label'] ); ?>
+				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
+					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
+				<?php endif; ?>
 			</td>
 			<td class="prc-celda-estado" data-rotulo="Estado">
 				<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span>
@@ -20325,6 +20341,7 @@ use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\WorkspaceView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -20713,6 +20730,8 @@ final class Workspace {
 			'color'            => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
+
+			'ownership_label'  => ProcedureMetaKeys::AUDIENCE_SCHOOLS === $publico ? ProcedureChrome::ownership_label( (array) get_post_meta( $id, ProcedureMetaKeys::OWNERSHIP, true ) ) : '',
 			'state'            => $state,
 			'state_label'      => ProcedureState::label(
 				$state,
@@ -22364,6 +22383,7 @@ final class ProcedureEditorView {
 			<h1 class="prc-h1"><?php echo esc_html( '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título' ); ?></h1>
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
+			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) );?>
 			<span class="prc-acciones">
 				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
 				<?php echo self::duplicate_form( $m );?>
@@ -22566,7 +22586,10 @@ final class ProcedureEditorView {
 						<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v[ ProcedureMetaKeys::AUDIENCE ] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<p class="prc-campo__ayuda" id="prc-audience-ayuda">Cada docente presenta su propia solicitud con su cuenta.</p>
+				<p class="prc-campo__ayuda" id="prc-audience-ayuda">
+					<span data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>Solicita la dirección del centro con su cuenta personal, no con la cuenta genérica del centro, y con el cargo de dirección en su perfil.</span>
+					<span class="prc-solo-docentes">Cada docente presenta su propia solicitud con su cuenta personal.</span>
+				</p>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
@@ -22581,7 +22604,7 @@ final class ProcedureEditorView {
 							</div>
 						<?php endforeach; ?>
 					</div>
-					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
+					<p class="prc-campo__ayuda">Marque al menos una. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué.</p>
 					<?php echo self::centre_warning( $m, 'ownership' );?>
 				</fieldset>
 			</div>
@@ -23584,6 +23607,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -24277,6 +24301,23 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
+
+
+	private static function ownership_value( int $procedure_id ): array {
+		$guardada = $procedure_id > 0 ? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ) : array();
+		return $procedure_id > 0 && array() === $guardada ? array_keys( ProcedureMetaKeys::ownerships() ) : $guardada;
+	}
+
+
+
+
+
+
+
 	private static function submitted_data( int $procedure_id = 0 ): array {
 
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
@@ -24374,7 +24415,7 @@ final class ProcedureEditor {
 					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ),
+					'ownership'            => self::ownership_value( $procedure_id ),
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -25003,6 +25044,8 @@ final class ProcedureEditor {
 			'state_label'             => '',
 			'status'                  => '',
 			'status_label'            => '',
+
+			'audience_label'          => '',
 			'area_names'              => '',
 			'foreign_areas'           => array(),
 			'view_url'                => '',
@@ -25143,6 +25186,7 @@ final class ProcedureEditor {
 		$m['status']        = (string) $procedimiento->post_status;
 		$m['status_label']  = self::status_label( (string) $procedimiento->post_status );
 		$m['area_names']    = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
+		$m['audience_label'] = ProcedureChrome::audience_label( (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ), (array) get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) );
 		$foreign_ids        = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels         = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas'] = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
@@ -25218,9 +25262,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::AUDIENCE             => $procedure_id > 0
 				? ProcedureMetaKeys::in_list( self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS )
 				: ProcedureMetaKeys::AUDIENCE_SCHOOLS,
-			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
-				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
-				: array_keys( ProcedureMetaKeys::ownerships() ),
+			ProcedureMetaKeys::OWNERSHIP            => self::ownership_value( $procedure_id ),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -33056,6 +33098,13 @@ body.prc-app .prc-hoja {
 .prc-state-admitted { background: var(--prc-ok-cont); color: var(--prc-ok); }
 .prc-state-excluded { background: var(--prc-mal-cont); color: var(--prc-mal); }
 .prc-state-publish { background: var(--prc-ok-cont); color: var(--prc-ok); }
+/* A quién se dirige: no es un estado, así que va sin relleno y con borde. */
+.prc-state-audience { background: transparent; color: var(--prc-gris-texto); box-shadow: inset 0 0 0 1px currentColor; white-space: normal; }
+
+/* La ayuda de «Quién solicita»: la de centros va con el interruptor de
+   `data-prc-schools-only`, y la de profesorado se calla mientras aquella se
+   vea. Sin guion se ve la que toca a lo guardado; sin `~`, las dos. */
+[data-prc-schools-only]:not([hidden]) ~ .prc-solo-docentes { display: none; }
 
 /* --- avisos -------------------------------------------------------------- */
 

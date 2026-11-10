@@ -20,6 +20,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -707,6 +708,23 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * The ownerships the «Dirigido a» boxes start with.
+	 *
+	 * Uno nuevo empieza **sin ninguna**: quien no las toca no abre el
+	 * procedimiento a todos sin querer, y guardar sin elegir se rechaza
+	 * ({@see ProcedureInput::validate()}). Uno de antes sin titularidad
+	 * guardada se dirige a todos —es lo que hace `can_apply()`—, y así se
+	 * enseña: las dos marcadas.
+	 *
+	 * @param int $procedure_id Procedure post ID, 0 for a new one.
+	 * @return string[]
+	 */
+	private static function ownership_value( int $procedure_id ): array {
+		$guardada = $procedure_id > 0 ? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ) : array();
+		return $procedure_id > 0 && array() === $guardada ? array_keys( ProcedureMetaKeys::ownerships() ) : $guardada;
+	}
+
+	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
 	 * @param int $procedure_id Existing procedure, or 0 on creation.
@@ -809,7 +827,7 @@ final class ProcedureEditor {
 					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ),
+					'ownership'            => self::ownership_value( $procedure_id ),
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -1438,6 +1456,8 @@ final class ProcedureEditor {
 			'state_label'             => '',
 			'status'                  => '',
 			'status_label'            => '',
+			// A quién se dirige, en la pastilla de la cabecera junto al estado.
+			'audience_label'          => '',
 			'area_names'              => '',
 			'foreign_areas'           => array(),
 			'view_url'                => '',
@@ -1578,6 +1598,7 @@ final class ProcedureEditor {
 		$m['status']        = (string) $procedimiento->post_status;
 		$m['status_label']  = self::status_label( (string) $procedimiento->post_status );
 		$m['area_names']    = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
+		$m['audience_label'] = ProcedureChrome::audience_label( (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ), (array) get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) );
 		$foreign_ids        = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels         = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas'] = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
@@ -1653,9 +1674,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::AUDIENCE             => $procedure_id > 0
 				? ProcedureMetaKeys::in_list( self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS )
 				: ProcedureMetaKeys::AUDIENCE_SCHOOLS,
-			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
-				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
-				: array_keys( ProcedureMetaKeys::ownerships() ),
+			ProcedureMetaKeys::OWNERSHIP            => self::ownership_value( $procedure_id ),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),

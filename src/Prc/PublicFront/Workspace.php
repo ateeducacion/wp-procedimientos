@@ -13,6 +13,7 @@ use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\WorkspaceView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -400,6 +401,8 @@ final class Workspace {
 			'color'            => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
+			// La titularidad, en una pastilla: el profesorado ya lo dice la columna.
+			'ownership_label'  => ProcedureMetaKeys::AUDIENCE_SCHOOLS === $publico ? ProcedureChrome::ownership_label( (array) get_post_meta( $id, ProcedureMetaKeys::OWNERSHIP, true ) ) : '',
 			'state'            => $state,
 			'state_label'      => ProcedureState::label(
 				$state,

@@ -351,6 +351,9 @@ final class WorkspaceView {
 			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
 				<span class="material-symbols-outlined prc-icono-azul" aria-hidden="true"><?php echo esc_html( ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) $row['audience'] ? 'group' : 'home_work' ); ?></span>
 				<br /><?php echo esc_html( (string) $row['audience_label'] ); ?>
+				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
+					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
+				<?php endif; ?>
 			</td>
 			<td class="prc-celda-estado" data-rotulo="Estado">
 				<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span>

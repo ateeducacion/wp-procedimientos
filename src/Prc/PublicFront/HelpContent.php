@@ -182,8 +182,9 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'Rellene la solicitud',
 				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
+					. '<p>Si el procedimiento pide una lista de personas o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Personas que participan», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
 					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
-					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora.</li></ol>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong>, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
 					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -204,7 +205,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Verá el aviso <strong>«Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.»</strong> y, en la solicitud, <strong>«Presentada el …»</strong>.</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada: …»</strong>, en la dirección de su cuenta.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -221,11 +222,11 @@ final class HelpContent {
 				'id'    => 'personas-participantes',
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
-				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas de la solicitud»</strong>. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: pide al menos …»). No se rechaza, pero quien revisa lo verá.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>El plazo para gestionar la lista aparece encima («Plazo para gestionar la lista: …»). Puede ser distinto del plazo de solicitud.</li></ul>',
+				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'bloque «Personas de la solicitud» vacío, con «Dar de alta a una persona»',
+						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
@@ -269,14 +270,14 @@ final class HelpContent {
 				'id'    => 'retirar-la-solicitud',
 				'level' => 2,
 				'title' => 'Retire la solicitud si ya no quiere participar',
-				'html'  => '<p>Mientras el plazo siga abierto, pulse <strong>«Retirar la solicitud»</strong> (en «Mi centro» o al final de la solicitud) y confirme. Deja de contar y recibirá un correo de acuse. Mientras haya plazo, puede presentar otra nueva.</p>',
+				'html'  => '<p>Mientras el plazo siga abierto, pulse <strong>«Retirar la solicitud»</strong>, al final de la solicitud, y confirme. Deja de contar y recibirá un correo de acuse. Mientras haya plazo, puede presentar otra nueva.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -381,7 +382,8 @@ final class HelpContent {
 				'level' => 3,
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>',
+					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -505,14 +507,14 @@ final class HelpContent {
 				'id'    => 'como-se-que-esta-presentada',
 				'level' => 3,
 				'title' => '¿Cómo sé que mi solicitud ha quedado presentada?',
-				'html'  => '<p>Tiene tres pruebas: el aviso «Solicitud presentada» y la línea «Presentada el …» en la propia solicitud; el correo «Solicitud presentada: …»; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada.</p>',
+				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'inscripcion-incompleta',
 				'level' => 3,
 				'title' => 'Me dicen que la inscripción no está completa, pero lo rellené todo',
-				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas de la solicitud», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: pide al menos …». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
+				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas que participan», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -526,7 +528,7 @@ final class HelpContent {
 				'id'    => 'cambiar-personas-coordinadoras',
 				'level' => 3,
 				'title' => '¿Dónde añado o cambio a las personas después de presentar? ¿Hasta cuándo?',
-				'html'  => '<p>En la misma solicitud, en el bloque «Personas de la solicitud». El plazo aparece encima («Plazo para gestionar la lista: …») y puede durar más que el plazo de solicitud. La persona coordinadora de los datos de la solicitud se cambia mientras se pueda modificar la solicitud.</p>',
+				'html'  => '<p>En la misma solicitud, en el bloque «Personas que participan». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -561,7 +563,7 @@ final class HelpContent {
 				'id'    => 'me-equivoque-de-procedimiento',
 				'level' => 3,
 				'title' => 'Me equivoqué de procedimiento. ¿Puedo deshacerlo?',
-				'html'  => '<p>Sí: pulse «Retirar la solicitud» mientras el plazo siga abierto.</p>',
+				'html'  => '<p>Sí: pulse «Retirar la solicitud», al final de la solicitud, mientras el plazo siga abierto.</p>',
 				'shots' => array(),
 			),
 			array(

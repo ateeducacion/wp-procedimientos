@@ -723,6 +723,11 @@ final class ProcedureEditorView {
 			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
 		);
 
+		$elegidos = array();
+		foreach ( array_keys( $listas ) as $nombre ) {
+			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
+		}
+
 		ob_start();
 		?>
 		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -742,7 +747,7 @@ final class ProcedureEditorView {
 								<div class="prc-opcion">
 									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
 										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
-										<?php checked( in_array( (string) $valor, (array) $v[ $nombre ], true ) ); ?> />
+										<?php checked( in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
 									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
 								</div>
 							<?php endforeach; ?>

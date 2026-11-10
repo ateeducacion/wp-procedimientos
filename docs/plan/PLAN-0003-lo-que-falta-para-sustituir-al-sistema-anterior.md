@@ -636,15 +636,22 @@ acotada para la consulta de solo lectura):
   `array( 'codes' => … )`, esos centros, listo para `ApplicationQuery::run()`;
   sin procedimiento, si tiene alguna consulta),
   `::can_observe_application( int $user_id, int $application_id ): bool` y
-  `::can_view_application( int $user_id, int $application_id, bool $documents = false ): bool`
-  (con `$documents`, la descarga: a quien consulta solo se la da
-  `prc_observer_files`). `can_read()`, `why_not_code()` y `may_use_area()`
+  `::can_view_application( int $user_id, int $application_id, string $purpose = '', string $question_key = '' ): bool`
+  (`VIEW_OWN`: solo si es suya, lo que pregunta el correo de revisión;
+  `VIEW_DOCUMENT` con la pregunta: la descarga, que a quien consulta solo se
+  la da `prc_observer_files` y si la pregunta está entre sus columnas). `can_read()`, `why_not_code()` y `may_use_area()`
   pasan a privados.
 - `ObserverScope::zones_for( int $user_id )`, `::parse_zones( $raw )`,
   `::codes_in( array $zones, array $catalogue )`, `::is_observable( int $procedure_id )`,
   `::observers_of( string $code ): int[]`, `::allowed( array $groups )`,
-  `::columns( $chosen, array $groups )`, `FORBIDDEN_COLUMNS`
-  (`coordinator_dni`, `person_dni`, `note`) y `DEFAULT_GROUPS`.
+  `::columns( $chosen, array $groups )`, `::is_allowed( string $column )`,
+  `ALLOWED_COLUMNS` (lista cerrada: `date`, `centre`, `code`, `island`,
+  `municipality`, `centre_type`, `ownership`, `zone`, `zone_code`,
+  `applicant`, `email`, `position`, `coordinator`, `coordinator_email`,
+  `person_name`, `person_surname`, `person_email`, `person_phone`,
+  `person_role`, `person_group`, `state`, `score`, más `q\d+` y
+  `q\d+:r\d+`) y `DEFAULT_GROUPS`. `observers_of()` lee solo ID y la meta de
+  zona.
 - Metas del procedimiento (`ProcedureMetaKeys`): `OBSERVABLE`
   (`prc_observable`), `OBSERVER_COLUMNS` (`prc_observer_columns`, saneada por
   `ProcedureMetaRegistration::sanitize_observer_columns()`), `OBSERVER_FILES`,
@@ -663,7 +670,12 @@ acotada para la consulta de solo lectura):
   públicos.
 - Correo: `people_changed` se copia a `ObserverScope::observers_of()` del
   centro si el procedimiento es observable y tiene `prc_observer_notify`, con
-  el enlace a la consulta (`url_label` en el contexto).
+  el enlace a la consulta (`url_label` en el contexto) y la persona descrita
+  solo con las columnas `person_*` que la consulta enseña
+  (`ApplicationPeople::describe( $spec, $row, ?array $fields = null )`); sin
+  ninguna, sin datos de la persona. El correo de revisión va a la cuenta
+  autora solo con `VIEW_OWN`.
+- Guardar el perfil normaliza la meta de zona como lista.
 
 **Decisiones:**
 - Capacidad `prc_view_applications` y rol `prc_observer`. La zona de la
@@ -682,6 +694,10 @@ acotada para la consulta de solo lectura):
       descarga de un documento.
 - [x] Prueba: sin `prc_observable` la pantalla responde como si no existiera.
 - [x] Prueba: el DNI y la nota no salen ni en el HTML ni en el CSV.
+- [x] Prueba: el conjunto exacto de columnas ofrecidas, y una columna nueva
+      que no se ofrece ni se guarda.
+- [x] Prueba: el aviso a la zona sin columnas de personas no lleva datos de
+      la persona; la nota de revisión no llega a quien solo consulta.
 - [x] Implementar y ADR-0043.
 
 ### PR 8 — Duplicar (`feature/duplicate-procedure`)

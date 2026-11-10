@@ -89,14 +89,25 @@ final class QuestionChanges {
 	 * un entero se perdería sin aviso. Lo que no parece un número tras el `|`
 	 * («A | B») es texto, y vale.
 	 *
-	 * @param array<int, array<string, mixed>> $raw Questions as the workshop sent them.
+	 * Solo se revisan las líneas nuevas o cambiadas: una opción guardada antes
+	 * de los puntos («Nota media | 7,5») vuelve tal cual, o como la escribe
+	 * {@see QuestionPoints::lines()}, y no impide guardar el panel. Una
+	 * pregunta sin rótulo se borra, y no se revisa.
+	 *
+	 * @param array<int, array<string, mixed>> $raw    Questions as the workshop sent them.
+	 * @param array<int, array<string, mixed>> $before Questions stored now.
 	 * @return string
 	 */
-	public static function input_errors( array $raw ): string {
+	public static function input_errors( array $raw, array $before = array() ): string {
+		$guardadas = array_column( $before, null, 'key' );
 		foreach ( $raw as $pregunta ) {
+			if ( '' === trim( (string) ( $pregunta['label'] ?? '' ) ) ) {
+				continue;
+			}
 			$rotulo = '«' . (string) ( $pregunta['label'] ?? '' ) . '»';
 			$tipo   = (string) ( $pregunta['type'] ?? '' );
-			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '' ) : '';
+			$antes  = $guardadas[ (string) ( $pregunta['key'] ?? '' ) ] ?? array();
+			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '', self::known_lines( $antes ) ) : '';
 			if ( '' !== $mal ) {
 				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
 			}
@@ -114,15 +125,32 @@ final class QuestionChanges {
 	}
 
 	/**
-	 * The first choice line whose points, after the last `|`, look like a number but are not one.
+	 * The choice lines a stored question already had: as stored and as the workshop writes them.
 	 *
-	 * @param mixed $choices The workshop's text, one choice per line.
+	 * @param array<string, mixed> $question Stored question, or empty.
+	 * @return string[]
+	 */
+	private static function known_lines( array $question ): array {
+		if ( array() === $question ) {
+			return array();
+		}
+		return array_merge( array_map( 'strval', (array) ( $question['choices'] ?? array() ) ), QuestionPoints::lines( $question ) );
+	}
+
+	/**
+	 * The first new choice line whose points, after the last `|`, look like a number but are not one.
+	 *
+	 * @param mixed    $choices The workshop's text, one choice per line.
+	 * @param string[] $known   Lines the stored question already had; not checked.
 	 * @return string The line, or ''.
 	 */
-	private static function bad_points( $choices ): string {
+	private static function bad_points( $choices, array $known ): string {
 		foreach ( is_string( $choices ) ? (array) preg_split( '/\r\n|\r|\n/', $choices ) : array() as $linea ) {
 			$linea = trim( (string) $linea );
 			$cola  = trim( (string) substr( (string) strrchr( $linea, '|' ), 1 ) );
+			if ( in_array( $linea, $known, true ) ) {
+				continue;
+			}
 			if ( false !== strpos( $linea, '|' ) && preg_match( '/^[-+]?[\d.,]*\d[\d.,]*$/', $cola ) && ! preg_match( '/^\d{1,6}$/', $cola ) ) {
 				return $linea;
 			}

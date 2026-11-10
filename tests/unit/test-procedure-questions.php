@@ -878,6 +878,91 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una opción antigua con `|` sobrevive a volver a guardar el panel: el
+	 * taller la escribe con « | 0» y se lee igual que estaba, sin puntos.
+	 */
+	public function test_stored_choices_with_a_bar_survive_the_workshop_round_trip() {
+		$q = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Curso',
+					'type'    => 'multiple',
+					'choices' => array( 'Curso | 2024', 'Otro' ),
+				),
+			)
+		);
+
+		$this->assertSame( array( 'Curso | 2024 | 0', 'Otro | 0' ), QuestionPoints::lines( $q[0] ) );
+
+		$otra = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Curso',
+					'type'    => 'multiple',
+					'choices' => implode( "\n", QuestionPoints::lines( $q[0] ) ),
+				),
+			)
+		);
+		$this->assertSame( array( 'Curso | 2024', 'Otro' ), $otra[0]['choices'] );
+		$this->assertArrayNotHasKey( 'points', $otra[0], 'todo a cero es no tener puntos' );
+
+		$sin_barra = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'   => 'Ejes',
+					'type'    => 'multiple',
+					'choices' => array( 'X', 'Y' ),
+				),
+			)
+		);
+		$this->assertSame( array( 'X', 'Y' ), QuestionPoints::lines( $sin_barra[0] ), 'sin `|`, las líneas son el texto' );
+	}
+
+	/**
+	 * Solo se revisan los puntos de lo tecleado nuevo o cambiado, y no los de
+	 * una pregunta que se borra.
+	 */
+	public function test_only_new_or_changed_choice_lines_are_checked() {
+		$antes   = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Nota',
+					'type'    => 'multiple',
+					'choices' => array( 'Nota media | 7,5', 'Otra' ),
+				),
+				array(
+					'key'   => 'q2',
+					'label' => 'Grupos',
+					'type'  => 'text',
+				),
+			)
+		);
+		$enviada = function ( string $label, string $choices ) use ( $antes ): array {
+			return array(
+				array(
+					'key'     => 'q1',
+					'label'   => $label,
+					'type'    => 'multiple',
+					'choices' => $choices,
+				),
+				array(
+					'key'   => 'q2',
+					'label' => 'Número de grupos',
+					'type'  => 'text',
+				),
+			);
+		};
+
+		$this->assertSame( '', QuestionChanges::input_errors( $enviada( 'Nota', implode( "\n", QuestionPoints::lines( $antes[0] ) ) ), $antes ) );
+		$this->assertSame( '', QuestionChanges::input_errors( $enviada( 'Nota', "Nota media | 7,5\nOtra" ), $antes ), 'como se pintaba antes, tampoco' );
+		$this->assertSame( '', QuestionChanges::input_errors( $enviada( '', "Nota media | 7,5\nB | -2" ), $antes ), 'una pregunta que se borra no se revisa' );
+		$this->assertStringContainsString( '«B | -2»', QuestionChanges::input_errors( $enviada( 'Nota', "Nota media | 7,5\nB | -2" ), $antes ) );
+	}
+
+	/**
 	 * Sin mínimo, el mínimo es cero: un máximo negativo es un rango imposible.
 	 */
 	public function test_a_negative_maximum_without_minimum_is_refused() {

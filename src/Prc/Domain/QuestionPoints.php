@@ -33,7 +33,7 @@ final class QuestionPoints {
 	 * salen los puntos. Una lista ya guardada se toma tal cual, con sus
 	 * `points` si los trae: así normalizar dos veces no cambia nada, y una
 	 * opción antigua «Curso | 2024» sigue siendo ese texto y vale 0. Sin
-	 * ninguna opción con puntos, no hay `points`.
+	 * ninguna opción con puntos, o con todos a cero, no hay `points`.
 	 *
 	 * @param string               $type Question type, one with choices.
 	 * @param array<string, mixed> $raw  Raw question.
@@ -56,7 +56,7 @@ final class QuestionPoints {
 			$textos[] = $una[0];
 			$valen[]  = $una[1];
 		}
-		if ( ! $con ) {
+		if ( ! $con || array() === array_filter( $valen ) ) {
 			return array( 'choices' => $textos );
 		}
 		return array(
@@ -127,17 +127,32 @@ final class QuestionPoints {
 	/**
 	 * The choices as the workshop writes them back: `Texto | 3` when there are points.
 	 *
+	 * Una pregunta sin puntos con alguna opción que lleva `|` («Curso | 2024»,
+	 * guardada antes de los puntos) se escribe entera con « | 0» al final: así
+	 * el último `|` es siempre el de los puntos, el texto vuelve tal cual al
+	 * guardar y, todo a cero, sigue sin puntos.
+	 *
 	 * @param array<string, mixed> $question Normalised question.
 	 * @return string[]
 	 */
 	public static function lines( array $question ): array {
 		$textos = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
-		if ( ! isset( $question['points'] ) || ! is_array( $question['points'] ) ) {
-			return $textos;
+		$puntos = isset( $question['points'] ) && is_array( $question['points'] ) ? $question['points'] : null;
+		if ( null === $puntos ) {
+			$barra = array_filter(
+				$textos,
+				function ( string $texto ): bool {
+					return false !== strpos( $texto, '|' );
+				}
+			);
+			if ( array() === $barra ) {
+				return $textos;
+			}
+			$puntos = array();
 		}
 		$out = array();
 		foreach ( $textos as $i => $texto ) {
-			$out[] = $texto . ' | ' . (int) ( $question['points'][ $i ] ?? 0 );
+			$out[] = $texto . ' | ' . (int) ( $puntos[ $i ] ?? 0 );
 		}
 		return $out;
 	}

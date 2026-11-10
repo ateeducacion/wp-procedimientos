@@ -248,13 +248,19 @@ final class ApplicationExport {
 	 *   cuenta;
 	 * - `conflict`: el mismo usuario con **otro** correo. No se funde en
 	 *   silencio: se queda la primera y esta se cuenta. Con el mismo correo es
-	 *   la misma persona, y no cuenta.
+	 *   la misma persona, y no cuenta;
+	 * - `invalid`: un usuario que la plataforma no acepta —fuera de
+	 *   `[a-z0-9_.@-]` o que no empieza por letra o cifra— o un correo que
+	 *   empieza por `=`, `+`, `-`, `@`, tabulador o retorno. Ese correo pasa
+	 *   la validación, pero en una hoja de cálculo sería una fórmula, y el
+	 *   usuario y el correo no se pueden neutralizar con una comilla sin
+	 *   cambiarlos.
 	 *
 	 * Un hueco de coordinación vacío no es una persona y no cuenta.
 	 *
 	 * @param int      $procedure_id Procedure post ID.
 	 * @param string[] $who          Keys of {@see who()}; empty for all.
-	 * @return array{people:array<int, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int}}
+	 * @return array{people:array<int, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}
 	 */
 	public static function people( int $procedure_id, array $who = array() ): array {
 		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
@@ -274,7 +280,7 @@ final class ApplicationExport {
 	 *
 	 * @param \WP_Post[] $applications Applications already loaded.
 	 * @param string[]   $who          Keys of {@see who()}; empty for all.
-	 * @return array<string, array{count:int, email:int, incomplete:int, conflict:int}>
+	 * @return array<string, array{count:int, email:int, incomplete:int, conflict:int, invalid:int}>
 	 */
 	public static function who_counts( array $applications, array $who = array() ): array {
 		$grupos = array();
@@ -304,7 +310,7 @@ final class ApplicationExport {
 	 *
 	 * @param iterable                $batches Applications, a batch (array of \WP_Post) at a time.
 	 * @param array<string, string[]> $groups  Group => sources.
-	 * @return array<string, array{people:array<string, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int}}>
+	 * @return array<string, array{people:array<string, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}>
 	 */
 	private static function tally( iterable $batches, array $groups ): array {
 		$out = array();
@@ -315,6 +321,7 @@ final class ApplicationExport {
 					'email'      => 0,
 					'incomplete' => 0,
 					'conflict'   => 0,
+					'invalid'    => 0,
 				),
 			);
 		}
@@ -352,12 +359,28 @@ final class ApplicationExport {
 			++$tally['left_out']['incomplete'];
 			return;
 		}
+		if ( ! self::is_safe_username( self::lower( $person['username'] ) ) || self::neutralize( (string) $person['email'] ) !== (string) $person['email'] ) {
+			++$tally['left_out']['invalid'];
+			return;
+		}
 		$clave = self::lower( $person['username'] );
 		if ( ! isset( $tally['people'][ $clave ] ) ) {
 			$tally['people'][ $clave ] = $person;
 		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
 			++$tally['left_out']['conflict'];
 		}
+	}
+
+	/**
+	 * Whether a username is one the platform takes and no spreadsheet runs.
+	 *
+	 * Se mira en minúsculas: la plataforma las pone al crear la cuenta.
+	 *
+	 * @param string $username Username, in lower case.
+	 * @return bool
+	 */
+	private static function is_safe_username( string $username ): bool {
+		return 1 === preg_match( '/^[a-z0-9][a-z0-9_.@-]*$/', $username );
 	}
 
 	/**
@@ -390,8 +413,9 @@ final class ApplicationExport {
 	 * comillas solo si lo exige —una coma, unas comillas o un salto—. El
 	 * nombre y los apellidos que empiecen por `=`, `+`, `-` o `@` llevan una
 	 * comilla simple delante, como en el CSV: el fichero también se abre en
-	 * una hoja de cálculo. El usuario y el correo salen tal cual: ya están
-	 * validados, y una comilla delante los convertiría en otros.
+	 * una hoja de cálculo. El usuario y el correo salen tal cual: quien no
+	 * los tenía seguros ya se quedó fuera en {@see people()}, y una comilla
+	 * delante los convertiría en otros.
 	 *
 	 * @param array<int, array<string, mixed>> $people Rows with `username`, `firstname`, `lastname`, `email`.
 	 * @return string

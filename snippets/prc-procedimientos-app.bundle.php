@@ -8524,6 +8524,12 @@ final class ApplicationExport {
 
 
 
+
+
+
+
+
+
 	public static function people( int $procedure_id, array $who = array() ): array {
 		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
 		return array(
@@ -8583,6 +8589,7 @@ final class ApplicationExport {
 					'email'      => 0,
 					'incomplete' => 0,
 					'conflict'   => 0,
+					'invalid'    => 0,
 				),
 			);
 		}
@@ -8620,12 +8627,28 @@ final class ApplicationExport {
 			++$tally['left_out']['incomplete'];
 			return;
 		}
+		if ( ! self::is_safe_username( self::lower( $person['username'] ) ) || self::neutralize( (string) $person['email'] ) !== (string) $person['email'] ) {
+			++$tally['left_out']['invalid'];
+			return;
+		}
 		$clave = self::lower( $person['username'] );
 		if ( ! isset( $tally['people'][ $clave ] ) ) {
 			$tally['people'][ $clave ] = $person;
 		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
 			++$tally['left_out']['conflict'];
 		}
+	}
+
+
+
+
+
+
+
+
+
+	private static function is_safe_username( string $username ): bool {
+		return 1 === preg_match( '/^[a-z0-9][a-z0-9_.@-]*$/', $username );
 	}
 
 
@@ -8649,6 +8672,7 @@ final class ApplicationExport {
 		$who = is_array( $options['who'] ?? null ) ? $options['who'] : array();
 		return self::moodle_lines( self::people( $procedure_id, $who )['people'] );
 	}
+
 
 
 
@@ -13080,12 +13104,14 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function who_label( array $quien ): string {
 		$cuenta  = (int) ( $quien['count'] ?? 0 );
 		$motivos = array(
 			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
 			'incomplete' => array( '%d incompleta', '%d incompletas' ),
 			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
 		);
 		$fuera   = array();
 		foreach ( $motivos as $clave => list( $una, $varias ) ) {

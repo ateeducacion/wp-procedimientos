@@ -564,8 +564,32 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			array( 'meta' => array( \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0001' ) ) )
 		);
 		$this->assertContains( $cambio->get_status(), array( 401, 403 ) );
+		wp_set_current_user( $head );
 		$this->assertFalse( current_user_can( 'edit_post_meta', $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES ) );
 		$this->assertSame( array( 'LISTA01' ), get_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $head, $caso['procedure'] ) );
+	}
+
+	/**
+	 * Los tipos privados se guardan por `options.php` con la capacidad del
+	 * aplicativo, sin `manage_options`; sin ella, no.
+	 */
+	public function test_options_php_saves_the_private_types_with_the_app_capability() {
+		\Prc\Admin\Settings::register_settings();
+		$gestion = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		get_userdata( $gestion )->add_cap( ProcedureAccess::CAP_MANAGE );
+		$nadie = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		// Lo que comprueba options.php antes de guardar el grupo.
+		$capacidad  = apply_filters( 'option_page_capability_' . \Prc\Admin\Settings::CENTRES_GROUP, 'manage_options' );
+		$permitidas = apply_filters( 'allowed_options', array() );
+		$this->assertContains( \Prc\Domain\CentreCatalog::OPTION_PRIVATE_TYPES, (array) ( $permitidas[ \Prc\Admin\Settings::CENTRES_GROUP ] ?? array() ) );
+
+		wp_set_current_user( $gestion );
+		$this->assertFalse( current_user_can( 'manage_options' ) );
+		$this->assertTrue( current_user_can( $capacidad ), 'con prc_manage_app guarda el grupo' );
+
+		wp_set_current_user( $nadie );
+		$this->assertFalse( current_user_can( $capacidad ), 'sin prc_manage_app, no' );
 	}
 }

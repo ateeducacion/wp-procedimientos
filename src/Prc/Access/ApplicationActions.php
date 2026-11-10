@@ -74,6 +74,7 @@ final class ApplicationActions {
 	 */
 	public static function register(): void {
 		add_filter( 'pre_untrash_post', array( self::class, 'guard_untrash' ), 10, 2 );
+		add_filter( 'pre_delete_post', array( self::class, 'guard_delete' ), 10, 2 );
 		add_filter( 'wp_untrash_post_status', array( self::class, 'untrash_status' ), 10, 3 );
 	}
 
@@ -264,7 +265,54 @@ final class ApplicationActions {
 		if ( null !== $untrash || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $untrash;
 		}
-		return null === self::live_twin( (int) $post->ID ) ? null : false;
+		// En un procedimiento histórico no se restaura nada, tampoco
+		// administración (ADR-0023).
+		return null === self::live_twin( (int) $post->ID ) && ! ProcedureAccess::is_archived( (int) $post->ID ) ? null : false;
+	}
+
+	/**
+	 * Whether the user may send this application to the bin or, from the bin, delete it for good.
+	 *
+	 * Es lo que `map_meta_cap()` contesta a `delete_post` sobre una solicitud:
+	 *
+	 * - con el procedimiento histórico, nadie, tampoco administración
+	 *   (ADR-0023): ni a la papelera, ni restaurar por el escritorio, que
+	 *   pregunta lo mismo;
+	 * - en la papelera —borrar para siempre, «Vaciar papelera»—, solo quien
+	 *   administra el aplicativo: quien revisa retira y restaura, no borra;
+	 * - publicada —enviarla a la papelera—, quien revisa.
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return bool
+	 */
+	public static function may_delete( int $user_id, int $application_id ): bool {
+		if ( ProcedureAccess::is_archived( $application_id ) ) {
+			return false;
+		}
+		return 'trash' === get_post_status( $application_id )
+			? ProcedureAccess::is_manager( $user_id )
+			: ProcedureAccess::can_review( $user_id, $application_id );
+	}
+
+	/**
+	 * Keep a withdrawn application from being deleted for good by anyone but administration.
+	 *
+	 * La capa de abajo de {@see may_delete()}: vale también para lo que no
+	 * pregunta por capacidades, como el vaciado automático de la papelera del
+	 * núcleo (`wp_scheduled_delete()`, sin nadie delante). Una retirada se
+	 * queda con sus documentos y su historial hasta que administración la
+	 * borre a mano.
+	 *
+	 * @param mixed    $delete Null to go on; anything else stops it.
+	 * @param \WP_Post $post   The post.
+	 * @return mixed
+	 */
+	public static function guard_delete( $delete, $post ) {
+		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type || 'trash' !== $post->post_status ) {
+			return $delete;
+		}
+		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
 	}
 
 	/**

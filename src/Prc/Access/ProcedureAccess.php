@@ -1259,7 +1259,10 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo ) {
+		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
+			// Papelera y borrado definitivo tienen su propia regla (ADR-0044).
+			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
 				: self::can_review( $user_id, $post_id );

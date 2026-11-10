@@ -469,8 +469,72 @@ class Test_Application_Actions extends WP_UnitTestCase {
 		$this->assertNotSame( '', $camino, 'el descriptor de prueba vale' );
 		$this->assertNotNull( $this->retirar( $c['head'], $c['application'] ) );
 		$this->assertFileExists( $camino, 'en la papelera, el documento se conserva' );
+		$this->acting_as( $c['reviewer'] );
+		wp_delete_post( $c['application'], true );
+		$this->assertFileExists( $camino, 'quien revisa no la borra para siempre' );
+		$this->acting_as( $this->administrator() );
 		wp_delete_post( $c['application'], true );
 		$this->assertFileDoesNotExist( $camino, 'borrada para siempre, el documento también' );
+	}
+
+	/**
+	 * Borrar para siempre una retirada es de administración; quien revisa
+	 * envía a la papelera y restaura.
+	 */
+	public function test_only_administration_deletes_a_withdrawn_one_for_good() {
+		$c = $this->caso();
+		$this->acting_as( $c['reviewer'] );
+		$this->assertTrue( current_user_can( 'delete_post', $c['application'] ), 'a la papelera, sí' );
+		ApplicationOperations::withdraw( $c['application'], $c['head'], ApplicationOperations::BY_APPLICANT );
+		$this->assertFalse( current_user_can( 'delete_post', $c['application'] ), 'borrarla para siempre, no' );
+		$this->assertTrue( current_user_can( ApplicationActions::CAP_RESTORE, $c['application'] ) );
+		$this->assertFalse( wp_delete_post( $c['application'], true ) );
+		$this->assertSame( 'trash', get_post_status( $c['application'] ) );
+		$this->acting_as( $this->administrator() );
+		$this->assertTrue( current_user_can( 'delete_post', $c['application'] ) );
+	}
+
+	/**
+	 * La papelera del núcleo no se lleva una retirada antigua.
+	 */
+	public function test_the_automatic_bin_emptying_keeps_withdrawn_applications() {
+		$c = $this->caso();
+		ApplicationOperations::withdraw( $c['application'], $c['head'], ApplicationOperations::BY_APPLICANT );
+		$this->assertSame( '', get_post_meta( $c['application'], '_wp_trash_meta_time', true ), 'sin fecha de caducidad' );
+		// Y aunque la tuviera —una retirada de antes de esta regla—, el vaciado
+		// automático, sin nadie delante, no la borra.
+		update_post_meta( $c['application'], '_wp_trash_meta_time', time() - 100 * DAY_IN_SECONDS );
+		$papelera = $this->procedure( $c['reviewer'], array( $c['area'] ), array(), array( 'post_title' => 'Para la papelera' ) );
+		wp_trash_post( $papelera );
+		update_post_meta( $papelera, '_wp_trash_meta_time', time() - 100 * DAY_IN_SECONDS );
+		$this->acting_as( 0 );
+		wp_scheduled_delete();
+		$this->assertSame( 'trash', get_post_status( $c['application'] ) );
+		$this->assertFalse( get_post_status( $papelera ), 'el resto de la papelera se vacía como siempre' );
+		$this->assertNotSame( array(), ApplicationLog::all( $c['application'] ) );
+		// Restaurada, vuelve como estaba.
+		ApplicationOperations::restore( $c['application'] );
+		$this->assertSame( 'publish', get_post_status( $c['application'] ) );
+	}
+
+	/**
+	 * Con el procedimiento histórico nadie retira ni restaura, tampoco
+	 * administración por el escritorio.
+	 */
+	public function test_an_archived_procedure_freezes_the_bin_for_everyone() {
+		$c     = $this->caso();
+		$otra  = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$admin = $this->administrator();
+		ApplicationOperations::withdraw( $otra, $c['reviewer'], ApplicationOperations::BY_REVIEWER, 'Por error.' );
+		update_post_meta( $c['procedure'], ProcedureMetaKeys::ARCHIVED, true );
+		$this->acting_as( $admin );
+		$this->assertFalse( current_user_can( 'delete_post', $c['application'] ) );
+		$this->assertFalse( current_user_can( 'delete_post', $otra ) );
+		$this->assertFalse( current_user_can( ApplicationActions::CAP_RESTORE, $otra ) );
+		$this->assertNull( $this->taller( $admin, ApplicationActionsPanel::OP_RETIRE, $c['procedure'], $c['application'], array( ApplicationActionsPanel::FIELD_REASON => 'x' ) ) );
+		wp_untrash_post( $otra );
+		$this->assertSame( 'trash', get_post_status( $otra ), 'tampoco por el escritorio' );
+		$this->assertSame( 'publish', get_post_status( $c['application'] ) );
 	}
 
 	// ─── retirar y restaurar (quien revisa) ────────────────────────────────

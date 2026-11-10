@@ -96,6 +96,10 @@ final class ApplicationOperations {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
 			return;
 		}
+		// La papelera del núcleo se vacía sola a los EMPTY_TRASH_DAYS días, y
+		// lo que mira es esta meta: sin ella, una retirada no caduca y no se
+		// pierden ni sus documentos ni su historial (ADR-0044).
+		delete_post_meta( $post_id, '_wp_trash_meta_time' );
 		$ctx = self::$context ?? array(
 			'user'   => get_current_user_id(),
 			'by'     => self::BY_DESK,

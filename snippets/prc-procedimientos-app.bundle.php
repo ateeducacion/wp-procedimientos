@@ -7192,7 +7192,10 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo ) {
+		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
+
+			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
 				: self::can_review( $user_id, $post_id );
@@ -7386,6 +7389,7 @@ final class ApplicationActions {
 
 	public static function register(): void {
 		add_filter( 'pre_untrash_post', array( self::class, 'guard_untrash' ), 10, 2 );
+		add_filter( 'pre_delete_post', array( self::class, 'guard_delete' ), 10, 2 );
 		add_filter( 'wp_untrash_post_status', array( self::class, 'untrash_status' ), 10, 3 );
 	}
 
@@ -7576,7 +7580,54 @@ final class ApplicationActions {
 		if ( null !== $untrash || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $untrash;
 		}
-		return null === self::live_twin( (int) $post->ID ) ? null : false;
+
+
+		return null === self::live_twin( (int) $post->ID ) && ! ProcedureAccess::is_archived( (int) $post->ID ) ? null : false;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function may_delete( int $user_id, int $application_id ): bool {
+		if ( ProcedureAccess::is_archived( $application_id ) ) {
+			return false;
+		}
+		return 'trash' === get_post_status( $application_id )
+			? ProcedureAccess::is_manager( $user_id )
+			: ProcedureAccess::can_review( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function guard_delete( $delete, $post ) {
+		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type || 'trash' !== $post->post_status ) {
+			return $delete;
+		}
+		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
 	}
 
 
@@ -13299,6 +13350,10 @@ final class ApplicationOperations {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
 			return;
 		}
+
+
+
+		delete_post_meta( $post_id, '_wp_trash_meta_time' );
 		$ctx = self::$context ?? array(
 			'user'   => get_current_user_id(),
 			'by'     => self::BY_DESK,

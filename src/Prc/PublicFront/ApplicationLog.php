@@ -45,9 +45,10 @@ final class ApplicationLog {
 	 * @param int                  $application_id Application post ID.
 	 * @param string               $event          What happened: lowercase letters and underscores.
 	 * @param array<string, mixed> $data           What the event tells.
+	 * @param int                  $user_id        Account that acted; 0 for the current one.
 	 * @return void
 	 */
-	public static function add( int $application_id, string $event, array $data ): void {
+	public static function add( int $application_id, string $event, array $data, int $user_id = 0 ): void {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return;
 		}
@@ -55,7 +56,7 @@ final class ApplicationLog {
 		$todo   = self::all( $application_id );
 		$todo[] = array(
 			'at'    => gmdate( 'Y-m-d\TH:i:s\Z' ),
-			'user'  => get_current_user_id(),
+			'user'  => $user_id > 0 ? $user_id : get_current_user_id(),
 			'event' => $event,
 			'data'  => $data,
 		);

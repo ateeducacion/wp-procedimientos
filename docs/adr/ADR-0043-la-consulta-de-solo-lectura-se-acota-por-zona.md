@@ -242,3 +242,40 @@ no se ofrece.
 - `can_read()`, `why_not_code()` y `may_use_area()` pasan a privados: no los
   usaba nadie fuera del guardián, y la prueba de `may_use_area()` pregunta
   ahora por `assign_term`, que es la puerta de verdad.
+
+## Adenda — 2026-11-10 (revisión del PR 7)
+
+La revisión del PR cambió cinco detalles; la decisión no cambia.
+
+- **Lista de permitidas, no de prohibidas.** `ObserverScope::FORBIDDEN_COLUMNS`
+  no llega a publicarse: lo sustituye `ObserverScope::ALLOWED_COLUMNS`, una
+  lista cerrada y escrita a mano de las columnas que la consulta puede
+  enseñar —las que se ofrecían, sin el DNI de nadie ni la nota—, más las de
+  las preguntas (`q4`, `q4:r1`; `ObserverScope::is_allowed()`). Una columna
+  que otro cambio añada a la exportación no llega a la consulta hasta que
+  alguien la escriba en esa lista. La raya «nunca el DNI ni la nota» sigue
+  igual; lo que cambia es que fallar es no enseñar.
+- **`can_view_application()` dice para qué se pregunta.** El cuarto
+  argumento booleano pasa a ser `string $purpose` y `string $question_key`:
+  `ProcedureAccess::VIEW_OWN` responde solo si la solicitud es **suya** —de su
+  centro o su solicitud individual de profesorado—, y es lo que pregunta el
+  correo con la nota de revisión: quien cambió de centro y consulta la zona
+  del antiguo ya no la recibe. `ProcedureAccess::VIEW_DOCUMENT` con la
+  pregunta del documento es lo que pregunta la descarga: quien consulta solo
+  descarga, con `prc_observer_files`, los documentos de preguntas que están
+  entre las columnas que la consulta enseña.
+- **El aviso a la zona enseña lo mismo que la consulta.** La copia de
+  `people_changed` describe a la persona solo con las columnas `person_*` que
+  el procedimiento enseña en la consulta; sin ninguna, dice que hubo un alta,
+  un cambio o una baja en la lista de ese centro, sin datos de la persona. El
+  correo a los contactos no cambia.
+- **Guardar el perfil normaliza la meta de zona como lista.** El campo
+  «Zonas de consulta» escribe siempre un array de códigos, aunque la meta
+  tuviera un texto con comas. Si `prc_zone_meta_key` apunta a una meta que
+  escribe otro sistema y espera otro formato, guardar el perfil desde el
+  escritorio la reescribe: hay que tenerlo en cuenta antes de apuntar el
+  filtro a una meta ajena.
+- `ObserverScope::observers_of()` lee solo los ID de las cuentas y su meta de
+  zona, en una consulta, sin cargar el resto de sus metas.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

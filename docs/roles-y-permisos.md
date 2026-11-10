@@ -297,7 +297,7 @@ campo `zone` de cada centro (ADR-0042).
 
 | Pieza | Dónde |
 |---|---|
-| Zonas de la persona | meta de usuario, clave por `prc_zone_meta_key`; lista o texto con comas |
+| Zonas de la persona | meta de usuario, clave por `prc_zone_meta_key`; se lee como lista o como texto con comas, y **guardar el perfil la reescribe como lista** —cuidado si el filtro apunta a una meta que escribe otro sistema— |
 | Centros de esas zonas | `ProcedureAccess::observer_codes()`, del catálogo de hoy |
 | Si el procedimiento admite consulta | `prc_observable`, y que esté publicado (`ObserverScope::is_observable()`) |
 | Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en el panel «Consulta» del taller |
@@ -316,9 +316,13 @@ Cinco reglas:
    decidir: un centro que cambia de zona deja de verse desde la antigua. Una
    solicitud de profesorado no tiene centro, y un centro fuera del catálogo
    no tiene zona: por zona, no se ven.
-4. **El DNI y la nota, nunca.** Ni en la pantalla ni en el CSV, aunque el
-   procedimiento los marque; tampoco el historial ni el fichero de alta de
-   usuarios.
+4. **Solo columnas de una lista cerrada.** Las que puede enseñar están
+   escritas a mano (`ObserverScope::ALLOWED_COLUMNS`) más las preguntas; el
+   DNI y la nota no están, ni en la pantalla ni en el CSV, y una columna nueva
+   de la exportación no entra sola. Tampoco el historial ni el fichero de
+   alta de usuarios. Los documentos, solo los de preguntas que se enseñan, y
+   el aviso de personas a la zona describe a la persona con esas mismas
+   columnas.
 5. **No confirma lo que no enseña.** Un procedimiento que no admite consulta
    responde igual que uno que no existe.
 

@@ -453,9 +453,11 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   procedimiento publicado con `prc_observable`, y nada más; ni editar, ni
   borrar, ni el taller. Lo decide `ProcedureAccess::can_observe()` y
   `can_observe_application()`; los centros de cada zona se leen del catálogo
-  al decidir, no se copian. **El DNI o NIE y la nota de revisión no se
-  enseñan nunca** en la consulta ni en su CSV
-  (`ObserverScope::FORBIDDEN_COLUMNS`), aunque el procedimiento los marque. Un
+  al decidir, no se copian. **La consulta solo enseña columnas de una lista
+  cerrada** (`ObserverScope::ALLOWED_COLUMNS`, más las preguntas): ni el DNI
+  o NIE ni la nota de revisión están, y una columna nueva de la exportación
+  no entra hasta añadirla a mano. Lo mismo vale para su CSV, sus documentos
+  y el aviso de personas a la zona. Un
   procedimiento que no admite consulta responde igual que uno que no existe.
   Ni el nombre con que una instalación llama a la zona ni a quien consulta se
   escriben aquí: «zona» y «consulta».

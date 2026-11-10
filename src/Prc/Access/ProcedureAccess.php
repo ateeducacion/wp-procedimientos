@@ -1091,6 +1091,8 @@ final class ProcedureAccess {
 				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
 				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'state'    => ProcedureState::of_post( $procedure_id ),
+				// La prórroga de la solicitud abre la lista que sigue su plazo.
+				'late'     => ApplicationActions::is_late_open( $application_id ),
 			)
 		);
 	}

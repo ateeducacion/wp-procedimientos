@@ -24,6 +24,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\MyCentre;
 use Prc\PublicFront\Observe;
+use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleSpecPanel;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ApplyFormView;
@@ -807,6 +808,54 @@ class Test_Application_Actions extends WP_UnitTestCase {
 		);
 		$this->assertContains( 'internal_note', $con['columns'] );
 		$this->assertStringContainsString( self::INTERNA, ApplicationExport::csv( $c['procedure'], $con['columns'] ) );
+	}
+
+	/**
+	 * La prórroga abre también la lista de personas que sigue el plazo de la
+	 * solicitud; con ventana propia, manda la ventana propia.
+	 */
+	public function test_the_extension_opens_the_people_list_that_follows_the_application() {
+		$spec = array(
+			'enabled' => true,
+			'roles'   => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Docente',
+				),
+			),
+		);
+		$c    = $this->caso( false, array( ProcedureMetaKeys::PEOPLE_SPEC => $spec ) );
+		$id   = ApplicationOperations::submit_for( $c['procedure'], $c['reviewer'], 'C0002', $this->dia( 5 ) );
+		$sur  = $this->school_head( 'C0002' );
+		$this->assertTrue( ProcedureAccess::can_edit_people( $sur, $id ), 'con prórroga, la lista sin fechas se abre' );
+		$this->assertTrue(
+			People::add(
+				$id,
+				$sur,
+				array(
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
+					'role'    => 'r1',
+				)
+			)['ok']
+		);
+		$this->assertFalse( ProcedureAccess::can_edit_people( $c['head'], $c['application'] ), 'sin prórroga, cerrada' );
+
+		update_post_meta( $id, ApplicationMetaKeys::LATE_UNTIL, $this->dia( -1 ) );
+		$this->assertFalse( ProcedureAccess::can_edit_people( $sur, $id ), 'vencida, cerrada' );
+
+		update_post_meta( $id, ApplicationMetaKeys::LATE_UNTIL, $this->dia( 5 ) );
+		update_post_meta(
+			$c['procedure'],
+			ProcedureMetaKeys::PEOPLE_SPEC,
+			$spec + array(
+				'opens_at'  => $this->dia( -9 ),
+				'closes_at' => $this->dia( -2 ),
+			)
+		);
+		$this->assertFalse( ProcedureAccess::can_edit_people( $sur, $id ), 'con ventana propia, manda la ventana propia' );
 	}
 
 	// ─── el historial ──────────────────────────────────────────────────────

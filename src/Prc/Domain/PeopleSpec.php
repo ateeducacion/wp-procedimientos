@@ -333,7 +333,7 @@ final class PeopleSpec {
 				return $texto;
 			}
 		}
-		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review );
+		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review, ! empty( $ctx['late'] ) );
 	}
 
 	/**
@@ -343,13 +343,14 @@ final class PeopleSpec {
 	 * @param string               $today  Y-m-d.
 	 * @param string               $state  Procedure state.
 	 * @param string               $review Review state.
+	 * @param bool                 $late   Whether the application has a live extension.
 	 * @return string Empty when open.
 	 */
-	private static function window( array $spec, string $today, string $state, string $review ): string {
+	private static function window( array $spec, string $today, string $state, string $review, bool $late = false ): string {
 		$abre   = (string) $spec['opens_at'];
 		$cierra = (string) $spec['closes_at'];
 		if ( '' === $abre && '' === $cierra ) {
-			return self::application_editable( $state, $review )
+			return self::application_editable( $state, $review, $late )
 				? ''
 				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
 		}
@@ -366,13 +367,17 @@ final class PeopleSpec {
 	 * Whether the school may edit its application in this state: the rule of
 	 * the application screen (ADR-0020).
 	 *
+	 * Sin fechas propias, la lista sigue la ventana de la solicitud, y con
+	 * ella su prórroga (ADR-0044): la regla es la de
+	 * {@see ProcedureState::application_window()}.
+	 *
 	 * @param string $state  Procedure state.
 	 * @param string $review Review state.
+	 * @param bool   $late   Whether the application has a live extension.
 	 * @return bool
 	 */
-	public static function application_editable( string $state, string $review ): bool {
-		return ProcedureState::accepts_applications( $state )
-			|| ( ProcedureMetaKeys::STATE_AMENDMENT === $state && ApplicationMetaKeys::REVIEW_AMEND === $review );
+	public static function application_editable( string $state, string $review, bool $late = false ): bool {
+		return '' === ProcedureState::application_window( $state, $review, false, $late );
 	}
 
 	/**

@@ -3180,7 +3180,7 @@ final class PeopleSpec {
 				return $texto;
 			}
 		}
-		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review );
+		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review, ! empty( $ctx['late'] ) );
 	}
 
 
@@ -3192,11 +3192,12 @@ final class PeopleSpec {
 
 
 
-	private static function window( array $spec, string $today, string $state, string $review ): string {
+
+	private static function window( array $spec, string $today, string $state, string $review, bool $late = false ): string {
 		$abre   = (string) $spec['opens_at'];
 		$cierra = (string) $spec['closes_at'];
 		if ( '' === $abre && '' === $cierra ) {
-			return self::application_editable( $state, $review )
+			return self::application_editable( $state, $review, $late )
 				? ''
 				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
 		}
@@ -3217,9 +3218,13 @@ final class PeopleSpec {
 
 
 
-	public static function application_editable( string $state, string $review ): bool {
-		return ProcedureState::accepts_applications( $state )
-			|| ( ProcedureMetaKeys::STATE_AMENDMENT === $state && ApplicationMetaKeys::REVIEW_AMEND === $review );
+
+
+
+
+
+	public static function application_editable( string $state, string $review, bool $late = false ): bool {
+		return '' === ProcedureState::application_window( $state, $review, false, $late );
 	}
 
 
@@ -7019,6 +7024,8 @@ final class ProcedureAccess {
 				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
 				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'state'    => ProcedureState::of_post( $procedure_id ),
+
+				'late'     => ApplicationActions::is_late_open( $application_id ),
 			)
 		);
 	}

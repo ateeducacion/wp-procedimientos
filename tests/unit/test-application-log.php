@@ -77,9 +77,10 @@ class Test_Application_Log extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El historial tiene tope: al llenarse se van las entradas más antiguas.
+	 * El historial tiene tope: al llenarse se van las entradas más antiguas
+	 * y la primera dice cuántas se han ido, sumando las de cada vez.
 	 */
-	public function test_the_history_keeps_the_newest_entries() {
+	public function test_the_history_keeps_the_newest_entries_and_says_how_many_went() {
 		$id    = $this->solicitud();
 		$viejo = array();
 		for ( $i = 0; $i < ApplicationLog::MAX; ++$i ) {
@@ -95,8 +96,53 @@ class Test_Application_Log extends WP_UnitTestCase {
 
 		$todo = ApplicationLog::all( $id );
 		$this->assertCount( ApplicationLog::MAX, $todo );
+		$this->assertSame( ApplicationLog::TRIMMED, $todo[0]['event'] );
+		$this->assertSame( 2, $todo[0]['data']['dropped'] );
+		$this->assertSame( 2, $todo[1]['data']['n'], 'las dos primeras se fueron' );
 		$this->assertSame( 'new', end( $todo )['event'] );
-		$this->assertSame( 1, $todo[0]['data']['n'], 'la primera se fue' );
+
+		ApplicationLog::add( $id, 'newer', array() );
+		$todo = ApplicationLog::all( $id );
+		$this->assertCount( ApplicationLog::MAX, $todo );
+		$this->assertSame( 3, $todo[0]['data']['dropped'] );
+		$this->assertSame( 3, $todo[1]['data']['n'] );
+	}
+
+	/**
+	 * Una entrada que otra petición escribe entre la lectura y la escritura
+	 * no se pierde.
+	 */
+	public function test_an_entry_written_in_between_is_not_lost() {
+		$id = $this->solicitud();
+		ApplicationLog::add( $id, 'first', array() );
+		$hecho   = false;
+		$colarse = static function ( $corto, $object_id, $meta_key ) use ( $id, &$hecho ) {
+			global $wpdb;
+			if ( $hecho || (int) $object_id !== $id || ApplicationMetaKeys::LOG !== $meta_key ) {
+				return $corto;
+			}
+			$hecho  = true;
+			$suyo   = ApplicationLog::all( $id );
+			$suyo[] = array(
+				'at'    => '2026-11-10T10:00:00Z',
+				'user'  => 1,
+				'event' => 'other',
+				'data'  => array(),
+			);
+			$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
+				$wpdb->postmeta,
+				array( 'meta_value' => maybe_serialize( $suyo ) ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				array(
+					'post_id'  => $id,
+					'meta_key' => ApplicationMetaKeys::LOG, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				)
+			);
+			return $corto;
+		};
+		add_filter( 'update_post_metadata', $colarse, 10, 3 );
+		$this->assertTrue( ApplicationLog::add( $id, 'mine', array() ) );
+		wp_cache_delete( $id, 'post_meta' );
+		$this->assertSame( array( 'first', 'other', 'mine' ), array_column( ApplicationLog::all( $id ), 'event' ) );
 	}
 
 	/**

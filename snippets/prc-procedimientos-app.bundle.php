@@ -6035,6 +6035,105 @@ final class ApplicationMetaRegistration {
 
 
 
+namespace Prc\Meta;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Meta\MetaSwap', false ) ) {
+final class MetaSwap {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function change( int $post_id, string $key, callable $change, int $tries = 2 ): array {
+		$res   = array();
+		$veces = max( 1, $tries );
+		for ( $i = 0; $i < $veces; ++$i ) {
+			wp_cache_delete( $post_id, 'post_meta' );
+			$leido = get_metadata_raw( 'post', $post_id, $key, true );
+			$res   = (array) $change( $leido ) + array(
+				'value' => null,
+				'error' => '',
+			);
+			if ( '' !== (string) $res['error'] || ! empty( $res['skip'] ) ) {
+				return array( 'ok' => '' === (string) $res['error'] ) + $res;
+			}
+			if ( self::swap( $post_id, $key, $leido, $res['value'] ) ) {
+				wp_cache_delete( $post_id, 'post_meta' );
+				return array( 'ok' => true ) + $res;
+			}
+		}
+		return array(
+			'ok'    => false,
+			'error' => 'conflict',
+		) + $res;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function swap( int $post_id, string $key, $read, $value ): bool {
+		if ( null === $read ) {
+			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
+		}
+		if ( empty( $read ) ) {
+
+
+
+			delete_post_meta( $post_id, $key );
+			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
+		}
+		if ( array() === $value ) {
+			return false !== delete_post_meta( $post_id, $key, wp_slash( $read ) );
+		}
+		return false !== update_post_meta( $post_id, $key, wp_slash( $value ), $read );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PostType;
 
 
@@ -9949,6 +10048,7 @@ final class ApplicationFiles {
 namespace Prc\PublicFront;
 
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\MetaSwap;
 use Prc\PostType\ApplicationPostType;
 
 
@@ -9979,6 +10079,7 @@ final class ApplicationLog {
 	public const MAX = 500;
 
 
+	public const TRIMMED = 'log_trimmed';
 
 
 
@@ -9990,19 +10091,70 @@ final class ApplicationLog {
 
 
 
-	public static function add( int $application_id, string $event, array $data, int $user_id = 0 ): void {
+
+
+
+	public static function add( int $application_id, string $event, array $data, int $user_id = 0 ): bool {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
-			return;
+			return false;
 		}
-		wp_cache_delete( $application_id, 'post_meta' );
-		$todo   = self::all( $application_id );
-		$todo[] = array(
+		$entrada = array(
 			'at'    => gmdate( 'Y-m-d\TH:i:s\Z' ),
 			'user'  => $user_id > 0 ? $user_id : get_current_user_id(),
 			'event' => $event,
 			'data'  => $data,
 		);
-		update_post_meta( $application_id, ApplicationMetaKeys::LOG, wp_slash( array_slice( $todo, -self::MAX ) ) );
+		$res     = MetaSwap::change(
+			$application_id,
+			ApplicationMetaKeys::LOG,
+			static function ( $leido ) use ( $entrada ): array {
+				return array( 'value' => self::append( self::sanitize( $leido ), $entrada ) );
+			},
+			3
+		);
+		return (bool) $res['ok'];
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function append( array $todo, array $entrada ): array {
+		$idas = 0;
+		if ( isset( $todo[0] ) && self::TRIMMED === $todo[0]['event'] ) {
+			$idas = (int) ( $todo[0]['data']['dropped'] ?? 0 );
+			array_shift( $todo );
+		}
+		$todo[] = $entrada;
+		if ( count( $todo ) + ( $idas > 0 ? 1 : 0 ) <= self::MAX ) {
+			return $idas > 0 ? array_merge( array( self::trimmed( $idas, $todo[0]['at'] ) ), $todo ) : $todo;
+		}
+		$quedan = array_slice( $todo, - ( self::MAX - 1 ) );
+		$idas  += count( $todo ) - count( $quedan );
+		return array_merge( array( self::trimmed( $idas, (string) $quedan[0]['at'] ) ), $quedan );
+	}
+
+
+
+
+
+
+
+
+	private static function trimmed( int $dropped, string $at ): array {
+		return array(
+			'at'    => $at,
+			'user'  => 0,
+			'event' => self::TRIMMED,
+			'data'  => array( 'dropped' => $dropped ),
+		);
 	}
 
 
@@ -10079,6 +10231,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\PeopleSpec;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\MetaSwap;
 use Prc\Meta\ProcedureMetaKeys;
 
 
@@ -10190,42 +10343,89 @@ final class People {
 
 
 
+
+
+
+
+
+
+
 	private static function apply( int $application_id, int $user_id, string $change, string $id, string $huella, array $raw ): array {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_EDIT_PEOPLE, $application_id ) ) {
 			return self::refused( ProcedureAccess::why_not_people( $user_id, $application_id ) );
 		}
-
-		wp_cache_delete( $application_id, 'post_meta' );
-		$lista = self::of( $application_id );
-		$sitio = self::position( $lista, $id );
-		if ( self::ADDED !== $change ) {
-			$stale = self::stale( $lista, $sitio, $huella );
-			if ( '' !== $stale ) {
-				return self::refused( $stale );
+		$spec  = self::spec( (int) wp_get_post_parent_id( $application_id ) );
+		$nueva = self::ADDED === $change ? bin2hex( random_bytes( 6 ) ) : $id;
+		$res   = MetaSwap::change(
+			$application_id,
+			ApplicationMetaKeys::PEOPLE,
+			static function ( $leido ) use ( $spec, $change, $id, $nueva, $huella, $raw ): array {
+				return self::compute( $spec, ApplicationPeople::rows( $leido ), $change, $id, $nueva, $huella, $raw );
 			}
+		);
+		if ( 'conflict' === $res['error'] ) {
+			return self::refused( 'Otra cuenta de su centro estaba cambiando la lista a la vez y no se ha podido guardar sin pisar su cambio. Revise la lista tal como está ahora y vuelva a intentarlo.' );
+		}
+		if ( ! $res['ok'] || ! empty( $res['skip'] ) ) {
+			return array(
+				'ok'      => (bool) $res['ok'],
+				'error'   => (string) $res['error'],
+				'errors'  => (array) ( $res['errors'] ?? array() ),
+				'changed' => false,
+				'stale'   => ! empty( $res['stale'] ),
+			);
+		}
+		return self::written( $application_id, $user_id, $change, (array) $res['before'], (array) $res['after'] );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function compute( array $spec, array $lista, string $change, string $id, string $nueva, string $huella, array $raw ): array {
+		$sitio = self::position( $lista, $id );
+		$stale = self::ADDED === $change ? '' : self::stale( $lista, $sitio, $huella );
+		if ( '' !== $stale ) {
+			return array(
+				'error' => $stale,
+				'stale' => true,
+			);
 		}
 		$antes = null === $sitio ? array() : $lista[ $sitio ];
 		if ( self::REMOVED === $change ) {
 			array_splice( $lista, (int) $sitio, 1 );
-			return self::write( $application_id, $user_id, $change, $antes, array(), $lista );
-		}
-
-		$fila       = ApplicationPeople::row( $raw );
-		$fila['id'] = self::ADDED === $change ? bin2hex( random_bytes( 6 ) ) : $id;
-		$errores    = ApplicationPeople::validate( self::spec( (int) wp_get_post_parent_id( $application_id ) ), $lista, self::ADDED === $change ? array( 'id' => '' ) + $fila : $fila );
-		if ( array() !== $errores ) {
 			return array(
-				'ok'     => false,
-				'error'  => self::why( $errores ),
-				'errors' => $errores,
+				'value'  => array_values( $lista ),
+				'before' => $antes,
+				'after'  => array(),
 			);
 		}
-		if ( null === $sitio ) {
-			$lista[] = $fila;
-		} else {
+		$fila       = array( 'id' => $nueva ) + ApplicationPeople::row( $raw );
+		$fila       = ApplicationPeople::row( $fila );
+		$errores    = ApplicationPeople::validate( $spec, $lista, self::ADDED === $change ? array( 'id' => '' ) + $fila : $fila );
+		$lista[]    = $fila;
+		$sin_cambio = $antes === $fila;
+		if ( null !== $sitio ) {
+			array_pop( $lista );
 			$lista[ $sitio ] = $fila;
 		}
-		return self::write( $application_id, $user_id, $change, $antes, $fila, $lista );
+		return array(
+			'value'  => array_values( $lista ),
+			'error'  => array() !== $errores ? self::why( $errores ) : '',
+			'errors' => $errores,
+
+			'skip'   => array() === $errores && $sin_cambio,
+			'before' => $antes,
+			'after'  => $fila,
+		);
 	}
 
 
@@ -10241,7 +10441,7 @@ final class People {
 			return 'Esa persona ya no está en la lista: otra cuenta de su centro la ha dado de baja mientras tanto. Revise la lista tal como está ahora.';
 		}
 		if ( ! hash_equals( ApplicationPeople::fingerprint( $rows[ $where ] ), $huella ) ) {
-			return 'Otra cuenta de su centro ha cambiado esta persona mientras usted la tenía abierta, y no se ha guardado nada para no pisar su cambio. Revise los datos actuales y vuelva a intentarlo.';
+			return 'Otra cuenta de su centro ha cambiado esta persona mientras usted la tenía abierta, y no se ha guardado nada para no pisar su cambio. Abajo están sus datos actuales: revíselos y vuelva a intentarlo.';
 		}
 		return '';
 	}
@@ -10256,9 +10456,7 @@ final class People {
 
 
 
-
-	private static function write( int $application_id, int $user_id, string $change, array $before, array $after, array $rows ): array {
-		update_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, wp_slash( array_values( $rows ) ) );
+	private static function written( int $application_id, int $user_id, string $change, array $before, array $after ): array {
 		ApplicationLog::add(
 			$application_id,
 			'person_' . $change,
@@ -10278,12 +10476,16 @@ final class People {
 
 
 
+
+
 		do_action( 'prc_people_changed', $application_id, $change, $before, $after, $user_id );
 
 		return array(
-			'ok'     => true,
-			'error'  => '',
-			'errors' => array(),
+			'ok'      => true,
+			'error'   => '',
+			'errors'  => array(),
+			'changed' => true,
+			'stale'   => false,
 		);
 	}
 
@@ -10350,9 +10552,11 @@ final class People {
 
 	private static function refused( string $why ): array {
 		return array(
-			'ok'     => false,
-			'error'  => $why,
-			'errors' => array(),
+			'ok'      => false,
+			'error'   => $why,
+			'errors'  => array(),
+			'changed' => false,
+			'stale'   => false,
 		);
 	}
 }

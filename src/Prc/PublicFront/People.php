@@ -11,6 +11,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\PeopleSpec;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\MetaSwap;
 use Prc\Meta\ProcedureMetaKeys;
 
 /**
@@ -76,7 +77,7 @@ final class People {
 	 * @param int                  $application_id Application post ID.
 	 * @param int                  $user_id        Who does it.
 	 * @param array<string, mixed> $raw            The person: name, surname, dni, email, phone, role, group.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	public static function add( int $application_id, int $user_id, array $raw ): array {
 		$raw['id'] = '';
@@ -91,7 +92,7 @@ final class People {
 	 * @param string               $id             Row ID.
 	 * @param string               $huella         Fingerprint of the row as it was painted.
 	 * @param array<string, mixed> $raw            The person as it should stay.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	public static function change( int $application_id, int $user_id, string $id, string $huella, array $raw ): array {
 		return self::apply( $application_id, $user_id, self::CHANGED, $id, $huella, $raw );
@@ -104,14 +105,21 @@ final class People {
 	 * @param int    $user_id        Who does it.
 	 * @param string $id             Row ID.
 	 * @param string $huella         Fingerprint of the row as it was painted.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	public static function remove( int $application_id, int $user_id, string $id, string $huella ): array {
 		return self::apply( $application_id, $user_id, self::REMOVED, $id, $huella, array() );
 	}
 
 	/**
-	 * Do one change, re-reading the list right before writing it.
+	 * Do one change on the list as it is when writing, and only if nobody
+	 * wrote in between.
+	 *
+	 * La lista se relee y el cambio se recalcula —y se revalida— en cada
+	 * intento de {@see MetaSwap::change()}: si otra cuenta escribió entre la
+	 * lectura y la escritura, la base de datos no la pisa y se intenta otra
+	 * vez sobre lo nuevo; si vuelve a pasar, se rechaza con aviso. Solo con la
+	 * lista ya escrita se anota en el historial y se avisa.
 	 *
 	 * @param int                  $application_id Application post ID.
 	 * @param int                  $user_id        Who does it.
@@ -119,51 +127,91 @@ final class People {
 	 * @param string               $id             Row ID; empty when adding.
 	 * @param string               $huella         Fingerprint as painted; empty when adding.
 	 * @param array<string, mixed> $raw            The person; empty when removing.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	private static function apply( int $application_id, int $user_id, string $change, string $id, string $huella, array $raw ): array {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_EDIT_PEOPLE, $application_id ) ) {
 			return self::refused( ProcedureAccess::why_not_people( $user_id, $application_id ) );
 		}
-		// Lo que hay ahora en la base de datos, no lo que había al pintar.
-		wp_cache_delete( $application_id, 'post_meta' );
-		$lista = self::of( $application_id );
-		$sitio = self::position( $lista, $id );
-		if ( self::ADDED !== $change ) {
-			$stale = self::stale( $lista, $sitio, $huella );
-			if ( '' !== $stale ) {
-				return self::refused( $stale );
+		$spec  = self::spec( (int) wp_get_post_parent_id( $application_id ) );
+		$nueva = self::ADDED === $change ? bin2hex( random_bytes( 6 ) ) : $id;
+		$res   = MetaSwap::change(
+			$application_id,
+			ApplicationMetaKeys::PEOPLE,
+			static function ( $leido ) use ( $spec, $change, $id, $nueva, $huella, $raw ): array {
+				return self::compute( $spec, ApplicationPeople::rows( $leido ), $change, $id, $nueva, $huella, $raw );
 			}
+		);
+		if ( 'conflict' === $res['error'] ) {
+			return self::refused( 'Otra cuenta de su centro estaba cambiando la lista a la vez y no se ha podido guardar sin pisar su cambio. Revise la lista tal como está ahora y vuelva a intentarlo.' );
+		}
+		if ( ! $res['ok'] || ! empty( $res['skip'] ) ) {
+			return array(
+				'ok'      => (bool) $res['ok'],
+				'error'   => (string) $res['error'],
+				'errors'  => (array) ( $res['errors'] ?? array() ),
+				'changed' => false,
+				'stale'   => ! empty( $res['stale'] ),
+			);
+		}
+		return self::written( $application_id, $user_id, $change, (array) $res['before'], (array) $res['after'] );
+	}
+
+	/**
+	 * The list after one change, from the list as it is now.
+	 *
+	 * @param array<string, mixed>              $spec   Specification.
+	 * @param array<int, array<string, string>> $lista  The list now.
+	 * @param string                            $change Change.
+	 * @param string                            $id     Row ID; empty when adding.
+	 * @param string                            $nueva  ID the row gets.
+	 * @param string                            $huella Fingerprint as painted.
+	 * @param array<string, mixed>              $raw    The person.
+	 * @return array<string, mixed> For MetaSwap::change(): `value` or `error`, and `before`, `after`.
+	 */
+	private static function compute( array $spec, array $lista, string $change, string $id, string $nueva, string $huella, array $raw ): array {
+		$sitio = self::position( $lista, $id );
+		$stale = self::ADDED === $change ? '' : self::stale( $lista, $sitio, $huella );
+		if ( '' !== $stale ) {
+			return array(
+				'error' => $stale,
+				'stale' => true,
+			);
 		}
 		$antes = null === $sitio ? array() : $lista[ $sitio ];
 		if ( self::REMOVED === $change ) {
 			array_splice( $lista, (int) $sitio, 1 );
-			return self::write( $application_id, $user_id, $change, $antes, array(), $lista );
-		}
-
-		$fila       = ApplicationPeople::row( $raw );
-		$fila['id'] = self::ADDED === $change ? bin2hex( random_bytes( 6 ) ) : $id;
-		$errores    = ApplicationPeople::validate( self::spec( (int) wp_get_post_parent_id( $application_id ) ), $lista, self::ADDED === $change ? array( 'id' => '' ) + $fila : $fila );
-		if ( array() !== $errores ) {
 			return array(
-				'ok'     => false,
-				'error'  => self::why( $errores ),
-				'errors' => $errores,
+				'value'  => array_values( $lista ),
+				'before' => $antes,
+				'after'  => array(),
 			);
 		}
-		if ( null === $sitio ) {
-			$lista[] = $fila;
-		} else {
+		$fila       = array( 'id' => $nueva ) + ApplicationPeople::row( $raw );
+		$fila       = ApplicationPeople::row( $fila );
+		$errores    = ApplicationPeople::validate( $spec, $lista, self::ADDED === $change ? array( 'id' => '' ) + $fila : $fila );
+		$lista[]    = $fila;
+		$sin_cambio = $antes === $fila;
+		if ( null !== $sitio ) {
+			array_pop( $lista );
 			$lista[ $sitio ] = $fila;
 		}
-		return self::write( $application_id, $user_id, $change, $antes, $fila, $lista );
+		return array(
+			'value'  => array_values( $lista ),
+			'error'  => array() !== $errores ? self::why( $errores ) : '',
+			'errors' => $errores,
+			// Un cambio que deja la fila igual no escribe, ni anota, ni avisa.
+			'skip'   => array() === $errores && $sin_cambio,
+			'before' => $antes,
+			'after'  => $fila,
+		);
 	}
 
 	/**
 	 * Why a change on a painted row cannot go on: the row went away or changed.
 	 *
-	 * @param array<int, array<string, string>> $rows  The list now.
-	 * @param int|null                          $where Where the row is, or null.
+	 * @param array<int, array<string, string>> $rows   The list now.
+	 * @param int|null                          $where  Where the row is, or null.
 	 * @param string                            $huella Fingerprint as painted.
 	 * @return string Empty when the row is as it was painted.
 	 */
@@ -172,24 +220,22 @@ final class People {
 			return 'Esa persona ya no está en la lista: otra cuenta de su centro la ha dado de baja mientras tanto. Revise la lista tal como está ahora.';
 		}
 		if ( ! hash_equals( ApplicationPeople::fingerprint( $rows[ $where ] ), $huella ) ) {
-			return 'Otra cuenta de su centro ha cambiado esta persona mientras usted la tenía abierta, y no se ha guardado nada para no pisar su cambio. Revise los datos actuales y vuelva a intentarlo.';
+			return 'Otra cuenta de su centro ha cambiado esta persona mientras usted la tenía abierta, y no se ha guardado nada para no pisar su cambio. Abajo están sus datos actuales: revíselos y vuelva a intentarlo.';
 		}
 		return '';
 	}
 
 	/**
-	 * Write the list, log the change and tell whoever listens.
+	 * Log a change already written and tell whoever listens.
 	 *
-	 * @param int                               $application_id Application post ID.
-	 * @param int                               $user_id        Who did it.
-	 * @param string                            $change         Change.
-	 * @param array<string, string>             $before         The row before; empty when added.
-	 * @param array<string, string>             $after          The row after; empty when removed.
-	 * @param array<int, array<string, string>> $rows           The whole list after.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @param int                   $application_id Application post ID.
+	 * @param int                   $user_id        Who did it.
+	 * @param string                $change         Change.
+	 * @param array<string, string> $before         The row before; empty when added.
+	 * @param array<string, string> $after          The row after; empty when removed.
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
-	private static function write( int $application_id, int $user_id, string $change, array $before, array $after, array $rows ): array {
-		update_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, wp_slash( array_values( $rows ) ) );
+	private static function written( int $application_id, int $user_id, string $change, array $before, array $after ): array {
 		ApplicationLog::add(
 			$application_id,
 			'person_' . $change,
@@ -203,6 +249,8 @@ final class People {
 		/**
 		 * One person of the list of an application has just been added, changed or removed.
 		 *
+		 * Solo después de que la lista quede escrita.
+		 *
 		 * @param int                   $application_id Application post ID.
 		 * @param string                $change         `added`, `changed` or `removed`.
 		 * @param array<string, string> $before         The row before; empty when added.
@@ -212,9 +260,11 @@ final class People {
 		do_action( 'prc_people_changed', $application_id, $change, $before, $after, $user_id );
 
 		return array(
-			'ok'     => true,
-			'error'  => '',
-			'errors' => array(),
+			'ok'      => true,
+			'error'   => '',
+			'errors'  => array(),
+			'changed' => true,
+			'stale'   => false,
 		);
 	}
 
@@ -277,13 +327,15 @@ final class People {
 	 * A refusal, with its reason.
 	 *
 	 * @param string $why Why.
-	 * @return array{ok:bool, error:string, errors:array<string, string>}
+	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	private static function refused( string $why ): array {
 		return array(
-			'ok'     => false,
-			'error'  => $why,
-			'errors' => array(),
+			'ok'      => false,
+			'error'   => $why,
+			'errors'  => array(),
+			'changed' => false,
+			'stale'   => false,
 		);
 	}
 }

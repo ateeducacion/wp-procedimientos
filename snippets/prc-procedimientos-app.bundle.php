@@ -314,6 +314,8 @@ final class ProcedureMetaKeys {
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
 			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
+			'application_withdrawn' => 'Aviso a los correos de contacto, y acuse a quien la retira, cuando un centro retira su solicitud',
+			'application_extended'  => 'Aviso a quien presentó la solicitud cuando se le concede una prórroga',
 		);
 	}
 
@@ -26283,6 +26285,8 @@ namespace Prc\Notifications;
 
 
 
+
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -26389,6 +26393,20 @@ final class Messages {
 
 			case Mailer::EVENT_PEOPLE_CHANGED:
 				return self::people( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_WITHDRAWN:
+				return self::withdrawn( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_EXTENDED:
+				return array(
+					'Prórroga de su solicitud: ' . $titulo,
+					array_merge(
+						array( 'Se ha concedido una prórroga a la solicitud al procedimiento «' . $titulo . '»: puede completarla o modificarla hasta el ' . self::text( $ctx, 'until' ) . ', incluido, aunque el plazo general esté cerrado.' ),
+						'' !== $quien ? array( 'Solicitud de: ' . $quien ) : array(),
+						self::link( 'Puede hacerlo en:', $ctx, 'url' ),
+						array( '', 'Este correo es un aviso automático: no hace falta responderlo.' )
+					),
+				);
 		}
 		return null;
 	}
@@ -26461,6 +26479,42 @@ final class Messages {
 				self::field( 'Antes', self::text( $ctx, 'before' ) ),
 				self::field( 'Después', self::text( $ctx, 'after' ) ),
 				self::link( '' !== self::text( $ctx, 'url_label' ) ? self::text( $ctx, 'url_label' ) : 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+			),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	private static function withdrawn( string $titulo, string $quien, array $ctx ): array {
+		$datos = array_merge(
+			self::field( 'Procedimiento', $titulo ),
+			self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+			self::field( 'Retirada por', self::text( $ctx, 'applicant' ) ),
+			self::field( 'Fecha', self::text( $ctx, 'date' ) )
+		);
+		if ( ! empty( $ctx['ack'] ) ) {
+			return array(
+				'Solicitud retirada: ' . $titulo,
+				array_merge(
+					array( 'Se ha retirado la solicitud al procedimiento «' . $titulo . '». Ya no cuenta.', '' ),
+					$datos,
+					self::link( 'Mientras el plazo siga abierto, puede presentar una nueva en:', $ctx, 'url' ),
+					array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+				),
+			);
+		}
+		return array(
+			'Solicitud retirada — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			array_merge(
+				array( 'Se ha retirado una solicitud del procedimiento «' . $titulo . '». Está en «Retiradas» del panel de solicitudes, y se puede restaurar mientras el centro no presente otra.', '' ),
+				$datos,
+				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
 			),
 		);
 	}
@@ -26599,6 +26653,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
@@ -26638,6 +26693,8 @@ final class Mailer {
 	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
 	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
 	public const EVENT_PEOPLE_CHANGED        = 'people_changed';
+	public const EVENT_APPLICATION_WITHDRAWN = 'application_withdrawn';
+	public const EVENT_APPLICATION_EXTENDED  = 'application_extended';
 
 
 
@@ -26675,6 +26732,8 @@ final class Mailer {
 		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
 		add_action( 'prc_people_changed', array( self::class, 'on_people_changed' ), 10, 5 );
+		add_action( 'prc_application_withdrawn', array( self::class, 'on_application_withdrawn' ), 10, 4 );
+		add_action( 'prc_application_extended', array( self::class, 'on_application_extended' ), 10, 4 );
 	}
 
 
@@ -26691,6 +26750,8 @@ final class Mailer {
 			self::EVENT_DELIVERY_RECEIVED,
 			self::EVENT_PROCEDURE_CREATED,
 			self::EVENT_PEOPLE_CHANGED,
+			self::EVENT_APPLICATION_WITHDRAWN,
+			self::EVENT_APPLICATION_EXTENDED,
 		);
 	}
 
@@ -27060,6 +27121,77 @@ final class Mailer {
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 				self::send_to_zone( (int) $application_id, $ctx, (array) $before, (array) $after );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_withdrawn( $application_id, $user_id = 0, $by = '', $reason = '' ): void {
+		unset( $reason );
+		if ( ApplicationOperations::BY_APPLICANT !== (string) $by ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
+				$propia      = (string) $ctx['url'];
+				$ctx['url']  = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
+				$ctx['ack'] = true;
+				$ctx['url'] = $propia;
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, array( self::email_of( (int) $user_id ) ), $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_extended( $application_id, $until = '', $previous = '', $user_id = 0 ): void {
+		unset( $previous, $user_id );
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( '' === (string) $until || ! ProcedureAccess::can_view_application( $autor, (int) $application_id, ProcedureAccess::VIEW_OWN ) ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $until, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['until'] = implode( '-', array_reverse( explode( '-', (string) $until ) ) );
+				self::send( self::EVENT_APPLICATION_EXTENDED, array( self::email_of( $autor ) ), $ctx );
 			}
 		);
 	}

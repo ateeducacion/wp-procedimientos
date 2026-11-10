@@ -286,6 +286,8 @@ final class ProcedureMetaKeys {
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
 			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
+			'application_withdrawn' => 'Aviso a los correos de contacto, y acuse a quien la retira, cuando un centro retira su solicitud',
+			'application_extended'  => 'Aviso a quien presentó la solicitud cuando se le concede una prórroga',
 		);
 	}
 

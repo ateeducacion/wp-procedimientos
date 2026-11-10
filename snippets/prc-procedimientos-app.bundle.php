@@ -10314,20 +10314,25 @@ final class Applications {
 
 
 
-	public static function review( int $application_id, string $state, string $note ): array {
+
+
+
+
+
+	public static function review( int $application_id, string $state, ?string $note ): array {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return self::refused( 'application' );
 		}
 		if ( ! isset( ApplicationMetaKeys::review_states()[ $state ] ) ) {
 			return self::refused( 'state' );
 		}
-		$note = trim( $note );
-		if ( '' === $note && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$note          = null === $note ? $previous_note : trim( $note );
+		if ( '' === trim( $note ) && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
 			return self::refused( 'note' );
 		}
 
-		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
-		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
 

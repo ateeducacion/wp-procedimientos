@@ -21776,6 +21776,10 @@ final class ProcedureDuplicate {
 		if ( $copia['contacts_left'] ) {
 			$args[ self::ARG_NO_CONTACTS ] = 1;
 		}
+
+
+
+		EditLock::release( $procedure_id );
 		Shell::leave( ProcedureEditor::url( $copia['id'], ProcedureEditor::PANEL_DATA, $args ) );
 		return '';
 	}

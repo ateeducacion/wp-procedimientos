@@ -52,6 +52,7 @@ return array(
 	'PublicFront/Workspace.php',
 	'PublicFront/View/ProcedureEditorView.php',
 	'PublicFront/ProcedureEditor.php',
+	'PublicFront/View/MeasuredQuestionView.php',
 	'PublicFront/View/ApplyFormView.php',
 	'PublicFront/ApplyForm.php',
 	'PublicFront/View/MyCentreView.php',

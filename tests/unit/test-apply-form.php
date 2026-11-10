@@ -797,4 +797,149 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertSame( '', get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true ) );
 		$this->assertSame( array(), get_post_meta( $id, ApplicationMetaKeys::COORDINATOR, true ) );
 	}
+
+	// ─── número, fecha, rejilla y puntos (ADR-0040) ────────────────────────
+
+	/**
+	 * Un procedimiento abierto con los tipos nuevos.
+	 *
+	 * @param bool $obligatorias Whether the questions are required.
+	 * @return int
+	 */
+	private function con_tipos_nuevos( bool $obligatorias = false ): int {
+		return $this->procedimiento(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'      => 'q1',
+						'label'    => 'Grupos',
+						'type'     => ProcedureQuestions::TYPE_NUMBER,
+						'required' => $obligatorias,
+						'max'      => 12,
+					),
+					array(
+						'key'      => 'q2',
+						'label'    => 'Fecha del claustro',
+						'type'     => ProcedureQuestions::TYPE_DATE,
+						'required' => $obligatorias,
+					),
+					array(
+						'key'      => 'q3',
+						'label'    => 'Alumnado',
+						'type'     => ProcedureQuestions::TYPE_GRID,
+						'required' => $obligatorias,
+						'rows'     => "Infantil\nPrimaria",
+					),
+					array(
+						'key'     => 'q4',
+						'label'   => 'Méritos',
+						'type'    => ProcedureQuestions::TYPE_MULTIPLE,
+						'choices' => "Huerto | 3\nRadio",
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Cada tipo nuevo se pinta con su control, y los puntos no se ven.
+	 */
+	public function test_the_new_types_are_painted_with_their_controls() {
+		$procedimiento = $this->con_tipos_nuevos( true );
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$html = $this->pintar( $procedimiento );
+		$n    = ApplyForm::FIELD_ANSWERS;
+
+		$this->assertMatchesRegularExpression( '/<input type="number"[^>]*id="prc-q-q1"[^>]*name="' . $n . '\[q1\]"[^>]*min="0"[^>]*max="12"[^>]*required/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="date"[^>]*id="prc-q-q2"[^>]*name="' . $n . '\[q2\]"[^>]*required/', $html );
+		$this->assertStringContainsString( 'name="' . $n . '[q3][r1]"', $html );
+		$this->assertStringContainsString( 'name="' . $n . '[q3][r2]"', $html );
+		$this->assertStringContainsString( '<label class="prc-campo__etiqueta" for="prc-q-q3-r1">Infantil</label>', $html );
+		$this->assertStringContainsString( 'value="Huerto"', $html );
+		$this->assertStringNotContainsString( '| 3', $html, 'quien solicita no ve los puntos' );
+	}
+
+	/**
+	 * Lo que se presenta se guarda con su forma: entero, día y una cantidad por fila.
+	 */
+	public function test_new_answers_are_stored_with_their_shape() {
+		$procedimiento = $this->con_tipos_nuevos();
+		$direccion     = $this->school_head( 'C0001' );
+
+		$vuelta = $this->enviar(
+			$direccion,
+			$procedimiento,
+			array(
+				ApplyForm::FIELD_ANSWERS => array(
+					'q1' => ' 007 ',
+					'q2' => '2026-02-28',
+					'q3' => array(
+						'r1' => '0',
+						'r2' => '',
+					),
+					'q4' => array( 'Huerto' ),
+				),
+			)
+		);
+
+		$this->assertNotNull( $vuelta );
+		$id = Applications::find( $procedimiento, 'C0001' );
+		$this->assertSame(
+			array(
+				'q1' => 7,
+				'q2' => '2026-02-28',
+				'q3' => array(
+					'r1' => 0,
+					'r2' => '',
+				),
+				'q4' => array( 'Huerto' ),
+			),
+			get_post_meta( $id, ApplicationMetaKeys::ANSWERS, true )
+		);
+
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+		$this->assertMatchesRegularExpression( '/name="' . ApplyForm::FIELD_ANSWERS . '\[q1\]"[^>]*value="7"/', $html, 'se vuelve a abrir con lo guardado' );
+		$this->assertMatchesRegularExpression( '/name="' . ApplyForm::FIELD_ANSWERS . '\[q3\]\[r1\]"[^>]*value="0"/', $html, 'y el cero sigue siendo cero' );
+		$this->assertMatchesRegularExpression( '/name="' . ApplyForm::FIELD_ANSWERS . '\[q3\]\[r2\]"[^>]*value=""/', $html );
+
+		// Con el plazo cerrado, lo presentado se lee.
+		update_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, $this->dia( -1 ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, $this->dia( -3 ) );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '28/02/2026', $html, 'la fecha, como día/mes/año' );
+		$this->assertStringContainsString( 'Infantil: 0', $html, 'y la rejilla, en una línea' );
+	}
+
+	/**
+	 * Un número fuera de rango, un día que no existe o una rejilla obligatoria
+	 * a medias no se presentan, y el motivo nombra la pregunta.
+	 */
+	public function test_wrong_new_answers_are_refused() {
+		$procedimiento = $this->con_tipos_nuevos( true );
+		$direccion     = $this->school_head( 'C0001' );
+		$bien          = array(
+			'q1' => '0',
+			'q2' => '2026-02-28',
+			'q3' => array(
+				'r1' => '1',
+				'r2' => '2',
+			),
+		);
+
+		foreach ( array(
+			'q1' => array( 'q1' => '1,5' ),
+			'q2' => array( 'q2' => '2026-02-30' ),
+			'q3' => array( 'q3' => array( 'r1' => '1' ) ),
+		) as $cual => $mal ) {
+			$this->olvidar_rechazo();
+			$this->assertNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => array_merge( $bien, $mal ) ) ), $cual );
+			$this->acting_as( $direccion );
+			$this->assertStringContainsString( 'Revise la respuesta a', $this->modelo( $procedimiento )['flash']['texto'], $cual );
+		}
+		$this->assertNull( Applications::find( $procedimiento, 'C0001' ) );
+
+		$this->olvidar_rechazo();
+		$this->assertNotNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => $bien ) ), 'cero responde una obligatoria' );
+	}
 }

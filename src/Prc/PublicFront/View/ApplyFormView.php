@@ -494,6 +494,9 @@ final class ApplyFormView {
 	 * @return string
 	 */
 	private static function question( array $p, array $answers, array $files = array() ): string {
+		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
 		$nombre = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';

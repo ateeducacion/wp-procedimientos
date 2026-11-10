@@ -185,7 +185,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Las cinco pestañas, la que se pide en la URL y sus recuentos.
+	 * Las seis pestañas, la que se pide en la URL y sus recuentos.
 	 */
 	public function test_the_five_panels_and_the_one_asked_for() {
 		list( , $uid, $procedimiento ) = $this->mio(
@@ -208,6 +208,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_QUESTIONS,
 				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_APPLICATIONS,
+				ProcedureEditor::PANEL_DELIVERIES,
 				ProcedureEditor::PANEL_PUBLISH,
 			),
 			array_keys( $m['panels'] )
@@ -215,6 +216,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
+		$this->assertSame( 0, $m['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
 		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_LINKS ]['count'] );
 		$this->assertSame( $procedimiento, $m['procedure_id'] );
 		$this->assertSame( (string) get_permalink( $procedimiento ), $m['view_url'] );
@@ -1115,7 +1117,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		foreach ( array( 'Datos', 'Preguntas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
+		foreach ( array( 'Datos', 'Preguntas', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -1142,7 +1144,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Centro de prueba', $html );
 		$this->assertStringContainsString( '<dd>B</dd>', $html, 'la respuesta sale en la revisión' );
 		// En pantalla, el día se escribe como en el resto del aplicativo.
-		$this->assertStringContainsString( 'data-rotulo="Fecha">' . gmdate( 'd-m-Y' ) . '</td>', $html );
+		$this->assertStringContainsString( 'data-rotulo="Fecha">' . current_time( 'd-m-Y' ) . '</td>', $html );
 		$this->assertStringContainsString( 'Guardar la revisión', $html );
 		$this->assertStringContainsString( 'Exportar a CSV', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_EXPORT . '"', $html );
@@ -1155,6 +1157,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Marcar como histórico', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', $html );
 	}
 
 	/**
@@ -1178,6 +1182,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );
 		$this->assertStringContainsString( 'histórico', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
 
 		$this->acting_as( $this->administrator() );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
@@ -1210,8 +1216,104 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertTrue( $before[0]['delivery'] );
 		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
+		$this->assertSame( 1, $this->modelo( $procedure )['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
 		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A scoped manager may only extend an existing delivery close after questions lock. */
+	public function test_delivery_closes_can_be_extended_without_reopening_questions() {
+		$procedure_close           = $this->dia( '-1 day' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria final',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-30 days' ),
+			'closes_at' => $procedure_close,
+		);
+		list( , $uid, $procedure ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array( $question ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( '-30 days' ),
+				ProcedureMetaKeys::CLOSES_AT => $procedure_close,
+			)
+		);
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedure, ProcedureState::GROUP_QUESTIONS ) );
+		$new_close = $this->dia( '+30 days' );
+		$redirect  = $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $new_close ) ) );
+
+		$this->assertNotNull( $redirect );
+		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Guardar nuevos cierres', $html );
+		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
+		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertSame( $new_close, $after[0]['closes_at'] );
+		$after[0]['closes_at'] = $before[0]['closes_at'];
+		$this->assertSame( $before, $after, 'no cambió rótulo, apertura, obligatoriedad ni respuesta' );
+	}
+
+	/** Invalid or shorter dates reject the entire update; arbitrary keys are ignored. */
+	public function test_delivery_close_updates_reject_shorten_and_invalid_dates() {
+		$current_close             = $this->dia( '+10 days' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-1 day' ),
+			'closes_at' => $current_close,
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		foreach ( array( $this->dia( '+9 days' ), '2026-02-30' ) as $date ) {
+			$this->assertNull(
+				$this->submit(
+					$uid,
+					ProcedureEditor::OP_DELIVERY_DATES,
+					$procedure,
+					0,
+					array(
+						ProcedureEditor::FIELD_DELIVERY_CLOSES => array(
+							'q1'   => $date,
+							'q999' => '2027-01-01',
+						),
+					)
+				)
+			);
+			$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		}
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => array( '2027-01-01' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => 'not-an-array' ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A submission without a delivery key cannot update unrelated questions. */
+	public function test_delivery_dates_reject_submissions_without_existing_deliveries() {
+		$question                  = array(
+			'key'      => 'q1',
+			'label'    => 'Texto',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $this->dia( '+30 days' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->acting_as( $uid );
+		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES );
+		$this->assertSame( 'error', $model['flash']['tipo'] );
+		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', ProcedureEditorView::html( $model ) );
 	}
 }

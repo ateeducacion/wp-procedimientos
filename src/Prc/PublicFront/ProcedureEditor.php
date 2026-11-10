@@ -56,13 +56,16 @@ final class ProcedureEditor {
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
+	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
 
-	public const OP_REVIEW    = 'review';
-	public const OP_EXPORT    = 'export';
-	public const OP_PUBLISH   = 'publish';
-	public const OP_ARCHIVE   = 'archive';
-	public const OP_UNARCHIVE = 'unarchive';
+	public const OP_REVIEW             = 'review';
+	public const OP_EXPORT             = 'export';
+	public const OP_PUBLISH            = 'publish';
+	public const OP_ARCHIVE            = 'archive';
+	public const OP_UNARCHIVE          = 'unarchive';
+	public const OP_DELIVERY_DATES     = 'delivery_dates';
+	public const FIELD_DELIVERY_CLOSES = 'prc_delivery_closes';
 
 	/**
 	 * Hidden field naming the operation a POST asks for.
@@ -107,6 +110,7 @@ final class ProcedureEditor {
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
+		self::OP_DELIVERY_DATES,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
@@ -124,6 +128,7 @@ final class ProcedureEditor {
 		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Preguntas guardadas.',
+		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
@@ -200,11 +205,13 @@ final class ProcedureEditor {
 			self::PANEL_QUESTIONS    => 'Preguntas',
 			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
+			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PUBLISH      => 'Publicación',
 		);
 		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
+			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
 		);
 
 		$out = array();
@@ -279,6 +286,15 @@ final class ProcedureEditor {
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			self::$rejected = 'Ese procedimiento ya no existe.';
+			return;
+		}
+		if ( self::OP_DELIVERY_DATES === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+			self::save_delivery_dates( $procedure_id );
 			return;
 		}
 
@@ -677,6 +693,46 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * Extend the closing date of existing independent deliveries without
+	 * changing their questions or opening dates.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function save_delivery_dates( int $procedure_id ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() verified this operation's nonce.
+		$closes = wp_unslash( $_POST[ self::FIELD_DELIVERY_CLOSES ] ?? array() );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( ! is_array( $closes ) ) {
+			self::$rejected = 'No se han podido validar los nuevos plazos. No se ha cambiado nada.';
+			return;
+		}
+
+		$questions = Applications::questions( $procedure_id );
+		$updated   = 0;
+		foreach ( $questions as &$question ) {
+			if ( ! ProcedureQuestions::is_delivery( $question ) || ! array_key_exists( $question['key'], $closes ) ) {
+				continue;
+			}
+			$new_close = is_string( $closes[ $question['key'] ] ) ? sanitize_text_field( $closes[ $question['key'] ] ) : '';
+			++$updated;
+			if ( ! ProcedureInput::is_valid_date( $new_close ) || $new_close < $question['closes_at'] ) {
+				self::$rejected = 'El nuevo cierre debe ser una fecha válida igual o posterior al actual. No se ha cambiado ningún plazo.';
+				return;
+			}
+			$question['closes_at'] = $new_close;
+		}
+		unset( $question );
+
+		if ( 0 === $updated ) {
+			self::$rejected = 'No hay entregas documentales cuyos plazos se puedan ampliar.';
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_DELIVERIES, array( self::ARG_NOTICE => 'entregas' ) ) );
+	}
+
+	/**
 	 * Save the three links: resolution, provisional list, final list.
 	 *
 	 * @param int $procedure_id Procedure post ID.
@@ -1011,6 +1067,7 @@ final class ProcedureEditor {
 		$m['values']        = self::values( $procedure_id );
 		$m['terms']         = self::term_lists( $user_id );
 		$m['questions']     = Applications::questions( $procedure_id );
+		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );

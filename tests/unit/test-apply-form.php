@@ -426,7 +426,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Su solicitud: A subsanar · hasta el ', $html );
 		$this->assertStringContainsString( 'Falta la memoria.', $html );
 		// El día, como en el resto del aplicativo y no en ISO.
-		$this->assertStringContainsString( 'Presentada el ' . gmdate( 'd-m-Y' ) . '.', $html );
+		$this->assertStringContainsString( 'Presentada el ' . current_time( 'd-m-Y' ) . '.', $html );
 		$this->assertTrue( $this->modelo( $procedimiento )['can_submit'], 'y el formulario sigue abierto' );
 	}
 

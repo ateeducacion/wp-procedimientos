@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043, ADR-0044]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -180,7 +180,10 @@ en `Meta/ApplicationMetaKeys`:
 | `prc_review_state` | string | `submitted` (presentada), `amend` (a subsanar), `admitted`, `excluded`; lista cerrada `ApplicationMetaKeys::review_states()` |
 | `prc_review_note` | string | Nota de quien gestiona; obligatoria al pedir subsanar o excluir |
 | `prc_people` | lista `{id, name, surname, dni, email, phone, role, group}` | Personas que participan, si el procedimiento pide la lista; la gestiona el centro fila a fila, con su propia ventana y sin tocar la revisión (ADR-0041) |
-| `prc_log` | lista `{at, user, event, data}` | Historial de la solicitud: quién, cuándo y qué, con el antes y el después; tope de 500 entradas; solo lo escribe el aplicativo (ADR-0041) |
+| `prc_log` | lista `{at, user, event, data}` | Historial de la solicitud: quién, cuándo y qué, con el antes y el después; tope de 500 entradas; solo lo escribe el aplicativo, escuchando las acciones de cada operación, y solo lo ve quien revisa (ADR-0041, ADR-0044) |
+| `prc_late_until` | string `Y-m-d` | Prórroga de esa solicitud: hasta ese día, incluido, el centro la edita entera aunque el plazo general esté cerrado; nunca en histórico. La concede quien revisa (ADR-0044) |
+| `prc_internal_note` | string | Nota interna de quien revisa: no la ve quien solicita ni quien consulta, ni va en ningún correo; en la exportación, solo si se elige su columna (ADR-0044) |
+| `prc_created_by` | integer | Cuenta que revisa y presentó la solicitud en nombre del centro; vacía cuando la presentó el centro (ADR-0044) |
 
 **Una solicitud por centro y procedimiento** (ADR-0018): antes de crear,
 `PublicFront/Applications::find( $procedure_id, $centre_code )`; si existe, se
@@ -496,6 +499,13 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
       memoria) con ficheros privados fuera del alcance del servidor web. Fase 2.
 - [x] Audiencia `teachers`: solicitud individual, pantalla personal y control por capacidad (ADR-0037).
 - [ ] Migración del histórico y conservación de las URL. Fase 4, con ADR.
+- [x] Retirar una solicitud (el centro, en plazo o en su prórroga; quien
+      revisa, por error y con motivo), restaurarla, concederle una prórroga,
+      presentarla en nombre de un centro y la nota interna, con el historial
+      de cada solicitud: la auditoría de las solicitudes que pedía la ADR-0005
+      (ADR-0044).
+- [ ] Auditoría de los cambios del procedimiento (ADR-0005): sigue sin
+      escribirse.
 - [ ] Recordatorios de cierre de plazo.
 - [ ] Estadísticas de participación por curso y ámbito.
 
@@ -646,3 +656,20 @@ Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0035,
 `tests/unit/test-procedure-state.php` y `tests/unit/test-procedure-editor.php`.
 El bundle pasa `php -l`; PHPUnit y PHPCS no se pudieron ejecutar porque Docker y
 `vendor/bin/phpcs` no están disponibles en este entorno.
+
+## Adenda — 2026-11-10: actuar sobre una solicitud
+
+El panel «Solicitudes» del taller gana «Retiradas (N)», «Presentar en nombre de
+un centro» y, en la revisión de cada solicitud, la nota interna, la prórroga,
+«Retirar esta solicitud» y un solo «Historial», leído solo al abrirla. La
+pantalla de la solicitud gana «Retirar la solicitud» y el aviso de la prórroga;
+«Mi centro», el enlace para retirarla. Las reglas viven en
+`Access/ApplicationActions` y las resuelve `ProcedureAccess::map_meta_cap()`;
+lo que escriben, en `PublicFront/ApplicationOperations`; el historial, en
+`PublicFront/ApplicationHistory`, que escucha las acciones. La ventana de la
+solicitud pasa de `ApplyForm::window()` a
+`ProcedureState::application_window()`, con la prórroga
+(`ProcedureState::late_open()`) por encima (ADR-0044).
+
+Asistencia de IA: Claude Code, claude-opus-5-5. Evidencia y comprobación:
+ADR-0044 y `tests/unit/test-application-actions.php`.

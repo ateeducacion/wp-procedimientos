@@ -210,3 +210,15 @@ Un procedimiento en la papelera se lleva sus solicitudes.
   ([ADR-0011](ADR-0011-el-procedimiento-es-un-tipo-de-contenido.md)).
 - Las solicitudes del sistema anterior no se migran ni se leen
   ([ADR-0024](ADR-0024-las-solicitudes-de-hoy-no-se-migran.md)).
+
+## Adenda — 2026-11-10 (ADR-0044)
+
+Una solicitud ya no la crea solo su centro: quien revisa puede **presentarla
+en su nombre** ([ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md)), vacía, con `post_author` y la meta
+`prc_created_by` de quien la crea y una prórroga hasta la que el centro la
+completa; la primera vez que el centro la guarda pasa a ser quien la presenta.
+La unicidad no cambia: se rechaza si el centro ya tiene una, también retirada.
+La solicitud gana tres metas más —`prc_late_until`, `prc_internal_note` y
+`prc_created_by`—, sin REST y con `auth_callback` falso como las demás.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

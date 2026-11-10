@@ -52,6 +52,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 | La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una |
 | El catálogo de centros es un formulario más | El filtro `prc_centres`; en local lo contesta el mu-plugin con centros inventados |
 | A qué centros se dirige una convocatoria lo dice su texto, y la titularidad del catálogo no se mira | `prc_ownership`, `prc_centre_types`, `prc_islands` y `prc_allowed_centres`, que decide `ProcedureAccess`; la titularidad se deriva del tipo (ADR-0042) |
+| Darse de baja, borrar una inscripción por error, inscribir a un centro que no llegó o «déjenle unos días más» se piden por correo y se hacen a mano en el gestor de formularios, sin rastro | Retirar (papelera), restaurar, la prórroga `prc_late_until` y presentar en nombre de un centro, con su historial en `prc_log` (`Access/ApplicationActions`, ADR-0044) |
 | Quien acompaña a los centros de una zona sigue sus solicitudes en una hoja de consulta que alguien monta a mano por procedimiento | La pantalla `consulta-de-solicitudes` (`PublicFront/Observe`): capacidad `prc_view_applications`, zonas en la meta `prc_zone` y lo que se enseña lo decide el procedimiento (`prc_observable`…); sin DNI ni nota, nunca (ADR-0043) |
 
 **Las solicitudes y los documentos ya presentados no se migran en la fase 1**
@@ -112,6 +113,7 @@ src/Prc/
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
 ├── Access/ObserverScope.php                Zonas de quien consulta, sus centros del catálogo y lo que nunca se enseña
 ├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, centro, zona, map_meta_cap, pre_get_posts
+├── Access/ApplicationActions.php           Retirar, restaurar, prórroga y en nombre de un centro: las reglas que resuelve map_meta_cap (ADR-0044)
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
 ├── Meta/ApplicationMetaRegistration.php    Ídem para la solicitud
 ├── Meta/MetaSwap.php                       Escribe una meta solo si sigue como se leyó (comparar y cambiar)
@@ -127,12 +129,15 @@ src/Prc/
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
 ├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
+├── PublicFront/ApplicationOperations.php   Lo que escriben retirar, restaurar, la prórroga, la nota interna y en nombre de un centro
+├── PublicFront/ApplicationHistory.php      Qué se anota en el historial, escuchando las acciones, y cómo se lee (ADR-0044)
 ├── PublicFront/People.php                  La lista de personas: alta, cambio y baja de fila en fila, relee al escribir (ADR-0041)
 ├── PublicFront/PeopleExport.php            Las columnas y filas que la lista de personas añade a la exportación
 ├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
 ├── PublicFront/ApplicationQuery.php        Las solicitudes de la tabla: censo, contadores, filtro y página, sin leer todas las metas
 ├── PublicFront/PeopleSpecPanel.php         El panel «Personas» del taller y la lista en la revisión
 ├── PublicFront/ApplicationsPanel.php       El panel «Solicitudes»: modelo de la tabla, revisión en bloque y qué se exporta
+├── PublicFront/ApplicationActionsPanel.php Retirar, restaurar, prórroga y en nombre de un centro desde el panel; su modelo
 ├── PublicFront/View/HomeView.php           Pinta la portada
 ├── PublicFront/Home.php                    [prc_home]
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública
@@ -140,6 +145,7 @@ src/Prc/
 ├── PublicFront/View/WorkspaceView.php      Pinta «Mis procedimientos»
 ├── PublicFront/Workspace.php               [prc_workspace]
 ├── PublicFront/View/ExportDialogView.php   Pinta el diálogo de exportar
+├── PublicFront/View/ApplicationActionsView.php Pinta retirar, «Retiradas», la prórroga, la nota interna y el historial
 ├── PublicFront/View/ApplicationsPanelView.php Pinta la tabla de solicitudes: contadores, filtros, páginas y bloque
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
@@ -148,6 +154,7 @@ src/Prc/
 ├── PublicFront/View/PeopleView.php         Pinta la lista de personas: la del centro, la de la revisión y el panel del taller
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
+├── PublicFront/WithdrawForm.php            Retirar la propia solicitud desde su pantalla (ADR-0044)
 ├── PublicFront/PeopleForm.php              La sección «Personas» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]
@@ -467,6 +474,17 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   procedimiento que no admite consulta responde igual que uno que no existe.
   Ni el nombre con que una instalación llama a la zona ni a quien consulta se
   escriben aquí: «zona» y «consulta».
+- **Una solicitud se retira, no se borra** (ADR-0044): quien solicita la
+  envía a la papelera en plazo o en su prórroga; quien revisa, con motivo. Se
+  restaura desde «Retiradas» si el centro no tiene otra. Ningún borrado
+  definitivo desde el aplicativo, y la revisión en bloque no retira. Las
+  reglas, en `Access/ApplicationActions`, resueltas en `map_meta_cap`.
+- **El historial escucha acciones** (ADR-0044): una operación nueva sobre una
+  solicitud emite su acción después de escribir y `ApplicationHistory` la
+  anota; ninguna pantalla llama a `ApplicationLog::add()` por su cuenta. Solo
+  lo ve quien revisa. **La nota interna** (`prc_internal_note`) no sale nunca
+  hacia quien solicita ni hacia quien consulta, ni en un correo, y no entra en
+  `ObserverScope::ALLOWED_COLUMNS`.
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.
 - Diffs pequeños y enfocados. No inventar ficheros que nadie ha pedido.
 

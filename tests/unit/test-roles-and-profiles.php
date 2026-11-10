@@ -18,11 +18,11 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 	use Prc_Fixtures;
 
 	/**
-	 * Los dos roles que crea el aplicativo. El otro perfil es `administrator`,
+	 * Los roles que crea el aplicativo. El otro perfil es `administrator`,
 	 * el nativo de WordPress, que no se crea: solo recibe capacidades.
 	 */
-	public function test_role_slugs_are_the_two_of_the_contract() {
-		$this->assertSame( array( 'prc_manager', 'prc_school_head' ), prc_role_slugs() );
+	public function test_role_slugs_are_the_product_roles() {
+		$this->assertSame( array( 'prc_manager', 'prc_school_head', 'prc_teacher' ), prc_role_slugs() );
 		$this->assertSame( prc_role_slugs(), array_keys( prc_role_definitions() ) );
 	}
 
@@ -50,6 +50,14 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		$this->assertTrue( $head->has_cap( 'prc_apply' ) );
 		$this->assertFalse( $head->has_cap( 'prc_manage_procedures' ) );
 		$this->assertFalse( $head->has_cap( 'prc_review_applications' ) );
+		$this->assertFalse( $head->has_cap( 'prc_apply_as_teacher' ) );
+
+		$teacher = get_role( 'prc_teacher' );
+		$this->assertNotNull( $teacher );
+		$this->assertSame( 'Profesorado participante', wp_roles()->role_names['prc_teacher'] );
+		$this->assertTrue( $teacher->has_cap( 'prc_apply' ) );
+		$this->assertTrue( $teacher->has_cap( 'prc_apply_as_teacher' ) );
+		$this->assertFalse( $teacher->has_cap( 'prc_manage_procedures' ) );
 
 		// La administración gestiona y revisa en todos los ámbitos y administra
 		// el aplicativo, pero no solicita.
@@ -85,12 +93,12 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 	 */
 	public function test_register_roles_does_not_touch_other_roles() {
 		$antes = wp_roles()->roles;
-		unset( $antes['prc_manager'], $antes['prc_school_head'], $antes['administrator'] );
+		unset( $antes['prc_manager'], $antes['prc_school_head'], $antes['prc_teacher'], $antes['administrator'] );
 
 		prc_register_roles();
 
 		$despues = wp_roles()->roles;
-		unset( $despues['prc_manager'], $despues['prc_school_head'], $despues['administrator'] );
+		unset( $despues['prc_manager'], $despues['prc_school_head'], $despues['prc_teacher'], $despues['administrator'] );
 
 		$this->assertSame( $antes, $despues );
 	}

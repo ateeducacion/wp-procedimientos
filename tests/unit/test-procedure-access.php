@@ -7,6 +7,7 @@
 
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -519,6 +520,41 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertFalse( user_can( $yo, 'read_post', $mia ) );
 
 		$this->assertFalse( ProcedureAccess::can_view_application( $yo, $procedimiento ), 'esto no es una solicitud' );
+	}
+
+	/** A teacher can see only their own application to a teacher procedure. */
+	public function test_a_teacher_sees_only_their_individual_application() {
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+		$teacher   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$mine      = (int) wp_insert_post(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_status' => 'publish',
+				'post_parent' => $procedure,
+				'post_author' => $teacher,
+			)
+		);
+		update_post_meta( $mine, ApplicationMetaKeys::APPLICANT_TYPE, ApplicationMetaKeys::TYPE_TEACHER );
+		$theirs = (int) wp_insert_post(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_status' => 'publish',
+				'post_parent' => $procedure,
+				'post_author' => $other,
+			)
+		);
+		update_post_meta( $theirs, ApplicationMetaKeys::APPLICANT_TYPE, ApplicationMetaKeys::TYPE_TEACHER );
+
+		$this->assertTrue( ProcedureAccess::can_apply( $teacher, $procedure ) );
+		$this->assertFalse( ProcedureAccess::can_apply( $teacher, $procedure, 'C0001' ) );
+		$this->assertTrue( ProcedureAccess::can_view_application( $teacher, $mine ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $teacher, $theirs ) );
+		$this->assertFalse( ProcedureAccess::can_deliver( $teacher, $mine, array() ), 'no hay una pregunta de entrega' );
 	}
 
 	/**

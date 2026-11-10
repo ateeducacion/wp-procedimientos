@@ -9,6 +9,7 @@ namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
+use Prc\Meta\ApplicationMetaKeys;
 
 /**
  * Solo pinta: no lee la petición, no consulta, no decide.
@@ -32,21 +33,23 @@ final class MyCentreView {
 	 * @return string
 	 */
 	public static function html( array $m ): string {
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' );
+		$titulo  = $docente ? 'Mis solicitudes de participación en procedimientos' : self::TITLE;
 		if ( '' !== (string) $m['aviso'] ) {
-			return Shell::render( self::TITLE, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
+			return Shell::render( $titulo, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
 		}
 
 		$centro = (array) $m['centre'];
 		$filas  = (array) $m['rows'];
 		$nombre = '' !== (string) $centro['name'] ? (string) $centro['name'] : 'Centro ' . (string) $centro['code'];
-		$ambito = 'Procedimientos para ' . $nombre . ' (' . (string) $centro['code'] . ')';
+		$ambito = $docente ? 'Solicitudes presentadas por ' . (string) ( $m['applicant'] ?? '' ) : 'Procedimientos para ' . $nombre . ' (' . (string) $centro['code'] . ')';
 
 		if ( array() === $filas ) {
 			return Shell::render(
-				self::TITLE,
+				$titulo,
 				$ambito,
-				'<div class="prc-mi-centro">' . self::count( 0 )
-					. '<p class="prc-vacio">Su centro todavía no ha presentado ninguna solicitud. Se presentan desde la ficha de cada procedimiento, mientras su plazo esté abierto.</p></div>'
+				'<div class="prc-mi-centro">' . self::count( 0, $docente )
+					. '<p class="prc-vacio">' . esc_html( $docente ? 'Todavía no ha presentado ninguna solicitud. Puede hacerlo desde la ficha de un procedimiento dirigido al profesorado, mientras el plazo esté abierto.' : 'Su centro todavía no ha presentado ninguna solicitud. Se presentan desde la ficha de cada procedimiento, mientras su plazo esté abierto.' ) . '</p></div>'
 			);
 		}
 
@@ -59,7 +62,7 @@ final class MyCentreView {
 				la segunda vez, al revés.
 			</p>
 			<?php
-			echo self::count( count( $filas ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
+			echo self::count( count( $filas ), $docente ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
 			echo self::amendment( (array) $m['amend'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado.
 			?>
 			<div class="prc-tabla-caja">
@@ -67,32 +70,37 @@ final class MyCentreView {
 					<caption class="screen-reader-text"><?php echo esc_html( $ambito ); ?></caption>
 					<thead>
 						<tr>
-							<?php foreach ( (array) $m['headers'] as $columna ) : ?>
+							<?php foreach ( (array) $m['headers'] as $clave => $columna ) : ?>
+								<?php
+								if ( $docente && 'coordinador' === (string) $clave ) {
+									continue; }
+								?>
 								<?php echo self::heading( (array) $columna ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
 							<?php endforeach; ?>
 						</tr>
 					</thead>
 					<tbody>
 						<?php foreach ( $filas as $fila ) : ?>
-							<?php echo self::row( (array) $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
+							<?php echo self::row( (array) $fila, $docente ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
 			</div>
 		</div>
 		<?php
-		return Shell::render( self::TITLE, $ambito, (string) ob_get_clean() );
+		return Shell::render( $titulo, $ambito, (string) ob_get_clean() );
 	}
 
 	/**
 	 * How many procedures are on the table.
 	 *
-	 * @param int $total Row count.
+	 * @param int  $total   Row count.
+	 * @param bool $docente Whether these are individual applications.
 	 * @return string
 	 */
-	private static function count( int $total ): string {
-		return '<p class="prc-recuento">Mostrando <strong>' . (int) $total . '</strong> '
-			. ( 1 === $total ? 'procedimiento' : 'procedimientos' ) . '.</p>';
+	private static function count( int $total, bool $docente = false ): string {
+		$nombre = $docente ? ( 1 === $total ? 'solicitud' : 'solicitudes' ) : ( 1 === $total ? 'procedimiento' : 'procedimientos' );
+		return '<p class="prc-recuento">Mostrando <strong>' . (int) $total . '</strong> ' . $nombre . '.</p>';
 	}
 
 	/**
@@ -145,9 +153,10 @@ final class MyCentreView {
 	 * One application, as a row.
 	 *
 	 * @param array<string, mixed> $fila One entry of the model rows.
+	 * @param bool                 $docente Whether this is the individual view.
 	 * @return string
 	 */
-	private static function row( array $fila ): string {
+	private static function row( array $fila, bool $docente = false ): string {
 		$cargo    = (string) $fila['position'];
 		$quien    = (string) $fila['applicant'];
 		$quien    = '' !== $quien && '' !== $cargo ? $quien . ' (' . $cargo . ')' : $quien;
@@ -166,7 +175,9 @@ final class MyCentreView {
 			</th>
 			<td class="prc-celda prc-celda--fecha" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
 			<td class="prc-celda" data-rotulo="Solicitante (cargo)"><?php echo self::value( $quien ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?></td>
-			<td class="prc-celda" data-rotulo="Coordinador/a"><?php echo self::value( (string) $fila['coordinator'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?></td>
+			<?php if ( ! $docente ) : ?>
+				<td class="prc-celda" data-rotulo="Coordinador/a"><?php echo self::value( (string) $fila['coordinator'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?></td>
+			<?php endif; ?>
 			<td class="prc-celda" data-rotulo="Opciones"><?php echo self::value( implode( '<br>', $opciones ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- ya escapado. ?></td>
 			<td class="prc-celda prc-celda--revision" data-rotulo="Revisión">
 				<span class="<?php echo esc_attr( Assets::state_class( (string) $fila['review'] ) ); ?>"><?php echo esc_html( (string) $fila['review_label'] ); ?></span>

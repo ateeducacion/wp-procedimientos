@@ -7,6 +7,7 @@
 
 use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Access\ProcedureAccess;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
@@ -146,6 +147,34 @@ class Test_Applications extends WP_UnitTestCase {
 		$this->assertEqualsCanonicalizing( array( $a, $b ), wp_list_pluck( Applications::for_procedure( $uno ), 'ID' ) );
 		$this->assertEqualsCanonicalizing( array( $a, $c ), wp_list_pluck( Applications::for_centre( 'C0001' ), 'ID' ) );
 		$this->assertSame( array(), Applications::for_centre( '' ) );
+	}
+
+	/** A teacher has one personal application per procedure. */
+	public function test_teacher_applications_are_found_and_saved_per_person() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+
+		$this->assertNull( Applications::find_for_teacher( $procedure, $teacher ) );
+		$this->assertSame( array(), Applications::for_teacher( $teacher ) );
+		$this->assertNull( Applications::find_for_teacher( 0, $teacher ) );
+		$this->assertSame( array(), Applications::for_teacher( 0 ) );
+
+		$id = Applications::save_teacher( $procedure, $teacher, array( 'answers' => array() ) );
+		$this->assertGreaterThan( 0, $id );
+		$this->assertSame( $id, Applications::save_teacher( $procedure, $teacher, array( 'answers' => array() ) ) );
+		$this->assertSame( $id, Applications::find_for_teacher( $procedure, $teacher ) );
+		$this->assertCount( 1, Applications::for_teacher( $teacher ) );
+		$this->assertNull( Applications::find_for_teacher( $procedure, $other ) );
+		$this->assertSame( 'Solicitud individual — Red de prueba', get_the_title( $id ) );
+		$this->assertSame( 'Profesorado', Applications::row( get_post( $id ), array() )['centre'] );
+		$this->assertSame( 0, Applications::save_teacher( $procedure, 0, array() ), 'sin una persona válida no se guarda' );
+		$this->assertSame( 0, Applications::save_teacher( $this->procedimiento(), $teacher, array() ), 'un procedimiento para centros no acepta solicitudes individuales' );
 	}
 
 	/**

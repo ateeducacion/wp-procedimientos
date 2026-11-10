@@ -381,7 +381,7 @@ final class ProcedureEditorView {
 						<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v[ ProcedureMetaKeys::AUDIENCE ] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<p class="prc-campo__ayuda" id="prc-audience-ayuda">La inscripción individual del profesorado aún no está disponible.</p>
+				<p class="prc-campo__ayuda" id="prc-audience-ayuda">Cada docente presenta su propia solicitud con su cuenta.</p>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
 				<fieldset>
@@ -899,10 +899,11 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function applications_panel( array $m ): string {
-		$filas = (array) $m['applications'];
+		$filas   = (array) $m['applications'];
+		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values'][ ProcedureMetaKeys::AUDIENCE ] ?? '' );
 		if ( array() === $filas ) {
 			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
-				. '<p class="prc-vacio">Cuando un centro solicite saldrá en esta tabla, y desde ella podrá admitirlo, pedirle subsanar o excluirlo, y exportar la lista a CSV.</p></section>';
+				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
 		}
 		$cuenta = count( $filas );
 
@@ -920,11 +921,18 @@ final class ProcedureEditorView {
 				<caption class="screen-reader-text">Solicitudes presentadas a este procedimiento</caption>
 				<thead>
 					<tr>
-						<th class="prc-th" scope="col">Centro</th>
-						<th class="prc-th" scope="col">Código</th>
+						<?php if ( $docente ) : ?>
+							<th class="prc-th" scope="col">Docente</th>
+							<th class="prc-th" scope="col">Correo</th>
+						<?php else : ?>
+							<th class="prc-th" scope="col">Centro</th>
+							<th class="prc-th" scope="col">Código</th>
+						<?php endif; ?>
 						<th class="prc-th" scope="col">Fecha</th>
-						<th class="prc-th" scope="col">Cargo</th>
-						<th class="prc-th" scope="col">Coordinación</th>
+						<?php if ( ! $docente ) : ?>
+							<th class="prc-th" scope="col">Cargo</th>
+							<th class="prc-th" scope="col">Coordinación</th>
+						<?php endif; ?>
 						<th class="prc-th" scope="col">Revisión</th>
 						<th class="prc-th" scope="col">Acciones</th>
 					</tr>
@@ -932,11 +940,18 @@ final class ProcedureEditorView {
 				<tbody>
 					<?php foreach ( $filas as $fila ) : ?>
 						<tr data-estado="<?php echo esc_attr( (string) $fila['state_key'] ); ?>">
-							<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
-							<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
+							<?php if ( $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Docente"><?php echo esc_html( (string) $fila['applicant'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Correo"><?php echo esc_html( (string) $fila['email'] ); ?></td>
+							<?php else : ?>
+								<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
+								<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
+							<?php endif; ?>
 							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-							<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) $fila['coordinator_dni'] . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
+							<?php if ( ! $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
+					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
+							<?php endif; ?>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 						</tr>
@@ -1128,8 +1143,8 @@ final class ProcedureEditorView {
 			</ol>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				Las fechas y los enlaces calculan el estado. Si necesita cerrar las solicitudes antes, puede hacerlo aquí
-				sin cambiar esos datos ni los plazos de entrega documental.
+				El estado sale de las fechas y los enlaces; no hay que marcarlo a mano. Con el listado definitivo enlazado pasa a «Resuelto».
+				Si necesita cerrar las solicitudes antes, puede hacerlo aquí sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
 			<?php if ( true === $m['can_publish'] ) : ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,

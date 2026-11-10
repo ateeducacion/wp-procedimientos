@@ -177,6 +177,35 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertSame( (string) $una, $filas[0]['procedure_id'] );
 	}
 
+	/** Teachers only see their own individual applications and get clear labels. */
+	public function test_a_teacher_sees_only_their_individual_applications() {
+		$procedure = $this->procedimiento(
+			'Formación de prueba',
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$this->assertGreaterThan( 0, Applications::save_teacher( $procedure, $teacher, $this->nucleo() ) );
+		$this->assertGreaterThan( 0, Applications::save_teacher( $procedure, $other, $this->nucleo() ) );
+
+		$this->acting_as( $teacher );
+		$model = MyCentre::model();
+		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, $model['applicant_type'] );
+		$this->assertSame( 'Docente de prueba', $model['applicant'] );
+		$this->assertCount( 1, $model['rows'] );
+		$this->assertSame( 'Docente de prueba', $model['rows'][0]['applicant'] );
+		$this->assertSame( ApplyForm::url( $procedure ), $model['rows'][0]['url'] );
+		$html = MyCentreView::html( $model );
+		$this->assertStringContainsString( 'Mis solicitudes de participación en procedimientos', $html );
+		$this->assertStringContainsString( 'Solicitudes presentadas por Docente de prueba', $html );
+		$this->assertStringNotContainsString( 'Coordinador/a', $html );
+	}
+
 	/**
 	 * Cada fila lleva el estado del procedimiento y el de la revisión con su
 	 * nota: es lo que el centro viene a mirar.

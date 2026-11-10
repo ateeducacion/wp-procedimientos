@@ -97,7 +97,7 @@ provision: ## Provisiona: idioma, bundle, snippets, roles, vocabulario, páginas
 	@$(WP_ENV) run cli wp $(WP_URL) eval-file $(PRC_DEV)/scripts/setup-vocabulary.php
 	@echo "Creando las páginas del aplicativo (una por pantalla, con su shortcode)..."
 	@$(WP_ENV) run cli wp $(WP_URL) eval-file $(PRC_DEV)/scripts/setup-pages.php
-	@echo "Usuarios, procedimientos y solicitudes de prueba (gestion, gestion2, direccion, direccion2)..."
+	@echo "Usuarios, procedimientos y solicitudes de prueba (gestion, gestion2, direccion, direccion2, consulta)..."
 	@$(WP_ENV) run cli wp $(WP_URL) eval-file $(PRC_DEV)/scripts/seed-demo.php
 
 seed-demo: start-if-not-running ## Rehace los datos de demostración: usuarios, procedimientos y solicitudes

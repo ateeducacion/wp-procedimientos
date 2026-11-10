@@ -3325,7 +3325,9 @@ final class ProcedureCopy {
 
 	public static function title( string $title ): string {
 		$title = trim( $title );
-		return ( '' !== $title ? $title : 'Procedimiento sin título' ) . self::SUFFIX;
+		$title = '' !== $title ? $title : 'Procedimiento sin título';
+
+		return substr( $title, -strlen( self::SUFFIX ) ) === self::SUFFIX ? $title : $title . self::SUFFIX;
 	}
 
 
@@ -3367,7 +3369,6 @@ final class ProcedureCopy {
 		return array(
 			'meta'    => $meta,
 			'js_left' => ! $with_js && '' !== trim( $js ),
-			'undated' => $preguntas['undated'],
 		);
 	}
 
@@ -3384,9 +3385,8 @@ final class ProcedureCopy {
 
 
 	public static function questions( $raw ): array {
-		$out     = array();
-		$map     = array();
-		$undated = array();
+		$out = array();
+		$map = array();
 		foreach ( ProcedureQuestions::sanitize( $raw ) as $i => $pregunta ) {
 			$antes           = (string) $pregunta['key'];
 			$pregunta['key'] = 'q' . ( $i + 1 );
@@ -3394,7 +3394,6 @@ final class ProcedureCopy {
 			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
 				$pregunta['opens_at']  = '';
 				$pregunta['closes_at'] = '';
-				$undated[]             = (string) $pregunta['label'];
 			}
 			if ( ProcedureQuestions::TYPE_GRID === $pregunta['type'] ) {
 				$filas               = self::renumber( (array) $pregunta['rows'], 'r' );
@@ -3410,7 +3409,6 @@ final class ProcedureCopy {
 			'questions' => $out,
 			'seq'       => count( $out ),
 			'map'       => $map,
-			'undated'   => $undated,
 		);
 	}
 

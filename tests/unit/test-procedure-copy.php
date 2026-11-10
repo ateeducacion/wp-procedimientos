@@ -119,7 +119,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		);
 		$this->assertSame( 1, $copia['questions'][2]['min'] );
 		$this->assertSame( 9, $copia['questions'][2]['max'] );
-		$this->assertSame( array(), $copia['undated'] );
+		$this->assertArrayNotHasKey( 'undated', $copia );
 	}
 
 	/**
@@ -183,7 +183,6 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		$this->assertSame( '', $entrega['opens_at'] );
 		$this->assertSame( '', $entrega['closes_at'] );
 		$this->assertFalse( ProcedureQuestions::valid_delivery( $entrega ) );
-		$this->assertSame( array( 'Memoria final' ), $copia['undated'] );
 		$this->assertArrayNotHasKey( 'opens_at', $copia['questions'][1], 'un archivo de la solicitud no tiene plazo que quitar' );
 	}
 
@@ -318,6 +317,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 	public function test_the_title_says_it_is_a_copy() {
 		$this->assertSame( 'Red de prueba (copia)', ProcedureCopy::title( '  Red de prueba ' ) );
 		$this->assertSame( 'Procedimiento sin título (copia)', ProcedureCopy::title( '' ) );
+		$this->assertSame( 'Red de prueba (copia)', ProcedureCopy::title( 'Red de prueba (copia)' ), 'la copia de una copia no se marca dos veces' );
 	}
 
 	// ─── antes de publicar ─────────────────────────────────────────────────

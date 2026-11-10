@@ -274,7 +274,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$m = $this->modelo( $procedimiento );
 		$this->assertFalse( $m['can_submit'] );
-		$this->assertSame( 'Este procedimiento no se dirige a centros de la titularidad del suyo.', $m['why'] );
+		$this->assertSame( 'Este procedimiento es solo para centros públicos.', $m['why'] );
 		$this->assertStringNotContainsString( '<form', ApplyFormView::html( $m ) );
 
 		$this->assertNull( $this->enviar( $privado, $procedimiento ) );
@@ -282,6 +282,47 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->olvidar_rechazo();
 		$this->assertNotNull( $this->enviar( $this->school_head( 'C0001' ), $procedimiento ), 'el público sí solicita' );
+		$this->assertSame( 1, Applications::count( $procedimiento ) );
+	}
+
+	/**
+	 * Acotado después de presentar: la solicitud se queda como estaba, pero el
+	 * centro que ya no es elegible no la vuelve a enviar, tampoco por un POST
+	 * directo con el código en el campo.
+	 */
+	public function test_a_school_that_is_no_longer_eligible_cannot_resubmit() {
+		$procedimiento = $this->procedimiento();
+		$norte         = $this->school_head( 'C0001' );
+		$this->assertNotNull( $this->enviar( $norte, $procedimiento ) );
+		$solicitud = (int) Applications::find( $procedimiento, 'C0001' );
+		$this->assertGreaterThan( 0, $solicitud );
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'C0002' ) );
+		$this->olvidar_rechazo();
+
+		$m = $this->modelo( $procedimiento );
+		$this->assertFalse( $m['can_submit'] );
+		$this->assertSame( 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.', $m['why'] );
+		$this->assertSame( $solicitud, (int) $m['application']['id'], 'la ve igual' );
+
+		$antes = get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true );
+		$this->assertNull(
+			$this->enviar(
+				$norte,
+				$procedimiento,
+				array(
+					ApplyForm::FIELD_POSITION => ApplicationMetaKeys::POSITION_SECRETARY,
+					ApplyForm::FIELD_CENTRE   => 'C0001',
+				)
+			)
+		);
+		$this->assertSame( $antes, get_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, true ), 'nada cambió' );
+		$this->assertSame( 1, Applications::count( $procedimiento ) );
+		$this->assertSame( 'publish', get_post_status( $solicitud ) );
+
+		// Un centro fuera del catálogo, a uno acotado: tampoco.
+		$this->olvidar_rechazo();
+		$this->assertNull( $this->enviar( $this->school_head( 'X0009' ), $procedimiento ) );
 		$this->assertSame( 1, Applications::count( $procedimiento ) );
 	}
 

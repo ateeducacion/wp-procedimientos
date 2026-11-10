@@ -96,6 +96,22 @@ final class ProcedureMetaKeys {
 	public const CENTRE_KINDS = 'prc_centre_kinds';
 
 	/**
+	 * Tipos de centro admitidos, como los escribe el catálogo. Vacía, todos (ADR-0042).
+	 */
+	public const CENTRE_TYPES = 'prc_centre_types';
+
+	/**
+	 * Islas admitidas, como las escribe el catálogo. Vacía, todas (ADR-0042).
+	 */
+	public const ISLANDS = 'prc_islands';
+
+	/**
+	 * Lista cerrada de códigos de centro que pueden solicitar. Vacía, sin
+	 * lista (ADR-0042).
+	 */
+	public const ALLOWED_CENTRES = 'prc_allowed_centres';
+
+	/**
 	 * Si la solicitud pide una persona coordinadora.
 	 */
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
@@ -201,6 +217,9 @@ final class ProcedureMetaKeys {
 			self::AUDIENCE,
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
+			self::CENTRE_TYPES,
+			self::ISLANDS,
+			self::ALLOWED_CENTRES,
 			self::REQUIRES_COORDINATOR,
 			self::COORDINATOR_COUNT,
 			self::CUSTOM_CSS,
@@ -280,6 +299,20 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP_PUBLIC  => 'Centros públicos',
 			self::OWNERSHIP_PRIVATE => 'Centros privados y concertados',
 		);
+	}
+
+	/**
+	 * The ownership of one school, written out for a table cell.
+	 *
+	 * @param string $ownership One of the keys of {@see ownerships()}.
+	 * @return string Empty when it is none of them.
+	 */
+	public static function ownership_name( string $ownership ): string {
+		$nombres = array(
+			self::OWNERSHIP_PUBLIC  => 'Pública',
+			self::OWNERSHIP_PRIVATE => 'Privada',
+		);
+		return $nombres[ $ownership ] ?? '';
 	}
 
 	/**

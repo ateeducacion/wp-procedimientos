@@ -541,4 +541,31 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$this->assertSame( 200, $item->get_status() );
 		$this->assertStringNotContainsString( 'alguien@example.org', wp_json_encode( $item->get_data() ) );
 	}
+
+	/**
+	 * Los acotados de centros no salen por la REST, y un centro que no es
+	 * elegible no se los quita: ni por la REST ni escribiendo la meta.
+	 */
+	public function test_a_school_cannot_lift_the_centre_rules() {
+		$caso = $this->two_areas( 'publish' );
+		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES, array( 'LISTA01' ) );
+		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ISLANDS, array( 'Isla Inventada' ) );
+		$head = $this->school_head( 'C0001' );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $caso['procedure'] ) );
+
+		$item = $this->request( 0, 'GET', '/wp/v2/prc_procedure/' . $caso['procedure'] );
+		$this->assertStringNotContainsString( 'LISTA01', wp_json_encode( $item->get_data() ) );
+		$this->assertStringNotContainsString( 'Isla Inventada', wp_json_encode( $item->get_data() ) );
+
+		$cambio = $this->request(
+			$head,
+			'POST',
+			'/wp/v2/prc_procedure/' . $caso['procedure'],
+			array( 'meta' => array( \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0001' ) ) )
+		);
+		$this->assertContains( $cambio->get_status(), array( 401, 403 ) );
+		$this->assertFalse( current_user_can( 'edit_post_meta', $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES ) );
+		$this->assertSame( array( 'LISTA01' ), get_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $caso['procedure'] ) );
+	}
 }

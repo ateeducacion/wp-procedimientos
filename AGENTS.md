@@ -52,6 +52,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 | La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una |
 | El catálogo de centros es un formulario más | El filtro `prc_centres`; en local lo contesta el mu-plugin con centros inventados |
 | A qué centros se dirige una convocatoria lo dice su texto, y la titularidad del catálogo no se mira | `prc_ownership`, `prc_centre_types`, `prc_islands` y `prc_allowed_centres`, que decide `ProcedureAccess`; la titularidad se deriva del tipo (ADR-0042) |
+| Quien acompaña a los centros de una zona sigue sus solicitudes en una hoja de consulta que alguien monta a mano por procedimiento | La pantalla `consulta-de-solicitudes` (`PublicFront/Observe`): capacidad `prc_view_applications`, zonas en la meta `prc_zone` y lo que se enseña lo decide el procedimiento (`prc_observable`…); sin DNI ni nota, nunca (ADR-0043) |
 
 **Las solicitudes y los documentos ya presentados no se migran en la fase 1**
 (ADR-0024). **No se lee nada del gestor de formularios anterior** ni se añade
@@ -108,7 +109,8 @@ src/Prc/
 ├── Domain/CentreEligibility.php            Qué centros admite un procedimiento: titularidad, tipo, isla, lista. Puro
 ├── Domain/CentreCatalog.php                Filtro prc_centres, find/search; titularidad derivada del tipo y zona
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
-├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, map_meta_cap, pre_get_posts
+├── Access/ObserverScope.php                Zonas de quien consulta, sus centros del catálogo y lo que nunca se enseña
+├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, centro, zona, map_meta_cap, pre_get_posts
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
 ├── Meta/ApplicationMetaRegistration.php    Ídem para la solicitud
 ├── Meta/MetaSwap.php                       Escribe una meta solo si sigue como se leyó (comparar y cambiar)
@@ -147,6 +149,9 @@ src/Prc/
 ├── PublicFront/PeopleForm.php              La sección «Personas» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]
+├── PublicFront/ObserveSettings.php         El panel «Consulta» del taller: qué enseña la consulta (ADR-0043)
+├── PublicFront/View/ObserveView.php        Pinta la consulta y el panel «Consulta»
+├── PublicFront/Observe.php                 [prc_observe]: la consulta de solo lectura por zona y su CSV
 ├── Notifications/Messages.php              Asunto y cuerpo de cada correo, en texto plano. Puro
 ├── Notifications/Mailer.php                La única salida de correo; escucha las acciones de las pantallas
 ├── Admin/ProcedureAdmin.php                Columnas, filtro por ámbito y acotado del listado
@@ -240,9 +245,11 @@ es legal por fichero y **fatal** al concatenar. Por eso también está prohibido
 `Access/ProcedureAccess`. Esconder algo en el listado con `pre_get_posts` **no
 es protegerlo**: quedan abiertos el enlace directo a `post.php?post=N`, la
 edición rápida, la REST API y las acciones en bloque. La capa que protege es
-`map_meta_cap`. Se hacen las dos, en ese orden de importancia. Y son dos
-acotados, los dos fail-closed: por **ámbito** (la meta `prc_area` de quien
-gestiona) y por **centro** (`Access/CentreScope`, para quien solicita).
+`map_meta_cap`. Se hacen las dos, en ese orden de importancia. Y son tres
+acotados, los tres fail-closed: por **ámbito** (la meta `prc_area` de quien
+gestiona), por **centro** (`Access/CentreScope`, para quien solicita) y por
+**zona** (`Access/ObserverScope`, para quien consulta: solo lee, nunca
+escribe; ADR-0043).
 
 **Verlo funcionando:** `make bundle && make sync-snippets` y recarga
 <http://localhost:8698/gestion-de-procedimientos/>.
@@ -441,6 +448,17 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   una instalación. Isla, tipo y zona se leen del catálogo al pintar
   (`PublicFront/CentreColumns::attributes()`); la solicitud solo guarda código y
   nombre.
+- **La consulta por zona solo lee** (ADR-0043): `prc_view_applications` da
+  `read_post` sobre las solicitudes de los centros de sus zonas en un
+  procedimiento publicado con `prc_observable`, y nada más; ni editar, ni
+  borrar, ni el taller. Lo decide `ProcedureAccess::can_observe()` y
+  `can_observe_application()`; los centros de cada zona se leen del catálogo
+  al decidir, no se copian. **El DNI o NIE y la nota de revisión no se
+  enseñan nunca** en la consulta ni en su CSV
+  (`ObserverScope::FORBIDDEN_COLUMNS`), aunque el procedimiento los marque. Un
+  procedimiento que no admite consulta responde igual que uno que no existe.
+  Ni el nombre con que una instalación llama a la zona ni a quien consulta se
+  escriben aquí: «zona» y «consulta».
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.
 - Diffs pequeños y enfocados. No inventar ficheros que nadie ha pedido.
 

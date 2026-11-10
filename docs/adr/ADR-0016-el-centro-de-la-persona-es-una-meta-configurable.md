@@ -215,3 +215,15 @@ ya presentó su solicitud la sigue editando
 guardando como foto, igual que antes.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-10 (ADR-0043)
+
+La zona de quien consulta sigue el mismo patrón: una meta de usuario cuya
+clave devuelve un filtro, `prc_zone_meta_key` (por defecto `prc_zone`),
+leída en un solo sitio (`Access/ObserverScope::zones_for()`) y en cerrado.
+Dos diferencias: admite **varias** zonas, y lo que se cruza con ella no es la
+solicitud sino el catálogo de hoy, que dice qué centros son de cada zona
+([ADR-0043](ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md)).
+El código de centro de quien solicita no cambia.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

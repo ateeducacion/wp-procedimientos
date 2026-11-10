@@ -604,12 +604,66 @@ acotada para la consulta de solo lectura):
 ### PR 7 — Consulta de solo lectura (`feature/observers`)
 
 **Ficheros:**
-- Crear `PublicFront/Observe.php`, `PublicFront/View/ObserveView.php`.
-- Modificar `Shell.php` (slug `consulta-de-solicitudes`, shortcode
-  `[prc_observe]`), `ProcedureAccess.php`, `snippets/roles-and-profiles.php`,
-  `scripts/setup-pages.php`, editor y vista.
-- Pruebas: `test-observe.php`, `test-procedure-access.php`,
-  `test-rest-authorization.php`.
+- Crear `Access/ObserverScope.php` (la zona de la persona, sus centros del
+  catálogo, si un procedimiento admite consulta y lo que nunca se enseña),
+  `PublicFront/Observe.php`, `PublicFront/ObserveSettings.php` (el panel
+  «Consulta» del taller, aparte para que `ProcedureEditor` no pase del umbral
+  de PHPMD) y `PublicFront/View/ObserveView.php`.
+- Modificar `ProcedureAccess.php`, `Shell.php` (slug `consulta-de-solicitudes`,
+  shortcode `[prc_observe]`, menú y perfil), `Meta/ProcedureMetaKeys.php` y
+  registro, `ProcedureEditor.php` y su vista (panel «Consulta»),
+  `ApplicationsPanel.php` y su vista (paginador y piezas reutilizables),
+  `ApplicationFiles.php` (descarga), `Notifications/Mailer.php` y
+  `Messages.php`, `App.php`, `load-order.php`, `snippets/roles-and-profiles.php`,
+  `scripts/setup-pages.php`, `scripts/seed-demo.php` y el mu-plugin.
+- Pruebas: `test-observer-access.php` (guardián), `test-observe.php`
+  (pantalla, exportación, documentos, panel, correo y menú); ampliar
+  `test-rest-authorization.php`, `test-roles-and-profiles.php`,
+  `test-provision.php`, `test-shell.php` y `test-procedure-editor.php`.
+
+**Interfaces que produce:**
+- Capacidad `ProcedureAccess::CAP_VIEW_APPLICATIONS` (`prc_view_applications`)
+  y rol `prc_observer` («Consulta de solicitudes»: `read` y esa capacidad).
+- Meta de usuario de la zona: `ObserverScope::META_KEY` (`prc_zone`), clave
+  por el filtro `prc_zone_meta_key`; una lista o un texto con comas, varias
+  zonas. Campo «Zonas de consulta» del perfil, solo administración
+  (`prc_zone_meta_key()` y `prc_profile_zones()` en el snippet de roles).
+- `ProcedureAccess::observer_zones( int $user_id ): string[]`,
+  `::observer_codes( int $user_id ): string[]` (los centros de sus zonas,
+  del catálogo de hoy),
+  `::can_observe( int $user_id, int $procedure_id = 0, ?array &$scope = null ): bool`
+  (con procedimiento, deja en `$scope` lo que ve: `array()` es todo y
+  `array( 'codes' => … )`, esos centros, listo para `ApplicationQuery::run()`;
+  sin procedimiento, si tiene alguna consulta),
+  `::can_observe_application( int $user_id, int $application_id ): bool` y
+  `::can_view_application( int $user_id, int $application_id, bool $documents = false ): bool`
+  (con `$documents`, la descarga: a quien consulta solo se la da
+  `prc_observer_files`). `can_read()`, `why_not_code()` y `may_use_area()`
+  pasan a privados.
+- `ObserverScope::zones_for( int $user_id )`, `::parse_zones( $raw )`,
+  `::codes_in( array $zones, array $catalogue )`, `::is_observable( int $procedure_id )`,
+  `::observers_of( string $code ): int[]`, `::allowed( array $groups )`,
+  `::columns( $chosen, array $groups )`, `FORBIDDEN_COLUMNS`
+  (`coordinator_dni`, `person_dni`, `note`) y `DEFAULT_GROUPS`.
+- Metas del procedimiento (`ProcedureMetaKeys`): `OBSERVABLE`
+  (`prc_observable`), `OBSERVER_COLUMNS` (`prc_observer_columns`, saneada por
+  `ProcedureMetaRegistration::sanitize_observer_columns()`), `OBSERVER_FILES`,
+  `OBSERVER_EXPORT` y `OBSERVER_NOTIFY`; todas sin REST y apagadas.
+- Pantalla: `Shell::SLUGS['observe']`, `Shell::SHORTCODES['observe']`,
+  `Shell::zone_names( int $user_id )`; `Observe::url( int $procedure_id = 0, array $args = array() )`,
+  `::model( array $request )`, `::filter( array $source, array $columns )`,
+  `::csv( int $user_id, int $procedure_id, array $source ): ?string`,
+  `::handle()` (POST `FIELD_DO` = `OP_EXPORT`, `FIELD_ID`, nonce
+  `NONCE_NAME` con `nonce_action( $procedure_id )`) y `NOT_FOUND`.
+- Taller: `ProcedureEditor::PANEL_OBSERVE` (`consulta`), `OP_OBSERVE`, aviso
+  `consulta`; `ObserveSettings::model()`, `::save()`, `::handle()`,
+  `::columns()`, `::offered()` y sus campos `FIELD_*`.
+- `ApplicationsPanel::pager( callable $url, array $filter, int $pages )`
+  público; `ApplicationsPanelView::states()`, `::select()` y `::pager()`
+  públicos.
+- Correo: `people_changed` se copia a `ObserverScope::observers_of()` del
+  centro si el procedimiento es observable y tiene `prc_observer_notify`, con
+  el enlace a la consulta (`url_label` en el contexto).
 
 **Decisiones:**
 - Capacidad `prc_view_applications` y rol `prc_observer`. La zona de la
@@ -619,11 +673,16 @@ acotada para la consulta de solo lectura):
 - Ve las solicitudes de los centros de su zona, sus personas y, si se
   permite, descarga sus documentos y exporta lo que ve. No edita nada.
 - `people_changed` puede copiarse a quienes consultan esa zona.
+- Quien gestiona el ámbito del procedimiento, y quien tiene todos, ve la
+  consulta entera. Sin la columna del estado no hay contadores ni filtro por
+  estado; las incompletas no se enseñan.
 
-- [ ] Prueba: una solicitud de otra zona no se ve ni por enlace directo, ni
-      por REST, ni en la exportación.
-- [ ] Prueba: sin `prc_observable` la pantalla responde como si no existiera.
-- [ ] Implementar y ADR-0043.
+- [x] Prueba: una solicitud de otra zona no se ve ni por enlace directo, ni
+      por REST, ni por el escritorio, ni en la exportación, ni por la
+      descarga de un documento.
+- [x] Prueba: sin `prc_observable` la pantalla responde como si no existiera.
+- [x] Prueba: el DNI y la nota no salen ni en el HTML ni en el CSV.
+- [x] Implementar y ADR-0043.
 
 ### PR 8 — Duplicar (`feature/duplicate-procedure`)
 

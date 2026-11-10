@@ -17039,11 +17039,14 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
+
+
 
 
 
@@ -17067,11 +17070,56 @@ final class Settings {
 
 
 
+	public const MAIL_GROUP = 'prc_mail';
+
+
+
+
 
 
 	public static function register(): void {
 		add_action( 'admin_menu', array( self::class, 'menu' ) );
 		add_action( 'admin_init', array( self::class, 'handle_actions' ) );
+		add_action( 'admin_init', array( self::class, 'register_settings' ) );
+
+
+		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
+	}
+
+
+
+
+
+
+	public static function register_settings(): void {
+		$saneado = array(
+			Mailer::OPTION_FROM_NAME     => 'sanitize_text_field',
+			Mailer::OPTION_FROM          => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_REPLY_TO      => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_COPY          => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_CREATED_EXTRA => 'sanitize_textarea_field',
+		);
+		foreach ( $saneado as $opcion => $callback ) {
+			register_setting(
+				self::MAIL_GROUP,
+				$opcion,
+				array(
+					'type'              => 'string',
+					'default'           => '',
+					'sanitize_callback' => $callback,
+					'show_in_rest'      => false,
+				)
+			);
+		}
+	}
+
+
+
+
+
+
+	public static function capability(): string {
+		return ProcedureAccess::CAP_MANAGE;
 	}
 
 
@@ -17167,10 +17215,53 @@ final class Settings {
 		<div class="wrap">
 			<h1>Ajustes y diagnóstico de procedimientos</h1>
 			<p class="description" style="max-width:46rem">
-				Esta pantalla no guarda nada todavía: cuenta lo que el aplicativo tiene montado
-				en este sitio. Si algo sale «sin registrar», es que el snippet correspondiente
-				no está activo.
+				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
+				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
+				que guarda es la configuración del correo.
 			</p>
+
+			<h2>Correo</h2>
+			<p style="max-width:46rem">
+				Vacíos, los correos salen con el remitente de WordPress y sin copia. Cada
+				procedimiento decide, en su pestaña «Avisos», cuáles de sus correos se envían.
+			</p>
+			<form method="post" action="options.php">
+				<?php settings_fields( self::MAIL_GROUP ); ?>
+				<table class="form-table" role="presentation" style="max-width:46rem">
+					<tbody>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>">Nombre del remitente</label></th>
+							<td><input class="regular-text" type="text" id="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>" name="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_FROM_NAME, '' ) ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>">Dirección del remitente</label></th>
+							<td>
+								<input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>" name="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_FROM, '' ) ); ?>" />
+								<p class="description">Una dirección que el servidor de correo de este sitio pueda usar como remitente.</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>">Responder a</label></th>
+							<td><input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>" name="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_REPLY_TO, '' ) ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>">Copia</label></th>
+							<td>
+								<input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>" name="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_COPY, '' ) ); ?>" />
+								<p class="description">Recibe copia de cada procedimiento creado y de cada solicitud recibida.</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>">Texto del correo de alta</label></th>
+							<td>
+								<textarea class="large-text" rows="4" id="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>" name="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>"><?php echo esc_textarea( (string) get_option( Mailer::OPTION_CREATED_EXTRA, '' ) ); ?></textarea>
+								<p class="description">Se añade al final del correo que avisa de un procedimiento recién creado: las instrucciones propias de esta instalación.</p>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<?php submit_button( 'Guardar la configuración del correo' ); ?>
+			</form>
 
 			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) :?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['msg'] ) ) );?></p></div>

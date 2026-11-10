@@ -10,6 +10,7 @@ use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 
@@ -196,6 +197,39 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 		}
 		$this->assertStringContainsString( '<td>Registrado</td>', $html );
 		$this->assertStringNotContainsString( '<td>Sin registrar</td>', $html );
+	}
+
+	/**
+	 * El remitente y las copias del correo se guardan desde los ajustes, con
+	 * la capacidad del aplicativo, y vacías por defecto.
+	 */
+	public function test_the_mail_options_are_registered_and_painted() {
+		$this->acting_as( $this->administrator() );
+		Settings::register_settings();
+
+		$registradas = get_registered_settings();
+		foreach ( Mailer::options() as $opcion ) {
+			$this->assertArrayHasKey( $opcion, $registradas );
+			$this->assertSame( Settings::MAIL_GROUP, $registradas[ $opcion ]['group'] );
+			$this->assertSame( '', get_option( $opcion ), $opcion . ' vacía por defecto' );
+		}
+		$this->assertSame( ProcedureAccess::CAP_MANAGE, apply_filters( 'option_page_capability_' . Settings::MAIL_GROUP, 'manage_options' ) );
+
+		update_option( Mailer::OPTION_FROM, 'no es un correo' );
+		$this->assertSame( '', get_option( Mailer::OPTION_FROM ), 'una dirección inválida se queda vacía' );
+		update_option( Mailer::OPTION_COPY, ' Copia@Example.org ' );
+		$this->assertSame( 'copia@example.org', get_option( Mailer::OPTION_COPY ) );
+		update_option( Mailer::OPTION_FROM_NAME, "<b>Nombre</b>\nOtro" );
+		$this->assertSame( 'Nombre Otro', get_option( Mailer::OPTION_FROM_NAME ) );
+
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Correo', $html );
+		foreach ( Mailer::options() as $opcion ) {
+			$this->assertStringContainsString( 'name="' . $opcion . '"', $html );
+		}
+		$this->assertMatchesRegularExpression( '/name=[\'"]option_page[\'"] value=[\'"]' . Settings::MAIL_GROUP . '[\'"]/', $html, 'el formulario va por la API de ajustes' );
 	}
 
 	/**

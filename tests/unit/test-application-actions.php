@@ -203,6 +203,7 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	 */
 	private function taller( int $uid, string $op, int $procedure, int $row = 0, array $extra = array() ): ?string {
 		$this->acting_as( $uid );
+		$fila = in_array( $op, ApplicationActionsPanel::ROW_OPS, true ) || ProcedureEditor::OP_REVIEW === $op ? $row : 0;
 		$this->post(
 			array_merge(
 				array(
@@ -212,8 +213,8 @@ class Test_Application_Actions extends WP_UnitTestCase {
 				),
 				$extra
 			),
-			ProcedureEditor::nonce_action( $op ),
-			ProcedureEditor::nonce_name( $op, in_array( $op, ApplicationActionsPanel::ROW_OPS, true ) || ProcedureEditor::OP_REVIEW === $op ? $row : 0 )
+			ProcedureEditor::nonce_action( $op, $fila ),
+			ProcedureEditor::nonce_name( $op, $fila )
 		);
 		return $this->exit_url( array( ProcedureEditor::class, 'handle' ) );
 	}
@@ -563,6 +564,30 @@ class Test_Application_Actions extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'value="' . ApplicationActionsPanel::OP_RESTORE . '"', $html );
 		$this->assertStringContainsString( 'Retirada por quien revisa', $html );
 		$this->assertStringContainsString( 'Retiradas (1)', $this->panel( $c['reviewer'], $c['procedure'] ) );
+	}
+
+	/**
+	 * El nonce de una operación sobre una solicitud es de esa solicitud: el de
+	 * otra fila no vale.
+	 */
+	public function test_the_nonce_of_one_row_does_not_serve_another() {
+		$c    = $this->caso();
+		$otra = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$op   = ApplicationActionsPanel::OP_RETIRE;
+		$this->assertNotSame( ProcedureEditor::nonce_action( $op, $c['application'] ), ProcedureEditor::nonce_action( $op, $otra ) );
+		$this->acting_as( $c['reviewer'] );
+		$this->post(
+			array(
+				ProcedureEditor::FIELD_DO                 => $op,
+				ProcedureEditor::FIELD_PROCEDURE          => (string) $c['procedure'],
+				ProcedureEditor::FIELD_ROW                => (string) $otra,
+				ApplicationActionsPanel::FIELD_REASON     => 'Por error.',
+				ProcedureEditor::nonce_name( $op, $otra ) => wp_create_nonce( ProcedureEditor::nonce_action( $op, $c['application'] ) ),
+			)
+		);
+		$this->assertNull( $this->exit_url( array( ProcedureEditor::class, 'handle' ) ) );
+		$this->assertSame( 'publish', get_post_status( $otra ) );
+		$this->assertNotNull( $this->taller( $c['reviewer'], $op, $c['procedure'], $otra, array( ApplicationActionsPanel::FIELD_REASON => 'Por error.' ) ) );
 	}
 
 	/**

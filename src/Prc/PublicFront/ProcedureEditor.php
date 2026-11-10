@@ -353,13 +353,18 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Nonce action of one operation.
+	 * Nonce action of one operation; on one application, of that one too.
 	 *
-	 * @param string $op Operation.
+	 * La revisión y las actuaciones sobre una solicitud (retirar, restaurar,
+	 * la prórroga) llevan un nonce de su operación **y** de su solicitud: el
+	 * de una fila no vale para otra.
+	 *
+	 * @param string $op  Operation.
+	 * @param int    $row Application, 0 for an operation on the procedure.
 	 * @return string
 	 */
-	public static function nonce_action( string $op ): string {
-		return 'prc_ed_' . $op;
+	public static function nonce_action( string $op, int $row = 0 ): string {
+		return 'prc_ed_' . $op . ( $row > 0 ? '_' . $row : '' );
 	}
 
 	/*
@@ -548,7 +553,7 @@ final class ProcedureEditor {
 	private static function verify( string $op, int $row ): bool {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- esto es la comprobación del nonce.
 		$valor = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::nonce_name( $op, $row ) ] ?? '' ) ) );
-		return false !== wp_verify_nonce( $valor, self::nonce_action( $op ) );
+		return false !== wp_verify_nonce( $valor, self::nonce_action( $op, $row ) );
 	}
 
 	/**

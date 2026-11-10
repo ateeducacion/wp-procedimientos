@@ -363,7 +363,7 @@ final class ProcedureQuestions {
 	private static function answer( array $question, $value ): array {
 		$tipo = (string) ( $question['type'] ?? self::TYPE_TEXT );
 		if ( self::has_choices( $tipo ) ) {
-			return self::choice_answer( $question, $value );
+			return QuestionPoints::answer( $question, $value );
 		}
 		if ( self::TYPE_NUMBER === $tipo ) {
 			return self::number_answer( $question, $value );
@@ -382,31 +382,6 @@ final class ProcedureQuestions {
 		}
 		$texto = mb_substr( $texto, 0, self::TEXT_MAX );
 		return array( $texto, $obliga && '' === $texto );
-	}
-
-	/**
-	 * A choice answer: one of the list, or several of it without repeats.
-	 *
-	 * @param array<string, mixed> $question Normalised question with choices.
-	 * @param mixed                $value    Raw answer.
-	 * @return array{0:string|string[], 1:bool}
-	 */
-	private static function choice_answer( array $question, $value ): array {
-		$opciones = (array) ( $question['choices'] ?? array() );
-		$obliga   = ! empty( $question['required'] );
-		if ( self::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
-			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
-			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
-			return array( $elegida, $obliga && '' === $elegida );
-		}
-		$limpias = array();
-		foreach ( is_array( $value ) ? $value : array() as $una ) {
-			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
-			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
-				$limpias[] = $una;
-			}
-		}
-		return array( $limpias, $obliga && array() === $limpias );
 	}
 
 	/**

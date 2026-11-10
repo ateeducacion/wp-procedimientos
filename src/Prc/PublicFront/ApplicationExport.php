@@ -125,36 +125,15 @@ final class ApplicationExport {
 	 * @return array<string, array<string, string>> group => (column key => heading).
 	 */
 	public static function groups( int $procedure_id ): array {
-		$todas = self::columns( Applications::questions( $procedure_id ) );
-		$out   = array();
-		$fijas = array();
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$out       = array();
+		$fijas     = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
 			$fijas        += $out[ $grupo ];
 		}
 		$out['questions'] = array_diff_key( $todas, $fijas );
-		return $out;
-	}
-
-	/**
-	 * Every column one can export, in the order of the table.
-	 *
-	 * Las de {@see Applications::columns()}, con cada rejilla abierta en una
-	 * columna por fila, `q4:r1`, en su sitio. Una rejilla sin filas se queda
-	 * en su columna.
-	 *
-	 * @param array<int, array<string, mixed>> $questions Normalised questions.
-	 * @return array<string, string> key => heading.
-	 */
-	private static function columns( array $questions ): array {
-		$rejillas = array();
-		foreach ( $questions as $pregunta ) {
-			$rejillas[ (string) $pregunta['key'] ] = QuestionGrid::columns( $pregunta );
-		}
-		$out = array();
-		foreach ( Applications::columns( $questions ) as $clave => $rotulo ) {
-			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
-		}
 		return $out;
 	}
 
@@ -166,8 +145,9 @@ final class ApplicationExport {
 	 * @return array<string, string> key => heading; empty when none is valid.
 	 */
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = self::columns( Applications::questions( $procedure_id ) );
-		$out   = array();
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$out       = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
 				$out[ $clave ] = $todas[ $clave ];
@@ -193,7 +173,7 @@ final class ApplicationExport {
 	 */
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = self::columns( $preguntas );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
 		// Ninguna válida, o todas aunque sea en otro orden: el CSV de siempre.
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {

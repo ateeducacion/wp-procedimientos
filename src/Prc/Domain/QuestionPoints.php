@@ -20,6 +20,9 @@ namespace Prc\Domain;
  *
  * La puntuación de una solicitud no se guarda: se calcula al leer, con los
  * puntos de hoy.
+ *
+ * Aquí vive también la validación de una respuesta de opciones, que es lo
+ * que casa lo marcado con el texto de cada opción.
  */
 final class QuestionPoints {
 
@@ -59,6 +62,31 @@ final class QuestionPoints {
 			'choices' => $textos,
 			'points'  => $valen,
 		);
+	}
+
+	/**
+	 * A choice answer: one of the list, or several of it without repeats.
+	 *
+	 * @param array<string, mixed> $question Normalised question with choices.
+	 * @param mixed                $value    Raw answer.
+	 * @return array{0:string|string[], 1:bool}
+	 */
+	public static function answer( array $question, $value ): array {
+		$opciones = (array) ( $question['choices'] ?? array() );
+		$obliga   = ! empty( $question['required'] );
+		if ( ProcedureQuestions::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
+			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
+			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
+			return array( $elegida, $obliga && '' === $elegida );
+		}
+		$limpias = array();
+		foreach ( is_array( $value ) ? $value : array() as $una ) {
+			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
+			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
+				$limpias[] = $una;
+			}
+		}
+		return array( $limpias, $obliga && array() === $limpias );
 	}
 
 	/**

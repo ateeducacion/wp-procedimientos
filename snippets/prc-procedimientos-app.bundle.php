@@ -919,6 +919,9 @@ namespace Prc\Domain;
 
 
 
+
+
+
 if ( ! class_exists( 'Prc\Domain\QuestionPoints', false ) ) {
 final class QuestionPoints {
 
@@ -958,6 +961,31 @@ final class QuestionPoints {
 			'choices' => $textos,
 			'points'  => $valen,
 		);
+	}
+
+
+
+
+
+
+
+
+	public static function answer( array $question, $value ): array {
+		$opciones = (array) ( $question['choices'] ?? array() );
+		$obliga   = ! empty( $question['required'] );
+		if ( ProcedureQuestions::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
+			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
+			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
+			return array( $elegida, $obliga && '' === $elegida );
+		}
+		$limpias = array();
+		foreach ( is_array( $value ) ? $value : array() as $una ) {
+			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
+			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
+				$limpias[] = $una;
+			}
+		}
+		return array( $limpias, $obliga && array() === $limpias );
 	}
 
 
@@ -1281,6 +1309,29 @@ final class QuestionGrid {
 		}
 		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
 			$out[ (string) $question['key'] . ':' . (string) $fila['key'] ] = (string) $question['label'] . ' — ' . (string) $fila['label'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function expand( array $columns, array $questions ): array {
+		$rejillas = array();
+		foreach ( $questions as $pregunta ) {
+			$rejillas[ (string) ( $pregunta['key'] ?? '' ) ] = self::columns( $pregunta );
+		}
+		$out = array();
+		foreach ( $columns as $clave => $rotulo ) {
+			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
 		}
 		return $out;
 	}
@@ -1671,7 +1722,7 @@ final class ProcedureQuestions {
 	private static function answer( array $question, $value ): array {
 		$tipo = (string) ( $question['type'] ?? self::TYPE_TEXT );
 		if ( self::has_choices( $tipo ) ) {
-			return self::choice_answer( $question, $value );
+			return QuestionPoints::answer( $question, $value );
 		}
 		if ( self::TYPE_NUMBER === $tipo ) {
 			return self::number_answer( $question, $value );
@@ -1690,31 +1741,6 @@ final class ProcedureQuestions {
 		}
 		$texto = mb_substr( $texto, 0, self::TEXT_MAX );
 		return array( $texto, $obliga && '' === $texto );
-	}
-
-
-
-
-
-
-
-
-	private static function choice_answer( array $question, $value ): array {
-		$opciones = (array) ( $question['choices'] ?? array() );
-		$obliga   = ! empty( $question['required'] );
-		if ( self::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
-			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
-			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
-			return array( $elegida, $obliga && '' === $elegida );
-		}
-		$limpias = array();
-		foreach ( is_array( $value ) ? $value : array() as $una ) {
-			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
-			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
-				$limpias[] = $una;
-			}
-		}
-		return array( $limpias, $obliga && array() === $limpias );
 	}
 
 
@@ -9064,9 +9090,10 @@ final class ApplicationExport {
 
 
 	public static function groups( int $procedure_id ): array {
-		$todas = self::columns( Applications::questions( $procedure_id ) );
-		$out   = array();
-		$fijas = array();
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$out       = array();
+		$fijas     = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
 			$fijas        += $out[ $grupo ];
@@ -9082,31 +9109,10 @@ final class ApplicationExport {
 
 
 
-
-
-
-	private static function columns( array $questions ): array {
-		$rejillas = array();
-		foreach ( $questions as $pregunta ) {
-			$rejillas[ (string) $pregunta['key'] ] = QuestionGrid::columns( $pregunta );
-		}
-		$out = array();
-		foreach ( Applications::columns( $questions ) as $clave => $rotulo ) {
-			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
-		}
-		return $out;
-	}
-
-
-
-
-
-
-
-
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = self::columns( Applications::questions( $procedure_id ) );
-		$out   = array();
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$out       = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
 				$out[ $clave ] = $todas[ $clave ];
@@ -9132,7 +9138,7 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = self::columns( $preguntas );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
 
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {

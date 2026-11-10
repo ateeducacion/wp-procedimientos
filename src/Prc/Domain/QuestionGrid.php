@@ -215,6 +215,29 @@ final class QuestionGrid {
 	}
 
 	/**
+	 * Table columns with each grid opened into one column per row, in its place.
+	 *
+	 * Es lo que ofrece la exportación: la tabla del taller lleva la rejilla en
+	 * una celda y el CSV, una columna por fila. Una rejilla sin filas se queda
+	 * en su columna.
+	 *
+	 * @param array<string, string>            $columns   Table columns, key => heading.
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @return array<string, string> key => heading.
+	 */
+	public static function expand( array $columns, array $questions ): array {
+		$rejillas = array();
+		foreach ( $questions as $pregunta ) {
+			$rejillas[ (string) ( $pregunta['key'] ?? '' ) ] = self::columns( $pregunta );
+		}
+		$out = array();
+		foreach ( $columns as $clave => $rotulo ) {
+			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
+		}
+		return $out;
+	}
+
+	/**
 	 * The cells of a grid answer, keyed like {@see columns()}.
 	 *
 	 * @param array<string, mixed> $question Normalised question.

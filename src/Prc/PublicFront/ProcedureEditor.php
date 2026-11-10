@@ -854,7 +854,7 @@ final class ProcedureEditor {
 			);
 		}
 
-		self::$rejected = QuestionChanges::input_errors( $crudas );
+		self::$rejected = QuestionChanges::input_errors( $crudas, $antes );
 		if ( '' !== self::$rejected ) {
 			return;
 		}

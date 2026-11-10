@@ -962,7 +962,7 @@ final class QuestionPoints {
 			$textos[] = $una[0];
 			$valen[]  = $una[1];
 		}
-		if ( ! $con ) {
+		if ( ! $con || array() === array_filter( $valen ) ) {
 			return array( 'choices' => $textos );
 		}
 		return array(
@@ -1036,14 +1036,29 @@ final class QuestionPoints {
 
 
 
+
+
+
+
+
 	public static function lines( array $question ): array {
 		$textos = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
-		if ( ! isset( $question['points'] ) || ! is_array( $question['points'] ) ) {
-			return $textos;
+		$puntos = isset( $question['points'] ) && is_array( $question['points'] ) ? $question['points'] : null;
+		if ( null === $puntos ) {
+			$barra = array_filter(
+				$textos,
+				function ( string $texto ): bool {
+					return false !== strpos( $texto, '|' );
+				}
+			);
+			if ( array() === $barra ) {
+				return $textos;
+			}
+			$puntos = array();
 		}
 		$out = array();
 		foreach ( $textos as $i => $texto ) {
-			$out[] = $texto . ' | ' . (int) ( $question['points'][ $i ] ?? 0 );
+			$out[] = $texto . ' | ' . (int) ( $puntos[ $i ] ?? 0 );
 		}
 		return $out;
 	}
@@ -1989,11 +2004,22 @@ final class QuestionChanges {
 
 
 
-	public static function input_errors( array $raw ): string {
+
+
+
+
+
+
+	public static function input_errors( array $raw, array $before = array() ): string {
+		$guardadas = array_column( $before, null, 'key' );
 		foreach ( $raw as $pregunta ) {
+			if ( '' === trim( (string) ( $pregunta['label'] ?? '' ) ) ) {
+				continue;
+			}
 			$rotulo = '«' . (string) ( $pregunta['label'] ?? '' ) . '»';
 			$tipo   = (string) ( $pregunta['type'] ?? '' );
-			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '' ) : '';
+			$antes  = $guardadas[ (string) ( $pregunta['key'] ?? '' ) ] ?? array();
+			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '', self::known_lines( $antes ) ) : '';
 			if ( '' !== $mal ) {
 				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
 			}
@@ -2016,10 +2042,27 @@ final class QuestionChanges {
 
 
 
-	private static function bad_points( $choices ): string {
+	private static function known_lines( array $question ): array {
+		if ( array() === $question ) {
+			return array();
+		}
+		return array_merge( array_map( 'strval', (array) ( $question['choices'] ?? array() ) ), QuestionPoints::lines( $question ) );
+	}
+
+
+
+
+
+
+
+
+	private static function bad_points( $choices, array $known ): string {
 		foreach ( is_string( $choices ) ? (array) preg_split( '/\r\n|\r|\n/', $choices ) : array() as $linea ) {
 			$linea = trim( (string) $linea );
 			$cola  = trim( (string) substr( (string) strrchr( $linea, '|' ), 1 ) );
+			if ( in_array( $linea, $known, true ) ) {
+				continue;
+			}
 			if ( false !== strpos( $linea, '|' ) && preg_match( '/^[-+]?[\d.,]*\d[\d.,]*$/', $cola ) && ! preg_match( '/^\d{1,6}$/', $cola ) ) {
 				return $linea;
 			}
@@ -15239,7 +15282,7 @@ final class ProcedureEditor {
 			);
 		}
 
-		self::$rejected = QuestionChanges::input_errors( $crudas );
+		self::$rejected = QuestionChanges::input_errors( $crudas, $antes );
 		if ( '' !== self::$rejected ) {
 			return;
 		}

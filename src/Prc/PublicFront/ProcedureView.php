@@ -113,7 +113,10 @@ final class ProcedureView {
 				'tabs'                 => self::tabs( $contenido ),
 				'excerpt'              => trim( wp_strip_all_tags( (string) get_post_field( 'post_excerpt', $post_id ) ) ),
 				'state'                => $state,
-				'state_label'          => ProcedureState::label( $state ),
+				'state_label'          => ProcedureState::label(
+					$state,
+					(bool) $meta[ ProcedureMetaKeys::APPLICATIONS_CLOSED ]
+				),
 				'state_icon'           => self::state_icon( $state ),
 				'dates'                => DateRange::of( (string) $meta[ ProcedureMetaKeys::OPENS_AT ], (string) $meta[ ProcedureMetaKeys::CLOSES_AT ] ),
 				'amend_dates'          => DateRange::of( (string) $meta[ ProcedureMetaKeys::AMEND_OPENS_AT ], (string) $meta[ ProcedureMetaKeys::AMEND_CLOSES_AT ] ),

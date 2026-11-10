@@ -14,6 +14,7 @@ namespace Prc\Meta;
  * del gestor de formularios: fechas, ficheros, textos, casillas de diseño y un
  * desplegable de estado que alguien tiene que acordarse de cambiar. Aquí se
  * quedan las que describen el procedimiento y nada más: el estado se calcula
+ * con fechas y enlaces, salvo la pausa manual de solicitudes
  * ({@see \Prc\Domain\ProcedureState}), la resolución y los listados son
  * enlaces (ADR-0021) y las opciones son preguntas configurables (ADR-0019).
  *
@@ -118,6 +119,11 @@ final class ProcedureMetaKeys {
 	 */
 	public const ARCHIVED = 'prc_archived';
 
+	/**
+	 * Close applications manually without changing the published deadlines.
+	 */
+	public const APPLICATIONS_CLOSED = 'prc_applications_closed';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -168,6 +174,7 @@ final class ProcedureMetaKeys {
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,
+			self::APPLICATIONS_CLOSED,
 		);
 	}
 

@@ -26,7 +26,8 @@ final class WorkspaceView {
 	 * The legend, in the order it is read.
 	 *
 	 * Las ocho entradas del original eran el cruce de un estado escrito a mano
-	 * con la fecha límite. Aquí el estado se deriva de las fechas, así que son
+	 * con la fecha límite. Aquí el estado se deriva de las fechas y del cierre
+	 * manual de solicitudes, así que son
 	 * los siete estados del aplicativo; las dos entradas contradictorias de
 	 * aquella leyenda se han convertido en la octava, que es lo que siempre
 	 * fueron: un aviso de que los datos no cuadran.

@@ -761,6 +761,46 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'desarchivado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 	}
 
+	/** A manager may pause applications, keep delivery dates, resume by calendar, and return a procedure to draft. */
+	public function test_close_pause_keeps_delivery_windows_and_unpublish_returns_to_draft() {
+		list( , $uid, $procedure ) = $this->mio();
+		$closes_at                 = get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true );
+		$before                    = ProcedureState::of_post( $procedure );
+		$questions                 = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'     => 'Memoria',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-1 day' ),
+					'closes_at' => $this->dia( '+1 day' ),
+				),
+			)
+		);
+		update_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, $questions );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertTrue( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $closes_at, get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true ) );
+		$this->assertSame( $questions, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertTrue( ProcedureQuestions::delivery_is_open( $questions[0], ProcedureState::today() ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_CLOSED, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'cerradas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertFalse( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
+		$this->assertTrue( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertFalse( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $before, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'reabiertas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_UNPUBLISH, $procedure );
+		$this->assertSame( 'draft', get_post_status( $procedure ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_DRAFT, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'borrador', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+	}
+
 	// ─── Solicitudes ───────────────────────────────────────────────────────
 
 	/**
@@ -984,7 +1024,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS );
 		$this->assertSame( 'error', $m['flash']['tipo'] );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $m['flash']['texto'] );
 	}
 
 	/**
@@ -1081,10 +1121,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			),
 			(array) $m['groups']
 		);
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', (string) $m['state_notice'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', (string) $m['state_notice'] );
 
 		$html = ProcedureEditorView::html( $m );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $html );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
 		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan' );
 		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
@@ -1113,11 +1153,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				),
 			)
 		);
+		$this->acting_as( $uid );
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'B' ) ) );
 		$this->acting_as( $uid );
 
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		foreach ( array( 'Datos', 'Preguntas', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
+		$html   = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$labels = array(
+			'Datos',
+			'Preguntas',
+			'Entregas',
+			'Enlaces',
+			'Solicitudes',
+			'Publicación',
+			'Ver la ficha pública',
+			'Guardar los datos',
+		);
+		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -1155,6 +1212,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'Marcar como histórico', $html );
+		$this->assertStringContainsString( 'Cerrar solicitudes ahora', $html );
+		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
@@ -1170,17 +1229,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 
 		$this->assertStringContainsString( 'Todavía no hay solicitudes', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_APPLICATIONS ) ) );
-		$this->assertStringContainsString( 'Publicar el procedimiento', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
+		$this->assertStringContainsString( 'Publicar el procedimiento', $html );
+		$this->assertStringContainsString( 'aria-current="step"', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Borrador\s*<span[^>]*>Etapa actual/s', $html );
 
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'Crear un procedimiento', $html );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
+		// El sistema no marca como histórico un borrador: primero se publica.
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );
 		$this->assertStringContainsString( 'histórico', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
@@ -1190,6 +1260,45 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Solo administración', $html );
 		$this->assertStringContainsString( 'Volver a abrir el procedimiento', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_UNARCHIVE . '"', $html );
+	}
+
+	/** The publication timeline follows the derived procedure lifecycle. */
+	public function test_the_publication_timeline_marks_each_derived_stage() {
+		list( , $uid, $procedure ) = $this->mio();
+		$this->acting_as( $uid );
+		wp_update_post(
+			array(
+				'ID'          => $procedure,
+				'post_status' => 'publish',
+			)
+		);
+		$panel = ProcedureEditor::PANEL_PUBLISH;
+		update_post_meta(
+			$procedure,
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array(
+					'key'       => 'documento',
+					'label'     => 'Documento',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-2 days' ),
+					'closes_at' => $this->dia( '+2 days' ),
+				),
+			)
+		);
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
+		$this->assertMatchesRegularExpression( '/<h3>Publicado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::OPENS_AT, $this->dia( '-10 days' ) );
+		update_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, $this->dia( '-1 day' ) );
+		$this->assertMatchesRegularExpression( '/<h3>Pendiente de documentación\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::FINAL_LIST_URL, 'https://example.org/listado.pdf' );
+		$this->assertMatchesRegularExpression( '/<h3>Cerrado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 	}
 
 	/**

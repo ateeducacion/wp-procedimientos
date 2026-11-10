@@ -536,7 +536,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->acting_as( $direccion );
 
 		$this->assertSame( 'El plazo de solicitud todavía no está abierto.', $this->modelo( $proximo )['why'] );
-		$this->assertSame( 'El plazo de solicitud está cerrado.', $this->modelo( $cerrado )['why'] );
+		$this->assertSame( 'Las solicitudes están cerradas.', $this->modelo( $cerrado )['why'] );
 
 		$this->assertNull( $this->enviar( $direccion, $proximo ) );
 		$this->olvidar_rechazo();
@@ -593,9 +593,13 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertNotSame( '', ApplyForm::window( ProcedureMetaKeys::STATE_AMENDMENT, '' ) );
 		$this->assertNotSame( '', ApplyForm::window( ProcedureMetaKeys::STATE_AMENDMENT, ApplicationMetaKeys::REVIEW_SUBMITTED ) );
 		$this->assertSame( 'El plazo de solicitud todavía no está abierto.', ApplyForm::window( ProcedureMetaKeys::STATE_UPCOMING, '' ) );
+		$this->assertSame(
+			'La inscripción se ha cerrado manualmente, antes de la fecha prevista.',
+			ApplyForm::window( ProcedureMetaKeys::STATE_CLOSED, '', true )
+		);
 
 		foreach ( array( ProcedureMetaKeys::STATE_CLOSED, ProcedureMetaKeys::STATE_DRAFT, ProcedureMetaKeys::STATE_RESOLVED, ProcedureMetaKeys::STATE_ARCHIVED ) as $estado ) {
-			$this->assertSame( 'El plazo de solicitud está cerrado.', ApplyForm::window( $estado, ApplicationMetaKeys::REVIEW_AMEND ), $estado );
+			$this->assertSame( 'Las solicitudes están cerradas.', ApplyForm::window( $estado, ApplicationMetaKeys::REVIEW_AMEND ), $estado );
 		}
 	}
 

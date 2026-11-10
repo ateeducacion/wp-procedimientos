@@ -1036,18 +1036,68 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function publish_panel( array $m ): string {
-		$op = ProcedureEditor::OP_PUBLISH;
+		$op                 = ProcedureEditor::OP_PUBLISH;
+		$state              = (string) $m['state'];
+		$close_confirmation = sprintf(
+			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
+				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
+			(string) $m['title']
+		);
+		$draft_confirmation = sprintf(
+			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar '
+				. 'hasta que vuelva a publicarse.',
+			(string) $m['title']
+		);
+		$stage              = 1;
+		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
+			$stage = 0;
+		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
+			$stage = 4;
+		} elseif ( ProcedureMetaKeys::STATE_RESOLVED === $state ) {
+			$stage = 3;
+		} elseif ( ProcedureMetaKeys::STATE_CLOSED === $state ) {
+			$stage = $m['pending_documentation'] ? 2 : 3;
+		}
+		$steps = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array(
+				'Pendiente de documentación',
+				'Las solicitudes están cerradas y los centros ya inscritos aún pueden '
+					. 'entregar documentos dentro de su plazo.',
+			),
+			array(
+				'Cerrado',
+				'No se admiten solicitudes. Cuando ya no quede nada que gestionar, '
+					. 'puede marcar el procedimiento como histórico.',
+			),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
 
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
+			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
+				<?php foreach ( $steps as $index => $step ) : ?>
+					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
+						<h3><?php echo esc_html( $step[0] ); ?>
+						<?php
+						if ( $index === $stage ) :
+							?>
+							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
+						<p><?php echo esc_html( $step[1] ); ?></p>
+					</li>
+				<?php endforeach; ?>
+			</ol>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				El estado sale de las fechas y de los enlaces: no hay nada que marcar a mano. Con el listado definitivo enlazado pasa a «Resuelto».
+				Las fechas y los enlaces calculan el estado. Si necesita cerrar las solicitudes antes, puede hacerlo aquí
+				sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
 			<?php if ( true === $m['can_publish'] ) : ?>
-				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada, y los centros solicitan cuando abra el plazo.</p>
+				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
+					y los centros solicitan cuando abra el plazo.</p>
 				<form class="prc-acciones" method="post" action=""
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
@@ -1057,7 +1107,55 @@ final class ProcedureEditorView {
 					<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit">Publicar el procedimiento</button>
 				</form>
 			<?php elseif ( 'publish' === (string) $m['status'] ) : ?>
-				<p class="prc-intro">Publicado: se ve en la portada y en su ficha.</p>
+				<p class="prc-intro">Publicado: se ve en la portada y en su ficha. Si necesita retirarlo temporalmente,
+					puede devolverlo a borrador.</p>
+			<?php endif; ?>
+			<?php if ( true === $m['can_toggle_applications'] && 'publish' === (string) $m['status'] ) : ?>
+				<p class="prc-intro">
+					<?php if ( true === $m['applications_closed'] ) : ?>
+						La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega
+						de documentos ya solicitados.
+					<?php else : ?>
+						<?php if ( true === $m['pending_documentation'] ) : ?>
+							Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.
+						<?php else : ?>
+							Las solicitudes se abren y cierran según las fechas configuradas.
+						<?php endif; ?>
+					<?php endif; ?>
+				</p>
+				<?php $toggle = ProcedureEditor::OP_TOGGLE_APPLICATIONS; ?>
+				<form class="prc-acciones" method="post" action=""
+					<?php if ( false === $m['applications_closed'] ) : ?>
+						data-prc-confirm="<?php echo esc_attr( $close_confirmation ); ?>"
+						data-prc-confirm-ok="Cerrar solicitudes"
+					<?php endif; ?>
+				>
+					<?php wp_nonce_field( ProcedureEditor::nonce_action( $toggle ), ProcedureEditor::nonce_name( $toggle ), false ); ?>
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
+						value="<?php echo esc_attr( $toggle ); ?>" />
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
+						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">
+						<?php echo true === $m['applications_closed'] ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora'; ?>
+					</button>
+				</form>
+			<?php endif; ?>
+			<?php if ( true === $m['can_unpublish'] ) : ?>
+				<?php $op_borrador = ProcedureEditor::OP_UNPUBLISH; ?>
+				<form class="prc-acciones" method="post" action=""
+					data-prc-confirm="<?php echo esc_attr( $draft_confirmation ); ?>"
+					data-prc-confirm-ok="Devolver a borrador">
+					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op_borrador ), ProcedureEditor::nonce_name( $op_borrador ), false ); ?>
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
+						value="<?php echo esc_attr( $op_borrador ); ?>" />
+					<input type="hidden"
+						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
+						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Devolver a borrador</button>
+				</form>
 			<?php endif; ?>
 		</section>
 		<?php

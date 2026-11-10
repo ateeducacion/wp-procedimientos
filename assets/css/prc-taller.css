@@ -45,6 +45,18 @@
   padding: 10px 0;
 }
 
+/* El estado del procedimiento se presenta como etapas ordenadas, con texto además de color. */
+.prc-ciclo-publicacion { list-style: none; margin: 0 0 24px; padding: 0 0 0 12px; }
+.prc-ciclo-publicacion__paso { position: relative; margin: 0; padding: 0 0 18px 24px; border-left: 2px solid var(--prc-c-linea); }
+.prc-ciclo-publicacion__paso::before { position: absolute; top: 3px; left: -7px; width: 10px; height: 10px; border: 2px solid var(--prc-c-linea); border-radius: 50%; background: var(--prc-c-fondo); content: ""; }
+.prc-ciclo-publicacion__paso--completado { border-color: var(--prc-ok-texto); }
+.prc-ciclo-publicacion__paso--completado::before { border-color: var(--prc-ok-texto); background: var(--prc-ok-texto); }
+.prc-ciclo-publicacion__paso--actual::before { border-color: var(--prc-c-azul-borde); background: var(--prc-c-fondo); box-shadow: 0 0 0 3px var(--prc-info-borde); }
+.prc-ciclo-publicacion__paso:last-child { border-left-color: transparent; padding-bottom: 0; }
+.prc-ciclo-publicacion__paso h3 { margin: 0; font-size: var(--prc-t-base); }
+.prc-ciclo-publicacion__paso p { margin: 4px 0 0; }
+.prc-ciclo-publicacion__actual { display: inline-block; margin-left: 6px; font-size: var(--prc-t-menudo); font-weight: 400; }
+
 @media (max-width: 991.98px) {
   .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
 }

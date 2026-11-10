@@ -278,14 +278,19 @@ final class Applications {
 	 * What a procedure asks of a school, in the shape ApplicationInput wants.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{coordinator_count:int, requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
+	 * @return array{applicant_type:string, coordinator_count:int, requires_coordinator:bool, coordinators_in_list:bool, commitments:string, questions:array<int, array<string, mixed>>}
 	 */
 	public static function spec( int $procedure_id ): array {
 		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
+		// Con la lista de personas encendida, la coordinación está en un solo
+		// sitio: la lista, que se cambia con su propia ventana (ADR-0041).
+		$en_lista = $pide > 0 && People::enabled( $procedure_id );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
-			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
-			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
+			'coordinator_count'    => $en_lista ? 0 : $pide,
+			'requires_coordinator' => ! $en_lista && $pide > 0,
+			'coordinators_in_list' => $en_lista,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
@@ -385,6 +390,11 @@ final class Applications {
 			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
 			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
 		);
+		// El formulario ya no pide la coordinación cuando está en la lista: la
+		// que una solicitud de antes guardó ahí se queda como estaba.
+		if ( self::spec( $procedure_id )['coordinators_in_list'] ) {
+			unset( $metas[ ApplicationMetaKeys::COORDINATOR ] );
+		}
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}

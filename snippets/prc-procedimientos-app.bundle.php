@@ -11891,10 +11891,15 @@ final class Applications {
 
 	public static function spec( int $procedure_id ): array {
 		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
+
+
+		$en_lista = $pide > 0 && People::enabled( $procedure_id );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
-			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
-			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
+			'coordinator_count'    => $en_lista ? 0 : $pide,
+			'requires_coordinator' => ! $en_lista && $pide > 0,
+			'coordinators_in_list' => $en_lista,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
@@ -11994,6 +11999,11 @@ final class Applications {
 			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
 			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
 		);
+
+
+		if ( self::spec( $procedure_id )['coordinators_in_list'] ) {
+			unset( $metas[ ApplicationMetaKeys::COORDINATOR ] );
+		}
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
@@ -26719,19 +26729,7 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
-				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
-					<div class="prc-seccion__cuerpo">
-						<div class="prc-nota prc-campo--completo">
-							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
-						</div>
-						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) );?>
-						<?php endfor; ?>
-					</div>
-				</section>
-			<?php endif; ?>
+			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
 
 			<div class="prc-form__envio">
 				<button class="prc-boton-enviar" type="submit">
@@ -26742,6 +26740,34 @@ final class ApplyFormView {
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function coordination( array $m, array $coordinators ): string {
+		$spec = (array) $m['spec'];
+		if ( ! empty( $spec['coordinators_in_list'] ) ) {
+			$hasta = (string) ( $m['people']['until'] ?? '' );
+			return '<div class="prc-nota prc-campo--completo"><p>'
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '' ) )
+				. '</p></div>';
+		}
+		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$campos = '';
+		for ( $index = 0; $index < $cuantas; ++$index ) {
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+		}
+		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
+			. $campos . '</div></section>';
 	}
 
 

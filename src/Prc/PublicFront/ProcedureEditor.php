@@ -68,6 +68,7 @@ final class ProcedureEditor {
 	public const PANEL_PEOPLE       = 'personas';
 
 	public const OP_REVIEW              = 'review';
+	public const OP_BULK_REVIEW         = 'bulk_review';
 	public const OP_EXPORT              = 'export';
 	public const OP_PUBLISH             = 'publish';
 	public const OP_UNPUBLISH           = 'unpublish';
@@ -164,6 +165,7 @@ final class ProcedureEditor {
 		self::OP_PEOPLE_SPEC,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
+		self::OP_BULK_REVIEW,
 		self::OP_EXPORT,
 		self::OP_PUBLISH,
 		self::OP_UNPUBLISH,
@@ -418,18 +420,19 @@ final class ProcedureEditor {
 			return;
 		}
 
-		if ( self::OP_EXPORT === $op || self::OP_REVIEW === $op ) {
+		if ( in_array( $op, array( self::OP_EXPORT, self::OP_REVIEW, self::OP_BULK_REVIEW ), true ) ) {
 			// Gestionar solicitudes pide su capacidad, no la de editar: es otra
 			// cosa, y no toca el procedimiento, así que tampoco pide su bloqueo.
 			if ( ! ProcedureAccess::can_review( $user_id, $procedure_id ) ) {
 				self::$rejected = 'Su perfil no gestiona las solicitudes de este procedimiento.';
 				return;
 			}
-			if ( self::OP_EXPORT === $op ) {
-				self::export( $procedure_id, $user_id );
-				return;
-			}
-			self::review( $procedure_id, $row_id );
+			$solicitudes = array(
+				self::OP_EXPORT      => 'export',
+				self::OP_REVIEW      => 'review',
+				self::OP_BULK_REVIEW => 'bulk_review',
+			);
+			call_user_func( array( self::class, $solicitudes[ $op ] ), $procedure_id, self::OP_REVIEW === $op ? $row_id : $user_id );
 			return;
 		}
 
@@ -1152,7 +1155,42 @@ final class ProcedureEditor {
 			self::$rejected = $textos[ $res['error'] ] ?? 'No se ha podido revisar la solicitud.';
 			return;
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'revisada' ) ) );
+		// Vuelve a la misma vista: el filtro y la página viajan en el formulario.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle(); solo se lee el filtro de vuelta.
+		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( $_POST ), array( self::ARG_NOTICE => 'revisada' ) ) );
+	}
+
+	/**
+	 * Review the ticked applications at once, with the same state and note.
+	 *
+	 * Lo que se rechaza entero —nada marcado, más del tope, un estado que no
+	 * existe o la nota que falta— no redirige: repinta con el motivo. Lo
+	 * demás vuelve a la misma vista con cuántas cambiaron y cuántas no.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function bulk_review( int $procedure_id ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
+		$ids    = ApplicationsPanel::posted_ids( $_POST );
+		$filtro = ApplicationsPanel::filter( $_POST );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$res = ApplicationsPanel::bulk( $procedure_id, $ids, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );
+		if ( '' !== $res['error'] ) {
+			self::$rejected = $res['error'];
+			return;
+		}
+		Shell::leave(
+			ApplicationsPanel::url(
+				$procedure_id,
+				$filtro,
+				array(
+					self::ARG_NOTICE              => ApplicationsPanel::NOTICE_BULK,
+					ApplicationsPanel::ARG_DONE   => $res['done'],
+					ApplicationsPanel::ARG_FAILED => $res['failed'],
+				)
+			)
+		);
 	}
 
 	/**
@@ -1174,10 +1212,19 @@ final class ProcedureEditor {
 	private static function export( int $procedure_id, int $user_id ): void {
 		$eleccion = ApplicationExport::sanitize_choice( $procedure_id, self::export_request() );
 		ApplicationExport::remember( $user_id, $procedure_id, $eleccion );
+		// Las del filtro de la tabla, o todas (PR 6 del PLAN-0003).
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
+		$ids = ApplicationsPanel::export_ids( $procedure_id, $_POST );
 
 		$cuerpo = ApplicationExport::FORMAT_MOODLE === $eleccion['format']
-			? ApplicationExport::moodle( $procedure_id, array( 'who' => $eleccion['who'] ) )
-			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'] );
+			? ApplicationExport::moodle(
+				$procedure_id,
+				array(
+					'who' => $eleccion['who'],
+					'ids' => $ids,
+				)
+			)
+			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'], $ids );
 		$nombre = ApplicationExport::filename( (string) get_post_field( 'post_title', $procedure_id ), $eleccion['format'] );
 
 		Shell::send_header( 'Content-Type: text/csv; charset=utf-8' );
@@ -1214,33 +1261,6 @@ final class ProcedureEditor {
 			'shape'   => sanitize_key( self::field( self::FIELD_EXPORT_SHAPE ) ),
 			'format'  => sanitize_key( self::field( self::FIELD_EXPORT_FORMAT ) ),
 			'who'     => $listas[ self::FIELD_EXPORT_WHO ],
-		);
-	}
-
-	/**
-	 * What the export dialog shows: the columns, the last choice and who
-	 * would be left out of the user upload file.
-	 *
-	 * La descarga es la respuesta del envío, así que no puede volver con un
-	 * aviso: cuántas personas se quedan fuera, y por qué, se cuenta aquí, en
-	 * el propio diálogo, antes de descargar (ADR-0039).
-	 *
-	 * @param int        $procedure_id Procedure post ID.
-	 * @param int        $user_id      Who is looking.
-	 * @param \WP_Post[] $applications Its applications, already loaded for the table.
-	 * @return array<string, mixed>
-	 */
-	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
-		$quienes = array();
-		$fuentes = ApplicationExport::who( $procedure_id );
-		foreach ( ApplicationExport::who_counts( $applications, array_keys( $fuentes ) ) as $clave => $cuenta ) {
-			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
-		}
-		return array(
-			'groups'       => ApplicationExport::groups( $procedure_id ),
-			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
-			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
-			'who'          => $quienes,
 		);
 	}
 
@@ -1379,6 +1399,7 @@ final class ProcedureEditor {
 			'applications'            => array(),
 			'app_cols'                => array(),
 			'export'                  => array(),
+			'table'                   => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 			'people_spec'             => array(),
@@ -1500,13 +1521,10 @@ final class ProcedureEditor {
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
-			// Las solicitudes se leen una vez: la tabla y los recuentos del
-			// diálogo de exportar trabajan sobre las mismas.
-			$solicitudes       = Applications::for_procedure( $procedure_id );
-			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
-			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
-			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
-			$m['people']       = PeopleSpecPanel::reviews( $solicitudes );
+			// La tabla filtrada, una página, y lo que cuenta el diálogo de
+			// exportar: sin leer las metas de todas las solicitudes.
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- el filtro de la tabla es de lectura.
+			$m = array_merge( $m, ApplicationsPanel::model( $procedure_id, $user_id, (array) $m['questions'], $_GET ) );
 		}
 		return $m;
 	}
@@ -1524,6 +1542,10 @@ final class ProcedureEditor {
 				'tipo'  => 'error',
 				'texto' => self::$rejected,
 			);
+		}
+		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se leen dos cifras para el aviso.
+			return ApplicationsPanel::bulk_notice( $_GET );
 		}
 		return array(
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',

@@ -13,11 +13,7 @@ use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
-use Prc\PublicFront\ApplicationExport;
-use Prc\PublicFront\ApplicationFiles;
-use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
-use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -76,7 +72,7 @@ final class ProcedureEditorView {
 		} elseif ( ProcedureEditor::PANEL_LINKS === $panel ) {
 			echo self::links_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			echo self::applications_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+			echo ApplicationsPanelView::html( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::deliveries_panel( $m );
@@ -113,7 +109,9 @@ final class ProcedureEditorView {
 	 */
 	private static function read_only( array $m, string $panel ): bool {
 		if ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			return true !== $m['can_review'];
+			// El panel apaga él mismo lo que escribe: filtrar y pasar de
+			// página siguen abiertos aunque no se gestionen las solicitudes.
+			return false;
 		}
 		if ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
 			return true !== $m['can_edit'];
@@ -1057,361 +1055,6 @@ final class ProcedureEditorView {
 
 	// ─── Solicitudes ───────────────────────────────────────────────────────
 
-	/**
-	 * The «Solicitudes» panel: the table, the review of each one and the export.
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return string
-	 */
-	private static function applications_panel( array $m ): string {
-		$filas   = (array) $m['applications'];
-		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values'][ ProcedureMetaKeys::AUDIENCE ] ?? '' );
-		if ( array() === $filas ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
-				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
-		}
-		$cuenta = count( $filas );
-
-		ob_start();
-		?>
-		<div class="prc-banda-tabla">
-			<p class="prc-recuento">
-				<?php echo esc_html( sprintf( 1 === $cuenta ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $cuenta ) ); ?>
-				Cada una se revisa desde su fila; al exportar se eligen las columnas, una fila por solicitud o por persona, o el fichero de alta de usuarios.
-			</p>
-			<?php echo self::export_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-		</div>
-		<div class="prc-tabla-caja prc-panel-solicitudes">
-			<table class="prc-tabla prc-tabla--densa table">
-				<caption class="screen-reader-text">Solicitudes presentadas a este procedimiento</caption>
-				<thead>
-					<tr>
-						<?php if ( $docente ) : ?>
-							<th class="prc-th" scope="col">Docente</th>
-							<th class="prc-th" scope="col">Correo</th>
-						<?php else : ?>
-							<th class="prc-th" scope="col">Centro</th>
-							<th class="prc-th" scope="col">Código</th>
-						<?php endif; ?>
-						<th class="prc-th" scope="col">Fecha</th>
-						<?php if ( ! $docente ) : ?>
-							<th class="prc-th" scope="col">Cargo</th>
-							<th class="prc-th" scope="col">Coordinación</th>
-						<?php endif; ?>
-						<?php echo self::score_cell( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-						<th class="prc-th" scope="col">Revisión</th>
-						<th class="prc-th" scope="col">Acciones</th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( $filas as $fila ) : ?>
-						<tr data-estado="<?php echo esc_attr( (string) $fila['state_key'] ); ?>">
-							<?php if ( $docente ) : ?>
-								<td class="prc-celda" data-rotulo="Docente"><?php echo esc_html( (string) $fila['applicant'] ); ?></td>
-								<td class="prc-celda" data-rotulo="Correo"><?php echo esc_html( (string) $fila['email'] ); ?></td>
-							<?php else : ?>
-								<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
-								<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
-							<?php endif; ?>
-							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
-							<?php if ( ! $docente ) : ?>
-								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
-							<?php endif; ?>
-							<?php echo self::score_cell( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
-							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
-		</div>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
-	 * The «Puntos» heading, or one row's score, when some question gives points.
-	 *
-	 * Los puntos no se guardan: es una columna calculada que solo existe si
-	 * alguna pregunta los da (ADR-0040).
-	 *
-	 * @param array<string, mixed>      $m    Model.
-	 * @param array<string, mixed>|null $fila Row; null for the heading.
-	 * @return string
-	 */
-	private static function score_cell( array $m, ?array $fila = null ): string {
-		if ( ! isset( $m['app_cols']['score'] ) ) {
-			return '';
-		}
-		if ( null === $fila ) {
-			return '<th class="prc-th" scope="col">Puntos</th>';
-		}
-		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
-	}
-
-	/**
-	 * A cell that may be empty, with the dash the whole application uses.
-	 *
-	 * @param string $texto What the cell says.
-	 * @return string
-	 */
-	private static function dash( string $texto ): string {
-		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
-	}
-
-	/**
-	 * The download link of one private document of an application.
-	 *
-	 * El enlace se compone **aquí**, al pintar: es presentación, y por eso no
-	 * viaja dentro de la fila ni acaba en el CSV (ADR-0028). Apunta al
-	 * manejador del aplicativo, que vuelve a comprobar quién pregunta con
-	 * `ProcedureAccess::can_view_application()`: este enlace no autoriza nada.
-	 *
-	 * @param array<string, mixed> $fila One row.
-	 * @param string               $key  Question key.
-	 * @return string
-	 */
-	private static function download( array $fila, string $key ): string {
-		$adjuntos = isset( $fila[ Applications::KEY_FILES ] ) && is_array( $fila[ Applications::KEY_FILES ] )
-			? $fila[ Applications::KEY_FILES ]
-			: array();
-		$doc      = isset( $adjuntos[ $key ] ) && is_array( $adjuntos[ $key ] ) ? $adjuntos[ $key ] : array();
-		if ( array() === $doc || '' === (string) ( $doc['id'] ?? '' ) ) {
-			return '<span class="prc-sindato" title="Sin documento">&mdash;</span>';
-		}
-
-		return sprintf(
-			'<a class="prc-descarga" href="%1$s" download>%2$s</a>',
-			esc_url( ApplicationFiles::url( (int) ( $doc['application'] ?? 0 ), (string) $doc['id'] ) ),
-			esc_html( '' !== (string) ( $doc['name'] ?? '' ) ? (string) $doc['name'] : 'Descargar' )
-		);
-	}
-
-	/**
-	 * The review of one application: its answers, its state and its note.
-	 *
-	 * @param array<string, mixed>  $m    Model.
-	 * @param array<string, string> $fila Row.
-	 * @return string
-	 */
-	private static function review_form( array $m, array $fila ): string {
-		$op = ProcedureEditor::OP_REVIEW;
-		$id = (int) $fila['id'];
-
-		ob_start();
-		?>
-		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
-			<summary class="prc-revision__abrir">Revisar</summary>
-			<dl class="prc-respuestas">
-				<dt>Presentada por</dt>
-				<dd><?php echo esc_html( trim( (string) $fila['applicant'] . ' ' . (string) $fila['email'] ) ); ?></dd>
-				<?php foreach ( (array) $m['questions'] as $pregunta ) : ?>
-					<dt><?php echo esc_html( (string) $pregunta['label'] ); ?></dt>
-					<?php
-					// Un documento se pinta como enlace de descarga; lo demás,
-					// como texto. Lo decide el tipo de la pregunta (ADR-0028).
-					$respuesta = ProcedureQuestions::TYPE_FILE === (string) ( $pregunta['type'] ?? '' )
-						? self::download( $fila, (string) $pregunta['key'] )
-						: esc_html( '' !== (string) ( $fila[ $pregunta['key'] ] ?? '' ) ? (string) $fila[ $pregunta['key'] ] : '—' );
-					?>
-					<dd><?php echo $respuesta; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado justo arriba. ?></dd>
-				<?php endforeach; ?>
-			</dl>
-			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="prc-state-<?php echo esc_attr( (string) $id ); ?>">Estado</label>
-					<select class="prc-control" id="prc-state-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_STATE ); ?>">
-						<?php foreach ( (array) $m['review_states'] as $clave => $rotulo ) : ?>
-							<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $fila['state_key'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
-						<?php endforeach; ?>
-					</select>
-				</div>
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="prc-note-<?php echo esc_attr( (string) $id ); ?>">Nota para el centro</label>
-					<textarea class="prc-control" id="prc-note-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3"
-						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
-					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
-				</div>
-				<?php echo PanelParts::submit( 'Guardar la revisión' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			</form>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
-	 * The export dialog: a POST with its nonce, never a link.
-	 *
-	 * Sin guion es un desplegable con el formulario dentro, y funciona igual:
-	 * «Todas las columnas» es un campo que el servidor lee, no un atajo del
-	 * guion. Con guion, `prc-app.js` lo abre como diálogo modal, marca y
-	 * desmarca las casillas con «Todas» y enseña solo lo del formato elegido
-	 * (ADR-0039).
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return string
-	 */
-	private static function export_form( array $m ): string {
-		$op       = ProcedureEditor::OP_EXPORT;
-		$export   = (array) ( $m['export'] ?? array() );
-		$eleccion = (array) ( $export['choice'] ?? array() );
-		$columnas = (array) ( $eleccion['columns'] ?? array() );
-		$quienes  = (array) ( $eleccion['who'] ?? array() );
-		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
-		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
-
-		$radios_formato = self::export_radio(
-			ProcedureEditor::FIELD_EXPORT_FORMAT,
-			array(
-				ApplicationExport::FORMAT_CSV    => 'Hoja de cálculo (CSV)',
-				ApplicationExport::FORMAT_MOODLE => 'Fichero de alta de usuarios de Moodle',
-			),
-			$formato,
-			'data-prc-export-format'
-		);
-		$radios_forma   = self::export_radio(
-			ProcedureEditor::FIELD_EXPORT_SHAPE,
-			array(
-				ApplicationExport::SHAPE_APPLICATION => 'Solicitud',
-				ApplicationExport::SHAPE_PERSON      => 'Persona coordinadora: la solicitud se repite en cada una',
-			),
-			$forma
-		);
-
-		ob_start();
-		?>
-		<details class="prc-exportar" data-prc-export>
-			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
-			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
-				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-
-				<fieldset class="prc-exportar__grupo">
-					<legend>Formato</legend>
-					<?php echo $radios_formato; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				</fieldset>
-
-				<div class="prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_CSV ); ?>">
-					<fieldset class="prc-exportar__grupo">
-						<legend>Una fila por</legend>
-						<?php echo $radios_forma; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-					</fieldset>
-					<fieldset class="prc-exportar__grupo">
-						<legend>Columnas</legend>
-						<label class="prc-casilla">
-							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
-							Todas las columnas
-						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
-						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
-							<?php
-							if ( array() === $de_grupo ) {
-								continue;
-							}
-							?>
-							<fieldset class="prc-exportar__columnas">
-								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
-								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
-									<?php
-									// Las del catálogo del centro no son de «Todas»: el guion no
-									// las marca con ella, y sin elegirlas no salen (ADR-0042).
-									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
-									?>
-									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
-										<?php echo esc_html( (string) $rotulo ); ?>
-									</label>
-								<?php endforeach; ?>
-							</fieldset>
-						<?php endforeach; ?>
-					</fieldset>
-				</div>
-
-				<fieldset class="prc-exportar__grupo prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_MOODLE ); ?>">
-					<legend>Quiénes salen en el fichero de usuarios</legend>
-					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
-						<label class="prc-casilla">
-							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
-							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
-						</label>
-					<?php endforeach; ?>
-					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
-				</fieldset>
-
-				<div class="prc-acciones">
-					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
-				</div>
-			</form>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
-	 * One closed choice of the export dialog, as radio buttons.
-	 *
-	 * @param string                $name     Field name.
-	 * @param array<string, string> $options  value => label.
-	 * @param string                $selected Chosen value.
-	 * @param string                $marca    Extra data attribute, or empty.
-	 * @return string
-	 */
-	private static function export_radio( string $name, array $options, string $selected, string $marca = '' ): string {
-		$out = '';
-		foreach ( $options as $valor => $rotulo ) {
-			$out .= sprintf(
-				'<label class="prc-casilla"><input type="radio" name="%1$s" value="%2$s"%3$s%4$s /> %5$s</label>',
-				esc_attr( $name ),
-				esc_attr( (string) $valor ),
-				'' !== $marca ? ' ' . esc_attr( $marca ) : '',
-				checked( (string) $valor, $selected, false ),
-				esc_html( $rotulo )
-			);
-		}
-		return $out;
-	}
-
-	/**
-	 * Who goes in the user upload file, with how many and who is left out, and why.
-	 *
-	 * Cada motivo con su rótulo: sin correo válido, incompletas (sin nombre,
-	 * apellidos o usuario), usuario en conflicto (el mismo usuario con otro
-	 * correo) y usuario no válido para la plataforma. Una persona repetida con
-	 * el mismo correo no es una omisión.
-	 *
-	 * @param array<string, mixed> $quien One source: `label`, `count`, `email`, `incomplete`, `conflict`, `invalid`.
-	 * @return string
-	 */
-	private static function who_label( array $quien ): string {
-		$cuenta  = (int) ( $quien['count'] ?? 0 );
-		$motivos = array(
-			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
-			'incomplete' => array( '%d incompleta', '%d incompletas' ),
-			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
-			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
-		);
-		$fuera   = array();
-		foreach ( $motivos as $clave => list( $una, $varias ) ) {
-			$n = (int) ( $quien[ $clave ] ?? 0 );
-			if ( $n > 0 ) {
-				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
-			}
-		}
-		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
-		if ( array() !== $fuera ) {
-			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
-		}
-		return $texto . ')';
-	}
-
 	// ─── Publicación ───────────────────────────────────────────────────────
 
 	/**
@@ -1717,7 +1360,7 @@ final class ProcedureEditorView {
 	 * @param string $label Human label.
 	 * @return string
 	 */
-	private static function badge( string $slug, string $label ): string {
+	public static function badge( string $slug, string $label ): string {
 		if ( '' === $label ) {
 			return '';
 		}

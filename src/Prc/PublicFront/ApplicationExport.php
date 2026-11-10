@@ -177,12 +177,16 @@ final class ApplicationExport {
 	 * BOM, CRLF y cada celda entrecomillada y neutralizada
 	 * ({@see Applications::csv_lines()}).
 	 *
-	 * @param int      $procedure_id Procedure post ID.
-	 * @param string[] $columns      Column keys, in order; empty for all.
-	 * @param string   $shape        {@see SHAPE_APPLICATION} or {@see SHAPE_PERSON}.
+	 * Con `$ids`, solo esas solicitudes del procedimiento: las del filtro de
+	 * la tabla. Sin ellas, todas.
+	 *
+	 * @param int        $procedure_id Procedure post ID.
+	 * @param string[]   $columns      Column keys, in order; empty for all.
+	 * @param string     $shape        {@see SHAPE_APPLICATION} or {@see SHAPE_PERSON}.
+	 * @param int[]|null $ids          Only these applications; null for every one.
 	 * @return string
 	 */
-	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
+	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION, ?array $ids = null ): string {
 		$preguntas = Applications::questions( $procedure_id );
 		$columnas  = CentreColumns::ordered( self::valid_columns( $procedure_id, $columns ), PeopleExport::all_columns( $procedure_id ), PeopleExport::all_columns( $procedure_id, true ) );
 		$personas  = PeopleExport::spec( $procedure_id );
@@ -190,7 +194,7 @@ final class ApplicationExport {
 		$filas     = array();
 		// El catálogo se lee una vez, y solo si sale alguna de sus columnas.
 		$catalogo = array() !== array_intersect_key( $claves, array_flip( CentreColumns::KEYS ) ) ? CentreCatalog::index() : array();
-		foreach ( self::batches( $procedure_id ) as $tanda ) {
+		foreach ( self::batches( $procedure_id, $ids ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas, $catalogo ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
@@ -287,12 +291,13 @@ final class ApplicationExport {
 	 *
 	 * Un hueco de coordinación vacío no es una persona y no cuenta.
 	 *
-	 * @param int      $procedure_id Procedure post ID.
-	 * @param string[] $who          Keys of {@see who()}; empty for all.
+	 * @param int        $procedure_id Procedure post ID.
+	 * @param string[]   $who          Keys of {@see who()}; empty for all.
+	 * @param int[]|null $ids          Only these applications; null for every one.
 	 * @return array{people:array<int, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}
 	 */
-	public static function people( int $procedure_id, array $who = array() ): array {
-		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
+	public static function people( int $procedure_id, array $who = array(), ?array $ids = null ): array {
+		$cuenta = self::tally( self::batches( $procedure_id, $ids ), array( 'all' => self::sources( $who ) ) )['all'];
 		return array(
 			'people'   => array_values( $cuenta['people'] ),
 			'left_out' => $cuenta['left_out'],
@@ -303,21 +308,24 @@ final class ApplicationExport {
 	 * For each source, how many people would go in the user upload file and
 	 * how many would be left out, and why.
 	 *
-	 * Una sola pasada por las solicitudes, y las que se le dan: el panel ya
-	 * las ha cargado para pintar la tabla, con sus metas y sus cuentas, así
-	 * que añadir una fuente no añade consultas.
+	 * Una sola pasada por las solicitudes, y las que se le dan. La tabla no
+	 * carga las metas de todas, solo las de su página: con `$stored` —la
+	 * coordinación y las personas de cada una, ya leídas por
+	 * {@see ApplicationQuery}— no se lee ninguna meta más, y añadir una
+	 * fuente no añade consultas.
 	 *
-	 * @param \WP_Post[] $applications Applications already loaded.
-	 * @param string[]   $who          Keys of {@see who()}; empty for all.
+	 * @param \WP_Post[]                       $applications Applications already loaded.
+	 * @param string[]                         $who          Keys of {@see who()}; empty for all.
+	 * @param array<int, array<string, mixed>> $stored       Application ID => its coordination and people metas, when already read.
 	 * @return array<string, array{count:int, email:int, incomplete:int, conflict:int, invalid:int}>
 	 */
-	public static function who_counts( array $applications, array $who = array() ): array {
+	public static function who_counts( array $applications, array $who = array(), array $stored = array() ): array {
 		$grupos = array();
 		foreach ( self::sources( $who ) as $fuente ) {
 			$grupos[ $fuente ] = array( $fuente );
 		}
 		$out = array();
-		foreach ( self::tally( array( $applications ), $grupos ) as $fuente => $cuenta ) {
+		foreach ( self::tally( array( $applications ), $grupos, $stored ) as $fuente => $cuenta ) {
 			$out[ $fuente ] = array( 'count' => count( $cuenta['people'] ) ) + $cuenta['left_out'];
 		}
 		return $out;
@@ -337,11 +345,12 @@ final class ApplicationExport {
 	/**
 	 * Go through the applications once and gather the people of each group of sources.
 	 *
-	 * @param iterable                $batches Applications, a batch (array of \WP_Post) at a time.
-	 * @param array<string, string[]> $groups  Group => sources.
+	 * @param iterable                         $batches Applications, a batch (array of \WP_Post) at a time.
+	 * @param array<string, string[]>          $groups  Group => sources.
+	 * @param array<int, array<string, mixed>> $stored  Metas already read, by application ID.
 	 * @return array<string, array{people:array<string, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}>
 	 */
-	private static function tally( iterable $batches, array $groups ): array {
+	private static function tally( iterable $batches, array $groups, array $stored = array() ): array {
 		$out = array();
 		foreach ( array_keys( $groups ) as $grupo ) {
 			$out[ $grupo ] = array(
@@ -360,7 +369,7 @@ final class ApplicationExport {
 				$de = array();
 				foreach ( $groups as $grupo => $fuentes ) {
 					foreach ( $fuentes as $fuente ) {
-						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud );
+						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud, (array) ( $stored[ (int) $solicitud->ID ] ?? array() ) );
 						foreach ( $de[ $fuente ] as $persona ) {
 							self::add( $out[ $grupo ], $persona );
 						}
@@ -426,12 +435,13 @@ final class ApplicationExport {
 	 * The user upload file of Moodle.
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
-	 * @param array<string, mixed> $options      `who`: keys of {@see who()}; empty for all.
+	 * @param array<string, mixed> $options      `who`: keys of {@see who()}; empty for all. `ids`: only these applications.
 	 * @return string
 	 */
 	public static function moodle( int $procedure_id, array $options = array() ): string {
 		$who = is_array( $options['who'] ?? null ) ? $options['who'] : array();
-		return self::moodle_lines( self::people( $procedure_id, $who )['people'] );
+		$ids = is_array( $options['ids'] ?? null ) ? $options['ids'] : null;
+		return self::moodle_lines( self::people( $procedure_id, $who, $ids )['people'] );
 	}
 
 	/**
@@ -485,17 +495,18 @@ final class ApplicationExport {
 	/**
 	 * The people one source gives for one application.
 	 *
-	 * @param string   $source      Key of {@see who()}.
-	 * @param \WP_Post $application The application.
+	 * @param string               $source      Key of {@see who()}.
+	 * @param \WP_Post             $application The application.
+	 * @param array<string, mixed> $stored      Its metas already read, if any.
 	 * @return array<int, array<string, mixed>>
 	 */
-	private static function from_source( string $source, \WP_Post $application ): array {
+	private static function from_source( string $source, \WP_Post $application, array $stored = array() ): array {
 		switch ( $source ) {
 			case self::WHO_APPLICANT:
 				return self::applicant( $application );
 			case self::WHO_COORDINATORS:
 				$out = array();
-				foreach ( self::coordinators( $application ) as $persona ) {
+				foreach ( self::coordinators( $application, $stored ) as $persona ) {
 					// Un hueco vacío del formulario no es una persona.
 					if ( '' === $persona['name'] . $persona['surname'] . $persona['email'] ) {
 						continue;
@@ -507,7 +518,7 @@ final class ApplicationExport {
 			case self::WHO_PEOPLE:
 				// Su usuario es la parte local del correo, como quien se teclea
 				// en un formulario ({@see username()}).
-				return PeopleExport::users( (int) $application->ID );
+				return PeopleExport::users( (int) $application->ID, array_key_exists( ApplicationMetaKeys::PEOPLE, $stored ) ? $stored[ ApplicationMetaKeys::PEOPLE ] : null );
 		}
 		return array();
 	}
@@ -666,11 +677,13 @@ final class ApplicationExport {
 	/**
 	 * The stored coordinators of one application.
 	 *
-	 * @param \WP_Post $application The application.
+	 * @param \WP_Post             $application The application.
+	 * @param array<string, mixed> $stored      Its metas already read, if any.
 	 * @return array<int, array{name:string, surname:string, dni:string, email:string}>
 	 */
-	private static function coordinators( \WP_Post $application ): array {
-		return ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( (int) $application->ID, ApplicationMetaKeys::COORDINATOR, true ) );
+	private static function coordinators( \WP_Post $application, array $stored = array() ): array {
+		$valor = array_key_exists( ApplicationMetaKeys::COORDINATOR, $stored ) ? $stored[ ApplicationMetaKeys::COORDINATOR ] : get_post_meta( (int) $application->ID, ApplicationMetaKeys::COORDINATOR, true );
+		return ApplicationMetaRegistration::sanitize_coordinator( $valor );
 	}
 
 	/**
@@ -680,16 +693,21 @@ final class ApplicationExport {
 	 * solicitudes y decenas de preguntas no tiene por qué pasar entero por
 	 * memoria para escribir un fichero.
 	 *
-	 * @param int $procedure_id Procedure post ID.
+	 * Con `$ids`, solo esas: un `post__in` vacío en WordPress no acota
+	 * nada, así que una lista vacía no da ninguna tanda.
+	 *
+	 * @param int        $procedure_id Procedure post ID.
+	 * @param int[]|null $ids          Only these applications; null for every one.
 	 * @return \Generator<int, \WP_Post[]>
 	 */
-	private static function batches( int $procedure_id ): \Generator {
-		if ( $procedure_id <= 0 ) {
+	private static function batches( int $procedure_id, ?array $ids = null ): \Generator {
+		if ( $procedure_id <= 0 || array() === $ids ) {
 			return;
 		}
+		$solo = null === $ids ? array() : array( 'post__in' => array_map( 'intval', $ids ) );
 		for ( $pagina = 1; ; ++$pagina ) {
 			$tanda = get_posts(
-				array(
+				$solo + array(
 					'post_type'        => ApplicationPostType::POST_TYPE,
 					'post_parent'      => $procedure_id,
 					'post_status'      => 'publish',

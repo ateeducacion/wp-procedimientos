@@ -13,6 +13,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
 
 /**
  * Las actuaciones de quien revisa sobre una solicitud (PLAN-0003, PR 9;
@@ -302,6 +303,7 @@ final class ApplicationActionsPanel {
 				'can_extend'    => '' === ApplicationActions::why_not_extend( $user_id, $id ),
 				'internal_note' => (string) get_post_meta( $id, ApplicationMetaKeys::INTERNAL_NOTE, true ),
 				'pending'       => ApplicationOperations::pending_for_school( $id ),
+				'review'        => (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'history'       => array(
 					'open'    => (string) $id === $abiertas,
 					'url'     => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $id ) + $args ) . '#prc-historial-' . $id,
@@ -313,6 +315,7 @@ final class ApplicationActionsPanel {
 		return array(
 			'rows'            => $filas,
 			'today'           => ProcedureState::today(),
+			'resolved'        => ProcedureMetaKeys::STATE_RESOLVED === ProcedureState::of_post( $procedure_id ),
 			'withdrawn_count' => ApplicationOperations::withdrawn_count( $procedure_id ),
 			'withdrawn_open'  => $abrir,
 			'withdrawn_url'   => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( self::ARG_WITHDRAWN => 1 ) ),

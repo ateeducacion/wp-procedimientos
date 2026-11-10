@@ -811,6 +811,36 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con prórroga, modificar una solicitud revisada la devuelve a
+	 * «Presentada»: el formulario lo avisa y el historial lo dice, sin correo
+	 * de revisión. En un procedimiento resuelto, también se avisa.
+	 */
+	public function test_editing_a_reviewed_application_with_an_extension_is_warned_and_logged() {
+		$c = $this->caso( false );
+		update_post_meta( $c['application'], ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		update_post_meta( $c['application'], ApplicationMetaKeys::LATE_UNTIL, $this->dia( 3 ) );
+		$html = $this->panel( $c['reviewer'], $c['procedure'] );
+		$this->assertStringContainsString( 'volverá a «Presentada» y habrá que revisarla de nuevo', $html );
+		$this->assertStringNotContainsString( 'ya está resuelto', $html );
+
+		$this->enviados = array();
+		$this->assertGreaterThan( 0, Applications::save( $c['procedure'], $c['head'], array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) ) );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $c['application'], ApplicationMetaKeys::REVIEW_STATE, true ) );
+		$this->assertSame( array( ApplicationHistory::UPDATED, ApplicationHistory::REVIEWED ), $this->eventos( $c['application'] ) );
+		$entrada = ApplicationLog::all( $c['application'] )[1];
+		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, $entrada['data']['previous'] );
+		$this->assertSame( 'save', $entrada['data']['by'] );
+		$this->assertSame( $c['head'], $entrada['user'] );
+		foreach ( $this->enviados as $correo ) {
+			$this->assertStringNotContainsString( 'Revisión de su solicitud', (string) $correo['subject'] );
+		}
+		$this->assertStringContainsString( 'al modificarla quien la presentó', implode( ' ', array_column( ApplicationHistory::entries( $c['application'] ), 'what' ) ) );
+
+		update_post_meta( $c['procedure'], ProcedureMetaKeys::FINAL_LIST_URL, 'https://example.org/listado.pdf' );
+		$this->assertStringContainsString( 'ya está resuelto', $this->panel( $c['reviewer'], $c['procedure'] ) );
+	}
+
+	/**
 	 * La prórroga abre también la lista de personas que sigue el plazo de la
 	 * solicitud; con ventana propia, manda la ventana propia.
 	 */

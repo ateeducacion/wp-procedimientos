@@ -8,6 +8,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\PublicFront\ApplicationActionsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
@@ -256,6 +257,9 @@ final class ApplicationActionsView {
 				);
 				?>
 			</p>
+			<?php foreach ( self::extend_warnings( $m, $a ) as $aviso ) : ?>
+				<p class="prc-campo__ayuda prc-aviso-prorroga"><?php echo esc_html( $aviso ); ?></p>
+			<?php endforeach; ?>
 			<div class="prc-campo">
 				<label class="prc-campo__etiqueta" for="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>">Puede editarla hasta el</label>
 				<input class="prc-control" type="date" id="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_LATE ); ?>" value="<?php echo esc_attr( $hasta ); ?>" min="<?php echo esc_attr( (string) ( $m['actions']['today'] ?? '' ) ); ?>" required />
@@ -269,6 +273,27 @@ final class ApplicationActionsView {
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * What whoever gives an extension has to know before giving it.
+	 *
+	 * Guardar con prórroga devuelve la solicitud a «Presentada» (ADR-0020), y
+	 * en un procedimiento resuelto es una decisión expresa (ADR-0044).
+	 *
+	 * @param array<string, mixed> $m Model of the workshop.
+	 * @param array<string, mixed> $a Actions row of the application.
+	 * @return string[]
+	 */
+	private static function extend_warnings( array $m, array $a ): array {
+		$out = array();
+		if ( in_array( (string) ( $a['review'] ?? '' ), array( ApplicationMetaKeys::REVIEW_ADMITTED, ApplicationMetaKeys::REVIEW_EXCLUDED ), true ) ) {
+			$out[] = 'Esta solicitud ya está revisada: si el centro la modifica con la prórroga, volverá a «Presentada» y habrá que revisarla de nuevo.';
+		}
+		if ( ! empty( $m['actions']['resolved'] ) ) {
+			$out[] = 'Este procedimiento ya está resuelto: una prórroga deja cambiar una solicitud después de la resolución.';
+		}
+		return $out;
 	}
 
 	/**

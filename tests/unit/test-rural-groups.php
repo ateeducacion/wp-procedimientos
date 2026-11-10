@@ -237,7 +237,7 @@ class Test_Rural_Groups extends WP_UnitTestCase {
 		update_post_meta( $lista, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'G0001', 'G0009' ) );
 
 		$this->assertSame( array( 'C0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $isla ) ), 'el centro está en la isla y la agrupación no' );
-		$this->assertSame( 'Este procedimiento es solo para centros de Isla Uno.', ProcedureAccess::why_not_eligible( $uid, $isla, 'G0001' ) );
+		$this->assertSame( 'Este procedimiento es solo para centros de Isla Uno.', ProcedureAccess::why_not_apply( $uid, $isla, 'G0001' ) );
 		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $publ ) ), 'la titularidad filtra al centro, no a la agrupación' );
 		$this->assertSame( array( 'G0001' ), array_keys( ProcedureAccess::apply_codes( $uid, $lista ) ) );
 		$this->assertSame( array( 'G0009' ), array_keys( ProcedureAccess::apply_codes( $fuera, $lista ) ), 'con la lista sola, una agrupación de la lista solicita aunque no esté en el catálogo' );

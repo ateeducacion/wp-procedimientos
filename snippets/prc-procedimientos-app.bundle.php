@@ -6086,6 +6086,29 @@ final class ProcedureAccess {
 
 
 
+
+	private const REASONS = array(
+		'session'        => 'Debe iniciar sesión con su cuenta personal para presentar la solicitud.',
+		'role_teachers'  => 'Su perfil no presenta solicitudes. Este procedimiento lo solicita cada docente con su cuenta personal: si ha entrado con otra, salga y entre con la suya.',
+		'role'           => 'Su perfil no presenta solicitudes de centro. Si ha entrado con la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es su cuenta personal, pida a quien administra el aplicativo que le asigne el cargo de dirección.',
+		'teacher_closed' => 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.',
+		'teachers_only'  => 'Este procedimiento lo solicita cada docente a título personal, con su propia cuenta. La dirección no presenta solicitud en nombre del centro.',
+		'heads_only'     => 'Este procedimiento lo presenta la dirección del centro, no cada docente.',
+		'no_code'        => 'Su cuenta no tiene centro asignado. Si es la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es la personal, pida a quien administra el aplicativo que le asigne el código de centro.',
+		'foreign_code'   => 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.',
+		'unpublished'    => 'Ese procedimiento no existe o todavía no está publicado.',
+		'kind'           => 'Este procedimiento solo admite solicitudes de %s, y su cuenta no tiene un código así.',
+		'fallback'       => 'Su centro (%s) no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha.',
+	);
+
+
+
+
+
+
+
+
+
 	private static $rest_checked = 0;
 
 
@@ -6915,28 +6938,6 @@ final class ProcedureAccess {
 
 
 
-	public static function why_not_eligible( int $user_id, int $post_id, string $code = '' ): string {
-		$codes = self::kind_codes( $user_id, $post_id );
-		if ( '' !== $code ) {
-			$codes = array_intersect_key( $codes, array( $code => true ) );
-		}
-		$primero = '';
-		foreach ( $codes as $uno => $kind ) {
-			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
-			if ( '' === $porque || self::has_application( $post_id, (string) $uno ) ) {
-				return '';
-			}
-			$primero = '' !== $primero ? $primero : $porque;
-		}
-		return $primero;
-	}
-
-
-
-
-
-
-
 
 
 
@@ -6949,78 +6950,38 @@ final class ProcedureAccess {
 		if ( self::can_apply( $user_id, $post_id, $code ) ) {
 			return '';
 		}
-		if ( $user_id <= 0 ) {
-			return 'Debe iniciar sesión con su cuenta personal para presentar la solicitud.';
+		$aplica    = user_can( $user_id, self::CAP_APPLY );
+		$docente   = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		$docentes  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
+		$suyos     = CentreScope::codes_for( $user_id );
+		$admite    = self::centre_kinds( $post_id );
+		$publicado = ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'publish' === get_post_status( $post_id );
+		$casos     = array(
+			'session'        => $user_id <= 0,
+			'role_teachers'  => ! $aplica && $docentes,
+			'role'           => ! $aplica,
+			'teacher_closed' => $docentes && $docente,
+			'teachers_only'  => $docentes,
+			'heads_only'     => array() === $suyos && $docente && $post_id > 0,
+			'no_code'        => array() === $suyos || $post_id <= 0,
+			'foreign_code'   => '' !== $code && ! isset( $suyos[ $code ] ),
+			'unpublished'    => ! $publicado,
+			'kind'           => array() === array_intersect( $suyos, $admite ),
+		);
+		$caso      = (string) array_search( true, $casos, true );
+		if ( '' !== $caso ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
+			return sprintf( self::REASONS[ $caso ], implode( ' y de ', $rotulos ) );
 		}
-		$porque = self::why_not_account( $user_id, $post_id );
-		if ( '' !== $porque || $post_id <= 0 ) {
-			return $porque;
-		}
+
+		$codes  = array_intersect( '' !== $code ? array_intersect_key( $suyos, array( $code => true ) ) : $suyos, $admite );
+		$codigo = (string) ( array_key_first( $codes ) ?? $code );
+		$porque = self::why_not_code( $post_id, $codigo, (string) ( $codes[ $codigo ] ?? ProcedureMetaKeys::KIND_SCHOOL ) );
+		$centro = (string) ( CentreCatalog::find( $codigo )['name'] ?? '' );
 		return CentreEligibility::with_contact(
-			self::why_not_procedure( $user_id, $post_id, $code ),
+			'' !== $porque ? $porque : sprintf( self::REASONS['fallback'], trim( $centro . ', ' . $codigo, ', ' ) ),
 			(string) ( ProcedureInput::emails( get_post_meta( $post_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' )
 		);
-	}
-
-
-
-
-
-
-
-
-
-
-
-	private static function why_not_account( int $user_id, int $post_id ): string {
-		$docentes = $post_id > 0 && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
-		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
-			return $docentes
-				? 'Su perfil no presenta solicitudes. Este procedimiento lo solicita cada docente con su cuenta personal: si ha entrado con otra, salga y entre con la suya.'
-				: 'Su perfil no presenta solicitudes de centro. Si ha entrado con la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es su cuenta personal, pida a quien administra el aplicativo que le asigne el cargo de dirección.';
-		}
-		$docente = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
-		if ( $docentes ) {
-			return $docente
-				? 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.'
-				: 'Este procedimiento lo solicita cada docente a título personal, con su propia cuenta. La dirección no presenta solicitud en nombre del centro.';
-		}
-		if ( array() !== CentreScope::codes_for( $user_id ) ) {
-			return '';
-		}
-		return $docente && $post_id > 0
-			? 'Este procedimiento lo presenta la dirección del centro, no cada docente.'
-			: 'Su cuenta no tiene centro asignado. Si es la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es la personal, pida a quien administra el aplicativo que le asigne el código de centro.';
-	}
-
-
-
-
-
-
-
-
-
-	private static function why_not_procedure( int $user_id, int $post_id, string $code ): string {
-		$suyos = CentreScope::codes_for( $user_id );
-		if ( '' !== $code && ! isset( $suyos[ $code ] ) ) {
-			return 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.';
-		}
-		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
-			return 'Ese procedimiento no existe o todavía no está publicado.';
-		}
-		$admite = self::centre_kinds( $post_id );
-		if ( array() === array_intersect( $suyos, $admite ) ) {
-			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
-			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
-		}
-		$porque = self::why_not_eligible( $user_id, $post_id, $code );
-		if ( '' !== $porque ) {
-			return $porque;
-		}
-		$codigo = '' !== $code ? $code : (string) array_key_first( $suyos );
-		$centro = (string) ( CentreCatalog::find( $codigo )['name'] ?? '' );
-		return 'Su centro (' . ( '' !== $centro ? $centro . ', ' : '' ) . $codigo . ') no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha.';
 	}
 
 
@@ -19408,9 +19369,9 @@ final class ProcedureView {
 				'mine'                 => $mia,
 				'action'               => $accion,
 				'manage_url'           => $gestion,
-				'why_not'              => '' === $gestion ? self::why_not( $post_id, $state, $user_id, $accion ) : '',
+				'why_not'              => self::why_not( $post_id, $state, $user_id, array( $accion['url'], $gestion ) ),
 				'account'              => self::account( $user_id ),
-				'switch_url'           => $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '',
+				'switch_url'           => self::switch_url( $post_id, $user_id ),
 			)
 		);
 	}
@@ -19782,8 +19743,8 @@ final class ProcedureView {
 
 
 
-	private static function why_not( int $post_id, string $state, int $user_id, array $action ): string {
-		if ( $user_id <= 0 || '' !== (string) $action['url'] || ! ProcedureState::accepts_applications( $state )
+	private static function why_not( int $post_id, string $state, int $user_id, array $buttons ): string {
+		if ( $user_id <= 0 || array() !== array_filter( $buttons ) || ! ProcedureState::accepts_applications( $state )
 			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
 			return '';
 		}
@@ -19805,6 +19766,17 @@ final class ProcedureView {
 			'name'  => $quien instanceof \WP_User ? (string) $quien->display_name : '',
 			'email' => $quien instanceof \WP_User ? (string) $quien->user_email : '',
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function switch_url( int $post_id, int $user_id ): string {
+		return $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '';
 	}
 
 
@@ -26266,7 +26238,7 @@ final class ApplyFormView {
 
 	public static function html( array $m ): string {
 		if ( '' !== (string) $m['aviso'] ) {
-			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::mine_link( $m ) );
+			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::next_steps( $m ) . self::mine_link( $m ) );
 		}
 
 		$flash = (array) $m['flash'];
@@ -26283,6 +26255,7 @@ final class ApplyFormView {
 			echo self::form( $m );
 		} else {
 			echo Shell::notice( 'aviso', (string) $m['why'] );
+			echo array() === (array) $m['application'] ? self::next_steps( $m ) : '';
 			echo self::summary( $m );
 		}
 		self::deliveries( $m );
@@ -26358,7 +26331,45 @@ final class ApplyFormView {
 		<?php if ( '' !== $subsanacion ) : ?>
 			<p class="prc-sub"><?php echo esc_html( 'Plazo de subsanación: ' . lcfirst( $subsanacion ) ); ?></p>
 		<?php endif; ?>
-		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) );?>
+		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ), '¿Dudas al rellenar?' );?>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function next_steps( array $m ): string {
+		$correo = (string) ( $m['contact_email'] ?? '' );
+		$motivo = (string) $m['why'] . ' ' . (string) $m['aviso'];
+		$volver = (string) ( $m['view_url'] ?? '' );
+		$cambio = (string) ( $m['switch_url'] ?? '' );
+
+		ob_start();
+		?>
+		<div class="prc-siguiente">
+			<?php if ( '' !== $correo && false === strpos( $motivo, $correo ) ) : ?>
+				<p>¿Cree que es un error? Escriba a <a href="<?php echo esc_url( 'mailto:' . $correo ); ?>"><?php echo esc_html( $correo ); ?></a>.</p>
+			<?php endif; ?>
+			<?php if ( '' !== $volver || '' !== $cambio ) : ?>
+				<p class="prc-acciones">
+					<?php if ( '' !== $volver ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( $volver ); ?>">Volver a la ficha del procedimiento</a>
+					<?php endif; ?>
+					<?php if ( '' !== $cambio ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( $cambio ); ?>">Salir y entrar con otra cuenta</a>
+					<?php endif; ?>
+				</p>
+			<?php endif; ?>
+			<?php echo PanelParts::help_link( (string) ( $m['start_help_url'] ?? '' ), '', 'Ayuda: cómo presentar una solicitud' );?>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -26923,6 +26934,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -27255,8 +27267,32 @@ final class ApplyForm {
 
 
 
+
+
+
+
+
+	private static function exits(): array {
+
+		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
+		$user_id      = get_current_user_id();
+
+
+		$cuenta = $user_id > 0 && 'publish' === get_post_status( $procedure_id ) && ! ProcedureAccess::can_apply( $user_id, $procedure_id );
+		return array(
+			'contact_email'  => (string) ( ProcedureInput::emails( get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' ),
+			'start_help_url' => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
+			'switch_url'     => $cuenta ? wp_logout_url( wp_login_url( self::url( $procedure_id ) ) ) : '',
+		);
+	}
+
+
+
+
+
+
 	public static function model(): array {
-		$m = array(
+		$m = self::exits() + array(
 			'aviso'           => '',
 			'flash'           => array(
 				'tipo'  => '',

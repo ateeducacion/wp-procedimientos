@@ -79,7 +79,7 @@ final class ApplyFormView {
 	 */
 	public static function html( array $m ): string {
 		if ( '' !== (string) $m['aviso'] ) {
-			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::mine_link( $m ) );
+			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::next_steps( $m ) . self::mine_link( $m ) );
 		}
 
 		$flash = (array) $m['flash'];
@@ -96,6 +96,7 @@ final class ApplyFormView {
 			echo self::form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} else {
 			echo Shell::notice( 'aviso', (string) $m['why'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+			echo array() === (array) $m['application'] ? self::next_steps( $m ) : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::summary( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
 		self::deliveries( $m );
@@ -171,7 +172,45 @@ final class ApplyFormView {
 		<?php if ( '' !== $subsanacion ) : ?>
 			<p class="prc-sub"><?php echo esc_html( 'Plazo de subsanación: ' . lcfirst( $subsanacion ) ); ?></p>
 		<?php endif; ?>
-		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ), '¿Dudas al rellenar?' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * What to do after a «no»: write to the contact, go back, switch account, read the help.
+	 *
+	 * El correo no se repite cuando el motivo ya lo dice. «Salir y entrar con
+	 * otra cuenta» solo sale cuando el motivo es la cuenta: con el plazo
+	 * cerrado, cambiar de cuenta no arregla nada.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function next_steps( array $m ): string {
+		$correo = (string) ( $m['contact_email'] ?? '' );
+		$motivo = (string) $m['why'] . ' ' . (string) $m['aviso'];
+		$volver = (string) ( $m['view_url'] ?? '' );
+		$cambio = (string) ( $m['switch_url'] ?? '' );
+
+		ob_start();
+		?>
+		<div class="prc-siguiente">
+			<?php if ( '' !== $correo && false === strpos( $motivo, $correo ) ) : ?>
+				<p>¿Cree que es un error? Escriba a <a href="<?php echo esc_url( 'mailto:' . $correo ); ?>"><?php echo esc_html( $correo ); ?></a>.</p>
+			<?php endif; ?>
+			<?php if ( '' !== $volver || '' !== $cambio ) : ?>
+				<p class="prc-acciones">
+					<?php if ( '' !== $volver ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( $volver ); ?>">Volver a la ficha del procedimiento</a>
+					<?php endif; ?>
+					<?php if ( '' !== $cambio ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( $cambio ); ?>">Salir y entrar con otra cuenta</a>
+					<?php endif; ?>
+				</p>
+			<?php endif; ?>
+			<?php echo PanelParts::help_link( (string) ( $m['start_help_url'] ?? '' ), '', 'Ayuda: cómo presentar una solicitud' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}

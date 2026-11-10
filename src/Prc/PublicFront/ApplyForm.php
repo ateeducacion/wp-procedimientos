@@ -11,6 +11,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -338,12 +339,36 @@ final class ApplyForm {
 	}
 
 	/**
+	 * Where a person who cannot go on goes next: contact, account and help.
+	 *
+	 * Una pantalla que solo dice «no» deja sin siguiente paso. Con el motivo
+	 * van el correo de contacto del procedimiento, el apartado de la ayuda
+	 * que explica cómo se entra y, cuando el motivo es la cuenta y no el
+	 * plazo, la salida para entrar con otra.
+	 *
+	 * @return array{contact_email:string, start_help_url:string, switch_url:string}
+	 */
+	private static function exits(): array {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- lectura del procedimiento, como en model().
+		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
+		$user_id      = get_current_user_id();
+		// Cambiar de cuenta solo arregla un motivo que es de la cuenta: no el
+		// de un procedimiento que no existe, ni el de un plazo cerrado.
+		$cuenta = $user_id > 0 && 'publish' === get_post_status( $procedure_id ) && ! ProcedureAccess::can_apply( $user_id, $procedure_id );
+		return array(
+			'contact_email'  => (string) ( ProcedureInput::emails( get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' ),
+			'start_help_url' => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
+			'switch_url'     => $cuenta ? wp_logout_url( wp_login_url( self::url( $procedure_id ) ) ) : '',
+		);
+	}
+
+	/**
 	 * Everything the screen decides before painting.
 	 *
 	 * @return array<string, mixed>
 	 */
 	public static function model(): array {
-		$m = array(
+		$m = self::exits() + array(
 			'aviso'           => '',
 			'flash'           => array(
 				'tipo'  => '',

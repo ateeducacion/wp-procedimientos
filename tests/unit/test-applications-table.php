@@ -412,10 +412,13 @@ class Test_Applications_Table extends WP_UnitTestCase {
 
 		// Sin lista ni entregas vencidas, ninguna puede estar incompleta.
 		list( , $otro ) = $this->mio();
-		$this->solicitud( $otro, 'C0001', 'Uno' );
-		$r = $this->consulta( $otro, array( ApplicationFilter::ARG_INCOMPLETE => '1' ) );
+		$uno            = $this->solicitud( $otro, 'C0001', 'Uno' );
+		$r              = $this->consulta( $otro, array( ApplicationFilter::ARG_INCOMPLETE => '1' ) );
 		$this->assertFalse( $r['may_be_incomplete'] );
-		$this->assertSame( array(), $r['ids'] );
+		// Ahí `incompletas=1` no es un filtro: se ignora, como una isla que no está.
+		$this->assertFalse( $r['filter']['incomplete'] );
+		$this->assertFalse( $r['active'] );
+		$this->assertSame( array( $uno ), $r['ids'] );
 	}
 
 	/**
@@ -439,7 +442,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 	 */
 	public function test_a_page_of_fifty_does_not_cost_queries_in_proportion_to_the_total() {
 		global $wpdb;
-		$medir = function ( int $n, array $get ) use ( $wpdb ): int {
+		$medir = function ( int $n, array $get, bool $archivado ) use ( $wpdb ): int {
 			list( $uid, $proc ) = $this->mio(
 				array(
 					ProcedureMetaKeys::PEOPLE_SPEC => array(
@@ -457,6 +460,10 @@ class Test_Applications_Table extends WP_UnitTestCase {
 			for ( $i = 0; $i < $n; $i++ ) {
 				$this->application( $proc, $this->school_head( 'C0001' ), 0 === $i % 2 ? 'C0001' : 'C0002' );
 			}
+			if ( $archivado ) {
+				// Histórico: quien lo gestionaba ya no revisa, solo filtra y mira.
+				update_post_meta( $proc, ProcedureMetaKeys::ARCHIVED, '1' );
+			}
 			$this->acting_as( $uid );
 			$_GET = array(
 				ProcedureEditor::ARG_PROCEDURE => (string) $proc,
@@ -470,12 +477,14 @@ class Test_Applications_Table extends WP_UnitTestCase {
 			return $wpdb->num_queries - $antes;
 		};
 		foreach ( array(
-			'sin filtro'   => array(),
-			'por isla'     => array( ApplicationFilter::ARG_ISLAND => 'Isla Uno' ),
-			'por búsqueda' => array( ApplicationFilter::ARG_SEARCH => 'centro' ),
-		) as $caso => $get ) {
-			$con_100 = $medir( 100, $get );
-			$con_300 = $medir( 300, $get );
+			'sin filtro'   => array( array(), false ),
+			'por isla'     => array( array( ApplicationFilter::ARG_ISLAND => 'Isla Uno' ), false ),
+			'por búsqueda' => array( array( ApplicationFilter::ARG_SEARCH => 'centro' ), false ),
+			'incompletas'  => array( array( ApplicationFilter::ARG_INCOMPLETE => '1' ), false ),
+			'solo lectura' => array( array( ApplicationFilter::ARG_ISLAND => 'Isla Uno' ), true ),
+		) as $caso => list( $get, $archivado ) ) {
+			$con_100 = $medir( 100, $get, $archivado );
+			$con_300 = $medir( 300, $get, $archivado );
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- la cifra se lee en la salida de la prueba.
 			fwrite( STDERR, sprintf( "\n[rendimiento] panel con una página de 50, %s: %d consultas sobre 100 solicitudes, %d sobre 300", $caso, $con_100, $con_300 ) );
 			$this->assertLessThanOrEqual( $con_100 + 2, $con_300, $caso );
@@ -606,9 +615,13 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		$this->assertSame( (string) $proc, $this->query_arg( $siguiente, ProcedureEditor::ARG_PROCEDURE ) );
 
 		$admitidas = (string) $m['table']['states'][3]['url'];
+		// Los contadores son atajos sobre el total: su enlace lleva solo el estado.
 		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, $this->query_arg( $admitidas, ApplicationFilter::ARG_REVIEW ) );
-		$this->assertSame( 'Isla Uno', $this->query_arg( $admitidas, ApplicationFilter::ARG_ISLAND ) );
-		$this->assertSame( '', $this->query_arg( $admitidas, ApplicationFilter::ARG_PAGE ), 'cambiar de estado vuelve a la primera página' );
+		foreach ( array( ApplicationFilter::ARG_ISLAND, ApplicationFilter::ARG_SEARCH, ApplicationFilter::ARG_ZONE, ApplicationFilter::ARG_INCOMPLETE, ApplicationFilter::ARG_PAGE ) as $arg ) {
+			$this->assertSame( '', $this->query_arg( $admitidas, $arg ), $arg );
+			$this->assertSame( '', $this->query_arg( (string) $m['table']['states'][0]['url'], $arg ), 'Todas: ' . $arg );
+		}
+		$this->assertSame( '', $this->query_arg( (string) $m['table']['states'][0]['url'], ApplicationFilter::ARG_REVIEW ) );
 
 		// El historial de una persona, con la lista encendida.
 		update_post_meta(
@@ -784,7 +797,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 			ApplicationsPanel::ARG_DONE   => '1',
 			ApplicationsPanel::ARG_FAILED => '4',
 		);
-		$this->assertSame( 'Se ha cambiado la revisión de 1 solicitud. 4 no se han cambiado: no son solicitudes de este procedimiento.', $this->panel_flash( $uid, $proc ) );
+		$this->assertSame( 'Se ha cambiado la revisión de 1 solicitud. 4 no se han podido cambiar (no son de este procedimiento o ya no están publicadas).', $this->panel_flash( $uid, $proc ) );
 	}
 
 	/**
@@ -851,7 +864,8 @@ class Test_Applications_Table extends WP_UnitTestCase {
 			)
 		);
 		$sin_cambios();
-		$this->assertStringContainsString( 'Como mucho se cambian 200', $this->panel_flash( $uid, $proc ) );
+		$this->assertSame( 50, ApplicationsPanel::BULK_MAX, 'una página: cada una manda su correo en la misma petición' );
+		$this->assertStringContainsString( 'Como mucho se cambian 50', $this->panel_flash( $uid, $proc ) );
 
 		// Sin permiso de revisar, ni dirección de un centro ni quien gestiona otro ámbito.
 		$this->assertNull(
@@ -1001,8 +1015,10 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Las del filtro (1)', $html );
 		$this->assertStringContainsString( 'Todas (4)', $html );
 		$this->assertStringContainsString( 'name="' . ApplicationFilter::ARG_REVIEW . '" value="' . ApplicationMetaKeys::REVIEW_ADMITTED . '"', $html );
-		$this->assertStringContainsString( 'Coordinación (0 personas. No saldrán: 1 sin correo válido)', $html );
-		$this->assertStringContainsString( 'Quien presenta la solicitud (0 personas. No saldrán: 1 incompleta)', $html, 'una cuenta sin nombre ni apellidos, solo la del filtro' );
+		$this->assertStringContainsString( '<span data-prc-export-scope-count="filter">(las del filtro: 0 personas. No saldrán: 1 sin correo válido)</span>', $html );
+		$this->assertStringContainsString( '<span data-prc-export-scope-count="all">(todas: 0 personas. No saldrán: 1 sin correo válido)</span>', $html );
+		$this->assertStringContainsString( '<span data-prc-export-scope-count="filter">(las del filtro: 0 personas. No saldrán: 1 incompleta)</span>', $html, 'una cuenta sin nombre ni apellidos, solo la del filtro' );
+		$this->assertStringContainsString( '<span data-prc-export-scope-count="all">(todas: 0 personas. No saldrán: 4 incompletas)</span>', $html );
 		$this->assertStringContainsString( 'Mostrando 1–1 de 1 solicitudes que cumplen el filtro, de 4 en total.', $html );
 	}
 
@@ -1023,5 +1039,162 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		$this->assertSame( 1, $xp->query( '//form[@id="prc-bloque"]/ancestor::fieldset[@disabled]' )->length, 'el bloque va dentro' );
 		$this->assertSame( 1, $xp->query( '//form[contains(@class,"prc-exportar__form")]/ancestor::fieldset[@disabled]' )->length, 'y la exportación también' );
 		$this->assertGreaterThan( 0, $xp->query( '//input[@data-prc-bulk-row]/ancestor::fieldset[@disabled]' )->length );
+	}
+
+	/**
+	 * Una solicitud con su coordinación.
+	 *
+	 * @param int $id     Application.
+	 * @param int $cuantas How many coordinators.
+	 * @return void
+	 */
+	private function coordinacion( int $id, int $cuantas = 1 ): void {
+		$personas = array();
+		for ( $i = 1; $i <= $cuantas; $i++ ) {
+			$personas[] = array(
+				'name'    => 'Persona',
+				'surname' => 'Número' . $id . $i,
+				'dni'     => '',
+				'email'   => 'p' . $id . 'n' . $i . '@example.org',
+			);
+		}
+		update_post_meta( $id, ApplicationMetaKeys::COORDINATOR, $personas );
+	}
+
+	/**
+	 * Exportar como lo haría el diálogo.
+	 *
+	 * @param int                  $uid   Who exports.
+	 * @param int                  $proc  Procedure.
+	 * @param array<string, mixed> $extra Fields.
+	 * @return string
+	 */
+	private function exportar( int $uid, int $proc, array $extra ): string {
+		$this->acting_as( $uid );
+		$this->post(
+			array(
+				ProcedureEditor::FIELD_DO        => ProcedureEditor::OP_EXPORT,
+				ProcedureEditor::FIELD_PROCEDURE => (string) $proc,
+			) + $extra,
+			ProcedureEditor::nonce_action( ProcedureEditor::OP_EXPORT ),
+			ProcedureEditor::nonce_name( ProcedureEditor::OP_EXPORT )
+		);
+		return $this->served( array( ProcedureEditor::class, 'handle' ) );
+	}
+
+	/**
+	 * Cada cifra del diálogo es la del fichero que se descarga con esa opción.
+	 */
+	public function test_each_count_of_the_dialog_is_the_file_downloaded_with_that_choice() {
+		list( $uid, $proc, $ids ) = $this->cuatro();
+		foreach ( array( $ids[0], $ids[1], $ids[2] ) as $id ) {
+			$this->coordinacion( $id );
+		}
+		$admitidas  = array( ApplicationFilter::ARG_REVIEW => ApplicationMetaKeys::REVIEW_ADMITTED );
+		$html       = $this->panel( $uid, $proc, $admitidas );
+		$usuarios   = function ( string $ambito ) use ( $uid, $proc, $admitidas ): int {
+			$fichero = $this->exportar(
+				$uid,
+				$proc,
+				$admitidas + array(
+					ProcedureEditor::FIELD_EXPORT_FORMAT  => ApplicationExport::FORMAT_MOODLE,
+					ProcedureEditor::FIELD_EXPORT_WHO     => array( ApplicationExport::WHO_COORDINATORS ),
+					ApplicationsPanel::FIELD_EXPORT_SCOPE => $ambito,
+				)
+			);
+			return count( explode( "\n", $fichero ) ) - 1;
+		};
+		$del_filtro = $usuarios( ApplicationsPanel::SCOPE_FILTER );
+		$todas      = $usuarios( ApplicationsPanel::SCOPE_ALL );
+		$this->assertSame( 1, $del_filtro );
+		$this->assertSame( 3, $todas );
+		$this->assertStringContainsString( sprintf( '<span data-prc-export-scope-count="filter">(las del filtro: %d persona)</span>', $del_filtro ), $html );
+		$this->assertStringContainsString( sprintf( '<span data-prc-export-scope-count="all">(todas: %d personas)</span>', $todas ), $html );
+	}
+
+	/**
+	 * Exportar con filtro una fila por persona: solo las personas de las del filtro.
+	 */
+	public function test_the_export_by_person_follows_the_filter() {
+		list( $uid, $proc, $ids ) = $this->cuatro();
+		$this->coordinacion( $ids[0], 3 );
+		$this->coordinacion( $ids[1], 2 );
+		$csv   = $this->exportar(
+			$uid,
+			$proc,
+			array(
+				ApplicationFilter::ARG_REVIEW        => ApplicationMetaKeys::REVIEW_ADMITTED,
+				ProcedureEditor::FIELD_EXPORT_SHAPE  => ApplicationExport::SHAPE_PERSON,
+				ProcedureEditor::FIELD_EXPORT_FORMAT => ApplicationExport::FORMAT_CSV,
+			)
+		);
+		$filas = array_values( array_filter( explode( "\r\n", $csv ) ) );
+		$this->assertCount( 3, $filas, 'cabecera y las dos personas de la única admitida' );
+		$this->assertStringContainsString( 'p' . $ids[1] . 'n1@example.org', $filas[1] );
+		$this->assertStringContainsString( 'p' . $ids[1] . 'n2@example.org', $filas[2] );
+		$this->assertStringNotContainsString( 'p' . $ids[0] . 'n1@example.org', $csv );
+	}
+
+	/**
+	 * La nota común: vacía, con un estado que no la exige, no toca la de cada
+	 * una; con texto, la sustituye en todas.
+	 */
+	public function test_the_common_note_keeps_or_replaces() {
+		list( $uid, $proc, $ids ) = $this->cuatro();
+		update_post_meta( $ids[0], ApplicationMetaKeys::REVIEW_NOTE, 'La de la primera.' );
+		add_filter( 'prc_mail', '__return_false' );
+		$enviar = function ( string $nota ) use ( $uid, $proc, $ids ): void {
+			$this->submit(
+				$uid,
+				ProcedureEditor::OP_BULK_REVIEW,
+				$proc,
+				0,
+				array(
+					ApplicationsPanel::FIELD_ROWS => array( (string) $ids[0], (string) $ids[2] ),
+					ProcedureEditor::FIELD_STATE  => ApplicationMetaKeys::REVIEW_ADMITTED,
+					ProcedureEditor::FIELD_NOTE   => $nota,
+				)
+			);
+		};
+		$enviar( '  ' );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, get_post_meta( $ids[0], ApplicationMetaKeys::REVIEW_STATE, true ) );
+		$this->assertSame( 'La de la primera.', get_post_meta( $ids[0], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+		$this->assertSame( 'Falta algo.', get_post_meta( $ids[2], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+
+		$enviar( 'Admitidas en la primera resolución.' );
+		$this->assertSame( 'Admitidas en la primera resolución.', get_post_meta( $ids[0], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+		$this->assertSame( 'Admitidas en la primera resolución.', get_post_meta( $ids[2], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+
+		// De una en una, vaciar la nota sigue siendo posible.
+		$this->submit(
+			$uid,
+			ProcedureEditor::OP_REVIEW,
+			$proc,
+			$ids[0],
+			array(
+				ProcedureEditor::FIELD_STATE => ApplicationMetaKeys::REVIEW_ADMITTED,
+				ProcedureEditor::FIELD_NOTE  => '',
+			)
+		);
+		$this->assertSame( '', get_post_meta( $ids[0], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+
+		// Y en la API: null es «sin nota nueva»; la cadena vacía, vaciarla.
+		$this->assertTrue( \Prc\PublicFront\Applications::review( $ids[2], ApplicationMetaKeys::REVIEW_ADMITTED, null )['ok'] );
+		$this->assertSame( 'Admitidas en la primera resolución.', get_post_meta( $ids[2], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+		$this->assertTrue( \Prc\PublicFront\Applications::review( $ids[2], ApplicationMetaKeys::REVIEW_AMEND, null )['ok'], 'sin nota nueva vale la que tiene, también donde es obligatoria' );
+		$this->assertSame( 'note', \Prc\PublicFront\Applications::review( $ids[0], ApplicationMetaKeys::REVIEW_AMEND, null )['error'], 'pero si no tiene, falta' );
+		$this->assertTrue( \Prc\PublicFront\Applications::review( $ids[2], ApplicationMetaKeys::REVIEW_ADMITTED, '' )['ok'] );
+		$this->assertSame( '', get_post_meta( $ids[2], ApplicationMetaKeys::REVIEW_NOTE, true ) );
+	}
+
+	/**
+	 * La ayuda del bloque dice lo que hace la nota y que cada una manda su correo.
+	 */
+	public function test_the_bulk_form_explains_note_and_mail() {
+		list( $uid, $proc ) = $this->cuatro();
+		$html               = $this->panel( $uid, $proc );
+		$this->assertStringContainsString( 'La nota se aplica a todas las marcadas', $html );
+		$this->assertStringContainsString( 'Como mucho 50 a la vez', $html );
+		$this->assertStringContainsString( 'en el mismo envío', $html );
 	}
 }

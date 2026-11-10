@@ -27,13 +27,14 @@ if ( ! function_exists( 'prc_demo_accounts' ) ) {
 	 * áreas que cuelgan de él; `gestion2` tiene un área de otro servicio, que
 	 * es lo que enseña el acotado por ámbito. `direccion` y `direccion2` son
 	 * dos centros públicos del catálogo inventado del mu-plugin de desarrollo:
-	 * cada uno ve solo las solicitudes del suyo.
+	 * cada uno ve solo las solicitudes del suyo. `consulta` consulta en solo
+	 * lectura las solicitudes de los centros de una zona inventada (ADR-0043).
 	 *
 	 * El que trabaja sobre todos los ámbitos es `admin`, el administrador que
 	 * ya crea wp-env: la administración es la nativa de WordPress, así que no
 	 * hay ninguna cuenta más que sembrar.
 	 *
-	 * @return array<string, array{role:string, areas:string[], centre:string, label:string}>
+	 * @return array<string, array{role:string, areas:string[], centre:string, zones?:string[], label:string}>
 	 */
 	function prc_demo_accounts(): array {
 		return array(
@@ -78,6 +79,13 @@ if ( ! function_exists( 'prc_demo_accounts' ) ) {
 				'areas'  => array(),
 				'centre' => '',
 				'label'  => 'Docente de ejemplo',
+			),
+			'consulta'       => array(
+				'role'   => 'prc_observer',
+				'areas'  => array(),
+				'centre' => '',
+				'zones'  => array( '90000090' ),
+				'label'  => 'Consulta (Zona Norte)',
 			),
 		);
 	}
@@ -252,6 +260,10 @@ if ( ! function_exists( 'prc_demo_procedures' ) ) {
 					'prc_provisional_list_url' => 'https://www.example.org/convivencia/listado-provisional.pdf',
 					'prc_ownership'            => array( 'public' ),
 					'prc_requires_coordinator' => false,
+					// Se consulta por zona en solo lectura, y se exporta (ADR-0043).
+					'prc_observable'           => true,
+					'prc_observer_columns'     => array( 'date', 'centre', 'code', 'zone', 'state' ),
+					'prc_observer_export'      => true,
 				),
 				'applications' => array(
 					'direccion'  => array( 'state' => 'admitted' ),
@@ -375,8 +387,8 @@ if ( ! function_exists( 'prc_seed_account' ) ) {
 	/**
 	 * Create or update one demo account, its ámbitos and its school code.
 	 *
-	 * @param string                                                          $login   Login name.
-	 * @param array{role:string, areas:string[], centre:string, label:string} $account Account definition.
+	 * @param string                                                                           $login   Login name.
+	 * @param array{role:string, areas:string[], centre:string, zones?:string[], label:string} $account Account definition.
 	 * @return int User ID.
 	 * @throws RuntimeException If the user cannot be created or an ámbito is missing.
 	 */
@@ -430,6 +442,14 @@ if ( ! function_exists( 'prc_seed_account' ) ) {
 			update_user_meta( $user->ID, $key, $account['centre'] );
 		} else {
 			delete_user_meta( $user->ID, $key );
+		}
+
+		// Y las zonas de consulta, en la suya (ADR-0043).
+		$zone_key = \Prc\Access\ObserverScope::meta_key();
+		if ( array() !== ( $account['zones'] ?? array() ) ) {
+			update_user_meta( $user->ID, $zone_key, $account['zones'] );
+		} else {
+			delete_user_meta( $user->ID, $zone_key );
 		}
 
 		return (int) $user->ID;
@@ -747,7 +767,7 @@ if ( ! function_exists( 'prc_seed_demo' ) ) {
 		if ( ! post_type_exists( 'prc_procedure' ) || ! taxonomy_exists( 'prc_area' ) || ! class_exists( '\\Prc\\Access\\CentreScope' ) ) {
 			throw new RuntimeException( 'El aplicativo no está cargado (falta prc_procedure o prc_area). Ejecute antes `make bundle && make sync-snippets`.' );
 		}
-		if ( ! get_role( 'prc_manager' ) || ! get_role( 'prc_school_head' ) ) {
+		if ( ! get_role( 'prc_manager' ) || ! get_role( 'prc_school_head' ) || ! get_role( 'prc_observer' ) ) {
 			throw new RuntimeException( 'Faltan los roles del aplicativo: ejecute antes scripts/provision-roles.php.' );
 		}
 		prc_seed_scope_details();

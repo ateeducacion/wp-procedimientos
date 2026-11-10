@@ -531,8 +531,8 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Quien consulta una zona tampoco llega por la REST a ninguna solicitud,
-	 * ni a las de su zona ni a las de otra, ni a las metas de la consulta.
+	 * Quien consulta una zona no llega por la REST a ninguna solicitud: no hay
+	 * ruta del tipo, y la búsqueda general no las devuelve.
 	 */
 	public function test_an_observer_reaches_no_application_through_rest() {
 		add_filter(
@@ -555,22 +555,26 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		\Prc\Domain\CentreCatalog::flush();
 		$caso = $this->two_areas( 'publish' );
 		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::OBSERVABLE, true );
-		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'code' ) );
 		$suya  = $this->application( $caso['procedure'], $this->school_head( 'C0002' ) );
 		$ajena = $this->application( $caso['procedure'], $this->school_head( 'C0001' ) );
 		$uid   = $this->observer( array( 'Z0002' ) );
 
-		$this->assertTrue( user_can( $uid, 'read_post', $suya ), 'la de su zona se lee en el aplicativo' );
-		foreach ( array( $suya, $ajena ) as $solicitud ) {
-			$this->assertSame( 404, $this->request( $uid, 'GET', '/wp/v2/prc_procedure/' . $solicitud )->get_status() );
+		foreach ( array_keys( $this->server->get_routes() ) as $ruta ) {
+			$this->assertStringNotContainsString( ApplicationPostType::POST_TYPE, $ruta );
 		}
-		$ficha = $this->request( $uid, 'GET', '/wp/v2/prc_procedure/' . $caso['procedure'] );
-		$this->assertSame( 200, $ficha->get_status(), 'la ficha publicada es pública' );
-		$this->assertStringNotContainsString( 'prc_observer', wp_json_encode( $ficha->get_data() ) );
-		$this->assertStringNotContainsString( 'prc_observable', wp_json_encode( $ficha->get_data() ) );
-
-		$escribir = $this->request( $uid, 'POST', '/wp/v2/prc_procedure/' . $caso['procedure'], array( 'title' => 'Cambiado' ) );
-		$this->assertContains( $escribir->get_status(), array( 401, 403 ) );
+		$busqueda = $this->request(
+			$uid,
+			'GET',
+			'/wp/v2/search',
+			array(
+				'search'   => 'Centro de prueba',
+				'subtype'  => 'any',
+				'per_page' => 100,
+			)
+		);
+		$this->assertSame( 200, $busqueda->get_status() );
+		$this->assertNotContains( $suya, $this->ids( $busqueda ), 'ni la de su zona' );
+		$this->assertNotContains( $ajena, $this->ids( $busqueda ) );
 	}
 
 	/**

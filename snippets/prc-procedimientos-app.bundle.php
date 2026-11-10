@@ -15984,6 +15984,114 @@ final class ProcedureEditor {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\ProcedureQuestions;
+use Prc\PublicFront\ApplyForm;
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\MeasuredQuestionView', false ) ) {
+final class MeasuredQuestionView {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function html( array $p, $valor ): string {
+		$key     = (string) $p['key'];
+		$id      = 'prc-q-' . $key;
+		$nombre  = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';
+		$obliga  = ! empty( $p['required'] );
+		$ayuda   = (string) $p['help'];
+		$pie     = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$rejilla = ProcedureQuestions::TYPE_GRID === (string) $p['type'];
+
+		$control = '';
+		if ( $rejilla ) {
+			$dadas = is_array( $valor ) ? $valor : array();
+			foreach ( (array) ( $p['rows'] ?? array() ) as $fila ) {
+				$rk       = (string) $fila['key'];
+				$control .= '<div class="prc-campo prc-campo--cuarto">'
+					. '<label class="prc-campo__etiqueta" for="' . esc_attr( $id . '-' . $rk ) . '">' . esc_html( (string) $fila['label'] ) . '</label>'
+					. self::number_input( $id . '-' . $rk, $nombre . '[' . $rk . ']', $dadas[ $rk ] ?? '', 0, null, $obliga )
+					. '</div>';
+			}
+			$control = '<div class="prc-opciones prc-rejilla" role="group" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
+		} elseif ( ProcedureQuestions::TYPE_NUMBER === (string) $p['type'] ) {
+			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie );
+		} else {
+			$control = '<input type="date" class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
+				. ( $obliga ? ' required' : '' ) . $pie . ' />';
+		}
+
+		return '<div class="prc-campo prc-pregunta ' . esc_attr( $rejilla ? 'prc-campo--completo' : 'prc-campo--medio' ) . '">'
+			. self::label( $rejilla ? $id . '-rotulo' : $id, (string) $p['label'], $obliga, $rejilla )
+			. $control
+			. ( '' !== $ayuda ? '<div class="prc-campo__ayuda" id="' . esc_attr( $id . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</div>' : '' )
+			. '</div>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '' ): string {
+		return '<input type="number" class="prc-control" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
+			. ' value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '" min="' . esc_attr( (string) $minimo ) . '"'
+			. ( null !== $maximo ? ' max="' . esc_attr( (string) $maximo ) . '"' : '' )
+			. ( $obliga ? ' required' : '' ) . $extra . ' />';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function label( string $id, string $rotulo, bool $obligatorio, bool $grupo ): string {
+		$atributo = $grupo ? ' id="' . esc_attr( $id ) . '"' : ' for="' . esc_attr( $id ) . '"';
+		$etiqueta = $grupo ? 'p' : 'label';
+		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
+			. esc_html( $rotulo )
+			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. '</' . $etiqueta . '>';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -16472,6 +16580,9 @@ final class ApplyFormView {
 
 
 	private static function question( array $p, array $answers, array $files = array() ): string {
+		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
 		$nombre = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';

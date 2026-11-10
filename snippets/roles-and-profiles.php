@@ -237,6 +237,49 @@ if ( ! function_exists( 'prc_centre_code_meta_key' ) ) {
 	}
 }
 
+if ( ! function_exists( 'prc_zone_meta_key' ) ) {
+	/**
+	 * Which user meta holds the zones a person observes on this site (ADR-0043).
+	 *
+	 * La misma pregunta que hace `Prc\Access\ObserverScope::meta_key()`,
+	 * hecha aquí sin depender de que el bundle esté cargado.
+	 *
+	 * @return string
+	 */
+	function prc_zone_meta_key(): string {
+		/** This filter is documented in src/Prc/Access/ObserverScope.php */
+		$key = apply_filters( 'prc_zone_meta_key', 'prc_zone' );
+		return is_string( $key ) ? trim( $key ) : '';
+	}
+}
+
+if ( ! function_exists( 'prc_profile_zones' ) ) {
+	/**
+	 * Zone codes out of what the profile field or the meta holds.
+	 *
+	 * Una lista, o un texto con los códigos separados por comas, puntos y coma
+	 * o espacios; se queda lo que tiene forma de código y sin repetir. Es la
+	 * regla de `ObserverScope::parse_zones()`, escrita aquí porque el snippet
+	 * va suelto.
+	 *
+	 * @param mixed $raw Raw value.
+	 * @return string[]
+	 */
+	function prc_profile_zones( $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY );
+		}
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $valor ) {
+			$codigo = is_string( $valor ) ? trim( $valor ) : '';
+			if ( preg_match( '/^[A-Za-z0-9]{3,20}$/', $codigo ) ) {
+				$out[ $codigo ] = $codigo;
+			}
+		}
+		return array_values( $out );
+	}
+}
+
 if ( ! function_exists( 'prc_can_edit_admin_only_fields' ) ) {
 	/**
 	 * Whether the current user may set somebody's ámbitos or school code.
@@ -250,7 +293,7 @@ if ( ! function_exists( 'prc_can_edit_admin_only_fields' ) ) {
 
 if ( ! function_exists( 'prc_render_profile_fields' ) ) {
 	/**
-	 * Render the ámbitos and school code fields on the user profile screens.
+	 * Render the ámbitos, school code and zones fields on the user profile screens.
 	 *
 	 * @param WP_User $user User being edited.
 	 * @return void
@@ -325,18 +368,31 @@ if ( ! function_exists( 'prc_render_profile_fields' ) ) {
 			printf( '<input type="text" name="prc_centre_code" id="prc_centre_code" class="regular-text" value="%s" />', esc_attr( $code ) );
 			echo '<p class="description">Código del centro por el que solicita. Sin él, esta persona no puede presentar ninguna solicitud.</p>';
 		}
+		echo '</td></tr>';
+
+		// Zonas de consulta: la meta cuya clave da el filtro (ADR-0043).
+		$zone_key = prc_zone_meta_key();
+		$zonas    = '' !== $zone_key ? implode( ', ', prc_profile_zones( get_user_meta( $user->ID, $zone_key, true ) ) ) : '';
+		echo '<tr><th><label for="prc_zone">Zonas de consulta</label></th><td>';
+		if ( ! $puede ) {
+			echo esc_html( '' === $zonas ? 'Sin zona asignada.' : $zonas );
+			echo '<p class="description">La zona la asigna quien administra el aplicativo: es la que decide qué solicitudes consulta.</p>';
+		} else {
+			printf( '<input type="text" name="prc_zone" id="prc_zone" class="regular-text" value="%s" />', esc_attr( $zonas ) );
+			echo '<p class="description">Códigos de las zonas cuyas solicitudes consulta, separados por comas. Sin ninguna, la consulta no enseña nada.</p>';
+		}
 		echo '</td></tr></table>';
 	}
 }
 
 if ( ! function_exists( 'prc_save_profile_fields' ) ) {
 	/**
-	 * Persist the ámbitos and school code fields.
+	 * Persist the ámbitos, school code and zones fields.
 	 *
-	 * Los dos campos deciden qué procedimientos toca y por qué centro solicita
-	 * cada persona, así que quien está acotado por ellos no puede escribirlos:
-	 * WordPress deja a cualquiera editar su propio perfil, y eso convertiría
-	 * el campo en la puerta de al lado.
+	 * Los tres campos deciden qué procedimientos toca, por qué centro solicita
+	 * y qué zonas consulta cada persona, así que quien está acotado por ellos
+	 * no puede escribirlos: WordPress deja a cualquiera editar su propio
+	 * perfil, y eso convertiría el campo en la puerta de al lado.
 	 *
 	 * @param int $user_id User ID being saved.
 	 * @return void
@@ -365,6 +421,16 @@ if ( ! function_exists( 'prc_save_profile_fields' ) ) {
 						update_user_meta( $user_id, 'prc_area', $term_id > 0 ? array( $term_id ) : array() );
 					}
 				}
+			}
+		}
+
+		$zone_key = prc_zone_meta_key();
+		if ( '' !== $zone_key && isset( $post['prc_zone'] ) && is_string( $post['prc_zone'] ) ) {
+			$zonas = prc_profile_zones( sanitize_text_field( $post['prc_zone'] ) );
+			if ( array() === $zonas ) {
+				delete_user_meta( $user_id, $zone_key );
+			} else {
+				update_user_meta( $user_id, $zone_key, $zonas );
 			}
 		}
 

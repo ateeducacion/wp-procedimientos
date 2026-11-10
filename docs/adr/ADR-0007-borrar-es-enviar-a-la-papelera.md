@@ -214,4 +214,11 @@ solicitud restaurada vuelve publicada, no en borrador. Lo demás no cambia:
 `Applications::find()` sigue sin mirar la papelera, y el borrado definitivo
 sigue siendo del escritorio.
 
+Dos excepciones para la solicitud a lo que dicen las «Consecuencias»: **la
+papelera no se vacía sola para ella** —al retirarla se le quita
+`_wp_trash_meta_time`, y `pre_delete_post` para el borrado sin administración
+delante, así que `EMPTY_TRASH_DAYS` no se la lleva con sus documentos y su
+historial—, y **borrarla para siempre exige `prc_manage_app`**: quien revisa la
+envía a la papelera y la restaura, pero no la borra.
+
 Asistencia de IA: Claude Code, claude-opus-5-5.

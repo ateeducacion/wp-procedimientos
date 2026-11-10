@@ -73,6 +73,12 @@ if ( ! function_exists( 'prc_demo_accounts' ) ) {
 				'centre' => '90000002',
 				'label'  => 'Dirección 2 (IES Ejemplo Dos)',
 			),
+			'profesor'       => array(
+				'role'   => 'prc_teacher',
+				'areas'  => array(),
+				'centre' => '',
+				'label'  => 'Docente de ejemplo',
+			),
 		);
 	}
 }
@@ -330,6 +336,37 @@ if ( ! function_exists( 'prc_demo_procedures' ) ) {
 				),
 				'applications' => array(),
 			),
+			array(
+				'slug'                 => 'formacion-docente-de-ejemplo',
+				'title'                => 'Formación docente de ejemplo',
+				'author'               => 'gestion',
+				'areas'                => array( 'subambito-1a' ),
+				'status'               => 'publish',
+				'meta'                 => array(
+					'prc_audience'       => 'teachers',
+					'prc_opens_at'       => prc_demo_day( -2 ),
+					'prc_closes_at'      => prc_demo_day( 10 ),
+					'prc_contact_emails' => array( 'formacion@example.org' ),
+					'prc_ownership'      => array(),
+					'prc_questions'      => array(
+						array(
+							'key'      => 'q1',
+							'label'    => '¿Qué espera aprender en esta formación?',
+							'help'     => 'Cuente brevemente qué le interesa.',
+							'type'     => 'text',
+							'required' => true,
+						),
+					),
+					'prc_commitments'    => 'La persona participante se compromete a completar la formación.',
+				),
+				'applications'         => array(),
+				'teacher_applications' => array(
+					'profesor' => array(
+						'state'   => 'submitted',
+						'answers' => array( 'q1' => 'Quiero aprender actividades sencillas para trabajar la ciencia en el aula.' ),
+					),
+				),
+			),
 		);
 	}
 }
@@ -490,6 +527,9 @@ if ( ! function_exists( 'prc_seed_procedure' ) ) {
 		foreach ( $procedure['applications'] as $login => $application ) {
 			$creadas += prc_seed_application( $root, $login, $application ) ? 1 : 0;
 		}
+		foreach ( (array) ( $procedure['teacher_applications'] ?? array() ) as $login => $application ) {
+			$creadas += prc_seed_teacher_application( $root, $login, $application ) ? 1 : 0;
+		}
 
 		echo esc_html(
 			sprintf(
@@ -504,6 +544,65 @@ if ( ! function_exists( 'prc_seed_procedure' ) ) {
 		) . "\n";
 
 		return $nuevo;
+	}
+}
+
+if ( ! function_exists( 'prc_seed_teacher_application' ) ) {
+	/**
+	 * Create or refresh one demo teacher's individual application.
+	 *
+	 * @param int                  $root        Procedure post ID.
+	 * @param string               $login       Demo teacher login.
+	 * @param array<string, mixed> $application Application review data.
+	 * @return bool Whether a new application was created.
+	 * @throws RuntimeException If the account or post cannot be read or written.
+	 */
+	function prc_seed_teacher_application( int $root, string $login, array $application ): bool {
+		$user = get_user_by( 'login', $login );
+		if ( ! $user instanceof WP_User ) {
+			throw new RuntimeException( esc_html( "No existe la cuenta «{$login}» para solicitar." ) );
+		}
+		$existing = get_posts(
+			array(
+				'post_type'   => 'prc_application',
+				'post_parent' => $root,
+				'post_status' => 'any',
+				'numberposts' => 1,
+				'author'      => (int) $user->ID,
+				'meta_key'    => 'prc_applicant_type', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- identifica solicitudes individuales del perfil.
+				'meta_value'  => 'teacher', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		$new      = array() === $existing;
+		$post     = array(
+			'post_type'   => 'prc_application',
+			'post_status' => 'publish',
+			'post_parent' => $root,
+			'post_author' => (int) $user->ID,
+			'post_title'  => 'Solicitud individual — ' . get_the_title( $root ),
+		);
+		if ( ! $new ) {
+			$post['ID'] = (int) $existing[0]->ID;
+		}
+		$id = $new ? wp_insert_post( $post, true ) : wp_update_post( $post, true );
+		if ( is_wp_error( $id ) ) {
+			throw new RuntimeException( esc_html( "No se pudo guardar la solicitud de «{$login}»: " . $id->get_error_message() ) );
+		}
+		foreach (
+			array(
+				'prc_applicant_type'     => 'teacher',
+				'prc_centre_code'        => '',
+				'prc_centre_name'        => '',
+				'prc_applicant_position' => '',
+				'prc_coordinator'        => array(),
+				'prc_answers'            => (array) ( $application['answers'] ?? array() ),
+				'prc_review_state'       => (string) $application['state'],
+				'prc_review_note'        => (string) ( $application['note'] ?? '' ),
+			) as $key => $value
+		) {
+			update_post_meta( (int) $id, $key, $value );
+		}
+		return $new;
 	}
 }
 

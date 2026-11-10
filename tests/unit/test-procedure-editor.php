@@ -1006,6 +1006,31 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ApplicationMetaKeys::REVIEW_AMEND, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
 	}
 
+	/** The review table for teacher calls shows the applicant, not centre data. */
+	public function test_teacher_applications_panel_shows_teacher_identity() {
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$teacher                   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$application               = $this->application(
+			$procedure,
+			$teacher,
+			'',
+			array( ApplicationMetaKeys::APPLICANT_TYPE => ApplicationMetaKeys::TYPE_TEACHER )
+		);
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertStringContainsString( '<th class="prc-th" scope="col">Docente</th>', $html );
+		$this->assertStringContainsString( 'Docente de prueba', $html );
+		$this->assertStringContainsString( 'docente de prueba', strtolower( $html ) );
+		$this->assertStringNotContainsString( '>Código</th>', $html );
+		$this->assertStringNotContainsString( '>Cargo</th>', $html );
+		$this->assertStringContainsString( 'value="' . $application . '"', $html );
+	}
+
 	// ─── permisos, nonces y bloqueo ────────────────────────────────────────
 
 	/**

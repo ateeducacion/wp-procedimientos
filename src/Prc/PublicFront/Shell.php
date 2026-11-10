@@ -452,7 +452,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => 'Mi centro',
+				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -691,6 +691,9 @@ final class Shell {
 	 * @return array<int, array{label:string, url:string, active:bool, group:bool, items:array<int, array<string, mixed>>}>
 	 */
 	private static function menu( int $user_id = 0 ): array {
+		if ( $user_id <= 0 ) {
+			$user_id = get_current_user_id();
+		}
 		$secciones = self::sections( $user_id );
 		if ( array() === $secciones ) {
 			return array();
@@ -702,11 +705,11 @@ final class Shell {
 			$menu[] = self::entry( 'Inicio', $secciones['home']['url'], 'home' === $activa );
 		}
 
-		// «Sus solicitudes»: las que ha presentado su centro. Las del
-		// profesorado son de otra fase y no hay pantalla a la que llevar.
+		// Solicitudes presentadas por el centro o por la persona docente.
 		if ( isset( $secciones['mine'] ) ) {
 			$suyas            = self::entry( 'Sus solicitudes' );
-			$suyas['items'][] = self::entry( 'De su centro', $secciones['mine']['url'], 'mine' === $activa );
+			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Personales' : 'De su centro';
+			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
 			$menu[]           = $suyas;
 		}
 

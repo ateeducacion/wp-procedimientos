@@ -215,7 +215,9 @@ final class ApplyForm {
 
 		// Un código que no llega se elige como en la pantalla; uno que llega
 		// tiene que ser de la cuenta y admitido, o no se guarda nada.
-		$pedido = self::field( self::FIELD_CENTRE );
+		$docente = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER )
+			&& ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pedido  = $docente ? '' : self::field( self::FIELD_CENTRE );
 		if ( self::OP_DELIVER === $op ) {
 			self::deliver( $procedure_id, $user_id, $pedido );
 			return;
@@ -224,8 +226,8 @@ final class ApplyForm {
 			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
 		}
-		$code      = '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' );
-		$existente = Applications::find( $procedure_id, $code );
+		$code      = $docente ? '' : ( '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' ) );
+		$existente = $docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
@@ -255,7 +257,9 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
+		$id = $docente
+			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
+			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
 			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
@@ -355,6 +359,9 @@ final class ApplyForm {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
 			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
 		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.';
+		}
 		$suyos = CentreScope::codes_for( $user_id );
 		if ( array() === $suyos ) {
 			return 'Su cuenta no tiene centro asignado, así que no puede presentar solicitudes. El código de centro lo pone quien administra el aplicativo.';
@@ -389,6 +396,7 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			'applicant_type'  => '',
 			'state'           => '',
 			'state_label'     => '',
 			'opens_at'        => '',
@@ -427,7 +435,7 @@ final class ApplyForm {
 		);
 
 		if ( ! is_user_logged_in() ) {
-			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud de su centro.';
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud.';
 			return $m;
 		}
 		$user_id = get_current_user_id();
@@ -435,16 +443,14 @@ final class ApplyForm {
 			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
 			return $m;
 		}
-		$quien          = wp_get_current_user();
-		$m['applicant'] = array(
+		$quien               = wp_get_current_user();
+		$m['applicant']      = array(
 			'name'  => (string) $quien->display_name,
 			'email' => (string) $quien->user_email,
 		);
-		$m['centre']    = Applications::centre_of( $user_id );
-		if ( array() === CentreScope::codes_for( $user_id ) ) {
-			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
-			return $m;
-		}
+		$es_docente          = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		$m['applicant_type'] = $es_docente ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
+		$m['centre']         = Applications::centre_of( $user_id );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- lectura del procedimiento y del aviso; mutar lleva su nonce.
 		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
@@ -454,7 +460,7 @@ final class ApplyForm {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
 			$m['aviso'] = $procedure_id > 0
 				? 'Ese procedimiento no existe o todavía no está publicado.'
-				: 'Abra la solicitud desde la ficha del procedimiento, o desde las solicitudes de su centro.';
+				: 'Abra la solicitud desde la ficha del procedimiento, o desde sus solicitudes.';
 			return $m;
 		}
 
@@ -472,13 +478,20 @@ final class ApplyForm {
 		$m['amend_closes_at'] = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
 		$m['final_list_url']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL, true );
 		$m['spec']            = Applications::spec( $procedure_id );
+		$m['applicant_type']  = (string) $m['spec']['applicant_type'];
+		$es_docente           = ApplicationMetaKeys::TYPE_TEACHER === $m['applicant_type'] && user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		if ( ! $es_docente && array() === CentreScope::codes_for( $user_id ) ) {
+			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
+			return $m;
+		}
 
-		// Sin ningún código admitido se queda el del centro, para decir por qué.
-		$code         = self::chosen( $user_id, $procedure_id, self::wanted() );
-		$m['centre']  = Applications::centre_of( $user_id, $code );
-		$m['choices'] = self::choices( $user_id, $procedure_id );
+		$code = $es_docente ? '' : self::chosen( $user_id, $procedure_id, self::wanted() );
+		if ( ! $es_docente ) {
+			$m['centre']  = Applications::centre_of( $user_id, $code );
+			$m['choices'] = self::choices( $user_id, $procedure_id );
+		}
 
-		$existente = Applications::find( $procedure_id, $m['centre']['code'] );
+		$existente = $es_docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $m['centre']['code'] );
 		if ( null !== $existente ) {
 			$meta             = Applications::meta( $existente );
 			$estado           = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
@@ -538,7 +551,9 @@ final class ApplyForm {
 	 */
 	private static function deliver( int $procedure_id, int $user_id, string $code ): void {
 		$key = self::field( self::FIELD_DELIVERY );
-		$id  = Applications::find( $procedure_id, $code );
+		$id  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true )
+			? Applications::find_for_teacher( $procedure_id, $user_id )
+			: Applications::find( $procedure_id, $code );
 		foreach ( Applications::questions( $procedure_id ) as $question ) {
 			if ( $key !== $question['key'] || ! ProcedureAccess::can_deliver( $user_id, (int) $id, $question ) ) {
 				continue;

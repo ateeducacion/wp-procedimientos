@@ -37,6 +37,10 @@ final class ApplicationMetaRegistration {
 	 */
 	public static function schema(): array {
 		return array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_applicant_type' ),
+			),
 			ApplicationMetaKeys::CENTRE_CODE        => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_text_field',
@@ -70,6 +74,16 @@ final class ApplicationMetaRegistration {
 				'sanitize' => 'sanitize_textarea_field',
 			),
 		);
+	}
+
+	/**
+	 * One supported applicant type; old records default to a centre.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function sanitize_applicant_type( $value ): string {
+		return ApplicationMetaKeys::TYPE_TEACHER === $value ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
 	}
 
 	/**

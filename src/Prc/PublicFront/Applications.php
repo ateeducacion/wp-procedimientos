@@ -8,6 +8,7 @@
 namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
+use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -76,6 +77,57 @@ final class Applications {
 			)
 		);
 		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+	/**
+	 * Find one teacher's application to a procedure.
+	 *
+	 * @param int $procedure_id Procedure ID.
+	 * @param int $user_id      Teacher account ID.
+	 * @return int|null
+	 */
+	public static function find_for_teacher( int $procedure_id, int $user_id ): ?int {
+		if ( $procedure_id <= 0 || $user_id <= 0 ) {
+			return null;
+		}
+		$ids = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_parent' => $procedure_id,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => 1,
+				'fields'      => 'ids',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- la solicitud individual se identifica por su autor y tipo.
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+	/**
+	 * The individual applications made by one teacher.
+	 *
+	 * @param int $user_id Teacher account ID.
+	 * @return array<int, \WP_Post>
+	 */
+	public static function for_teacher( int $user_id ): array {
+		if ( $user_id <= 0 ) {
+			return array();
+		}
+		$posts = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => -1,
+				'orderby'     => 'date',
+				'order'       => 'DESC',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- filtra las solicitudes individuales del perfil.
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		return is_array( $posts ) ? $posts : array();
 	}
 
 	/**
@@ -193,9 +245,11 @@ final class Applications {
 	 * @return array{coordinator_count:int, requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
 	 */
 	public static function spec( int $procedure_id ): array {
+		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
 		return array(
-			'coordinator_count'    => self::coordinator_count( $procedure_id ),
-			'requires_coordinator' => self::coordinator_count( $procedure_id ) > 0,
+			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
+			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
+			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
@@ -284,6 +338,7 @@ final class Applications {
 			'answers'     => array(),
 		);
 		$metas = array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
 			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
 			ApplicationMetaKeys::APPLICANT_POSITION => (string) $data['position'],
@@ -298,17 +353,65 @@ final class Applications {
 	}
 
 	/**
+	 * Save the application made by a teacher as an individual.
+	 *
+	 * @param int                                 $procedure_id Procedure ID.
+	 * @param int                                 $user_id      Teacher account ID.
+	 * @param array<string, mixed>                $data         Validated answers.
+	 * @param array<string, array<string, mixed>> $files        Validated uploads.
+	 * @return int Application post ID, or zero on failure.
+	 */
+	public static function save_teacher( int $procedure_id, int $user_id, array $data, array $files = array() ): int {
+		$user = get_userdata( $user_id );
+		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 0;
+		}
+		$id = self::save_post(
+			$procedure_id,
+			$user_id,
+			array(
+				'code'      => '',
+				'name'      => '',
+				'ownership' => '',
+			),
+			$files,
+			ApplicationMetaKeys::TYPE_TEACHER,
+			'Solicitud individual'
+		);
+		if ( 0 === $id ) {
+			return 0;
+		}
+		$data += array( 'answers' => array() );
+		foreach (
+			array(
+				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
+				ApplicationMetaKeys::CENTRE_CODE        => '',
+				ApplicationMetaKeys::CENTRE_NAME        => '',
+				ApplicationMetaKeys::APPLICANT_POSITION => '',
+				ApplicationMetaKeys::COORDINATOR        => array(),
+				ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+				ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+			) as $key => $value
+		) {
+			update_post_meta( $id, $key, wp_slash( $value ) );
+		}
+		return $id;
+	}
+
+	/**
 	 * Store the post and documents before changing the application core.
 	 *
 	 * @param int                                 $procedure_id Procedure ID.
-	 * @param int                                 $user_id Applicant ID.
+	 * @param int                                 $user_id    Applicant ID.
 	 * @param array<string, string>               $centro School snapshot.
-	 * @param array<string, array<string, mixed>> $files Validated uploads.
+	 * @param array<string, array<string, mixed>> $files     Validated uploads.
+	 * @param string                              $type      Applicant type.
+	 * @param string                              $applicant Applicant title.
 	 * @return int Post ID, or zero on failure.
 	 */
-	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files ): int {
-		$titulo = self::title( $centro, $procedure_id );
-		$id     = self::find( $procedure_id, $centro['code'] );
+	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files, string $type = ApplicationMetaKeys::TYPE_CENTRE, string $applicant = '' ): int {
+		$titulo = ApplicationMetaKeys::TYPE_TEACHER === $type ? $applicant . ' — ' . (string) get_post_field( 'post_title', $procedure_id ) : self::title( $centro, $procedure_id );
+		$id     = ApplicationMetaKeys::TYPE_TEACHER === $type ? self::find_for_teacher( $procedure_id, $user_id ) : self::find( $procedure_id, $centro['code'] );
 		$is_new = null === $id;
 		if ( null === $id ) {
 			$id = wp_insert_post(
@@ -471,7 +574,7 @@ final class Applications {
 		$fila = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
-			'centre'            => (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
+			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
 			'code'              => (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ],
 			// Dos valores de la misma fecha: `date` es la columna del CSV —en ISO,
 			// que es lo que ordena bien en una hoja de cálculo— y `date_label` es

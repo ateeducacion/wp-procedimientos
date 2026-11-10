@@ -594,13 +594,14 @@ final class Applications {
 	/**
 	 * The applications of one procedure as rows of the table.
 	 *
-	 * @param int $procedure_id Procedure post ID.
+	 * @param int             $procedure_id Procedure post ID.
+	 * @param \WP_Post[]|null $applications Its applications, if already loaded; null to load them.
 	 * @return array<int, array<string, mixed>> One row per application, keyed by columns(); `id`, `state_key`, `date_label` and {@see KEY_FILES} on top.
 	 */
-	public static function rows( int $procedure_id ): array {
+	public static function rows( int $procedure_id, ?array $applications = null ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
-		$solicitudes = self::for_procedure( $procedure_id );
+		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 		// Quién presentó cada una: todas las personas en una consulta, no una por fila.
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 		foreach ( $solicitudes as $solicitud ) {

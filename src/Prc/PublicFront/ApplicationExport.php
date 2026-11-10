@@ -133,9 +133,10 @@ final class ApplicationExport {
 	/**
 	 * The applications as a CSV file, with the chosen columns and shape.
 	 *
-	 * Sin ninguna columna válida salen todas, en el orden de la tabla: es el
-	 * CSV de siempre. El formato no cambia: `;`, BOM, CRLF y cada celda
-	 * entrecomillada y neutralizada ({@see Applications::csv_lines()}).
+	 * Sin ninguna columna válida, o con todas elegidas, salen todas en el
+	 * orden de la tabla: es el CSV de siempre. El formato no cambia: `;`,
+	 * BOM, CRLF y cada celda entrecomillada y neutralizada
+	 * ({@see Applications::csv_lines()}).
 	 *
 	 * @param int      $procedure_id Procedure post ID.
 	 * @param string[] $columns      Column keys, in order; empty for all.
@@ -143,13 +144,15 @@ final class ApplicationExport {
 	 * @return string
 	 */
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
-		$columnas = self::valid_columns( $procedure_id, $columns );
-		if ( array() === $columnas ) {
-			$columnas = Applications::columns( Applications::questions( $procedure_id ) );
-		}
 		$preguntas = Applications::questions( $procedure_id );
-		$claves    = array_flip( array_keys( $columnas ) );
-		$filas     = array();
+		$todas     = Applications::columns( $preguntas );
+		$columnas  = self::valid_columns( $procedure_id, $columns );
+		// Ninguna válida, o todas aunque sea en otro orden: el CSV de siempre.
+		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
+			$columnas = $todas;
+		}
+		$claves = array_flip( array_keys( $columnas ) );
+		$filas  = array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas );
@@ -208,42 +211,137 @@ final class ApplicationExport {
 	 * The people of a procedure for the user upload file, without repeats.
 	 *
 	 * Una persona sale una vez aunque esté en varias solicitudes: manda el
-	 * `username`, sin distinguir mayúsculas, y gana la primera. Quien no
-	 * tiene un correo válido —o se queda sin usuario por el filtro— no sale y
-	 * se cuenta en `skipped`, que es lo que el diálogo avisa antes de descargar.
+	 * `username`, sin distinguir mayúsculas, y gana la primera. Lo que no sale
+	 * se cuenta aparte en `left_out`, que es lo que el diálogo avisa antes de
+	 * descargar:
+	 *
+	 * - `email`: sin un correo válido;
+	 * - `incomplete`: sin nombre, sin apellidos o sin usuario —una cuenta sin
+	 *   nombre cuyo nombre público es el usuario, una coordinación antigua de
+	 *   una sola palabra, o el filtro que devuelve vacío—: Moodle no crea esa
+	 *   cuenta;
+	 * - `conflict`: el mismo usuario con **otro** correo. No se funde en
+	 *   silencio: se queda la primera y esta se cuenta. Con el mismo correo es
+	 *   la misma persona, y no cuenta.
+	 *
+	 * Un hueco de coordinación vacío no es una persona y no cuenta.
 	 *
 	 * @param int      $procedure_id Procedure post ID.
 	 * @param string[] $who          Keys of {@see who()}; empty for all.
-	 * @return array{people:array<int, array<string, mixed>>, skipped:int}
+	 * @return array{people:array<int, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int}}
 	 */
 	public static function people( int $procedure_id, array $who = array() ): array {
-		$fuentes = array_values( array_intersect( array_keys( self::who() ), $who ) );
-		if ( array() === $fuentes ) {
-			$fuentes = array_keys( self::who() );
+		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
+		return array(
+			'people'   => array_values( $cuenta['people'] ),
+			'left_out' => $cuenta['left_out'],
+		);
+	}
+
+	/**
+	 * For each source, how many people would go in the user upload file and
+	 * how many would be left out, and why.
+	 *
+	 * Una sola pasada por las solicitudes, y las que se le dan: el panel ya
+	 * las ha cargado para pintar la tabla, con sus metas y sus cuentas, así
+	 * que añadir una fuente no añade consultas.
+	 *
+	 * @param \WP_Post[] $applications Applications already loaded.
+	 * @param string[]   $who          Keys of {@see who()}; empty for all.
+	 * @return array<string, array{count:int, email:int, incomplete:int, conflict:int}>
+	 */
+	public static function who_counts( array $applications, array $who = array() ): array {
+		$grupos = array();
+		foreach ( self::sources( $who ) as $fuente ) {
+			$grupos[ $fuente ] = array( $fuente );
 		}
-		$personas = array();
-		$fuera    = 0;
-		foreach ( self::batches( $procedure_id ) as $tanda ) {
+		$out = array();
+		foreach ( self::tally( array( $applications ), $grupos ) as $fuente => $cuenta ) {
+			$out[ $fuente ] = array( 'count' => count( $cuenta['people'] ) ) + $cuenta['left_out'];
+		}
+		return $out;
+	}
+
+	/**
+	 * The sources asked for, in the order of {@see who()}; all when none is valid.
+	 *
+	 * @param array $who Keys asked for.
+	 * @return string[]
+	 */
+	private static function sources( array $who ): array {
+		$fuentes = array_values( array_intersect( array_keys( self::who() ), $who ) );
+		return array() === $fuentes ? array_keys( self::who() ) : $fuentes;
+	}
+
+	/**
+	 * Go through the applications once and gather the people of each group of sources.
+	 *
+	 * @param iterable                $batches Applications, a batch (array of \WP_Post) at a time.
+	 * @param array<string, string[]> $groups  Group => sources.
+	 * @return array<string, array{people:array<string, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int}}>
+	 */
+	private static function tally( iterable $batches, array $groups ): array {
+		$out = array();
+		foreach ( array_keys( $groups ) as $grupo ) {
+			$out[ $grupo ] = array(
+				'people'   => array(),
+				'left_out' => array(
+					'email'      => 0,
+					'incomplete' => 0,
+					'conflict'   => 0,
+				),
+			);
+		}
+		foreach ( $batches as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				foreach ( $fuentes as $fuente ) {
-					foreach ( self::from_source( $fuente, $solicitud ) as $persona ) {
-						$persona['username'] = self::username( $persona );
-						if ( '' === $persona['username'] || ! ProcedureInput::is_email( (string) $persona['email'] ) ) {
-							++$fuera;
-							continue;
-						}
-						$clave = function_exists( 'mb_strtolower' ) ? mb_strtolower( $persona['username'] ) : strtolower( $persona['username'] );
-						if ( ! isset( $personas[ $clave ] ) ) {
-							$personas[ $clave ] = $persona;
+				// Cada fuente se lee una vez por solicitud, la pidan los grupos que la pidan.
+				$de = array();
+				foreach ( $groups as $grupo => $fuentes ) {
+					foreach ( $fuentes as $fuente ) {
+						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud );
+						foreach ( $de[ $fuente ] as $persona ) {
+							self::add( $out[ $grupo ], $persona );
 						}
 					}
 				}
 			}
 		}
-		return array(
-			'people'  => array_values( $personas ),
-			'skipped' => $fuera,
-		);
+		return $out;
+	}
+
+	/**
+	 * Add one person to a tally, or count why not.
+	 *
+	 * @param array<string, mixed> $tally  The tally, changed in place.
+	 * @param array<string, mixed> $person The person.
+	 * @return void
+	 */
+	private static function add( array &$tally, array $person ): void {
+		if ( ! ProcedureInput::is_email( (string) $person['email'] ) ) {
+			++$tally['left_out']['email'];
+			return;
+		}
+		$person['username'] = self::username( $person );
+		if ( '' === $person['username'] || '' === $person['firstname'] || '' === $person['lastname'] ) {
+			++$tally['left_out']['incomplete'];
+			return;
+		}
+		$clave = self::lower( $person['username'] );
+		if ( ! isset( $tally['people'][ $clave ] ) ) {
+			$tally['people'][ $clave ] = $person;
+		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
+			++$tally['left_out']['conflict'];
+		}
+	}
+
+	/**
+	 * Lower case, multibyte when it can.
+	 *
+	 * @param string $value Value.
+	 * @return string
+	 */
+	private static function lower( string $value ): string {
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value ) : strtolower( $value );
 	}
 
 	/**
@@ -263,9 +361,11 @@ final class ApplicationExport {
 	 *
 	 * Exactamente la cabecera {@see MOODLE_HEADER}, separado por comas, UTF-8
 	 * sin BOM, saltos LF y sin salto tras la última fila. Un valor va entre
-	 * comillas solo si lo exige —una coma, unas comillas o un salto—, y lo
-	 * que empiece por `=`, `+`, `-` o `@` lleva una comilla simple delante,
-	 * como en el CSV: el fichero también se abre en una hoja de cálculo.
+	 * comillas solo si lo exige —una coma, unas comillas o un salto—. El
+	 * nombre y los apellidos que empiecen por `=`, `+`, `-` o `@` llevan una
+	 * comilla simple delante, como en el CSV: el fichero también se abre en
+	 * una hoja de cálculo. El usuario y el correo salen tal cual: ya están
+	 * validados, y una comilla delante los convertiría en otros.
 	 *
 	 * @param array<int, array<string, mixed>> $people Rows with `username`, `firstname`, `lastname`, `email`.
 	 * @return string
@@ -275,7 +375,8 @@ final class ApplicationExport {
 		foreach ( $people as $persona ) {
 			$campos = array();
 			foreach ( array( 'username', 'firstname', 'lastname', 'email' ) as $clave ) {
-				$campos[] = self::moodle_cell( (string) ( $persona[ $clave ] ?? '' ) );
+				$valor    = (string) ( $persona[ $clave ] ?? '' );
+				$campos[] = self::moodle_cell( 'firstname' === $clave || 'lastname' === $clave ? self::neutralize( $valor ) : $valor );
 			}
 			$lineas[] = implode( ',', $campos );
 		}
@@ -283,13 +384,12 @@ final class ApplicationExport {
 	}
 
 	/**
-	 * One value of the user upload file, neutralised and quoted only if needed.
+	 * One value of the user upload file, quoted only if needed.
 	 *
 	 * @param string $value Value.
 	 * @return string
 	 */
 	private static function moodle_cell( string $value ): string {
-		$value = self::neutralize( $value );
 		return false === strpbrk( $value, ",\"\r\n" ) ? $value : '"' . str_replace( '"', '""', $value ) . '"';
 	}
 
@@ -304,21 +404,6 @@ final class ApplicationExport {
 	}
 
 	/**
-	 * Split a full name at its first space: first name, then the rest.
-	 *
-	 * Para lo que se guardó antes de que la coordinación tuviera apellidos, y
-	 * para el nombre público de una cuenta sin nombre ni apellidos. Un nombre
-	 * compuesto sale mal partido; por eso desde la ADR-0039 se piden aparte.
-	 *
-	 * @param string $full Full name.
-	 * @return array{0:string, 1:string}
-	 */
-	public static function split_name( string $full ): array {
-		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
-		return array( $partes[0], $partes[1] ?? '' );
-	}
-
-	/**
 	 * The people one source gives for one application.
 	 *
 	 * @param string   $source      Key of {@see who()}.
@@ -330,15 +415,16 @@ final class ApplicationExport {
 			case self::WHO_APPLICANT:
 				return self::applicant( $application );
 			case self::WHO_COORDINATORS:
-				return array_map(
-					static function ( array $persona ) use ( $application ): array {
-						list( $nombre, $apellidos ) = '' !== $persona['surname']
-							? array( $persona['name'], $persona['surname'] )
-							: self::split_name( $persona['name'] );
-						return self::person( self::WHO_COORDINATORS, $application, 0, '', $nombre, $apellidos, $persona['email'] );
-					},
-					self::coordinators( $application )
-				);
+				$out = array();
+				foreach ( self::coordinators( $application ) as $persona ) {
+					// Un hueco vacío del formulario no es una persona.
+					if ( '' === $persona['name'] . $persona['surname'] . $persona['email'] ) {
+						continue;
+					}
+					$persona = ApplicationMetaRegistration::with_surname( $persona );
+					$out[]   = self::person( self::WHO_COORDINATORS, $application, 0, '', $persona['name'], $persona['surname'], $persona['email'] );
+				}
+				return $out;
 		}
 		return array();
 	}
@@ -347,7 +433,8 @@ final class ApplicationExport {
 	 * The account that submitted the application, as a person.
 	 *
 	 * Su usuario es el `user_login`; su nombre, el nombre y los apellidos de
-	 * la cuenta y, si falta alguno, el nombre público partido por el primer espacio.
+	 * la cuenta y, si falta alguno, el nombre público partido por el primer
+	 * espacio, salvo que el nombre público sea el propio usuario.
 	 *
 	 * @param \WP_Post $application The application.
 	 * @return array<int, array<string, mixed>> One person, or none.
@@ -359,8 +446,11 @@ final class ApplicationExport {
 		}
 		$nombre    = trim( (string) $cuenta->first_name );
 		$apellidos = trim( (string) $cuenta->last_name );
-		if ( '' === $nombre || '' === $apellidos ) {
-			$partido   = self::split_name( (string) $cuenta->display_name );
+		// El nombre público de una cuenta sin nombre suele ser el propio
+		// usuario: eso no es un nombre, y la persona queda incompleta.
+		$publico = (string) $cuenta->display_name;
+		if ( ( '' === $nombre || '' === $apellidos ) && $publico !== (string) $cuenta->user_login ) {
+			$partido   = ApplicationMetaRegistration::split_name( $publico );
 			$nombre    = '' !== $nombre ? $nombre : $partido[0];
 			$apellidos = '' !== $apellidos ? $apellidos : $partido[1];
 		}
@@ -516,6 +606,7 @@ final class ApplicationExport {
 					'post_status'      => 'publish',
 					'posts_per_page'   => self::BATCH,
 					'paged'            => $pagina,
+					'no_found_rows'    => true,
 					// El ID desempata: sin él, dos del mismo segundo podrían
 					// salir en dos tandas o en ninguna.
 					'orderby'          => array(

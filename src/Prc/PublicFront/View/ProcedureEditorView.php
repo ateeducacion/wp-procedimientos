@@ -1153,7 +1153,7 @@ final class ProcedureEditorView {
 							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
 						</label>
 					<?php endforeach; ?>
-					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. Quien no tenga un correo válido no sale.</p>
+					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
 				</fieldset>
 
 				<div class="prc-acciones">
@@ -1190,17 +1190,32 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * Who goes in the user upload file, with how many and who is left out.
+	 * Who goes in the user upload file, with how many and who is left out, and why.
 	 *
-	 * @param array{label?:string, count?:int, skipped?:int} $quien One source.
+	 * Cada motivo con su rótulo: sin correo válido, incompletas (sin nombre,
+	 * apellidos o usuario) y usuario en conflicto (el mismo usuario con otro
+	 * correo). Una persona repetida con el mismo correo no es una omisión.
+	 *
+	 * @param array<string, mixed> $quien One source: `label`, `count`, `email`, `incomplete`, `conflict`.
 	 * @return string
 	 */
 	private static function who_label( array $quien ): string {
-		$cuenta = (int) ( $quien['count'] ?? 0 );
-		$fuera  = (int) ( $quien['skipped'] ?? 0 );
-		$texto  = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
-		if ( $fuera > 0 ) {
-			$texto .= sprintf( 1 === $fuera ? '; %d persona sin correo válido no saldrá' : '; %d personas sin correo válido no saldrán', $fuera );
+		$cuenta  = (int) ( $quien['count'] ?? 0 );
+		$motivos = array(
+			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
+			'incomplete' => array( '%d incompleta', '%d incompletas' ),
+			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+		);
+		$fuera   = array();
+		foreach ( $motivos as $clave => list( $una, $varias ) ) {
+			$n = (int) ( $quien[ $clave ] ?? 0 );
+			if ( $n > 0 ) {
+				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
+			}
+		}
+		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		if ( array() !== $fuera ) {
+			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
 		}
 		return $texto . ')';
 	}

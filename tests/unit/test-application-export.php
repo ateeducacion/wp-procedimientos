@@ -8,6 +8,7 @@
 
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
@@ -216,18 +217,32 @@ class Test_Application_Export extends WP_UnitTestCase {
 	 */
 	public function test_an_unknown_key_is_ignored_and_none_valid_exports_everything() {
 		$procedimiento = $this->procedimiento();
-		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ) );
+		$id            = $this->solicitud(
+			$procedimiento,
+			'C0001',
+			array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ),
+			array(),
+			array(
+				'display_name' => 'Dirección Norte',
+				'user_email'   => 'norte@example.org',
+			)
+		);
 
 		$this->assertSame(
-			ApplicationExport::csv( $procedimiento, array( 'code' ) ),
+			"\xEF\xBB\xBF\"Código\"\r\n\"C0001\"\r\n",
 			ApplicationExport::csv( $procedimiento, array( 'no_existe', 'code', 'post_password' ) )
 		);
 
-		$todas = Applications::csv( $procedimiento );
+		$todas = "\xEF\xBB\xBF"
+			. '"Centro";"Código";"Fecha";"Presentada por";"Correo";"Cargo";"Coordinación";"DNI o NIE de coordinación";"Correo de coordinación";"Estado de revisión";"Nota";"Observaciones";"Tiene huerto";"Modalidad"' . "\r\n"
+			. '"Centro de prueba Norte";"C0001";"' . get_the_date( 'Y-m-d H:i', $id ) . '";"Dirección Norte";"norte@example.org";"Dirección";"Ana Pérez";"12345678Z";"ana@example.org";"Presentada";"";"Nada";"Sí";"B"' . "\r\n";
 		$this->assertSame( $todas, ApplicationExport::csv( $procedimiento, array( 'no_existe' ) ) );
 		$this->assertSame( $todas, ApplicationExport::csv( $procedimiento, array() ) );
 		$this->assertSame( $todas, ApplicationExport::csv( $procedimiento, array( array( 'code' ) ) ), 'una clave que no es texto tampoco cuenta' );
-		$this->assertSame( '"Centro";"Código";"Fecha"', substr( $this->lineas( $todas )[0], 0, 26 ) );
+
+		// Elegidas todas, aunque sea en otro orden, es el CSV de siempre.
+		$revueltas = array_reverse( array_keys( Applications::columns( Applications::questions( $procedimiento ) ) ) );
+		$this->assertSame( $todas, ApplicationExport::csv( $procedimiento, $revueltas ) );
 	}
 
 	/**
@@ -388,8 +403,112 @@ class Test_Application_Export extends WP_UnitTestCase {
 
 		$personas = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
 		$this->assertCount( 1, $personas['people'] );
-		$this->assertSame( 1, $personas['skipped'] );
+		$this->assertSame(
+			array(
+				'email'      => 1,
+				'incomplete' => 0,
+				'conflict'   => 0,
+			),
+			$personas['left_out'],
+			'la misma persona repetida no es una omisión'
+		);
 		$this->assertSame( "username,firstname,lastname,email\nana,Ana,Pérez,ana@example.org", ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) ) );
+	}
+
+	/**
+	 * El mismo usuario con otro correo no se funde en silencio: se queda la
+	 * primera y la otra se cuenta como conflicto.
+	 */
+	public function test_the_same_username_with_another_email_is_a_conflict() {
+		$procedimiento = $this->procedimiento();
+		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ) );
+		$this->solicitud( $procedimiento, 'C0002', array( $this->persona( 'Ana', 'Ruiz', 'ana@example.net' ) ) );
+
+		$personas = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
+		$this->assertCount( 1, $personas['people'] );
+		$this->assertSame( 'ana@example.org', $personas['people'][0]['email'], 'se queda la primera' );
+		$this->assertSame( 1, $personas['left_out']['conflict'] );
+	}
+
+	/**
+	 * Sin nombre o sin apellidos no se crea una cuenta: la fila no sale y se
+	 * cuenta como incompleta. Un hueco de coordinación vacío no cuenta.
+	 */
+	public function test_a_person_without_firstname_or_lastname_is_incomplete() {
+		$procedimiento = $this->procedimiento();
+		$this->solicitud(
+			$procedimiento,
+			'C0001',
+			array(
+				$this->persona( 'Cher', '', 'cher@example.org' ),
+				array(
+					'name'    => '',
+					'surname' => '',
+					'dni'     => '',
+					'email'   => '',
+				),
+			),
+			array(),
+			array( 'display_name' => 'direccionnorte' )
+		);
+
+		$coordinacion = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
+		$this->assertSame( array(), $coordinacion['people'] );
+		$this->assertSame(
+			array(
+				'email'      => 0,
+				'incomplete' => 1,
+				'conflict'   => 0,
+			),
+			$coordinacion['left_out']
+		);
+		$this->assertSame( ApplicationExport::MOODLE_HEADER, ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) ) );
+
+		$cuenta = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_APPLICANT ) );
+		$this->assertSame( 1, $cuenta['left_out']['incomplete'], 'una cuenta cuyo nombre público es una palabra' );
+	}
+
+	/**
+	 * Los recuentos del diálogo salen de una sola pasada por las solicitudes
+	 * que el panel ya tiene: las consultas no crecen con las fuentes.
+	 */
+	public function test_who_counts_does_one_pass_whatever_the_sources() {
+		$procedimiento = $this->procedimiento();
+		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ), $this->persona( 'Sin', 'Correo', '' ) ) );
+		$this->solicitud( $procedimiento, 'C0002', array( $this->persona( 'Luis', 'Díaz', 'luis@example.org' ) ) );
+		// Lo que hace el panel: las solicitudes, una vez, y la tabla con ellas.
+		$solicitudes = Applications::for_procedure( $procedimiento );
+		Applications::rows( $procedimiento, $solicitudes );
+
+		$consultas = function ( array $who ) use ( $solicitudes ): int {
+			global $wpdb;
+			$antes = $wpdb->num_queries;
+			ApplicationExport::who_counts( $solicitudes, $who );
+			return $wpdb->num_queries - $antes;
+		};
+		$una       = $consultas( array( ApplicationExport::WHO_COORDINATORS ) );
+		$todas     = $consultas( array() );
+		$this->assertSame( $una, $todas, 'más fuentes, las mismas consultas' );
+		$this->assertSame( 0, $todas, 'todo lo necesario ya lo cargó la tabla' );
+
+		$this->assertSame(
+			array(
+				ApplicationExport::WHO_COORDINATORS => array(
+					'count'      => 2,
+					'email'      => 1,
+					'incomplete' => 0,
+					'conflict'   => 0,
+				),
+				ApplicationExport::WHO_APPLICANT    => array(
+					'count'      => 0,
+					'email'      => 0,
+					'incomplete' => 2,
+					'conflict'   => 0,
+				),
+			),
+			ApplicationExport::who_counts( $solicitudes ),
+			'las cuentas de prueba no tienen nombre ni apellidos, y su nombre público es el usuario'
+		);
 	}
 
 	/**
@@ -440,8 +559,8 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$procedimiento = $this->procedimiento();
 		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana María Pérez', '', 'amp@example.org' ) ) );
 
-		$this->assertSame( array( 'Ana', 'María Pérez' ), ApplicationExport::split_name( '  Ana María Pérez ' ) );
-		$this->assertSame( array( 'Cher', '' ), ApplicationExport::split_name( 'Cher' ) );
+		$this->assertSame( array( 'Ana', 'María Pérez' ), ApplicationMetaRegistration::split_name( '  Ana María Pérez ' ) );
+		$this->assertSame( array( 'Cher', '' ), ApplicationMetaRegistration::split_name( 'Cher' ) );
 		$this->assertSame(
 			"username,firstname,lastname,email\namp,Ana,María Pérez,amp@example.org",
 			ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) )
@@ -474,7 +593,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$personas = ApplicationExport::people( $procedimiento, array( ApplicationExport::WHO_COORDINATORS ) );
 		$this->assertSame( 'x-ana-coordinators', $personas['people'][0]['username'] );
 		$this->assertCount( 1, $personas['people'] );
-		$this->assertSame( 1, $personas['skipped'] );
+		$this->assertSame( 1, $personas['left_out']['incomplete'], 'sin usuario no hay cuenta que crear' );
 	}
 
 	/**
@@ -491,6 +610,15 @@ class Test_Application_Export extends WP_UnitTestCase {
 			"username,firstname,lastname,email\nana,\"'=HYPERLINK(\"\"x\"\")\",'-Pérez,ana@example.org",
 			ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) )
 		);
+		// El usuario y el correo salen tal cual: ya están validados, y una
+		// comilla delante los convertiría en otro usuario y en otro correo.
+		add_filter(
+			'prc_export_username',
+			static function (): string {
+				return '-ana';
+			}
+		);
+		$this->assertStringEndsWith( "\n-ana,\"'=HYPERLINK(\"\"x\"\")\",'-Pérez,ana@example.org", ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_COORDINATORS ) ) ) );
 		$this->assertSame( "'@x", ApplicationExport::neutralize( '@x' ) );
 		$this->assertSame( "'+1", ApplicationExport::neutralize( '+1' ) );
 		$this->assertSame( 'normal', ApplicationExport::neutralize( 'normal' ) );
@@ -643,6 +771,37 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$this->assertDoesNotMatchRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="q3"[^>]*checked/', $html );
 		$this->assertMatchesRegularExpression( '/value="' . ApplicationExport::SHAPE_PERSON . '"[^>]*checked/', $html );
 		$this->assertMatchesRegularExpression( '/value="' . ApplicationExport::FORMAT_MOODLE . '"/', $html );
-		$this->assertStringContainsString( '1 persona sin correo válido no saldrá', $html );
+		$this->assertStringContainsString( 'Coordinación (1 persona. No saldrán: 1 sin correo válido)', $html );
+		$this->assertStringContainsString( 'Quien presenta la solicitud (0 personas. No saldrán: 1 incompleta)', $html );
+	}
+
+	/**
+	 * Lo que diga una pregunta sale escapado en el diálogo, nunca como HTML:
+	 * ni sus etiquetas, ni sus `&` ni sus comillas.
+	 */
+	public function test_a_question_label_with_html_is_escaped_in_the_dialog() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta(
+			$procedimiento,
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array(
+					'key'   => 'q1',
+					'label' => '<b>Huerto</b> & "más"',
+					'type'  => ProcedureQuestions::TYPE_TEXT,
+				),
+			)
+		);
+		$this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ) );
+		$this->acting_as( $this->administrator() );
+		$_GET[ ProcedureEditor::ARG_PROCEDURE ] = (string) $procedimiento;
+		$_GET[ ProcedureEditor::ARG_PANEL ]     = ProcedureEditor::PANEL_APPLICATIONS;
+		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
+
+		$dialogo = substr( $html, (int) strpos( $html, 'data-prc-export' ) );
+		// Las etiquetas ya las quita la meta al guardar; lo que llega, sale escapado.
+		$this->assertStringContainsString( 'Huerto &amp; &quot;más&quot;', $dialogo );
+		$this->assertStringNotContainsString( '<b>', $dialogo );
+		$this->assertStringNotContainsString( '& "más"', $dialogo );
 	}
 }

@@ -7357,10 +7357,11 @@ final class Applications {
 
 
 
-	public static function rows( int $procedure_id ): array {
+
+	public static function rows( int $procedure_id, ?array $applications = null ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
-		$solicitudes = self::for_procedure( $procedure_id );
+		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 		foreach ( $solicitudes as $solicitud ) {
@@ -8409,14 +8410,17 @@ final class ApplicationExport {
 
 
 
+
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
-		$columnas = self::valid_columns( $procedure_id, $columns );
-		if ( array() === $columnas ) {
-			$columnas = Applications::columns( Applications::questions( $procedure_id ) );
-		}
 		$preguntas = Applications::questions( $procedure_id );
-		$claves    = array_flip( array_keys( $columnas ) );
-		$filas     = array();
+		$todas     = Applications::columns( $preguntas );
+		$columnas  = self::valid_columns( $procedure_id, $columns );
+
+		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
+			$columnas = $todas;
+		}
+		$claves = array_flip( array_keys( $columnas ) );
+		$filas  = array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas );
@@ -8483,34 +8487,129 @@ final class ApplicationExport {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 	public static function people( int $procedure_id, array $who = array() ): array {
-		$fuentes = array_values( array_intersect( array_keys( self::who() ), $who ) );
-		if ( array() === $fuentes ) {
-			$fuentes = array_keys( self::who() );
+		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
+		return array(
+			'people'   => array_values( $cuenta['people'] ),
+			'left_out' => $cuenta['left_out'],
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function who_counts( array $applications, array $who = array() ): array {
+		$grupos = array();
+		foreach ( self::sources( $who ) as $fuente ) {
+			$grupos[ $fuente ] = array( $fuente );
 		}
-		$personas = array();
-		$fuera    = 0;
-		foreach ( self::batches( $procedure_id ) as $tanda ) {
+		$out = array();
+		foreach ( self::tally( array( $applications ), $grupos ) as $fuente => $cuenta ) {
+			$out[ $fuente ] = array( 'count' => count( $cuenta['people'] ) ) + $cuenta['left_out'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function sources( array $who ): array {
+		$fuentes = array_values( array_intersect( array_keys( self::who() ), $who ) );
+		return array() === $fuentes ? array_keys( self::who() ) : $fuentes;
+	}
+
+
+
+
+
+
+
+
+	private static function tally( iterable $batches, array $groups ): array {
+		$out = array();
+		foreach ( array_keys( $groups ) as $grupo ) {
+			$out[ $grupo ] = array(
+				'people'   => array(),
+				'left_out' => array(
+					'email'      => 0,
+					'incomplete' => 0,
+					'conflict'   => 0,
+				),
+			);
+		}
+		foreach ( $batches as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				foreach ( $fuentes as $fuente ) {
-					foreach ( self::from_source( $fuente, $solicitud ) as $persona ) {
-						$persona['username'] = self::username( $persona );
-						if ( '' === $persona['username'] || ! ProcedureInput::is_email( (string) $persona['email'] ) ) {
-							++$fuera;
-							continue;
-						}
-						$clave = function_exists( 'mb_strtolower' ) ? mb_strtolower( $persona['username'] ) : strtolower( $persona['username'] );
-						if ( ! isset( $personas[ $clave ] ) ) {
-							$personas[ $clave ] = $persona;
+
+				$de = array();
+				foreach ( $groups as $grupo => $fuentes ) {
+					foreach ( $fuentes as $fuente ) {
+						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud );
+						foreach ( $de[ $fuente ] as $persona ) {
+							self::add( $out[ $grupo ], $persona );
 						}
 					}
 				}
 			}
 		}
-		return array(
-			'people'  => array_values( $personas ),
-			'skipped' => $fuera,
-		);
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function add( array &$tally, array $person ): void {
+		if ( ! ProcedureInput::is_email( (string) $person['email'] ) ) {
+			++$tally['left_out']['email'];
+			return;
+		}
+		$person['username'] = self::username( $person );
+		if ( '' === $person['username'] || '' === $person['firstname'] || '' === $person['lastname'] ) {
+			++$tally['left_out']['incomplete'];
+			return;
+		}
+		$clave = self::lower( $person['username'] );
+		if ( ! isset( $tally['people'][ $clave ] ) ) {
+			$tally['people'][ $clave ] = $person;
+		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
+			++$tally['left_out']['conflict'];
+		}
+	}
+
+
+
+
+
+
+
+	private static function lower( string $value ): string {
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value ) : strtolower( $value );
 	}
 
 
@@ -8537,12 +8636,15 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function moodle_lines( array $people ): string {
 		$lineas = array( self::MOODLE_HEADER );
 		foreach ( $people as $persona ) {
 			$campos = array();
 			foreach ( array( 'username', 'firstname', 'lastname', 'email' ) as $clave ) {
-				$campos[] = self::moodle_cell( (string) ( $persona[ $clave ] ?? '' ) );
+				$valor    = (string) ( $persona[ $clave ] ?? '' );
+				$campos[] = self::moodle_cell( 'firstname' === $clave || 'lastname' === $clave ? self::neutralize( $valor ) : $valor );
 			}
 			$lineas[] = implode( ',', $campos );
 		}
@@ -8556,7 +8658,6 @@ final class ApplicationExport {
 
 
 	private static function moodle_cell( string $value ): string {
-		$value = self::neutralize( $value );
 		return false === strpbrk( $value, ",\"\r\n" ) ? $value : '"' . str_replace( '"', '""', $value ) . '"';
 	}
 
@@ -8577,38 +8678,25 @@ final class ApplicationExport {
 
 
 
-
-
-
-	public static function split_name( string $full ): array {
-		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
-		return array( $partes[0], $partes[1] ?? '' );
-	}
-
-
-
-
-
-
-
-
 	private static function from_source( string $source, \WP_Post $application ): array {
 		switch ( $source ) {
 			case self::WHO_APPLICANT:
 				return self::applicant( $application );
 			case self::WHO_COORDINATORS:
-				return array_map(
-					static function ( array $persona ) use ( $application ): array {
-						list( $nombre, $apellidos ) = '' !== $persona['surname']
-							? array( $persona['name'], $persona['surname'] )
-							: self::split_name( $persona['name'] );
-						return self::person( self::WHO_COORDINATORS, $application, 0, '', $nombre, $apellidos, $persona['email'] );
-					},
-					self::coordinators( $application )
-				);
+				$out = array();
+				foreach ( self::coordinators( $application ) as $persona ) {
+
+					if ( '' === $persona['name'] . $persona['surname'] . $persona['email'] ) {
+						continue;
+					}
+					$persona = ApplicationMetaRegistration::with_surname( $persona );
+					$out[]   = self::person( self::WHO_COORDINATORS, $application, 0, '', $persona['name'], $persona['surname'], $persona['email'] );
+				}
+				return $out;
 		}
 		return array();
 	}
+
 
 
 
@@ -8626,8 +8714,11 @@ final class ApplicationExport {
 		}
 		$nombre    = trim( (string) $cuenta->first_name );
 		$apellidos = trim( (string) $cuenta->last_name );
-		if ( '' === $nombre || '' === $apellidos ) {
-			$partido   = self::split_name( (string) $cuenta->display_name );
+
+
+		$publico = (string) $cuenta->display_name;
+		if ( ( '' === $nombre || '' === $apellidos ) && $publico !== (string) $cuenta->user_login ) {
+			$partido   = ApplicationMetaRegistration::split_name( $publico );
 			$nombre    = '' !== $nombre ? $nombre : $partido[0];
 			$apellidos = '' !== $apellidos ? $apellidos : $partido[1];
 		}
@@ -8783,6 +8874,7 @@ final class ApplicationExport {
 					'post_status'      => 'publish',
 					'posts_per_page'   => self::BATCH,
 					'paged'            => $pagina,
+					'no_found_rows'    => true,
 
 
 					'orderby'          => array(
@@ -12916,7 +13008,7 @@ final class ProcedureEditorView {
 							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
 						</label>
 					<?php endforeach; ?>
-					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. Quien no tenga un correo válido no sale.</p>
+					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
 				</fieldset>
 
 				<div class="prc-acciones">
@@ -12958,12 +13050,27 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
 	private static function who_label( array $quien ): string {
-		$cuenta = (int) ( $quien['count'] ?? 0 );
-		$fuera  = (int) ( $quien['skipped'] ?? 0 );
-		$texto  = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
-		if ( $fuera > 0 ) {
-			$texto .= sprintf( 1 === $fuera ? '; %d persona sin correo válido no saldrá' : '; %d personas sin correo válido no saldrán', $fuera );
+		$cuenta  = (int) ( $quien['count'] ?? 0 );
+		$motivos = array(
+			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
+			'incomplete' => array( '%d incompleta', '%d incompletas' ),
+			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+		);
+		$fuera   = array();
+		foreach ( $motivos as $clave => list( $una, $varias ) ) {
+			$n = (int) ( $quien[ $clave ] ?? 0 );
+			if ( $n > 0 ) {
+				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
+			}
+		}
+		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		if ( array() !== $fuera ) {
+			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
 		}
 		return $texto . ')';
 	}
@@ -14411,15 +14518,11 @@ final class ProcedureEditor {
 
 
 
-	private static function export_model( int $procedure_id, int $user_id ): array {
+
+	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
 		$quienes = array();
-		foreach ( ApplicationExport::who() as $clave => $rotulo ) {
-			$cuenta            = ApplicationExport::people( $procedure_id, array( $clave ) );
-			$quienes[ $clave ] = array(
-				'label'   => $rotulo,
-				'count'   => count( $cuenta['people'] ),
-				'skipped' => $cuenta['skipped'],
-			);
+		foreach ( ApplicationExport::who_counts( $applications ) as $clave => $cuenta ) {
+			$quienes[ $clave ] = array( 'label' => ApplicationExport::who()[ $clave ] ) + $cuenta;
 		}
 		return array(
 			'groups'       => ApplicationExport::groups( $procedure_id ),
@@ -14671,9 +14774,12 @@ final class ProcedureEditor {
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
+
+
+			$solicitudes       = Applications::for_procedure( $procedure_id );
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
-			$m['applications'] = Applications::rows( $procedure_id );
-			$m['export']       = self::export_model( $procedure_id, $user_id );
+			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
+			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
 		}
 		return $m;
 	}

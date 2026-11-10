@@ -1104,22 +1104,18 @@ final class ProcedureEditor {
 	 * would be left out of the user upload file.
 	 *
 	 * La descarga es la respuesta del envío, así que no puede volver con un
-	 * aviso: cuántas personas se quedan fuera por no tener correo válido se
-	 * cuenta aquí, en el propio diálogo, antes de descargar (ADR-0039).
+	 * aviso: cuántas personas se quedan fuera, y por qué, se cuenta aquí, en
+	 * el propio diálogo, antes de descargar (ADR-0039).
 	 *
-	 * @param int $procedure_id Procedure post ID.
-	 * @param int $user_id      Who is looking.
+	 * @param int        $procedure_id Procedure post ID.
+	 * @param int        $user_id      Who is looking.
+	 * @param \WP_Post[] $applications Its applications, already loaded for the table.
 	 * @return array<string, mixed>
 	 */
-	private static function export_model( int $procedure_id, int $user_id ): array {
+	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
 		$quienes = array();
-		foreach ( ApplicationExport::who() as $clave => $rotulo ) {
-			$cuenta            = ApplicationExport::people( $procedure_id, array( $clave ) );
-			$quienes[ $clave ] = array(
-				'label'   => $rotulo,
-				'count'   => count( $cuenta['people'] ),
-				'skipped' => $cuenta['skipped'],
-			);
+		foreach ( ApplicationExport::who_counts( $applications ) as $clave => $cuenta ) {
+			$quienes[ $clave ] = array( 'label' => ApplicationExport::who()[ $clave ] ) + $cuenta;
 		}
 		return array(
 			'groups'       => ApplicationExport::groups( $procedure_id ),
@@ -1371,9 +1367,12 @@ final class ProcedureEditor {
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
+			// Las solicitudes se leen una vez: la tabla y los recuentos del
+			// diálogo de exportar trabajan sobre las mismas.
+			$solicitudes       = Applications::for_procedure( $procedure_id );
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
-			$m['applications'] = Applications::rows( $procedure_id );
-			$m['export']       = self::export_model( $procedure_id, $user_id );
+			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
+			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
 		}
 		return $m;
 	}

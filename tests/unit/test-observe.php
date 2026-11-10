@@ -576,6 +576,11 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->assertStringContainsString( ApplicationFiles::ARG_FILE, $html );
 		$this->assertStringContainsString( 'Ese documento ya no está', $this->descargar( $uid, $caso['c2'], $propio ), 'autorizada: lo que falta es el fichero de prueba' );
 		$this->assertStringContainsString( 'No puede descargar', $this->descargar( $uid, $caso['c1'], $ajeno ), 'otra zona, ni con la URL adivinada' );
+
+		// Con documentos permitidos pero sin la pregunta entre sus columnas, tampoco.
+		$this->raw_columns( $caso['procedure'], array( 'centre' ) );
+		$this->assertStringContainsString( 'No puede descargar', $this->descargar( $uid, $caso['c2'], $propio ) );
+		$this->assertStringContainsString( 'Ese documento ya no está', $this->descargar( (int) get_post_field( 'post_author', $caso['c2'] ), $caso['c2'], $propio ), 'el centro sí: lo que falta es el fichero de prueba' );
 	}
 
 	// ─── el panel del taller ───────────────────────────────────────────────
@@ -710,9 +715,67 @@ class Test_Observe extends WP_UnitTestCase {
 			) + $persona
 		);
 		$this->assertSame( array( 'gestion@example.org', 'consulta-dos@example.org' ), array_column( $this->enviados, 'to' ) );
-		$this->assertStringNotContainsString( '33333333P', (string) $this->enviados[1]['message'] );
-		$this->assertStringContainsString( Shell::url( 'observe' ), (string) $this->enviados[1]['message'] );
-		$this->assertStringNotContainsString( 'editar-procedimiento', (string) $this->enviados[1]['message'] );
+		$contactos = (string) $this->enviados[0]['message'];
+		$zona      = (string) $this->enviados[1]['message'];
+		$this->assertStringContainsString( 'otra@example.org', $contactos, 'a los contactos, como siempre' );
+		$this->assertStringNotContainsString( '33333333P', $zona );
+		$this->assertStringContainsString( Shell::url( 'observe' ), $zona );
+		$this->assertStringNotContainsString( 'editar-procedimiento', $zona );
+		// La consulta no enseña ninguna columna de personas: el correo a la
+		// zona dice que hubo un alta en el centro y nada de la persona.
+		$this->assertStringContainsString( 'IES Dos', $zona );
+		foreach ( array( 'Ana', 'Pérez', 'otra@example.org', 'Docente' ) as $dato ) {
+			$this->assertStringNotContainsString( $dato, $zona, $dato );
+		}
+
+		// Si enseña el nombre y el papel, el correo a la zona lleva eso y nada más.
+		$this->enviados = array();
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'centre', 'person_name', 'person_role' ) );
+		People::add(
+			$caso['c2'],
+			$director,
+			array(
+				'dni'   => '12345678Z',
+				'email' => 'tercera@example.org',
+				'phone' => '600 111 222',
+			) + $persona
+		);
+		$zona = (string) $this->enviados[1]['message'];
+		$this->assertStringContainsString( 'Ana', $zona );
+		$this->assertStringContainsString( 'Docente', $zona );
+		foreach ( array( 'Pérez', 'tercera@example.org', '600 111 222', '12345678Z' ) as $dato ) {
+			$this->assertStringNotContainsString( $dato, $zona, $dato );
+		}
+		$this->assertStringContainsString( 'Pérez', (string) $this->enviados[0]['message'], 'los contactos lo reciben entero' );
+	}
+
+	/**
+	 * La nota de revisión va a quien presentó la solicitud solo si sigue
+	 * siendo de su centro; poder verla por la consulta no basta.
+	 */
+	public function test_the_review_note_does_not_reach_an_author_who_only_observes_now() {
+		$caso  = $this->caso();
+		$autor = (int) get_post_field( 'post_author', $caso['c2'] );
+		wp_update_user(
+			array(
+				'ID'         => $autor,
+				'user_email' => 'antes-directora@example.org',
+			)
+		);
+
+		$this->enviados = array();
+		\Prc\PublicFront\Applications::review( $caso['c2'], ApplicationMetaKeys::REVIEW_EXCLUDED, 'Primera nota' );
+		$this->assertContains( 'antes-directora@example.org', array_column( $this->enviados, 'to' ), 'mientras es de su centro, le llega' );
+
+		// Cambia de centro y ahora consulta la zona del antiguo.
+		update_user_meta( $autor, \Prc\Access\CentreScope::meta_key(), 'C0001' );
+		get_userdata( $autor )->add_role( 'prc_observer' );
+		update_user_meta( $autor, ObserverScope::meta_key(), array( 'Z0002' ) );
+		$this->assertTrue( user_can( $autor, 'read_post', $caso['c2'] ), 'la ve por la consulta' );
+
+		$this->enviados = array();
+		\Prc\PublicFront\Applications::review( $caso['c2'], ApplicationMetaKeys::REVIEW_AMEND, self::NOTA . ' segunda' );
+		$this->assertNotContains( 'antes-directora@example.org', array_column( $this->enviados, 'to' ) );
 	}
 
 	// ─── el menú ───────────────────────────────────────────────────────────

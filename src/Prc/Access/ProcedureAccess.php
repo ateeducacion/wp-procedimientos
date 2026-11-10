@@ -425,31 +425,6 @@ final class ProcedureAccess {
 	}
 
 	/**
-	 * Read-only inventory of editorial accounts for deployment preparation.
-	 *
-	 * @return array<int, array{user_id:int,login:string,state:string,ids:int[],invalid:string[],legacy:bool}>
-	 */
-	public static function scope_diagnostics(): array {
-		$rows = array();
-		foreach ( get_users() as $user ) {
-			if ( ! ( $user instanceof \WP_User ) || self::can_edit_all_areas( $user->ID ) ) {
-				continue;
-			}
-			if ( ! user_can( $user, self::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
-				continue;
-			}
-			$rows[] = array_merge(
-				array(
-					'user_id' => $user->ID,
-					'login'   => $user->user_login,
-				),
-				self::scope_assignment_state( $user->ID )
-			);
-		}
-		return $rows;
-	}
-
-	/**
 	 * Ámbitos the user reaches: the profile ones and every descendant.
 	 *
 	 * Un servicio alcanza a sus áreas: quien tiene el término padre gestiona
@@ -622,6 +597,34 @@ final class ProcedureAccess {
 			return false;
 		}
 		return self::in_scope( $user_id, $post_id );
+	}
+
+	/**
+	 * Whether the user may duplicate this procedure, and under which ámbitos (PR 8 del PLAN-0003).
+	 *
+	 * Quien lo abre en el taller y puede crear procedimientos: duplicar es
+	 * leer el original y dar de alta otro. Por eso vale en cualquier estado,
+	 * histórico incluido —el original no se toca—, y quien no tiene ámbito no
+	 * duplica, igual que no crea.
+	 *
+	 * Los ámbitos del duplicado son los del original que quien duplica puede
+	 * poner (ADR-0025): con todos, todos; si no, los que alcanza su perfil. Si
+	 * no alcanza ninguno, el suyo, como en un alta normal.
+	 *
+	 * @param int        $user_id User ID.
+	 * @param int        $post_id Procedure ID.
+	 * @param array|null $areas   Set to the term IDs of prc_area of the duplicate; null when it may not.
+	 * @return bool
+	 */
+	public static function can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool {
+		$areas = null;
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
+			return false;
+		}
+		$suyos = self::post_areas( $post_id );
+		$areas = self::can_edit_all_areas( $user_id ) ? $suyos : array_values( array_intersect( $suyos, self::scope_areas( $user_id ) ) );
+		$areas = array() !== $areas ? $areas : self::user_areas( $user_id );
+		return true;
 	}
 
 	/**

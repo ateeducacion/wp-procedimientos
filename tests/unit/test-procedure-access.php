@@ -766,7 +766,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$user  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
 		$raw   = $area . ',' . $other;
 		update_user_meta( $user, ProcedureAccess::USER_AREA_META, $raw );
-		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$rows = array_column( \Prc\Admin\Settings::scope_diagnostics(), null, 'user_id' );
 		$this->assertSame( 'ambiguous', $rows[ $user ]['state'] );
 		$this->assertTrue( $rows[ $user ]['legacy'] );
 		$this->assertSame( $raw, get_user_meta( $user, ProcedureAccess::USER_AREA_META, true ) );

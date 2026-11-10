@@ -565,6 +565,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 					'email'      => 0,
 					'incomplete' => 0,
 					'conflict'   => 0,
+					'invalid'    => 0,
 				),
 			),
 			ApplicationExport::who_counts( $solicitudes ),

@@ -312,6 +312,10 @@ final class ApplicationOperations {
 		) as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
+		// Una por centro: si el centro presentó la suya entretanto, gana la suya.
+		if ( Applications::lost_race( $id, $procedure_id, $codigo ) ) {
+			return 0;
+		}
 
 		/**
 		 * An application has just been submitted on behalf of a school.

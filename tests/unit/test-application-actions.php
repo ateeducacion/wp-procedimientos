@@ -811,6 +811,66 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Hace que, la próxima vez que se cree una solicitud, otra petición
+	 * «gane» y cree antes la gemela de ese centro.
+	 *
+	 * @param int    $procedure Procedure ID.
+	 * @param int    $author    Author of the twin.
+	 * @param string $code      School code.
+	 * @return void
+	 */
+	private function gemela_en_medio( int $procedure, int $author, string $code ): void {
+		$pendiente = true;
+		add_filter(
+			'wp_insert_post_data',
+			function ( array $data ) use ( &$pendiente, $procedure, $author, $code ): array {
+				if ( $pendiente && 'prc_application' === $data['post_type'] ) {
+					$pendiente = false;
+					$this->application( $procedure, $author, $code );
+				}
+				return $data;
+			}
+		);
+	}
+
+	/**
+	 * Cuántas solicitudes publicadas tiene un centro en un procedimiento.
+	 *
+	 * @param int    $procedure Procedure ID.
+	 * @param string $code      School code.
+	 * @return int
+	 */
+	private function de_centro( int $procedure, string $code ): int {
+		$n = 0;
+		foreach ( Applications::for_procedure( $procedure ) as $post ) {
+			$n += (int) ( get_post_meta( $post->ID, ApplicationMetaKeys::CENTRE_CODE, true ) === $code );
+		}
+		return $n;
+	}
+
+	/**
+	 * Una por centro, también con dos envíos a la vez: si otra solicitud del
+	 * mismo centro se crea entre la comprobación y la escritura, la nueva se
+	 * borra y se dice por qué.
+	 */
+	public function test_a_twin_created_in_between_loses_the_race() {
+		$c   = $this->caso();
+		$sur = $this->school_head( 'C0002' );
+		$this->gemela_en_medio( $c['procedure'], $sur, 'C0002' );
+		$this->assertSame( 0, Applications::save( $c['procedure'], $sur, array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) ) );
+		$this->assertSame( Applications::DUPLICATE, Applications::why_not_saved( 'otro' ) );
+		$this->assertSame( 1, $this->de_centro( $c['procedure'], 'C0002' ) );
+
+		// Lo mismo en nombre de un centro.
+		$this->gemela_en_medio( $c['procedure'], $this->school_head( 'C0003' ), 'C0003' );
+		$this->assertSame( 0, ApplicationOperations::submit_for( $c['procedure'], $c['reviewer'], 'C0003', $this->dia( 3 ) ) );
+		$this->assertSame( 1, $this->de_centro( $c['procedure'], 'C0003' ) );
+
+		// Sin carrera, se guarda como siempre.
+		$this->assertGreaterThan( 0, Applications::save( $c['procedure'], $this->school_head( 'C0001' ), array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) ) );
+	}
+
+	/**
 	 * Con prórroga, modificar una solicitud revisada la devuelve a
 	 * «Presentada»: el formulario lo avisa y el historial lo dice, sin correo
 	 * de revisión. En un procedimiento resuelto, también se avisa.

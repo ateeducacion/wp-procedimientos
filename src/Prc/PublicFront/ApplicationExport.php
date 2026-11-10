@@ -72,7 +72,7 @@ final class ApplicationExport {
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
-		'review'       => array( 'state', 'note', 'score' ),
+		'review'       => array( 'state', 'note', 'score', 'internal_note' ),
 	);
 
 	/**

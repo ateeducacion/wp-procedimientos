@@ -32,6 +32,18 @@ final class CentreColumns {
 	public const KEYS = array( 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' );
 
 	/**
+	 * Every column that is offered but is not of the CSV «de siempre».
+	 *
+	 * Las del catálogo y la nota interna de quien revisa (PLAN-0003, PR 9):
+	 * solo salen si se eligen, también con «Todas las columnas».
+	 *
+	 * @return string[]
+	 */
+	public static function extras(): array {
+		return array_merge( self::KEYS, Applications::EXTRA_COLUMNS );
+	}
+
+	/**
 	 * The columns with their heading.
 	 *
 	 * @param bool $wanted Whether they are wanted at all; false gives none.
@@ -158,7 +170,7 @@ final class CentreColumns {
 	 * @return string[]
 	 */
 	public static function all_plus( array $ticked, array $always ): array {
-		$extras = array_values( array_intersect( self::KEYS, $ticked ) );
+		$extras = array_values( array_intersect( self::extras(), $ticked ) );
 		return array() === $extras ? array() : array_merge( $always, $extras );
 	}
 }

@@ -89,6 +89,8 @@ final class ApplyFormView {
 		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::choices( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::status_card( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		// La prórroga de esta solicitud, si la tiene (PLAN-0003, PR 9).
+		echo Shell::notice( 'info', (string) ( $m['withdraw']['late'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 
 		if ( true === $m['can_submit'] ) {
 			echo self::form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
@@ -100,6 +102,8 @@ final class ApplyFormView {
 		// La lista de personas, con su propia ventana: fuera del formulario de
 		// la solicitud, que puede estar cerrado mientras ella sigue abierta.
 		echo PeopleView::section( (array) ( $m['people'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		// Retirar la solicitud, al final: es lo último que se busca.
+		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 

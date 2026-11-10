@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
@@ -88,6 +89,7 @@ final class ApplyForm {
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
 		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
+		'retirada'   => 'Solicitud retirada: ya no cuenta para este procedimiento. Mientras el plazo siga abierto, puede volver a presentar una nueva.',
 	);
 
 	/**
@@ -219,7 +221,9 @@ final class ApplyForm {
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
-			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+			// La prórroga de esa solicitud la abre aunque el plazo esté cerrado.
+			ApplicationActions::is_late_open( (int) $existente )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -510,7 +514,8 @@ final class ApplyForm {
 			$m['why'] = self::window(
 				(string) $m['state'],
 				(string) ( $m['application']['state'] ?? '' ),
-				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+				ApplicationActions::is_late_open( (int) ( $m['application']['id'] ?? 0 ) )
 			);
 		}
 		$m['can_submit'] = '' === $m['why'];
@@ -613,8 +618,9 @@ final class ApplyForm {
 			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
 			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
 			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
-			// Una solicitud ya presentada ya aceptó los compromisos.
-			'accept'            => array() !== $application,
+			// Una solicitud ya presentada ya aceptó los compromisos; una
+			// presentada en nombre del centro, todavía no.
+			'accept'            => ApplicationOperations::accepted( $application ),
 			'answers'           => (array) ( $application['answers'] ?? array() ),
 		);
 	}
@@ -631,6 +637,8 @@ final class ApplyForm {
 		$m = self::model();
 		// La lista de personas va aparte: tiene su propia ventana (ADR-0041).
 		$m['people'] = PeopleForm::model( $m );
+		// Retirar y la prórroga, también aparte (PLAN-0003, PR 9).
+		$m['withdraw'] = WithdrawForm::model( $m );
 		return ApplyFormView::html( $m );
 	}
 }

@@ -1107,7 +1107,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 			),
 			$grupos['questions']
 		);
-		$this->assertSame( array( 'state', 'note', 'score' ), array_keys( $grupos['review'] ) );
+		$this->assertSame( array( 'state', 'note', 'score', 'internal_note' ), array_keys( $grupos['review'] ), 'la nota interna se ofrece, fuera de «Todas»' );
 		$this->assertSame( 'Puntos', $grupos['review']['score'] );
 
 		$lineas = $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'score', 'q2', 'q4:r1', 'q4:r2' ) ) );

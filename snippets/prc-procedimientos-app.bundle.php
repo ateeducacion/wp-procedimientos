@@ -24785,7 +24785,10 @@ final class Observe {
 
 		$filas = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT p.post_parent, COALESCE(m.meta_value, '') AS code FROM {$wpdb->posts} p LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = %s AND p.post_status = 'publish' AND p.post_parent IN ({$huecos})",
+
+
+
+				'SELECT p.post_parent, COALESCE(m.meta_value, \'\') AS code FROM ' . $wpdb->posts . ' p LEFT JOIN ' . $wpdb->postmeta . ' m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = %s AND p.post_status = \'publish\' AND p.post_parent IN (' . $huecos . ')',
 				array_merge( array( ApplicationMetaKeys::CENTRE_CODE, ApplicationPostType::POST_TYPE ), $procedure_ids )
 			)
 		);

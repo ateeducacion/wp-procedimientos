@@ -237,14 +237,17 @@ final class Observe {
 	private static function codes_by_procedure( array $procedure_ids ): array {
 		global $wpdb;
 		$huecos = implode( ',', array_fill( 0, count( $procedure_ids ), '%d' ) );
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- los huecos son %d y se preparan; contar por centro sin cargar cada solicitud.
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- los huecos son %d y se preparan; contar por centro sin cargar cada solicitud.
 		$filas = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT p.post_parent, COALESCE(m.meta_value, '') AS code FROM {$wpdb->posts} p LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = %s AND p.post_status = 'publish' AND p.post_parent IN ({$huecos})",
+				// Concatenado y no con «{$…}» dentro de la cadena: el validador de
+				// Code Snippets cuenta las llaves de una clase sin distinguir la
+				// interpolación, y la daba por cerrada antes de tiempo.
+				'SELECT p.post_parent, COALESCE(m.meta_value, \'\') AS code FROM ' . $wpdb->posts . ' p LEFT JOIN ' . $wpdb->postmeta . ' m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = %s AND p.post_status = \'publish\' AND p.post_parent IN (' . $huecos . ')',
 				array_merge( array( ApplicationMetaKeys::CENTRE_CODE, ApplicationPostType::POST_TYPE ), $procedure_ids )
 			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+		// phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
 		$out = array();
 		foreach ( (array) $filas as $fila ) {
 			$out[ (int) $fila->post_parent ][] = (string) $fila->code;

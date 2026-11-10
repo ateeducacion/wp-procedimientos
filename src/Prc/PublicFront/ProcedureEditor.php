@@ -125,6 +125,19 @@ final class ProcedureEditor {
 	public const FIELD_NOTIFY = 'prc_notify_on';
 
 	/**
+	 * Fields of the export dialog (ADR-0039).
+	 *
+	 * «Todas las columnas», las columnas una a una, la forma (una fila por
+	 * solicitud o por persona), el formato (CSV o fichero de alta de
+	 * usuarios) y, para ese fichero, quiénes salen.
+	 */
+	public const FIELD_EXPORT_ALL     = 'prc_export_all';
+	public const FIELD_EXPORT_COLUMNS = 'prc_export_columns';
+	public const FIELD_EXPORT_SHAPE   = 'prc_export_shape';
+	public const FIELD_EXPORT_FORMAT  = 'prc_export_format';
+	public const FIELD_EXPORT_WHO     = 'prc_export_who';
+
+	/**
 	 * Every operation this screen accepts by POST.
 	 *
 	 * @var string[]
@@ -397,7 +410,7 @@ final class ProcedureEditor {
 				return;
 			}
 			if ( self::OP_EXPORT === $op ) {
-				self::export( $procedure_id );
+				self::export( $procedure_id, $user_id );
 				return;
 			}
 			self::review( $procedure_id, $row_id );
@@ -1031,25 +1044,89 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Send the applications of this procedure down as a CSV file.
+	 * Send the applications of this procedure down, as the dialog asked.
 	 *
 	 * Va por POST y con nonce como cualquier otra acción, aunque no escriba
-	 * nada: un enlace en GET que descarga la lista entera de centros es justo
-	 * lo que no se quiere que se pueda pegar en un correo.
+	 * nada en el procedimiento: un enlace en GET que descarga la lista entera
+	 * de centros es justo lo que no se quiere que se pueda pegar en un correo.
+	 * Lo único que escribe es la elección, en la meta de quien exporta, para
+	 * que la próxima vez el diálogo salga como lo dejó (ADR-0039).
+	 *
+	 * Un envío sin los campos del diálogo —el de antes— exporta lo de antes:
+	 * todas las columnas, una fila por solicitud, en CSV.
 	 *
 	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who exports.
 	 * @return void
 	 */
-	private static function export( int $procedure_id ): void {
-		$cuerpo = Applications::csv( $procedure_id );
-		$nombre = Applications::filename( (string) get_post_field( 'post_title', $procedure_id ) );
+	private static function export( int $procedure_id, int $user_id ): void {
+		$eleccion = ApplicationExport::sanitize_choice( $procedure_id, self::export_request() );
+		ApplicationExport::remember( $user_id, $procedure_id, $eleccion );
+
+		$cuerpo = ApplicationExport::FORMAT_MOODLE === $eleccion['format']
+			? ApplicationExport::moodle( $procedure_id, array( 'who' => $eleccion['who'] ) )
+			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'] );
+		$nombre = ApplicationExport::filename( (string) get_post_field( 'post_title', $procedure_id ), $eleccion['format'] );
 
 		Shell::send_header( 'Content-Type: text/csv; charset=utf-8' );
 		Shell::send_header( 'Content-Disposition: attachment; filename="' . $nombre . '"' );
 		Shell::send_header( 'Content-Length: ' . strlen( $cuerpo ) );
 		Shell::send_header( 'Cache-Control: no-store, no-cache, must-revalidate' );
-		echo $cuerpo; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- es un CSV, no HTML; Applications::csv_lines() lo entrecomilla y desactiva las fórmulas.
+		echo $cuerpo; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- es un CSV, no HTML; ApplicationExport lo entrecomilla y desactiva las fórmulas.
 		Shell::leave();
+	}
+
+	/**
+	 * What the export dialog sent, in the shape ApplicationExport wants.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function export_request(): array {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
+		$listas = array();
+		foreach ( array( self::FIELD_EXPORT_COLUMNS, self::FIELD_EXPORT_WHO ) as $campo ) {
+			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cada clave pasa por sanitize_key() justo abajo.
+			$listas[ $campo ] = is_array( $valor ) ? array_map( 'sanitize_key', array_filter( $valor, 'is_string' ) ) : array();
+		}
+		$todas = ! empty( $_POST[ self::FIELD_EXPORT_ALL ] );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		return array(
+			'all'     => $todas,
+			'columns' => $listas[ self::FIELD_EXPORT_COLUMNS ],
+			'shape'   => sanitize_key( self::field( self::FIELD_EXPORT_SHAPE ) ),
+			'format'  => sanitize_key( self::field( self::FIELD_EXPORT_FORMAT ) ),
+			'who'     => $listas[ self::FIELD_EXPORT_WHO ],
+		);
+	}
+
+	/**
+	 * What the export dialog shows: the columns, the last choice and who
+	 * would be left out of the user upload file.
+	 *
+	 * La descarga es la respuesta del envío, así que no puede volver con un
+	 * aviso: cuántas personas se quedan fuera por no tener correo válido se
+	 * cuenta aquí, en el propio diálogo, antes de descargar (ADR-0039).
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who is looking.
+	 * @return array<string, mixed>
+	 */
+	private static function export_model( int $procedure_id, int $user_id ): array {
+		$quienes = array();
+		foreach ( ApplicationExport::who() as $clave => $rotulo ) {
+			$cuenta            = ApplicationExport::people( $procedure_id, array( $clave ) );
+			$quienes[ $clave ] = array(
+				'label'   => $rotulo,
+				'count'   => count( $cuenta['people'] ),
+				'skipped' => $cuenta['skipped'],
+			);
+		}
+		return array(
+			'groups'       => ApplicationExport::groups( $procedure_id ),
+			'group_labels' => ApplicationExport::group_labels(),
+			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
+			'who'          => $quienes,
+		);
 	}
 
 	/**
@@ -1175,6 +1252,7 @@ final class ProcedureEditor {
 			'q_max'                   => ProcedureQuestions::MAX,
 			'applications'            => array(),
 			'app_cols'                => array(),
+			'export'                  => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 		);
@@ -1295,6 +1373,7 @@ final class ProcedureEditor {
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
 			$m['applications'] = Applications::rows( $procedure_id );
+			$m['export']       = self::export_model( $procedure_id, $user_id );
 		}
 		return $m;
 	}

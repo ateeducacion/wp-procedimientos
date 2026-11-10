@@ -74,6 +74,11 @@ class Test_Provision extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_Term::class, $area );
 		$this->assertSame( 0, $servicio->parent );
 		$this->assertSame( $servicio->term_id, $area->parent, 'el área cuelga de su servicio' );
+		foreach ( array( 'ambito-1', 'subambito-1a', 'subambito-1b', 'subambito-1c', 'ambito-2', 'subambito-2a', 'subambito-2b' ) as $slug ) {
+			$term = get_term_by( 'slug', $slug, ProcedureTaxonomies::AREA );
+			$this->assertSame( $slug . '@example.org', get_term_meta( $term->term_id, ProcedureTaxonomies::EMAIL, true ) );
+			$this->assertTrue( wp_attachment_is_image( (int) get_term_meta( $term->term_id, ProcedureTaxonomies::IMAGE_ID, true ) ) );
+		}
 
 		$this->assertInstanceOf( WP_Term::class, get_term_by( 'slug', '2026-2027', ProcedureTaxonomies::COURSE ) );
 	}
@@ -186,6 +191,17 @@ class Test_Provision extends WP_UnitTestCase {
 				'users'        => count_users()['total_users'],
 				'procedures'   => $posts( ProcedurePostType::POST_TYPE ),
 				'applications' => $posts( ApplicationPostType::POST_TYPE ),
+				'demo_images'  => count(
+					get_posts(
+						array(
+							'post_type'   => 'attachment',
+							'post_status' => 'inherit',
+							'numberposts' => -1,
+							'meta_key'    => '_prc_demo_scope_image', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- el test cuenta el adjunto único de demostración.
+							'meta_value'  => '1', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+						)
+					)
+				),
 			);
 		};
 

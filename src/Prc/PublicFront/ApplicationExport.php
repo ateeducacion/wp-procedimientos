@@ -12,6 +12,7 @@ use Prc\Domain\ProcedureInput;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
 
 /**
  * Exportar a medida las solicitudes de un procedimiento (ADR-0039).
@@ -68,6 +69,31 @@ final class ApplicationExport {
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'review'       => array( 'state', 'note' ),
 	);
+
+	/**
+	 * Hook registration.
+	 *
+	 * @return void
+	 */
+	public static function register(): void {
+		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
+	}
+
+	/**
+	 * Forget every remembered choice of a procedure deleted for good.
+	 *
+	 * Mandarlo a la papelera no borra nada: puede volver.
+	 *
+	 * @param int           $post_id Post being deleted.
+	 * @param \WP_Post|null $post    The post, when WordPress passes it.
+	 * @return void
+	 */
+	public static function on_delete( int $post_id, $post = null ): void {
+		$tipo = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
+		if ( ProcedurePostType::POST_TYPE === $tipo ) {
+			delete_metadata( 'user', 0, self::CHOICE_META . $post_id, '', true );
+		}
+	}
 
 	// ─── las columnas ──────────────────────────────────────────────────────
 

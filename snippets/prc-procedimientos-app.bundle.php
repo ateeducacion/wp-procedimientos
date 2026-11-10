@@ -8279,6 +8279,7 @@ use Prc\Domain\ProcedureInput;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
 
 
 
@@ -8336,6 +8337,31 @@ final class ApplicationExport {
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'review'       => array( 'state', 'note' ),
 	);
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_delete( int $post_id, $post = null ): void {
+		$tipo = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
+		if ( ProcedurePostType::POST_TYPE === $tipo ) {
+			delete_metadata( 'user', 0, self::CHOICE_META . $post_id, '', true );
+		}
+	}
 
 
 
@@ -18521,6 +18547,7 @@ use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -18574,6 +18601,9 @@ final class App {
 
 
 		ApplicationFiles::class,
+
+
+		ApplicationExport::class,
 		ApplyForm::class,
 		MyCentre::class,
 		Workspace::class,

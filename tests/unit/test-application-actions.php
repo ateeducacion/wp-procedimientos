@@ -9,6 +9,7 @@
 use Prc\Access\ApplicationActions;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationFilter;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -20,6 +21,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationHistory;
 use Prc\PublicFront\ApplicationLog;
 use Prc\PublicFront\ApplicationOperations;
+use Prc\PublicFront\ApplicationQuery;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\MyCentre;
@@ -787,6 +789,26 @@ class Test_Application_Actions extends WP_UnitTestCase {
 		$this->assertSame( $sur, (int) get_post_field( 'post_author', $id ), 'quien la completa pasa a presentarla' );
 		$this->assertSame( $c['reviewer'], (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) );
 		$this->assertSame( array( ApplicationHistory::CREATED_FOR, ApplicationHistory::SUBMITTED ), $this->eventos( $id ) );
+	}
+
+	/**
+	 * Mientras el centro no la complete, una presentada en su nombre cuenta
+	 * como incompleta, y deja de contar cuando la guarda.
+	 */
+	public function test_one_submitted_on_behalf_is_incomplete_until_the_school_saves_it() {
+		$c  = $this->caso( false );
+		$id = ApplicationOperations::submit_for( $c['procedure'], $c['reviewer'], 'C0002', $this->dia( 5 ) );
+		$r  = ApplicationQuery::run( $c['procedure'], ApplicationFilter::sanitize( array() ) );
+		$this->assertTrue( $r['may_be_incomplete'] );
+		$this->assertSame( 1, $r['incomplete'] );
+		$this->assertSame( array( 'Pendiente de que el centro la complete' ), $r['reasons'][ $id ] );
+		$solo = ApplicationQuery::run( $c['procedure'], ApplicationFilter::sanitize( array( ApplicationFilter::ARG_INCOMPLETE => '1' ) ) );
+		$this->assertSame( array( $id ), $solo['ids'] );
+		$this->assertStringContainsString( 'Pendiente de que el centro la complete', $this->panel( $c['reviewer'], $c['procedure'] ) );
+
+		Applications::save( $c['procedure'], $this->school_head( 'C0002' ), array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) );
+		$r = ApplicationQuery::run( $c['procedure'], ApplicationFilter::sanitize( array() ) );
+		$this->assertSame( 0, $r['incomplete'] );
 	}
 
 	/**

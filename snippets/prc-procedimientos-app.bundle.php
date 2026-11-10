@@ -4124,11 +4124,12 @@ final class ApplicationCompleteness {
 
 
 
-	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review ): array {
+
+	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review, bool $pending = false ): array {
 		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
 			return array();
 		}
-		$out  = array();
+		$out  = $pending ? array( 'Pendiente de que el centro la complete' ) : array();
 		$spec = PeopleSpec::sanitize( $spec );
 		$hay  = ApplicationPeople::rows( $people );
 		if ( ! ApplicationPeople::is_complete( $spec, $hay ) ) {
@@ -15646,6 +15647,7 @@ final class ApplicationQuery {
 		ApplicationMetaKeys::CENTRE_NAME,
 		ApplicationMetaKeys::APPLICANT_TYPE,
 		ApplicationMetaKeys::COORDINATOR,
+		ApplicationMetaKeys::CREATED_BY,
 	);
 
 
@@ -15665,7 +15667,7 @@ final class ApplicationQuery {
 		$filter   = ApplicationFilter::against( $filter, $opciones );
 
 		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
-		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
 		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
 		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
@@ -15727,9 +15729,10 @@ final class ApplicationQuery {
 
 	private static function census( int $procedure_id, array $scope, bool $incomplete = true ): array {
 		$vacio = array(
-			'posts'  => array(),
-			'stored' => array(),
-			'check'  => false,
+			'posts'   => array(),
+			'stored'  => array(),
+			'check'   => false,
+			'pending' => array(),
 		);
 		if ( $procedure_id <= 0 ) {
 			return $vacio;
@@ -15776,11 +15779,33 @@ final class ApplicationQuery {
 				}
 			}
 		}
+		$pendientes = self::pending( $por_id, $stored );
 		return array(
-			'posts'  => $por_id,
-			'stored' => array_intersect_key( $stored, $por_id ),
-			'check'  => $mirar,
+			'posts'   => $por_id,
+			'stored'  => array_intersect_key( $stored, $por_id ),
+
+
+			'check'   => $mirar || array() !== $pendientes,
+			'pending' => $pendientes,
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function pending( array $posts, array $stored ): array {
+		$out = array();
+		foreach ( $posts as $id => $post ) {
+			$creada_por = (int) ( $stored[ $id ][ ApplicationMetaKeys::CREATED_BY ] ?? 0 );
+			if ( $creada_por > 0 && (int) $post->post_author === $creada_por ) {
+				$out[ $id ] = true;
+			}
+		}
+		return $out;
 	}
 
 
@@ -15886,13 +15911,14 @@ final class ApplicationQuery {
 
 
 
-	private static function reasons( int $procedure_id, array $stored ): array {
+
+	private static function reasons( int $procedure_id, array $stored, array $pending = array() ): array {
 		$spec      = self::people_spec( $procedure_id );
 		$preguntas = Applications::questions( $procedure_id );
 		$hoy       = ProcedureState::today();
 		$out       = array();
 		foreach ( $stored as $id => $meta ) {
-			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ], $preguntas, $meta[ ApplicationMetaKeys::FILES ], $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) );
+			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ] ?? '', $preguntas, $meta[ ApplicationMetaKeys::FILES ] ?? '', $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ), isset( $pending[ $id ] ) );
 			if ( array() !== $motivos ) {
 				$out[ $id ] = $motivos;
 			}

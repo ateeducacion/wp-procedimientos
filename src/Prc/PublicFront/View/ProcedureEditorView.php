@@ -82,6 +82,8 @@ final class ProcedureEditorView {
 			echo self::publish_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_NOTICES === $panel ) {
 			echo self::notices_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
+			echo PeopleView::spec_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::custom_code_panel( $m );
@@ -1138,6 +1140,7 @@ final class ProcedureEditorView {
 					<dd><?php echo $respuesta; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado justo arriba. ?></dd>
 				<?php endforeach; ?>
 			</dl>
+			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />

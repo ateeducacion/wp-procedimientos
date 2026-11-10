@@ -210,6 +210,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
+				ProcedureEditor::PANEL_PEOPLE,
 				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_NOTICES,
 				ProcedureEditor::PANEL_CODE,

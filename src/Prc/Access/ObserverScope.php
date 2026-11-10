@@ -40,16 +40,42 @@ final class ObserverScope {
 	public const META_KEY = 'prc_zone';
 
 	/**
-	 * Columns a read-only consultation never shows, nor exports, whatever the
-	 * procedure ticks: the DNI or NIE of anybody and the review note.
+	 * Columns a read-only consultation may show besides the questions: a
+	 * closed list, written by hand (ADR-0043).
 	 *
-	 * El DNI no es de la zona: es de cada persona, y lo necesita quien revisa,
-	 * no quien acompaña al centro. La nota de revisión es la conversación
-	 * entre quien gestiona y el centro (ADR-0043).
+	 * Es una lista de las **permitidas** y no de las prohibidas: una columna
+	 * que otro cambio añada a la exportación no llega a la consulta hasta que
+	 * alguien la escriba aquí. Fuera, a propósito, el DNI o NIE de cualquiera
+	 * (`coordinator_dni`, `person_dni`) —es de cada persona y lo necesita
+	 * quien revisa, no quien acompaña al centro— y la nota de revisión
+	 * (`note`), que es la conversación entre quien gestiona y el centro.
 	 *
 	 * @var string[]
 	 */
-	public const FORBIDDEN_COLUMNS = array( 'coordinator_dni', 'person_dni', 'note' );
+	public const ALLOWED_COLUMNS = array(
+		'date',
+		'centre',
+		'code',
+		'island',
+		'municipality',
+		'centre_type',
+		'ownership',
+		'zone',
+		'zone_code',
+		'applicant',
+		'email',
+		'position',
+		'coordinator',
+		'coordinator_email',
+		'person_name',
+		'person_surname',
+		'person_email',
+		'person_phone',
+		'person_role',
+		'person_group',
+		'state',
+		'score',
+	);
 
 	/**
 	 * Groups of columns a consultation shows when the procedure ticked none.
@@ -119,20 +145,37 @@ final class ObserverScope {
 		if ( '' === $zona || '' === $meta ) {
 			return array();
 		}
-		$candidatos = get_users(
+		// Solo los ID, y la meta de zona de esas cuentas en una consulta: no
+		// se cargan las demás metas de cada una.
+		$ids = get_users(
 			array(
 				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
-				'fields'       => 'all_with_meta',
+				'fields'       => 'ID',
 				'meta_key'     => $meta, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- solo quien tiene zona en el perfil la consulta.
 				'meta_compare' => 'EXISTS',
 			)
 		);
-		$out        = array();
-		foreach ( (array) $candidatos as $user ) {
-			if ( $user instanceof \WP_User && in_array( $zona, self::zones_for( (int) $user->ID ), true ) ) {
-				$out[] = (int) $user->ID;
+		$ids = array_map( 'intval', (array) $ids );
+		if ( array() === $ids ) {
+			return array();
+		}
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- los huecos son %d y se preparan; una sola meta de unas pocas cuentas.
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ')',
+				array_merge( array( $meta ), $ids )
+			)
+		);
+		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
+				$out[ (int) $fila->user_id ] = (int) $fila->user_id;
 			}
 		}
+		$out = array_values( $out );
 		return $out;
 	}
 
@@ -183,15 +226,31 @@ final class ObserverScope {
 	}
 
 	/**
-	 * Groups of columns without what a consultation never shows. Pure.
+	 * Whether a consultation may show this column: one of the closed list, or
+	 * a question (`q4`) or one row of a grid question (`q4:r1`). Pure.
+	 *
+	 * @param string $column Column key.
+	 * @return bool
+	 */
+	public static function is_allowed( string $column ): bool {
+		return in_array( $column, self::ALLOWED_COLUMNS, true ) || (bool) preg_match( '/^q[1-9][0-9]*(:r[1-9][0-9]*)?$/', $column );
+	}
+
+	/**
+	 * Groups of columns with only what a consultation may show. Pure.
 	 *
 	 * @param array<string, array<string, string>> $groups Group => (column => heading).
-	 * @return array<string, array<string, string>> The same, without the forbidden columns nor the groups left empty.
+	 * @return array<string, array<string, string>> The same, with only the allowed columns and without the groups left empty.
 	 */
 	public static function allowed( array $groups ): array {
 		$out = array();
 		foreach ( $groups as $grupo => $columnas ) {
-			$quedan = array_diff_key( (array) $columnas, array_flip( self::FORBIDDEN_COLUMNS ) );
+			$quedan = array();
+			foreach ( (array) $columnas as $clave => $rotulo ) {
+				if ( self::is_allowed( (string) $clave ) ) {
+					$quedan[ (string) $clave ] = $rotulo;
+				}
+			}
 			if ( array() !== $quedan ) {
 				$out[ (string) $grupo ] = $quedan;
 			}
@@ -201,11 +260,12 @@ final class ObserverScope {
 
 	/**
 	 * The columns a consultation shows: the chosen ones that are allowed, in
-	 * the order of the groups; the default groups when none is. Pure.
+	 * the order of the groups; the allowed ones of the default groups when
+	 * none is. Pure.
 	 *
 	 * @param mixed                                $chosen Stored choice: column keys.
 	 * @param array<string, array<string, string>> $groups Group => (column => heading), every one.
-	 * @return array<string, string> Column => heading; never a forbidden one.
+	 * @return array<string, string> Column => heading; only allowed ones.
 	 */
 	public static function columns( $chosen, array $groups ): array {
 		$permitidas = self::allowed( $groups );

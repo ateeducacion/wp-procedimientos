@@ -392,8 +392,10 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->assertFalse( user_can( $uid, ProcedureAccess::CAP_EDIT_PEOPLE, $caso['c2'] ) );
 		$this->assertFalse( ProcedureAccess::can_deliver( $uid, $caso['c2'], array( 'key' => 'q1' ) ) );
 		$this->assertFalse( user_can( $uid, 'edit_post', $caso['c2'] ) );
-		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $caso['c2'], true ), 'sin documentos permitidos, ni los de su zona' );
-		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $suya, true ), 'los de su centro, siempre' );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $caso['c2'], ProcedureAccess::VIEW_DOCUMENT, 'q1' ), 'sin documentos permitidos, ni los de su zona' );
+		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $suya, ProcedureAccess::VIEW_DOCUMENT, 'q1' ), 'los de su centro, siempre' );
+		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $suya, ProcedureAccess::VIEW_OWN ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $caso['c2'], ProcedureAccess::VIEW_OWN ), 'la de su zona no es suya' );
 		$this->assertArrayNotHasKey( 'C0002', \Prc\Access\CentreScope::codes_for( $uid ) );
 	}
 
@@ -433,17 +435,99 @@ class Test_Observer_Access extends WP_UnitTestCase {
 	// ─── documentos y exportación ──────────────────────────────────────────
 
 	/**
-	 * Los documentos de su zona se descargan solo si el procedimiento lo permite.
+	 * Los documentos de su zona se descargan solo si el procedimiento lo
+	 * permite, y solo los de preguntas que la consulta enseña.
 	 */
-	public function test_documents_follow_the_procedure() {
+	public function test_documents_follow_the_procedure_and_the_columns() {
 		$sin = $this->caso();
 		$uid = $this->observer( array( 'Z0002' ) );
 		$this->assertTrue( user_can( $uid, 'read_post', $sin['c2'] ) );
-		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], true ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], ProcedureAccess::VIEW_DOCUMENT, 'q1' ) );
 
 		update_post_meta( $sin['procedure'], ProcedureMetaKeys::OBSERVER_FILES, true );
-		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $sin['c2'], true ) );
-		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c1'], true ), 'ni con documentos permitidos, los de otra zona' );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], ProcedureAccess::VIEW_DOCUMENT, 'q1' ), 'la pregunta no está entre sus columnas' );
+
+		update_post_meta( $sin['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'code', 'q1' ) );
+		$this->assertTrue( ProcedureAccess::can_view_application( $uid, $sin['c2'], ProcedureAccess::VIEW_DOCUMENT, 'q1' ) );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], ProcedureAccess::VIEW_DOCUMENT, 'q2' ), 'otra pregunta, no' );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c2'], ProcedureAccess::VIEW_DOCUMENT ), 'sin pregunta, no' );
+		$this->assertFalse( ProcedureAccess::can_view_application( $uid, $sin['c1'], ProcedureAccess::VIEW_DOCUMENT, 'q1' ), 'ni con documentos permitidos, los de otra zona' );
+	}
+
+	/**
+	 * Las columnas que se pueden enseñar son una lista cerrada: las de hoy,
+	 * sin DNI ni nota, más las de las preguntas.
+	 */
+	public function test_the_allowed_columns_are_a_closed_list() {
+		$this->assertSame(
+			array( 'date', 'centre', 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code', 'applicant', 'email', 'position', 'coordinator', 'coordinator_email', 'person_name', 'person_surname', 'person_email', 'person_phone', 'person_role', 'person_group', 'state', 'score' ),
+			ObserverScope::ALLOWED_COLUMNS
+		);
+		foreach ( array( 'q1', 'q40', 'q4:r1', 'code' ) as $clave ) {
+			$this->assertTrue( ObserverScope::is_allowed( $clave ), $clave );
+		}
+		foreach ( array( 'coordinator_dni', 'person_dni', 'note', 'q', 'q1:x', 'quiz', 'secreto_nuevo', 'Q1' ) as $clave ) {
+			$this->assertFalse( ObserverScope::is_allowed( $clave ), $clave );
+		}
+	}
+
+	/**
+	 * Una columna que otro PR añada a la exportación no se ofrece, no se
+	 * guarda y no se enseña hasta que alguien la permita a mano.
+	 */
+	public function test_a_new_export_column_is_not_offered_until_allowed() {
+		$grupos = array(
+			'centre' => array(
+				'code'          => 'Código',
+				'secreto_nuevo' => 'Dato nuevo de otro PR',
+			),
+		);
+		$this->assertSame( array( 'centre' => array( 'code' => 'Código' ) ), ObserverScope::allowed( $grupos ) );
+		$this->assertSame( array( 'code' => 'Código' ), ObserverScope::columns( array( 'secreto_nuevo', 'code' ), $grupos ) );
+
+		$caso = $this->caso();
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'secreto_nuevo', 'code' ) );
+		$this->assertSame( array( 'code' ), get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, true ) );
+	}
+
+	/**
+	 * Lo que el panel ofrece en un procedimiento con lista de personas y
+	 * preguntas: exactamente la lista cerrada más sus preguntas.
+	 */
+	public function test_the_panel_offers_exactly_the_allowed_columns() {
+		$caso      = $this->caso(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Docente',
+						),
+					),
+				),
+				ProcedureMetaKeys::QUESTIONS   => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Memoria',
+						'type'  => 'file',
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Modalidad',
+						'type'  => 'text',
+					),
+				),
+			)
+		);
+		$ofrecidas = array();
+		foreach ( \Prc\PublicFront\ObserveSettings::offered( $caso['procedure'] ) as $columnas ) {
+			$ofrecidas = array_merge( $ofrecidas, array_keys( $columnas ) );
+		}
+		sort( $ofrecidas );
+		$esperadas = array_merge( array_diff( ObserverScope::ALLOWED_COLUMNS, array( 'score' ) ), array( 'q1', 'q2' ) );
+		sort( $esperadas );
+		$this->assertSame( $esperadas, $ofrecidas );
 	}
 
 	/**

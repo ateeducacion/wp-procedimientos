@@ -179,8 +179,9 @@ final class ProcedureMetaKeys {
 
 	/**
 	 * Qué columnas de la exportación enseña la consulta. Vacía, las de
-	 * solicitud, centro y coordinación; el DNI y la nota, nunca
-	 * ({@see \Prc\Access\ObserverScope::FORBIDDEN_COLUMNS}).
+	 * solicitud, centro y coordinación; solo las de una lista cerrada más
+	 * las preguntas, sin el DNI ni la nota
+	 * ({@see \Prc\Access\ObserverScope::ALLOWED_COLUMNS}).
 	 */
 	public const OBSERVER_COLUMNS = 'prc_observer_columns';
 

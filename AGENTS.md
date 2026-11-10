@@ -119,6 +119,7 @@ src/Prc/
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
 ├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
 ├── PublicFront/People.php                  La lista de personas: alta, cambio y baja de fila en fila, relee al escribir (ADR-0041)
+├── PublicFront/PeopleExport.php            Las columnas y filas que la lista de personas añade a la exportación
 ├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
 ├── PublicFront/PeopleSpecPanel.php         El panel «Personas» del taller y la lista en la revisión
 ├── PublicFront/View/HomeView.php           Pinta la portada

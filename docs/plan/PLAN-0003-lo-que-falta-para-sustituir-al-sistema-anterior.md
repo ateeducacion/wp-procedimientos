@@ -278,8 +278,10 @@ copia de todo `procedure_created` y `application_received`). Con
   `PublicFront/ApplicationLog.php`, `PublicFront/People.php` (la lista,
   escrita de fila en fila), `PublicFront/PeopleForm.php` (la sección de la
   solicitud y su POST), `PublicFront/PeopleSpecPanel.php` (el panel del
-  taller) y `PublicFront/View/PeopleView.php`: sin ellos `ApplyForm`,
-  `ProcedureEditor` y sus vistas pasan más del umbral de PHPMD.
+  taller), `PublicFront/PeopleExport.php` (columnas y filas de la
+  exportación) y `PublicFront/View/PeopleView.php`: sin ellos `ApplyForm`,
+  `ProcedureEditor`, `ApplicationExport` y sus vistas pasan más del umbral
+  de PHPMD.
 - Modificar `Meta/*MetaKeys.php` y registros, `ApplyForm.php` y su vista,
   `ProcedureEditor.php` y su vista (panel «Personas» y revisión),
   `MyCentre.php` y su vista, `ProcedureAccess.php`, `ApplicationExport.php`,

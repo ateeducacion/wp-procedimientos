@@ -5944,6 +5944,16 @@ final class ProcedureAccess {
 
 
 
+
+
+
+	private static $rest_checked = 0;
+
+
+
+
+
+
 	public static function register(): void {
 		add_filter( 'map_meta_cap', array( self::class, 'map_meta_cap' ), 10, 4 );
 		add_filter( 'rest_pre_insert_prc_procedure', array( self::class, 'validate_rest_areas' ), 10, 2 );
@@ -5951,6 +5961,9 @@ final class ProcedureAccess {
 		add_filter( 'wp_insert_post_data', array( self::class, 'guard_parent' ), 10, 2 );
 		add_action( 'save_post_' . ProcedurePostType::POST_TYPE, array( self::class, 'stamp_area' ), 20 );
 	}
+
+
+
 
 
 
@@ -5981,10 +5994,56 @@ final class ProcedureAccess {
 		$post_id = absint( $postarr['ID'] ?? 0 );
 		if ( $post_id > 0 ) {
 			$data['post_parent'] = (int) get_post_field( 'post_parent', $post_id );
+
+
+
+
+			if ( ProcedurePostType::POST_TYPE === $tipo ) {
+				$por_rest           = self::$rest_checked === $post_id;
+				self::$rest_checked = 0;
+				if ( ! $por_rest && self::is_unready_publication( $post_id, (string) ( $data['post_status'] ?? '' ), $postarr['tax_input'][ ProcedureTaxonomies::COURSE ] ?? null ) ) {
+					$data['post_status'] = 'draft';
+				}
+			}
 		} elseif ( ProcedurePostType::POST_TYPE === $tipo ) {
 			$data['post_parent'] = 0;
 		}
 		return $data;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function is_unready_publication( int $post_id, string $status, $course, ?array &$why = null ): bool {
+		$why        = array();
+		$publicados = array( 'publish', 'future' );
+		if ( ! in_array( $status, $publicados, true ) || ( $post_id > 0 && in_array( get_post_status( $post_id ), $publicados, true ) ) ) {
+			return false;
+		}
+		if ( null === $course ) {
+			$course = $post_id > 0 ? wp_get_post_terms( $post_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ) : array();
+		}
+		$curso = 0;
+		foreach ( is_array( $course ) ? $course : explode( ',', (string) $course ) as $valor ) {
+			$term = is_numeric( $valor ) ? get_term( (int) $valor, ProcedureTaxonomies::COURSE ) : get_term_by( 'name', trim( (string) $valor ), ProcedureTaxonomies::COURSE );
+			if ( $term instanceof \WP_Term && 0 === $curso ) {
+				$curso = (int) $term->term_id;
+			}
+		}
+		$preguntas = ProcedureQuestions::sanitize( $post_id > 0 ? get_post_meta( $post_id, ProcedureMetaKeys::QUESTIONS, true ) : array() );
+		$why       = ProcedureInput::not_ready( $curso, $preguntas );
+		return array() !== $why;
 	}
 
 
@@ -6014,26 +6073,30 @@ final class ProcedureAccess {
 			return $prepared;
 		}
 		$post_id = absint( $request->get_url_params()['id'] ?? 0 );
-		if ( ! $request->has_param( ProcedureTaxonomies::AREA ) ) {
-			if ( $post_id > 0 || self::can_edit_all_areas() ) {
-				return $prepared;
-			}
+		$final   = null;
+		if ( $request->has_param( ProcedureTaxonomies::AREA ) ) {
+			$final = self::resolve_area_assignment( $post_id, (array) $request->get_param( ProcedureTaxonomies::AREA ) );
+		} elseif ( 0 === $post_id && ! self::can_edit_all_areas() ) {
 			$assigned = self::user_areas();
-			if ( array() === $assigned ) {
-				return new \WP_Error( 'prc_area_forbidden', self::scope_assignment_message( get_current_user_id() ), array( 'status' => 403 ) );
-			}
-			$requested = $assigned;
-		} else {
-			$requested = (array) $request->get_param( ProcedureTaxonomies::AREA );
+			$final    = array() === $assigned
+				? new \WP_Error( 'prc_area_forbidden', self::scope_assignment_message( get_current_user_id() ), array( 'status' => 403 ) )
+				: self::resolve_area_assignment( 0, $assigned );
 		}
-		$final = self::resolve_area_assignment( $post_id, $requested );
 		if ( is_wp_error( $final ) ) {
 			return $final;
 		}
 		if ( 0 === $post_id && ! self::can_edit_all_areas() && in_array( $request->get_param( 'status' ), array( 'publish', 'future', 'private' ), true ) ) {
 			return new \WP_Error( 'prc_scope_draft_first', 'Cree el procedimiento como borrador antes de publicarlo, para que tenga ámbito desde el principio.', array( 'status' => 400 ) );
 		}
-		$request->set_param( ProcedureTaxonomies::AREA, $final );
+
+		$faltan = array();
+		if ( self::is_unready_publication( $post_id, (string) $request->get_param( 'status' ), $request->has_param( ProcedureTaxonomies::COURSE ) ? $request->get_param( ProcedureTaxonomies::COURSE ) : null, $faltan ) ) {
+			return new \WP_Error( 'prc_not_ready', 'Todavía no se puede publicar. ' . implode( ' ', $faltan ), array( 'status' => 400 ) );
+		}
+		self::$rest_checked = $post_id;
+		if ( null !== $final ) {
+			$request->set_param( ProcedureTaxonomies::AREA, $final );
+		}
 		return $prepared;
 	}
 

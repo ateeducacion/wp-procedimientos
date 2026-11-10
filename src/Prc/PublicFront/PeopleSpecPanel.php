@@ -134,15 +134,18 @@ final class PeopleSpecPanel {
 	 * The people and history of each application, for the review in the
 	 * «Solicitudes» panel.
 	 *
-	 * @param \WP_Post[] $applications Applications already loaded.
+	 * El enlace al historial conserva el filtro y la página de la tabla.
+	 *
+	 * @param \WP_Post[]            $applications Applications already loaded.
+	 * @param array<string, string> $args         Query args of the table, already URL-encoded.
 	 * @return array<int, array<string, mixed>> Application ID => what PeopleForm::review() returns.
 	 */
-	public static function reviews( array $applications ): array {
+	public static function reviews( array $applications, array $args = array() ): array {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige qué historial se lee; leerlo lo autoriza el panel.
 		$pedido = absint( wp_unslash( $_GET[ self::ARG_HISTORY ] ?? 0 ) );
 		$out    = array();
 		foreach ( $applications as $solicitud ) {
-			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido );
+			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido, $args );
 		}
 		return $out;
 	}

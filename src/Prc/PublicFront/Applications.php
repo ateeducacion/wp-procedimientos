@@ -51,15 +51,6 @@ final class Applications {
 	 */
 	public const KEY_FILES = '_files';
 
-	/**
-	 * Columns read from the catalogue when the row is painted, never stored
-	 * in the application (ADR-0042). They are offered by the export, and are
-	 * not part of the CSV «de siempre».
-	 *
-	 * @var string[]
-	 */
-	public const CENTRE_COLUMNS = array( 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' );
-
 	// ─── leer ──────────────────────────────────────────────────────────────
 
 	/**
@@ -327,7 +318,7 @@ final class Applications {
 		} elseif ( ! isset( CentreScope::codes_for( $user_id )[ $code ] ) ) {
 			$code = '';
 		}
-		$centro = '' !== $code ? CentreCatalog::find( $code ) : array();
+		$centro = CentreCatalog::find( $code );
 		return array(
 			'code'      => $code,
 			'name'      => (string) ( $centro['name'] ?? '' ),
@@ -605,7 +596,7 @@ final class Applications {
 	 * aquí una columna; la exportación la abre en una por fila.
 	 *
 	 * Con `$centre`, detrás del código van los atributos del centro que se leen
-	 * del catálogo ({@see CENTRE_COLUMNS}); sin él, las de siempre.
+	 * del catálogo ({@see CentreColumns}); sin él, las de siempre.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
 	 * @param bool                             $centre    Whether to add the catalogue columns.
@@ -616,7 +607,7 @@ final class Applications {
 			'centre' => 'Centro',
 			'code'   => 'Código',
 		);
-		$out += $centre ? self::centre_columns() : array();
+		$out += CentreColumns::columns( $centre );
 		$out += array(
 			'date'              => 'Fecha',
 			'applicant'         => 'Presentada por',
@@ -636,79 +627,6 @@ final class Applications {
 	}
 
 	/**
-	 * The catalogue columns of the centre, with their heading.
-	 *
-	 * @return array<string, string>
-	 */
-	public static function centre_columns(): array {
-		$zona = self::zone_label();
-		return array(
-			'island'       => 'Isla',
-			'municipality' => 'Municipio',
-			'centre_type'  => 'Tipo de centro',
-			'ownership'    => 'Titularidad',
-			'zone'         => $zona,
-			'zone_code'    => $zona . ' (código)',
-		);
-	}
-
-	/**
-	 * What people call the zone of a centre on this installation.
-	 *
-	 * @return string
-	 */
-	public static function zone_label(): string {
-		/**
-		 * Filter the label of the zone a centre is attached to.
-		 *
-		 * @param string $label Label. Default «Zona».
-		 */
-		$rotulo = apply_filters( 'prc_zone_label', 'Zona' );
-		$rotulo = is_string( $rotulo ) ? trim( wp_strip_all_tags( $rotulo ) ) : '';
-		return '' !== $rotulo ? $rotulo : 'Zona';
-	}
-
-	/**
-	 * What the catalogue says today about the centre of a code.
-	 *
-	 * Se lee al pintar o exportar y no se copia a la solicitud: si el centro
-	 * cambia de zona, la solicitud lo dice al día siguiente. Es lo que leen
-	 * los filtros por isla y por zona (ADR-0042).
-	 *
-	 * @param string                                   $code  School code.
-	 * @param array<string, array<string, mixed>>|null $index {@see CentreCatalog::index()}, when already read; null to look the code up.
-	 * @return array{island:string, municipality:string, type:string, ownership:string, zone:string, zone_name:string} Every field empty when the code is not in the catalogue.
-	 */
-	public static function centre_attributes( string $code, ?array $index = null ): array {
-		$code   = trim( $code );
-		$centro = '' === $code ? array() : ( null === $index ? CentreCatalog::find( $code ) : (array) ( $index[ $code ] ?? array() ) );
-		$out    = array();
-		foreach ( array( 'island', 'municipality', 'type', 'ownership', 'zone', 'zone_name' ) as $campo ) {
-			$out[ $campo ] = (string) ( $centro[ $campo ] ?? '' );
-		}
-		return $out;
-	}
-
-	/**
-	 * The catalogue cells of one row.
-	 *
-	 * @param string                                   $code  School code.
-	 * @param array<string, array<string, mixed>>|null $index Catalogue index, or null.
-	 * @return array<string, string> Keys of {@see CENTRE_COLUMNS}.
-	 */
-	private static function centre_cells( string $code, ?array $index ): array {
-		$centro = self::centre_attributes( $code, $index );
-		return array(
-			'island'       => $centro['island'],
-			'municipality' => $centro['municipality'],
-			'centre_type'  => $centro['type'],
-			'ownership'    => ProcedureMetaKeys::ownership_name( $centro['ownership'] ),
-			'zone'         => $centro['zone_name'],
-			'zone_code'    => $centro['zone'],
-		);
-	}
-
-	/**
 	 * The applications of one procedure as rows of the table.
 	 *
 	 * @param int             $procedure_id Procedure post ID.
@@ -722,7 +640,7 @@ final class Applications {
 		// Quién presentó cada una: todas las personas en una consulta, no una por fila.
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 		// Y el catálogo, una vez: no una búsqueda por fila.
-		$catalogo = array() === $solicitudes ? array() : CentreCatalog::index();
+		$catalogo = CentreColumns::index_for( $solicitudes );
 		foreach ( $solicitudes as $solicitud ) {
 			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}
@@ -732,7 +650,7 @@ final class Applications {
 	/**
 	 * One application as a row of the table.
 	 *
-	 * Los atributos del centro ({@see CENTRE_COLUMNS}) salen del catálogo de
+	 * Los atributos del centro ({@see CentreColumns}) salen del catálogo de
 	 * hoy; el nombre, de la foto que guardó la solicitud (ADR-0017).
 	 *
 	 * @param \WP_Post                                 $application The application.
@@ -765,7 +683,7 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);
-		$fila += self::centre_cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
+		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la
 		// meta bajo su clave: solo salen las preguntas que hoy tiene el procedimiento.
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];

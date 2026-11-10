@@ -165,7 +165,7 @@ personas no pasan por aquí: siguen su propia regla (ADR-0033, ADR-0041).
 
 La isla, el municipio, el tipo, la titularidad y la zona **se leen del
 catálogo al pintar o exportar**; no se copian a la solicitud, que solo guarda
-código y nombre (ADR-0029). `Applications::centre_attributes( $code )` es la
+código y nombre (ADR-0029). `PublicFront/CentreColumns::attributes( $code )` es la
 lectura que usarán los filtros por isla y por zona. `Applications::columns()`
 gana, con su segundo parámetro, `island` («Isla»), `municipality`
 («Municipio»), `centre_type` («Tipo de centro»), `ownership` («Titularidad»),

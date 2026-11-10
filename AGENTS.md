@@ -118,6 +118,7 @@ src/Prc/
 ├── PublicFront/Shell.php                   SLUGS, SHORTCODES y el marco de cada pantalla
 ├── PublicFront/EditLock.php                Bloqueo de edición de WordPress
 ├── PublicFront/View/PanelParts.php         Piezas comunes de los paneles
+├── PublicFront/CentreColumns.php           Isla, municipio, tipo, titularidad y zona del catálogo para la tabla y el CSV
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
 ├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
@@ -427,7 +428,7 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   defecto); la zona es el código de otro centro del catálogo, `zone` en el
   código —su rótulo, del filtro `prc_zone_label`— y nunca el nombre que le dé
   una instalación. Isla, tipo y zona se leen del catálogo al pintar
-  (`Applications::centre_attributes()`); la solicitud solo guarda código y
+  (`PublicFront/CentreColumns::attributes()`); la solicitud solo guarda código y
   nombre.
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.
 - Diffs pequeños y enfocados. No inventar ficheros que nadie ha pedido.

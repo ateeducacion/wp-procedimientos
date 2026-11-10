@@ -157,6 +157,21 @@ final class CentreEligibility {
 	}
 
 	/**
+	 * The rules as the «Datos» form holds them: the closed list, one code per line.
+	 *
+	 * @param array<string, string[]> $rules What {@see rules()} returned.
+	 * @return array{centre_types:string[], islands:string[], allowed_centres:string}
+	 */
+	public static function form_values( array $rules ): array {
+		$rules = self::rules( $rules );
+		return array(
+			'centre_types'    => $rules['types'],
+			'islands'         => $rules['islands'],
+			'allowed_centres' => implode( "\n", $rules['codes'] ),
+		);
+	}
+
+	/**
 	 * Whether the procedure narrows down the schools that may apply at all.
 	 *
 	 * Pedir todas las titularidades es no pedir ninguna.

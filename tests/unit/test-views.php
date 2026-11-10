@@ -326,7 +326,9 @@ class Test_Views extends WP_UnitTestCase {
 		$html = ProcedureChrome::html( ProcedureView::model( $id ) );
 
 		$this->assertStringContainsString( 'prc-resumen', $html );
-		$this->assertStringNotContainsString( 'prc-resumen__datos', $html );
+		// Sin fechas, la única fila es a quién se dirige: siempre hay algo que decir.
+		$this->assertStringContainsString( '<dt>Pueden solicitar</dt>', $html );
+		$this->assertStringNotContainsString( '<dt>Inscripción</dt>', $html );
 		$this->assertStringNotContainsString( 'prc-resumen__enlaces', $html );
 		$this->assertStringNotContainsString( 'prc-cuenta', $html );
 		// Con un solo panel no se pinta la barra: es una ficha larga y ya.

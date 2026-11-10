@@ -180,9 +180,9 @@ final class ProcedureView {
 				'mine'                 => $mia,
 				'action'               => $accion,
 				'manage_url'           => $gestion,
-				'why_not'              => '' === $gestion ? self::why_not( $post_id, $state, $user_id, $accion ) : '',
+				'why_not'              => self::why_not( $post_id, $state, $user_id, array( $accion['url'], $gestion ) ),
 				'account'              => self::account( $user_id ),
-				'switch_url'           => $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '',
+				'switch_url'           => self::switch_url( $post_id, $user_id ),
 			)
 		);
 	}
@@ -548,14 +548,14 @@ final class ProcedureView {
 	 * estado. A quien gestiona procedimientos no se le explica que no
 	 * solicita. El motivo lo da {@see ProcedureAccess::why_not_apply()}.
 	 *
-	 * @param int                  $post_id Procedure.
-	 * @param string               $state   Derived state.
-	 * @param int                  $user_id Who is looking.
-	 * @param array<string, mixed> $action  What action() decided.
+	 * @param int      $post_id Procedure.
+	 * @param string   $state   Derived state.
+	 * @param int      $user_id Who is looking.
+	 * @param string[] $buttons The URLs of the button and of the workshop link; empty when there is none.
 	 * @return string Empty when there is nothing to explain.
 	 */
-	private static function why_not( int $post_id, string $state, int $user_id, array $action ): string {
-		if ( $user_id <= 0 || '' !== (string) $action['url'] || ! ProcedureState::accepts_applications( $state )
+	private static function why_not( int $post_id, string $state, int $user_id, array $buttons ): string {
+		if ( $user_id <= 0 || array() !== array_filter( $buttons ) || ! ProcedureState::accepts_applications( $state )
 			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
 			return '';
 		}
@@ -577,6 +577,17 @@ final class ProcedureView {
 			'name'  => $quien instanceof \WP_User ? (string) $quien->display_name : '',
 			'email' => $quien instanceof \WP_User ? (string) $quien->user_email : '',
 		);
+	}
+
+	/**
+	 * Log out and come back to the login, with this page as the destination.
+	 *
+	 * @param int $post_id Procedure.
+	 * @param int $user_id Who is looking (0 = nobody).
+	 * @return string Empty without a session.
+	 */
+	private static function switch_url( int $post_id, int $user_id ): string {
+		return $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '';
 	}
 
 	/**

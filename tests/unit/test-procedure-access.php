@@ -540,12 +540,12 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertTrue( ProcedureAccess::can_apply( $uno, $por_tipo ) );
 		$this->assertTrue( ProcedureAccess::can_apply( $tres, $por_tipo ), 'el tipo, sin distinguir mayúsculas; inactivo, sigue en el catálogo' );
 		$this->assertFalse( ProcedureAccess::can_apply( $dos, $por_tipo ) );
-		$this->assertSame( 'Este procedimiento es solo para centros de tipo CEIP.', ProcedureAccess::why_not_eligible( $dos, $por_tipo ) );
-		$this->assertSame( '', ProcedureAccess::why_not_eligible( $uno, $por_tipo ) );
+		$this->assertSame( 'Este procedimiento es solo para centros de tipo CEIP.', ProcedureAccess::why_not_apply( $dos, $por_tipo ) );
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $uno, $por_tipo ) );
 
 		$this->assertFalse( ProcedureAccess::can_apply( $uno, $por_isla ) );
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $por_isla ) );
-		$this->assertSame( 'Este procedimiento es solo para centros de Isla Dos.', ProcedureAccess::why_not_eligible( $uno, $por_isla ) );
+		$this->assertSame( 'Este procedimiento es solo para centros de Isla Dos.', ProcedureAccess::why_not_apply( $uno, $por_isla ) );
 
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $por_lista ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $uno, $por_lista ) );
@@ -560,7 +560,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		);
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $lista_e_isla ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $fuera, $lista_e_isla ), 'lista y más acotados: hace falta el catálogo' );
-		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_eligible( $fuera, $lista_e_isla ) );
+		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_apply( $fuera, $lista_e_isla ) );
 		$minusculas = $this->school_head( 'ie002' );
 		$this->assertTrue( ProcedureAccess::can_apply( $minusculas, $por_lista ), 'la lista no distingue mayúsculas del código de la cuenta' );
 
@@ -588,7 +588,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'C0001' ) );
 
 		$this->assertTrue( ProcedureAccess::can_apply( $head, $procedimiento ), 'la suya la sigue editando' );
-		$this->assertSame( '', ProcedureAccess::why_not_eligible( $head, $procedimiento ) );
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $head, $procedimiento ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $nuevo, $procedimiento ), 'una nueva, no' );
 		wp_trash_post( $solicitud );
 		$this->assertFalse( ProcedureAccess::can_apply( $head, $procedimiento ), 'en la papelera ya no cuenta' );

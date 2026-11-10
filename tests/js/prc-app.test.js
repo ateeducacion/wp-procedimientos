@@ -171,6 +171,48 @@ describe( 'confirmation before an irreversible action', () => {
 	} );
 } );
 
+describe( 'fields for school procedures', () => {
+	it( 'hides and disables centre options for teachers, then restores them for schools', async () => {
+		document.body.innerHTML = `
+			<select id="prc-audience"><option value="schools">Centros</option><option value="teachers">Profesorado</option></select>
+			<div data-prc-schools-only><input type="radio" name="prc_centre_kinds" value="school" checked /></div>
+			<div id="ownership-fields" data-prc-schools-only><input name="ownership[]" /></div>`;
+		await load();
+		const audience = document.getElementById( 'prc-audience' );
+		const fields = document.getElementById( 'ownership-fields' );
+
+		audience.value = 'teachers';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( true );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => input.disabled ) ).toBe( true );
+
+		audience.value = 'schools';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
+
+		const both = document.createElement( 'input' );
+		both.type = 'radio';
+		both.name = 'prc_centre_kinds';
+		both.value = 'both';
+		document.body.appendChild( both );
+		both.checked = true;
+		both.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
+
+		const cer = document.createElement( 'input' );
+		cer.type = 'radio';
+		cer.name = 'prc_centre_kinds';
+		cer.value = 'rural_group';
+		document.body.appendChild( cer );
+		cer.checked = true;
+		cer.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( fields.hidden ).toBe( false );
+		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
+	} );
+} );
+
 describe( 'edit lock over the WordPress Heartbeat', () => {
 	const LOCK = `
 		<div id="prc-edit-lock" data-post-id="42" data-lock="100:7" data-release-nonce="nonce"

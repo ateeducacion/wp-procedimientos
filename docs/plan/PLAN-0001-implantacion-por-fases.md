@@ -133,7 +133,7 @@ Son los criterios de aceptación de SDD-0001:
 | # | Qué falta | Consecuencia |
 |---|---|---|
 | 1 | Correos: ni al presentar ni al cambiar el estado de revisión | Fase 1 |
-| 2 | El constructor de preguntas y la tabla de solicitudes existen en su forma mínima: sin reordenar con el ratón, sin filtros, sin paginación | Fase 1 |
+| 2 | El constructor de preguntas y la tabla de solicitudes existen en su forma mínima: sin reordenar con el ratón, sin filtros, sin paginación | Fase 1. La tabla gana filtros, páginas de 50, incompletas y revisión en bloque en el PR 6 del [PLAN-0003](PLAN-0003-lo-que-falta-para-sustituir-al-sistema-anterior.md) |
 | 3 | El CSV lleva el núcleo fijo; las columnas por pregunta y el acotado por ámbito se comprueban en la fase 1 | Fase 1 |
 | 4 | No hay línea base ni auditoría de accesibilidad | Fase 1 |
 | 5 | El catálogo de centros de local es inventado; el real no existe en ningún sitio del repositorio ([ADR-0017](../adr/ADR-0017-el-catalogo-de-centros-no-se-versiona.md)) | Quien despliega lo aporta; P-02 |

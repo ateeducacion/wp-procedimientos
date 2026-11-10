@@ -702,11 +702,64 @@ acotada para la consulta de solo lectura):
 
 ### PR 8 — Duplicar (`feature/duplicate-procedure`)
 
-- [ ] Operación `duplicate` en el taller: copia datos, preguntas (con claves
-      nuevas), compromisos, especificación de personas y avisos a un borrador.
-- [ ] No copia fechas, enlaces de resolución, solicitudes ni archivado; el
+**Ficheros:**
+- Crear `Domain/ProcedureCopy.php` (puro: qué se lleva el duplicado) y
+  `PublicFront/ProcedureDuplicate.php` (la operación y su aviso): fuera de
+  `ProcedureEditor`, que ya estaba en el tope de métodos de PHPMD.
+- Modificar `Access/ProcedureAccess.php`, `Domain/ProcedureInput.php`,
+  `ProcedureEditor.php` y su vista (botón en la cabecera, aviso de lo que
+  falta para publicar), `View/WorkspaceView.php` (columna «Duplicar»),
+  `Admin/Settings.php` y `load-order.php`.
+- Pruebas: `test-procedure-copy.php` (dominio y clasificación de metas),
+  `test-duplicate-procedure.php`; ampliar `test-procedure-editor.php` y
+  `tests/browser/confirmacion.js`.
+
+**Interfaces que produce:**
+- `ProcedureCopy::policy(): array<string, string>` — cada meta del
+  procedimiento con `ProcedureCopy::COPY`, `TRANSFORM` o `NEVER`;
+  `::rule( string $key ): string` (`''` sin clasificar). La prueba
+  `test_every_registered_procedure_meta_is_classified` recorre las metas
+  registradas: **una meta nueva del procedimiento se clasifica aquí**.
+- `ProcedureCopy::meta( array $source, bool $with_js ): array{meta, js_left, undated}`,
+  `::questions( $raw ): array{questions, seq, map, undated}` (claves desde
+  `q1`, filas desde `r1`; `map` es clave vieja => nueva, filas como
+  `q4:r1`), `::people_spec( $raw )` (papeles y grupos renumerados, sin
+  ventana), `::observer_columns( $raw, array $map )` y
+  `::title( string $title )` (sufijo `ProcedureCopy::SUFFIX`, « (copia)»).
+- `ProcedureAccess::can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool`
+  — abre el original y puede crear procedimientos; en `$areas`, los ámbitos
+  del duplicado (los del original que puede poner o, si ninguno, el suyo).
+- `ProcedureInput::not_ready( int $course, array $questions ): string[]` —
+  lo que impide publicar: el curso y las entregas sin fechas válidas. El
+  modelo del taller lo da en `not_ready` y apaga `can_publish`; el POST de
+  publicar lo rechaza.
+- `ProcedureEditor::OP_DUPLICATE` (`duplicate`, nonce propio
+  `nonce_name( 'duplicate' )`), modelo `can_duplicate`;
+  `ProcedureDuplicate::duplicate( int $procedure_id, int $user_id ): array{id, js_left}|\WP_Error`,
+  `::handle()`, `::notice( array $request )`, `NOTICE` (`duplicado`),
+  `ARG_SOURCE` (`origen`) y `ARG_NO_JS` (`sin_js`).
+- `ProcedureEditorView::duplicate_question( string $title )`: el texto de la
+  confirmación, el mismo en el taller y en «Gestión».
+- `Settings::scope_diagnostics()` (antes en `ProcedureAccess`, que estaba en
+  el tope de 45 públicos de PHPMD).
+
+**Decisiones:**
+- Se duplica en cualquier estado, también histórico o con el bloqueo de
+  otra persona: el original no se escribe. Emite `prc_procedure_created`.
+- El duplicado: borrador de quien duplica, «<título> (copia)», sin curso,
+  en «Datos» con el aviso. Las entregas con plazo propio quedan sin
+  fechas: el borrador se guarda, y no se publica hasta ponerlas.
+- El JavaScript propio solo se copia con `can_edit_custom_js` sobre el
+  original; si se queda atrás, el aviso lo dice.
+- Sin ADR: no hay decisión de arquitectura nueva; la regla de clasificar
+  cada meta vive en `ProcedureCopy`, en su prueba y en `AGENTS.md`.
+
+- [x] Operación `duplicate` en el taller y en «Gestión»: copia datos,
+      preguntas (con claves nuevas), compromisos, especificación de personas
+      y avisos a un borrador.
+- [x] No copia fechas, enlaces de resolución, solicitudes ni archivado; el
       curso queda vacío para que se elija.
-- [ ] Prueba: el duplicado no comparte ninguna respuesta ni documento.
+- [x] Prueba: el duplicado no comparte ninguna respuesta ni documento.
 
 ### PR 9 — Actuar sobre una solicitud (`feature/application-actions`)
 

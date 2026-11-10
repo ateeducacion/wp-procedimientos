@@ -13,7 +13,9 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 
 /**
@@ -275,17 +277,53 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertStringContainsString( '- Etapas: Infantil, Primaria', $cuerpo );
 		$this->assertStringContainsString( ApplyForm::url( $procedimiento ), $cuerpo, 'lleva el enlace a su solicitud' );
 
-		// Ni claves internas ni números de la base de datos.
-		$texto = $this->sin_enlaces( $cuerpo );
+		// Es un justificante: su número, la fecha y la hora, y si está completa.
+		$this->assertStringContainsString( 'Solicitud presentada n.º ' . $id . ':', (string) $acuse[0]['subject'] );
+		$this->assertStringContainsString( 'Se ha presentado la solicitud n.º ' . $id . ' al procedimiento', $cuerpo );
+		$this->assertStringContainsString( ' el ' . get_the_date( 'd-m-Y', $id ) . ' a las ' . get_the_time( 'H:i', $id ) . ',', $cuerpo );
+		$this->assertStringContainsString( 'Estado: completa.', $cuerpo );
+		$this->assertStringContainsString( add_query_arg( ApplicationProgress::ARG_RECEIPT, '1', ApplyForm::url( $procedimiento ) ), $cuerpo, 'y el enlace al justificante' );
+
+		// Ni claves internas ni más números de la base de datos que el de la
+		// solicitud, que es su número de registro (ADR-0038, adenda).
+		$texto = $this->sin_enlaces( str_replace( 'n.º ' . $id, '', $cuerpo ) );
 		$this->assertStringNotContainsString( 'prc_', $texto );
 		$this->assertDoesNotMatchRegularExpression( '/\bq[0-9]+\b/', $texto, 'ninguna clave de pregunta' );
-		$this->assertDoesNotMatchRegularExpression( '/\b' . $id . '\b/', $texto, 'ni el número de la solicitud' );
+		$this->assertDoesNotMatchRegularExpression( '/\b' . $id . '\b/', $texto, 'el número de la solicitud, solo como n.º' );
 		$this->assertDoesNotMatchRegularExpression( '/\b' . $procedimiento . '\b/', $texto, 'ni el del procedimiento' );
 		$this->assertDoesNotMatchRegularExpression( '/\b' . $uid . '\b/', $texto, 'ni el de la cuenta' );
 
 		$copia = $this->con_asunto( 'Nueva solicitud' );
 		$this->assertSame( array( 'ambito@example.org', 'apoyo@example.org' ), $this->destinos( $copia ) );
 		$this->assertStringContainsString( '- Tiene huerto: Sí', (string) $copia[0]['message'] );
+	}
+
+	/**
+	 * Con lista de personas, el acuse dice que está incompleta, qué falta y
+	 * hasta cuándo se da de alta a las personas, con el enlace a la lista.
+	 */
+	public function test_the_acknowledgement_says_what_is_missing_and_until_when() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación',
+						),
+					),
+					'min'     => 2,
+					'max'     => 4,
+				),
+			)
+		);
+		Applications::save( $procedimiento, $this->direccion(), $this->nucleo() );
+
+		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
+		$this->assertStringContainsString( 'Estado: presentada, pero incompleta: faltan 2 personas.', $cuerpo );
+		$this->assertStringContainsString( 'hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido, en:', $cuerpo );
+		$this->assertStringContainsString( ApplyForm::url( $procedimiento ) . '#' . PeopleForm::ANCHOR, $cuerpo );
 	}
 
 	/**
@@ -834,7 +872,8 @@ class Test_Mailer extends WP_UnitTestCase {
 	// ─── tipos de pregunta (ADR-0040) ──────────────────────────────────────
 
 	/**
-	 * El acuse de un procedimiento sin tipos nuevos es, letra a letra, el de antes.
+	 * El acuse de un procedimiento sin tipos nuevos es, letra a letra, el
+	 * justificante de siempre: los tipos nuevos no cambian nada.
 	 */
 	public function test_the_acknowledgement_without_new_types_does_not_change() {
 		$procedimiento = $this->procedimiento();
@@ -842,12 +881,13 @@ class Test_Mailer extends WP_UnitTestCase {
 
 		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
 		$cuerpo = str_replace(
-			array( ApplyForm::url( $procedimiento ), (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $id, 'modified' ) ) ),
-			array( '{enlace}', '{fecha}' ),
+			array( ApplyForm::url( $procedimiento ), (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $id, 'modified' ) ), ApplicationProgress::when( (int) get_post_timestamp( $id ) ), 'n.º ' . $id ),
+			array( '{enlace}', '{fecha}', '{cuando}', 'n.º {n}' ),
 			$cuerpo
 		);
 		$this->assertSame(
-			"Se ha presentado la solicitud al procedimiento «Red de huertos escolares». Este es el resumen de lo presentado.\n\n"
+			"Se ha presentado la solicitud n.º {n} al procedimiento «Red de huertos escolares» el {cuando}, por Persona de prueba, para Centro de prueba Norte (C0001). Guarde este correo: es su justificante.\n\n"
+				. "Estado: completa.\n\n"
 				. "Procedimiento: Red de huertos escolares\n"
 				. "Centro: Centro de prueba Norte (C0001)\n"
 				. "Presentada por: Persona de prueba\n"
@@ -859,6 +899,8 @@ class Test_Mailer extends WP_UnitTestCase {
 				. "- Etapas: Infantil, Primaria\n\n"
 				. "Puede consultarla, y modificarla mientras el plazo siga abierto, en:\n"
 				. "{enlace}\n\n"
+				. "Justificante para imprimir o guardar en PDF:\n"
+				. "{enlace}&justificante=1\n\n"
 				. "Este correo es un acuse automático: no hace falta responderlo.\n",
 			$cuerpo
 		);

@@ -30225,6 +30225,11 @@ namespace Prc\Notifications;
 
 
 
+
+
+
+
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -30262,15 +30267,7 @@ final class Messages {
 
 		switch ( $event ) {
 			case Mailer::EVENT_APPLICATION_SUBMITTED:
-				return array(
-					'Solicitud presentada: ' . $titulo,
-					array_merge(
-						array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.', '' ),
-						self::summary( $ctx ),
-						self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
-						array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
-					),
-				);
+				return self::submitted( $titulo, $ctx );
 
 			case Mailer::EVENT_APPLICATION_UPDATED:
 				return array(
@@ -30347,6 +30344,50 @@ final class Messages {
 				);
 		}
 		return null;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function submitted( string $titulo, array $ctx ): array {
+		$numero = self::text( $ctx, 'number' );
+		if ( '' === $numero ) {
+			$cabeza = array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.' );
+		} else {
+			$quien  = self::text( $ctx, 'applicant' );
+			$centro = self::text( $ctx, 'centre' );
+			$falta  = self::lines( $ctx, 'missing' );
+			$cabeza = array(
+				'Se ha presentado la solicitud n.º ' . $numero . ' al procedimiento «' . $titulo . '» el ' . self::text( $ctx, 'submitted' )
+					. ( '' !== $quien ? ', por ' . $quien : '' ) . ( '' !== $centro ? ', para ' . $centro : '' ) . '. Guarde este correo: es su justificante.',
+				'',
+				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
+			);
+			$hasta  = self::text( $ctx, 'people_until' );
+			if ( '' !== $hasta ) {
+				$cabeza = array_merge( $cabeza, self::link( 'Puede dar de alta, cambiar o sustituir a las personas que participan hasta el ' . $hasta . ', incluido, en:', $ctx, 'people_url' ) );
+			}
+		}
+		return array(
+			'Solicitud presentada' . ( '' !== $numero ? ' n.º ' . $numero : '' ) . ': ' . $titulo,
+			array_merge(
+				$cabeza,
+				array( '' ),
+				self::summary( $ctx ),
+				self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
+				self::link( 'Justificante para imprimir o guardar en PDF:', $ctx, 'receipt_url' ),
+				array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+			),
+		);
 	}
 
 
@@ -30583,8 +30624,10 @@ use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
@@ -30592,11 +30635,13 @@ use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationOperations;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
 use Prc\PublicFront\ObserveSettings;
 use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
@@ -30914,6 +30959,9 @@ final class Mailer {
 					return;
 				}
 				$ctx['created'] = (bool) $created;
+				if ( $created ) {
+					$ctx = self::receipt( (int) $application_id, $ctx );
+				}
 
 				self::send(
 					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
@@ -31232,6 +31280,33 @@ final class Mailer {
 			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
 			'url'          => ApplyForm::url( $procedure_id, $args ),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function receipt( int $application_id, array $ctx ): array {
+		$procedure_id = (int) $ctx['procedure_id'];
+		$hasta        = People::enabled( $procedure_id )
+			? PeopleSpec::until( People::spec( $procedure_id ), (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() )
+			: '';
+		return array(
+			'number'       => (string) $application_id,
+			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
+			'missing'      => ApplicationProgress::missing( $application_id ),
+			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',
+			'people_url'   => (string) $ctx['url'] . '#' . PeopleForm::ANCHOR,
+			'receipt_url'  => add_query_arg( ApplicationProgress::ARG_RECEIPT, '1', (string) $ctx['url'] ),
+		) + $ctx;
 	}
 
 

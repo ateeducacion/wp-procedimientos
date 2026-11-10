@@ -379,6 +379,13 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		// Y a quien gestiona no se le explica que no solicita.
 		$this->acting_as( $this->manager( array( $area ) ) );
 		$this->assertSame( '', ProcedureView::model( $procedimiento )['why_not'] );
+
+		// Ni a quien consulta solicitudes: no solicita por su función, y
+		// mandarle a pedir el cargo de dirección le diría algo falso.
+		$this->acting_as( $this->observer( array( 'Z1' ) ) );
+		$m = ProcedureView::model( $procedimiento );
+		$this->assertSame( '', $m['why_not'] );
+		$this->assertStringNotContainsString( 'No puede solicitar con esta cuenta', ProcedureChrome::html( $m ) );
 	}
 
 	/**

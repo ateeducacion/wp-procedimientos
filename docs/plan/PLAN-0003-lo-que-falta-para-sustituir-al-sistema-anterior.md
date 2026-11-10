@@ -544,7 +544,10 @@ acotada para la consulta de solo lectura):
   `::export_ids( int $procedure_id, array $post ): ?int[]`,
   `::posted_ids( array $post ): int[]`,
   `::bulk( int $procedure_id, array $ids, string $state, string $note ): array{error, done, failed}`
-  y `::bulk_notice( array $request )`; `BULK_MAX = 200`.
+  y `::bulk_notice( array $request )`; `BULK_MAX = 50`.
+- `Applications::review( int $application_id, string $state, ?string $note )`:
+  `null` es «sin nota nueva» y conserva la que tenga (que cuenta para la
+  obligatoria); la cadena vacía la vacía, como en la revisión de una en una.
 - Campos POST: `ProcedureEditor::OP_BULK_REVIEW` (`bulk_review`, nonce propio),
   `ApplicationsPanel::FIELD_ROWS` (`prc_rows[]`), `FIELD_PAGE`
   (`prc_rows_page`, «marcar las de esta página»), `FIELD_PAGE_ROWS`
@@ -554,7 +557,8 @@ acotada para la consulta de solo lectura):
   filtro en campos ocultos con los nombres de GET. Aviso `bloque` con
   `revisadas` y `sin_cambiar`.
 - `ApplicationExport::csv( …, ?array $ids = null )`, `::moodle( …, array{who, ids} )`,
-  `::people( …, ?array $ids = null )`, `::who_counts( array $applications, array $who = array(), array $stored = array() )`,
+  `::people( …, ?array $ids = null )`, `::who_counts( array $applications, array $who = array(), array $stored = array() )`
+  (el diálogo la llama dos veces con filtro: todas y las del filtro),
   `PeopleExport::users( int $application_id, $people = null )`,
   `PeopleSpecPanel::reviews( array $applications, array $args = array() )` y
   `PeopleForm::review( int $application_id, bool $history = false, array $args = array() )`.
@@ -571,13 +575,20 @@ acotada para la consulta de solo lectura):
   pintar el panel con una página de 50 cuesta las mismas consultas sobre 100
   solicitudes que sobre 300 (`test-applications-table.php`).
 - En bloque, las mismas reglas que de una en una; un estado que no existe, la
-  nota que falta, nada marcado o más de 200 rechazan el envío entero. Un ID
-  que no es una solicitud publicada de este procedimiento no se toca y se
-  cuenta, sin frenar a las demás. Cada una pasa por `Applications::review()`:
-  emite `prc_application_reviewed` y sale su correo.
-- Exportar con un filtro ofrece «las del filtro» (lo marcado) o «todas»; los
-  recuentos de quién se queda fuera del fichero de usuarios son de lo que se
-  exporta.
+  nota que falta, nada marcado o más de 50 —una página— rechazan el envío
+  entero. Un ID que no es una solicitud publicada de este procedimiento no se
+  toca y se cuenta, sin frenar a las demás. Cada una pasa por
+  `Applications::review()`: emite `prc_application_reviewed` y su correo sale
+  **dentro de la misma petición**, sin cola ni cron; por eso el tope es una
+  página. La nota común, escrita, sustituye la de todas; en blanco, con un
+  estado que no la exige, cada una conserva la suya.
+- Exportar con un filtro ofrece «las del filtro» (lo marcado) o «todas». Los
+  recuentos de quién se queda fuera del fichero de usuarios se calculan para
+  las dos; con guion se ve la de la opción elegida y sin guion las dos, cada
+  una con su rótulo.
+- Los contadores por estado son atajos sobre el total: su enlace lleva solo
+  el estado. `incompletas=1` en un procedimiento donde ninguna puede estarlo
+  se ignora, como una isla que no está.
 - Quien no gestiona las solicitudes filtra y pasa de página; revisar, revisar
   en bloque y exportar quedan apagados.
 

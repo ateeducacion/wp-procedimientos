@@ -162,6 +162,28 @@ final class CentreCatalog {
 	}
 
 	/**
+	 * What the workshop offers to narrow a procedure: the types and islands
+	 * of the catalogue, and the chosen ones even if the catalogue lost them.
+	 *
+	 * @param bool     $wanted  Whether the screen paints them; false reads nothing.
+	 * @param string[] $types   Types already chosen.
+	 * @param string[] $islands Islands already chosen.
+	 * @return array{types:string[], islands:string[]}
+	 */
+	public static function choices( bool $wanted, array $types, array $islands ): array {
+		if ( ! $wanted ) {
+			return array(
+				'types'   => array(),
+				'islands' => array(),
+			);
+		}
+		return array(
+			'types'   => CentreEligibility::values( array_merge( self::values( 'type' ), $types ) ),
+			'islands' => CentreEligibility::values( array_merge( self::values( 'island' ), $islands ) ),
+		);
+	}
+
+	/**
 	 * The centre types that are private on this installation.
 	 *
 	 * Vacía por defecto: sin configurar, todo centro es público. La contesta

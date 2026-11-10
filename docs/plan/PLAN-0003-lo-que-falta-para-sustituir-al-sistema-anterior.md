@@ -395,6 +395,8 @@ copia de todo `procedure_created` y `application_received`). Con
   `Access/ProcedureAccess.php`, `Meta/ProcedureMetaKeys.php` y registro,
   `ProcedureEditor.php` y su vista (sección «Qué centros pueden solicitar» y
   diálogo de exportación), `ApplyForm.php` (el motivo), `Applications.php`,
+  `PublicFront/CentreColumns.php` (nuevo: las columnas del catálogo, aparte
+  para que `Applications` y `ApplicationExport` no pasen del umbral de PHPMD),
   `ApplicationExport.php`, `PeopleExport.php`, `Admin/Settings.php`,
   `scripts/mu-plugins/prc-dev-tools.php`, `load-order.php`.
 - Pruebas: `test-centre-eligibility.php` (dominio); ampliar
@@ -409,14 +411,15 @@ copia de todo `procedure_created` y `application_received`). Con
   código de otro centro del catálogo y `zone_name` su nombre, vacío si no
   está. `CentreCatalog::index(): array<string, array>` (por código, una
   pasada) y `CentreCatalog::values( string $field ): string[]` (valores
-  distintos de `type`, `island`…). `CentreCatalog::private_types(): string[]`
+  distintos de `type`, `island`…), `CentreCatalog::choices( bool $wanted, array $types, array $islands )`
+  (lo que ofrece el taller). `CentreCatalog::private_types(): string[]`
   y la opción `CentreCatalog::OPTION_PRIVATE_TYPES` (`prc_private_centre_types`).
 - La sincronización guarda `zone` (campo `CentreCatalogueSync::SOURCE_ZONE_FIELD`
   de la fuente, 8 cifras o vacío) y `ownership` si viene;
   `CentreCatalogueSync::record( array $item, string $code, string $name, bool $is_active ): array`.
 - Filtros: `prc_private_centre_types` (lista de tipos privados, sin distinguir
   mayúsculas; por defecto la opción, vacía) y `prc_zone_label` (rótulo de la
-  zona, «Zona» por defecto; `Applications::zone_label()`).
+  zona, «Zona» por defecto; `CentreColumns::zone_label()`).
 - Metas del procedimiento: `ProcedureMetaKeys::CENTRE_TYPES`
   (`prc_centre_types`), `ISLANDS` (`prc_islands`) y `ALLOWED_CENTRES`
   (`prc_allowed_centres`), arrays sin REST; vacías, sin acotado.
@@ -429,16 +432,20 @@ copia de todo `procedure_created` y `application_received`). Con
   `::why_not_eligible( int $user_id, int $post_id, string $code = '' ): string`;
   `apply_codes()` / `can_apply()` los aplican.
 - **Leer los atributos de una solicitud** (para los PR 6 y 7):
-  `Applications::centre_attributes( string $code, ?array $index = null ): array{island, municipality, type, ownership, zone, zone_name}`
+  `CentreColumns::attributes( string $code, ?array $index = null ): array{island, municipality, type, ownership, zone, zone_name}`
   con el `prc_centre_code` de la solicitud; todo vacío si el código no está
   en el catálogo o es de profesorado. Para muchas a la vez, pasar
   `CentreCatalog::index()` una vez. `Applications::row()` ya trae las celdas
   `island`, `municipality`, `centre_type`, `ownership` (rótulo), `zone`
   (nombre) y `zone_code`, y `Applications::rows()` lee el catálogo una sola vez.
-- Exportación: `Applications::CENTRE_COLUMNS`, `Applications::columns( array $questions, bool $centre = false )`,
-  `Applications::centre_columns()`, `PeopleExport::all_columns( int $procedure_id, bool $centre = false )`
-  y `ApplicationExport::extra_columns()`: las seis van en el grupo `centre`
-  de `groups()` pero fuera del CSV de siempre.
+- Exportación: `CentreColumns::KEYS`, `CentreColumns::columns()`,
+  `CentreColumns::cells( string $code, ?array $index )`, `CentreColumns::ordered()`,
+  `CentreColumns::all_plus()`, `CentreColumns::index_for( array $applications )`,
+  `Applications::columns( array $questions, bool $centre = false )` y
+  `PeopleExport::all_columns( int $procedure_id, bool $centre = false )`: las
+  seis van en el grupo `centre` de `groups()` pero fuera del CSV de siempre.
+- `CentreEligibility::form_values( array $rules )`: los acotados como los
+  pinta el taller (la lista cerrada, un código por línea).
 - `Settings::CENTRES_GROUP` y `Settings::sanitize_private_types()`.
 
 **Decisiones:**

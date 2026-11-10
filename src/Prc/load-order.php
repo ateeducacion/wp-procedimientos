@@ -45,6 +45,7 @@ return array(
 	'PublicFront/Shell.php',
 	'PublicFront/EditLock.php',
 	'PublicFront/View/PanelParts.php',
+	'PublicFront/CentreColumns.php',
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
 	'PublicFront/ApplicationLog.php',

@@ -662,37 +662,6 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * The centre rules of a procedure as the «Datos» form holds them.
-	 *
-	 * La lista cerrada, un código por línea: es como se teclea.
-	 *
-	 * @param int $procedure_id Procedure post ID, 0 for a new one.
-	 * @return array{centre_types:string[], islands:string[], allowed_centres:string}
-	 */
-	private static function stored_eligibility( int $procedure_id ): array {
-		$reglas = $procedure_id > 0 ? ProcedureAccess::eligibility( $procedure_id ) : CentreEligibility::rules( array() );
-		return array(
-			'centre_types'    => $reglas['types'],
-			'islands'         => $reglas['islands'],
-			'allowed_centres' => implode( "\n", $reglas['codes'] ),
-		);
-	}
-
-	/**
-	 * What the «Quién puede solicitar» section offers: the types and islands
-	 * of the catalogue, and the chosen ones even if the catalogue lost them.
-	 *
-	 * @param array<string, mixed> $values Field values.
-	 * @return array{types:string[], islands:string[]}
-	 */
-	private static function centre_options( array $values ): array {
-		return array(
-			'types'   => CentreEligibility::values( array_merge( CentreCatalog::values( 'type' ), (array) ( $values[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() ) ) ),
-			'islands' => CentreEligibility::values( array_merge( CentreCatalog::values( 'island' ), (array) ( $values[ ProcedureMetaKeys::ISLANDS ] ?? array() ) ) ),
-		);
-	}
-
-	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
 	 * @param int $procedure_id Existing procedure, or 0 on creation.
@@ -800,7 +769,7 @@ final class ProcedureEditor {
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				),
-				self::stored_eligibility( $procedure_id )
+				CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) )
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
@@ -1341,7 +1310,10 @@ final class ProcedureEditor {
 			return $m;
 		}
 
-		return self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
+		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+		return $m;
 	}
 
 	/**
@@ -1522,9 +1494,6 @@ final class ProcedureEditor {
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		if ( self::PANEL_DATA === $m['panel'] ) {
-			$m['centre_options'] = self::centre_options( (array) $m['values'] );
-		}
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// Las solicitudes se leen una vez: la tabla y los recuentos del
@@ -1593,7 +1562,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
-		$acotados                                       = self::stored_eligibility( $procedure_id );
+		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
 		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];

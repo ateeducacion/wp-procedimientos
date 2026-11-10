@@ -17,6 +17,7 @@ use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -1288,7 +1289,7 @@ final class ProcedureEditorView {
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
 							Todas las columnas
 						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( Applications::zone_label() ) ); ?>), que solo salen si se marcan.</p>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
 						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
 							<?php
 							if ( array() === $de_grupo ) {
@@ -1301,7 +1302,7 @@ final class ProcedureEditorView {
 									<?php
 									// Las del catálogo del centro no son de «Todas»: el guion no
 									// las marca con ella, y sin elegirlas no salen (ADR-0042).
-									$extra = in_array( (string) $clave, ApplicationExport::extra_columns(), true );
+									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
 									?>
 									<label class="prc-casilla">
 										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />

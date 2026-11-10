@@ -289,13 +289,13 @@ class Test_Application_Export extends WP_UnitTestCase {
 				'zone'         => 'Z0001',
 				'zone_name'    => 'Zona Inventada',
 			),
-			Applications::centre_attributes( 'C0001' )
+			\Prc\PublicFront\CentreColumns::attributes( 'C0001' )
 		);
 		$vacio = array_fill_keys( array( 'island', 'municipality', 'type', 'ownership', 'zone', 'zone_name' ), '' );
-		$this->assertSame( $vacio, Applications::centre_attributes( 'X0009' ) );
-		$this->assertSame( $vacio, Applications::centre_attributes( '' ), 'una solicitud de profesorado no tiene centro' );
-		$this->assertSame( 'Isla Dos', Applications::centre_attributes( 'C0002', \Prc\Domain\CentreCatalog::index() )['island'] );
-		$this->assertSame( 'Zona', Applications::zone_label() );
+		$this->assertSame( $vacio, \Prc\PublicFront\CentreColumns::attributes( 'X0009' ) );
+		$this->assertSame( $vacio, \Prc\PublicFront\CentreColumns::attributes( '' ), 'una solicitud de profesorado no tiene centro' );
+		$this->assertSame( 'Isla Dos', \Prc\PublicFront\CentreColumns::attributes( 'C0002', \Prc\Domain\CentreCatalog::index() )['island'] );
+		$this->assertSame( 'Zona', \Prc\PublicFront\CentreColumns::zone_label() );
 	}
 
 	/**

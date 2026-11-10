@@ -408,6 +408,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Centros públicos</span>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
 
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, array( 'La Palma' ) );
+		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Centros públicos de La Palma</span>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
+
 		update_post_meta( $procedimiento, ProcedureMetaKeys::AUDIENCE, ProcedureMetaKeys::AUDIENCE_TEACHERS );
 		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Profesorado</span>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
 	}

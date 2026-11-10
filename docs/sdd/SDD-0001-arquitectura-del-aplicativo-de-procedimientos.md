@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043, ADR-0044]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043, ADR-0044, ADR-0045]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -345,6 +345,7 @@ confirmaciones, con degradación a `confirm()` y a formulario sin JavaScript).
 | `apply` | `solicitud` | `[prc_apply]` | `prc_apply` | Formulario de solicitud del centro para `?procedimiento=ID`, o la solicitud presentada con su estado y la nota de revisión |
 | `mine` | `mi-centro` | `[prc_mine]` | `prc_apply` | Las solicitudes del centro: procedimiento, fecha, estado del procedimiento, estado de revisión |
 | `observe` | `consulta-de-solicitudes` | `[prc_observe]` | `prc_view_applications` o quien gestiona | Consulta de solo lectura: los procedimientos observables con solicitudes de sus zonas y, en cada uno, la tabla acotada a sus centros, con filtro, páginas y, si el procedimiento lo deja, documentos y CSV. Sin DNI ni nota (ADR-0043) |
+| `help` | `ayuda` | `[prc_help]` | Público | La ayuda: «Cómo presentar una solicitud» (`?guia=solicitar`, por defecto), «Cómo dar de alta un procedimiento» (`?guia=gestionar`) y «Preguntas frecuentes» (`?guia=preguntas`), con índice y un ancla estable por apartado; la ayuda técnica sale de la clave `help_contact` de `prc_chrome` (ADR-0045) |
 
 Toda escritura va por POST con nonce y comprobación de capacidad, patrón
 «POST → redirect → GET» con avisos en la sesión de la URL (`?aviso=`). Borrar
@@ -372,6 +373,7 @@ PostType/ApplicationPostType.php
 Taxonomy/ProcedureTaxonomies.php
 PublicFront/Assets.php, ExitSignal.php, Shell.php, EditLock.php   (del aplicativo de eventos)
 PublicFront/Home.php + View/HomeView.php
+PublicFront/Help.php + HelpContent.php + View/HelpView.php   la ayuda (ADR-0045)
 PublicFront/ProcedureView.php + View/ProcedureChrome.php
 PublicFront/Workspace.php + View/WorkspaceView.php
 PublicFront/ProcedureEditor.php + View/ProcedureEditorView.php + View/PanelParts.php

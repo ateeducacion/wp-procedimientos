@@ -452,19 +452,7 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
-				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
-					<div class="prc-seccion__cuerpo">
-						<div class="prc-nota prc-campo--completo">
-							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
-						</div>
-						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-						<?php endfor; ?>
-					</div>
-				</section>
-			<?php endif; ?>
+			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
 			<div class="prc-form__envio">
 				<button class="prc-boton-enviar" type="submit">
@@ -475,6 +463,34 @@ final class ApplyFormView {
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The coordinators the form asks for, or where they are asked when it is the list.
+	 *
+	 * @param array<string, mixed>             $m            Model.
+	 * @param array<int, array<string, mixed>> $coordinators What was typed or stored.
+	 * @return string
+	 */
+	private static function coordination( array $m, array $coordinators ): string {
+		$spec = (array) $m['spec'];
+		if ( ! empty( $spec['coordinators_in_list'] ) ) {
+			$hasta = (string) ( $m['people']['until'] ?? '' );
+			return '<div class="prc-nota prc-campo--completo"><p>'
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '' ) )
+				. '</p></div>';
+		}
+		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$campos = '';
+		for ( $index = 0; $index < $cuantas; ++$index ) {
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+		}
+		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
+			. $campos . '</div></section>';
 	}
 
 	/**

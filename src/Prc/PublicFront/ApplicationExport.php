@@ -8,6 +8,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -67,7 +68,7 @@ final class ApplicationExport {
 	 */
 	private const GROUPS = array(
 		'application'  => array( 'date' ),
-		'centre'       => array( 'centre', 'code' ),
+		'centre'       => array( 'centre', 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' ),
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
@@ -128,13 +129,15 @@ final class ApplicationExport {
 	 *
 	 * Las preguntas son las que el procedimiento tiene hoy, por su `key`: una
 	 * borrada ya no se ofrece, y su respuesta se queda en la meta (ADR-0019).
-	 * Una rejilla se ofrece fila a fila (ADR-0040).
+	 * Una rejilla se ofrece fila a fila (ADR-0040). El grupo «Centro» ofrece
+	 * además los atributos del catálogo, que solo salen si se eligen
+	 * ({@see extra_columns()}).
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array<string, array<string, string>> group => (column key => heading).
 	 */
 	public static function groups( int $procedure_id ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
@@ -154,7 +157,7 @@ final class ApplicationExport {
 	 * @return array<string, string> key => heading; empty when none is valid.
 	 */
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -181,18 +184,15 @@ final class ApplicationExport {
 	 */
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = PeopleExport::all_columns( $procedure_id );
-		$columnas  = self::valid_columns( $procedure_id, $columns );
+		$columnas  = self::ordered( $procedure_id, self::valid_columns( $procedure_id, $columns ) );
 		$personas  = PeopleExport::spec( $procedure_id );
-		// Ninguna válida, o todas aunque sea en otro orden: el CSV de siempre.
-		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
-			$columnas = $todas;
-		}
-		$claves = array_flip( array_keys( $columnas ) );
-		$filas  = array();
+		$claves    = array_flip( array_keys( $columnas ) );
+		$filas     = array();
+		// El catálogo se lee una vez, y solo si sale alguna de sus columnas.
+		$catalogo = array() !== array_intersect_key( $claves, array_flip( self::extra_columns() ) ) ? CentreCatalog::index() : array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
+				$fila = Applications::row( $solicitud, $preguntas, $catalogo ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
 					// Solo lo que se va a escribir: la fila entera no se guarda.
 					$filas[] = array_intersect_key( $una, $claves );
@@ -200,6 +200,40 @@ final class ApplicationExport {
 			}
 		}
 		return Applications::csv_lines( $columnas, $filas, PeopleExport::VERBATIM );
+	}
+
+	/**
+	 * The chosen columns in the order they go to the file.
+	 *
+	 * Ninguna, o justo las de siempre aunque sea en otro orden: el CSV de
+	 * siempre, sin un byte de diferencia. Todas las de siempre y además alguna
+	 * del catálogo del centro: en el orden de la tabla. Cualquier otra
+	 * elección, en el orden pedido.
+	 *
+	 * @param int                   $procedure_id Procedure post ID.
+	 * @param array<string, string> $chosen       What {@see valid_columns()} kept.
+	 * @return array<string, string>
+	 */
+	private static function ordered( int $procedure_id, array $chosen ): array {
+		$siempre = PeopleExport::all_columns( $procedure_id );
+		$faltan  = array_diff_key( $siempre, $chosen );
+		if ( array() === $chosen || ( array() === $faltan && count( $chosen ) === count( $siempre ) ) ) {
+			return $siempre;
+		}
+		return array() === $faltan ? array_intersect_key( PeopleExport::all_columns( $procedure_id, true ), $chosen ) : $chosen;
+	}
+
+	/**
+	 * The columns one may choose that do not go in the CSV «de siempre»: the
+	 * catalogue attributes of the centre (ADR-0042).
+	 *
+	 * «Todas las columnas» no las marca: el diálogo las pinta aparte, y solo
+	 * salen si se eligen.
+	 *
+	 * @return string[]
+	 */
+	public static function extra_columns(): array {
+		return Applications::CENTRE_COLUMNS;
 	}
 
 	/**
@@ -598,15 +632,22 @@ final class ApplicationExport {
 	 *
 	 * `all` gana a las casillas: es «Todas las columnas», que sin guion es
 	 * la única forma de pedirlas todas sin marcar una a una. Columnas vacías
-	 * significa todas.
+	 * significa todas las de siempre. Las del catálogo del centro
+	 * ({@see extra_columns()}) no entran en «todas»: con `all`, se suman las
+	 * que estén marcadas (ADR-0042).
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param array<string, mixed> $raw          `all`, `columns`, `shape`, `format`, `who`.
 	 * @return array{columns:string[], shape:string, format:string, who:string[]}
 	 */
 	public static function sanitize_choice( int $procedure_id, array $raw ): array {
-		$columnas = is_array( $raw['columns'] ?? null ) && empty( $raw['all'] ) ? $raw['columns'] : array();
+		$columnas = is_array( $raw['columns'] ?? null ) ? $raw['columns'] : array();
 		$quienes  = is_array( $raw['who'] ?? null ) ? array_filter( $raw['who'], 'is_string' ) : array();
+		if ( ! empty( $raw['all'] ) ) {
+			// «Todas» es el CSV de siempre; las del catálogo, si se marcaron, se suman.
+			$extras   = array_values( array_intersect( self::extra_columns(), $columnas ) );
+			$columnas = array() === $extras ? array() : array_merge( array_keys( PeopleExport::all_columns( $procedure_id ) ), $extras );
+		}
 		return array(
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,

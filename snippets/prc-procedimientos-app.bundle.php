@@ -9080,6 +9080,15 @@ final class Applications {
 
 
 
+	public const CENTRE_COLUMNS = array( 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' );
+
+
+
+
+
+
+
+
 
 
 	public static function find( int $procedure_id, string $centre_code ): ?int {
@@ -9620,10 +9629,17 @@ final class Applications {
 
 
 
-	public static function columns( array $questions ): array {
+
+
+
+
+	public static function columns( array $questions, bool $centre = false ): array {
 		$out  = array(
-			'centre'            => 'Centro',
-			'code'              => 'Código',
+			'centre' => 'Centro',
+			'code'   => 'Código',
+		);
+		$out += $centre ? self::centre_columns() : array();
+		$out += array(
 			'date'              => 'Fecha',
 			'applicant'         => 'Presentada por',
 			'email'             => 'Correo',
@@ -9646,6 +9662,79 @@ final class Applications {
 
 
 
+	public static function centre_columns(): array {
+		$zona = self::zone_label();
+		return array(
+			'island'       => 'Isla',
+			'municipality' => 'Municipio',
+			'centre_type'  => 'Tipo de centro',
+			'ownership'    => 'Titularidad',
+			'zone'         => $zona,
+			'zone_code'    => $zona . ' (código)',
+		);
+	}
+
+
+
+
+
+
+	public static function zone_label(): string {
+
+
+
+
+
+		$rotulo = apply_filters( 'prc_zone_label', 'Zona' );
+		$rotulo = is_string( $rotulo ) ? trim( wp_strip_all_tags( $rotulo ) ) : '';
+		return '' !== $rotulo ? $rotulo : 'Zona';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function centre_attributes( string $code, ?array $index = null ): array {
+		$code   = trim( $code );
+		$centro = '' === $code ? array() : ( null === $index ? CentreCatalog::find( $code ) : (array) ( $index[ $code ] ?? array() ) );
+		$out    = array();
+		foreach ( array( 'island', 'municipality', 'type', 'ownership', 'zone', 'zone_name' ) as $campo ) {
+			$out[ $campo ] = (string) ( $centro[ $campo ] ?? '' );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function centre_cells( string $code, ?array $index ): array {
+		$centro = self::centre_attributes( $code, $index );
+		return array(
+			'island'       => $centro['island'],
+			'municipality' => $centro['municipality'],
+			'centre_type'  => $centro['type'],
+			'ownership'    => ProcedureMetaKeys::ownership_name( $centro['ownership'] ),
+			'zone'         => $centro['zone_name'],
+			'zone_code'    => $centro['zone'],
+		);
+	}
+
+
+
+
+
+
 
 
 	public static function rows( int $procedure_id, ?array $applications = null ): array {
@@ -9654,8 +9743,10 @@ final class Applications {
 		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
+
+		$catalogo = array() === $solicitudes ? array() : CentreCatalog::index();
 		foreach ( $solicitudes as $solicitud ) {
-			$filas[] = self::row( $solicitud, $preguntas );
+			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}
 		return $filas;
 	}
@@ -9667,13 +9758,17 @@ final class Applications {
 
 
 
-	public static function row( \WP_Post $application, array $questions ): array {
+
+
+
+
+	public static function row( \WP_Post $application, array $questions, ?array $catalogue = null ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
 		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
-		$fila = array(
+		$fila  = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
 			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
@@ -9692,6 +9787,7 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);
+		$fila += self::centre_cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 
 
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
@@ -11158,9 +11254,13 @@ final class PeopleExport {
 
 
 
-	public static function all_columns( int $procedure_id ): array {
+
+
+
+
+	public static function all_columns( int $procedure_id, bool $centre = false ): array {
 		$preguntas = Applications::questions( $procedure_id );
-		$columns   = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$columns   = QuestionGrid::expand( Applications::columns( $preguntas, $centre ), $preguntas );
 		if ( ! People::enabled( $procedure_id ) ) {
 			return $columns;
 		}
@@ -11284,6 +11384,7 @@ final class PeopleExport {
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -11344,7 +11445,7 @@ final class ApplicationExport {
 
 	private const GROUPS = array(
 		'application'  => array( 'date' ),
-		'centre'       => array( 'centre', 'code' ),
+		'centre'       => array( 'centre', 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' ),
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
@@ -11410,8 +11511,10 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function groups( int $procedure_id ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
@@ -11431,7 +11534,7 @@ final class ApplicationExport {
 
 
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -11458,18 +11561,15 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = PeopleExport::all_columns( $procedure_id );
-		$columnas  = self::valid_columns( $procedure_id, $columns );
+		$columnas  = self::ordered( $procedure_id, self::valid_columns( $procedure_id, $columns ) );
 		$personas  = PeopleExport::spec( $procedure_id );
+		$claves    = array_flip( array_keys( $columnas ) );
+		$filas     = array();
 
-		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
-			$columnas = $todas;
-		}
-		$claves = array_flip( array_keys( $columnas ) );
-		$filas  = array();
+		$catalogo = array() !== array_intersect_key( $claves, array_flip( self::extra_columns() ) ) ? CentreCatalog::index() : array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
+				$fila = Applications::row( $solicitud, $preguntas, $catalogo ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
 
 					$filas[] = array_intersect_key( $una, $claves );
@@ -11477,6 +11577,40 @@ final class ApplicationExport {
 			}
 		}
 		return Applications::csv_lines( $columnas, $filas, PeopleExport::VERBATIM );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function ordered( int $procedure_id, array $chosen ): array {
+		$siempre = PeopleExport::all_columns( $procedure_id );
+		$faltan  = array_diff_key( $siempre, $chosen );
+		if ( array() === $chosen || ( array() === $faltan && count( $chosen ) === count( $siempre ) ) ) {
+			return $siempre;
+		}
+		return array() === $faltan ? array_intersect_key( PeopleExport::all_columns( $procedure_id, true ), $chosen ) : $chosen;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function extra_columns(): array {
+		return Applications::CENTRE_COLUMNS;
 	}
 
 
@@ -11881,9 +12015,16 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function sanitize_choice( int $procedure_id, array $raw ): array {
-		$columnas = is_array( $raw['columns'] ?? null ) && empty( $raw['all'] ) ? $raw['columns'] : array();
+		$columnas = is_array( $raw['columns'] ?? null ) ? $raw['columns'] : array();
 		$quienes  = is_array( $raw['who'] ?? null ) ? array_filter( $raw['who'], 'is_string' ) : array();
+		if ( ! empty( $raw['all'] ) ) {
+
+			$extras   = array_values( array_intersect( self::extra_columns(), $columnas ) );
+			$columnas = array() === $extras ? array() : array_merge( array_keys( PeopleExport::all_columns( $procedure_id ) ), $extras );
+		}
 		return array(
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
@@ -16388,7 +16529,7 @@ final class ProcedureEditorView {
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
 							Todas las columnas
 						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas y no se miran las de abajo.</p>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( Applications::zone_label() ) ); ?>), que solo salen si se marcan.</p>
 						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
 							<?php
 							if ( array() === $de_grupo ) {
@@ -16398,8 +16539,13 @@ final class ProcedureEditorView {
 							<fieldset class="prc-exportar__columnas">
 								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
 								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<?php
+
+
+									$extra = in_array( (string) $clave, ApplicationExport::extra_columns(), true );
+									?>
 									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" data-prc-export-col <?php checked( array() === $columnas || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
 										<?php echo esc_html( (string) $rotulo ); ?>
 									</label>
 								<?php endforeach; ?>

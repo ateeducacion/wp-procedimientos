@@ -62,12 +62,16 @@ final class PeopleExport {
 	 * open in its rows (ADR-0040) and the people ones after the coordination,
 	 * when the procedure asks for the list.
 	 *
-	 * @param int $procedure_id Procedure post ID.
+	 * Con `$centre`, también las del catálogo del centro: es lo que se puede
+	 * elegir, no lo que sale sin elegir (ADR-0042).
+	 *
+	 * @param int  $procedure_id Procedure post ID.
+	 * @param bool $centre       Whether to add the catalogue columns of the centre.
 	 * @return array<string, string> key => heading.
 	 */
-	public static function all_columns( int $procedure_id ): array {
+	public static function all_columns( int $procedure_id, bool $centre = false ): array {
 		$preguntas = Applications::questions( $procedure_id );
-		$columns   = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$columns   = QuestionGrid::expand( Applications::columns( $preguntas, $centre ), $preguntas );
 		if ( ! People::enabled( $procedure_id ) ) {
 			return $columns;
 		}

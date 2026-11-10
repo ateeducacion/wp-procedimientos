@@ -180,7 +180,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 
 		$this->assertSame( array( 'application', 'centre', 'applicant', 'coordination', 'review', 'questions' ), array_keys( $grupos ) );
 		$this->assertSame( array_keys( $grupos ), array_keys( ApplicationExport::group_labels( $this->procedimiento() ) ) );
-		$this->assertSame( array( 'centre', 'code' ), array_keys( $grupos['centre'] ) );
+		$this->assertSame( array( 'centre', 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' ), array_keys( $grupos['centre'] ) );
 		$this->assertSame( 'DNI o NIE de coordinación', $grupos['coordination']['coordinator_dni'] );
 		$this->assertSame(
 			array(
@@ -196,7 +196,142 @@ class Test_Application_Export extends WP_UnitTestCase {
 		foreach ( $grupos as $columnas ) {
 			$todas += $columnas;
 		}
-		$this->assertEqualsCanonicalizing( array_keys( Applications::columns( Applications::questions( $this->procedimiento() ) ) ), array_keys( $todas ) );
+		$this->assertEqualsCanonicalizing( array_keys( Applications::columns( Applications::questions( $this->procedimiento() ), true ) ), array_keys( $todas ) );
+	}
+
+	/**
+	 * Un catálogo con isla, municipio, tipo y zona, todo inventado.
+	 *
+	 * @return void
+	 */
+	private function catalogo_con_atributos(): void {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code'         => 'C0001',
+						'name'         => 'Centro de prueba Norte',
+						'type'         => 'CEIP',
+						'island'       => 'Isla Uno',
+						'municipality' => 'Villa Uno',
+						'zone'         => 'Z0001',
+					),
+					array(
+						'code'         => 'C0002',
+						'name'         => 'Centro de prueba Sur',
+						'type'         => 'Tipo Privado',
+						'island'       => 'Isla Dos',
+						'municipality' => 'Villa Dos',
+						'zone'         => 'Z0404',
+					),
+					array(
+						'code' => 'Z0001',
+						'name' => 'Zona Inventada',
+						'type' => 'Centro de zona',
+					),
+				);
+			},
+			20
+		);
+		add_filter(
+			'prc_private_centre_types',
+			static function (): array {
+				return array( 'tipo privado' );
+			}
+		);
+	}
+
+	/**
+	 * Las columnas del catálogo del centro se leen al exportar, con el rótulo
+	 * de la zona que diga la instalación; solo salen si se eligen.
+	 */
+	public function test_the_centre_attributes_come_from_the_catalogue() {
+		$this->catalogo_con_atributos();
+		add_filter(
+			'prc_zone_label',
+			static function () {
+				return 'Distrito';
+			}
+		);
+		$procedimiento = $this->procedimiento();
+		$this->solicitud( $procedimiento, 'C0001', array() );
+		$this->solicitud( $procedimiento, 'C0002', array() );
+		$this->solicitud( $procedimiento, 'X0009', array() );
+
+		$csv = $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' ) ) );
+		$this->assertSame( '"Código";"Isla";"Municipio";"Tipo de centro";"Titularidad";"Distrito";"Distrito (código)"', $csv[0] );
+		$this->assertSame( '"C0001";"Isla Uno";"Villa Uno";"CEIP";"Pública";"Zona Inventada";"Z0001"', $csv[1] );
+		$this->assertSame( '"C0002";"Isla Dos";"Villa Dos";"Tipo Privado";"Privada";"";"Z0404"', $csv[2], 'privada por su tipo; una zona que no está, sin nombre' );
+		$this->assertSame( '"X0009";"";"";"";"";"";""', $csv[3], 'fuera del catálogo, vacío' );
+
+		// Sin elegir, el CSV de siempre: ni una columna del catálogo.
+		$siempre = $this->lineas( ApplicationExport::csv( $procedimiento ) );
+		$this->assertStringNotContainsString( 'Isla', $siempre[0] );
+		$this->assertSame( $siempre, $this->lineas( ApplicationExport::csv( $procedimiento, array_keys( \Prc\PublicFront\PeopleExport::all_columns( $procedimiento ) ) ) ) );
+
+		// Todas las de siempre y además una del catálogo: en el orden de la tabla.
+		$mas = $this->lineas( ApplicationExport::csv( $procedimiento, array_merge( array( 'zone' ), array_keys( \Prc\PublicFront\PeopleExport::all_columns( $procedimiento ) ) ) ) );
+		$this->assertStringStartsWith( '"Centro";"Código";"Distrito";"Fecha"', $mas[0] );
+	}
+
+	/**
+	 * Lo que leen los filtros de los PR siguientes: los atributos de un código, al día.
+	 */
+	public function test_centre_attributes_of_a_code() {
+		$this->catalogo_con_atributos();
+		$this->assertSame(
+			array(
+				'island'       => 'Isla Uno',
+				'municipality' => 'Villa Uno',
+				'type'         => 'CEIP',
+				'ownership'    => 'public',
+				'zone'         => 'Z0001',
+				'zone_name'    => 'Zona Inventada',
+			),
+			Applications::centre_attributes( 'C0001' )
+		);
+		$vacio = array_fill_keys( array( 'island', 'municipality', 'type', 'ownership', 'zone', 'zone_name' ), '' );
+		$this->assertSame( $vacio, Applications::centre_attributes( 'X0009' ) );
+		$this->assertSame( $vacio, Applications::centre_attributes( '' ), 'una solicitud de profesorado no tiene centro' );
+		$this->assertSame( 'Isla Dos', Applications::centre_attributes( 'C0002', \Prc\Domain\CentreCatalog::index() )['island'] );
+		$this->assertSame( 'Zona', Applications::zone_label() );
+	}
+
+	/**
+	 * «Todas las columnas» es el CSV de siempre; las del catálogo marcadas se suman.
+	 */
+	public function test_all_columns_plus_the_catalogue_ones() {
+		$procedimiento = $this->procedimiento();
+		$siempre       = array_keys( \Prc\PublicFront\PeopleExport::all_columns( $procedimiento ) );
+
+		$solo_todas = ApplicationExport::sanitize_choice(
+			$procedimiento,
+			array(
+				'all'     => '1',
+				'columns' => array( 'code' ),
+			)
+		);
+		$this->assertSame( array(), $solo_todas['columns'] );
+
+		$con_isla = ApplicationExport::sanitize_choice(
+			$procedimiento,
+			array(
+				'all'     => '1',
+				'columns' => array( 'island', 'zone' ),
+			)
+		);
+		$this->assertSame( array_merge( $siempre, array( 'island', 'zone' ) ), $con_isla['columns'] );
+
+		$this->acting_as( $this->administrator() );
+		$this->solicitud( $procedimiento, 'C0001', array() );
+		$_GET  = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $procedimiento,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_APPLICATIONS,
+		);
+		$panel = ProcedureEditorView::html( ProcedureEditor::model() );
+		$this->assertStringContainsString( 'value="island" data-prc-export-extra  />', $panel, 'sin marcar y fuera de «Todas»' );
+		$this->assertStringContainsString( 'value="code" data-prc-export-col  checked=\'checked\' />', $panel );
 	}
 
 	/**

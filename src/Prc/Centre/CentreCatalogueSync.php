@@ -418,6 +418,8 @@ final class CentreCatalogueSync {
 
 			// 7. Reemplazo atómico.
 			update_option( CentreCatalogue::OPTION_CATALOGUE, $indexed, false );
+			// Lo que el dominio ya había construido en esta petición es de antes.
+			\Prc\Domain\CentreCatalog::flush();
 
 			$status = array(
 				'schema_version'       => 1,

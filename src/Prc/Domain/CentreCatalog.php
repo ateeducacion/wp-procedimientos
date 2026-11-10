@@ -44,7 +44,66 @@ final class CentreCatalog {
 	public const OPTION_PRIVATE_TYPES = 'prc_private_centre_types';
 
 	/**
+	 * Cache group whose `last_changed` stamps the memo: a cache flush, or
+	 * {@see flush()}, leaves it behind.
+	 */
+	private const CACHE_GROUP = 'prc_centres';
+
+	/**
+	 * The catalogue already built in this request, and what it was built from.
+	 *
+	 * @var array{key:string|null, all:array<int, array<string, mixed>>, index:array<string, array<string, mixed>>|null}
+	 */
+	private static $memo = array(
+		'key'   => null,
+		'all'   => array(),
+		'index' => null,
+	);
+
+	/**
+	 * Hook registration: forget the memo when the catalogue or the private types change.
+	 *
+	 * @return void
+	 */
+	public static function register(): void {
+		foreach ( array( 'added_option', 'updated_option', 'deleted_option' ) as $accion ) {
+			add_action( $accion, array( self::class, 'on_option' ) );
+		}
+	}
+
+	/**
+	 * Forget the memo when one of the options it is built from changes.
+	 *
+	 * @param string $option Option name.
+	 * @return void
+	 */
+	public static function on_option( $option ): void {
+		if ( in_array( $option, array( \Prc\Centre\CentreCatalogue::OPTION_CATALOGUE, self::OPTION_PRIVATE_TYPES ), true ) ) {
+			self::flush();
+		}
+	}
+
+	/**
+	 * Forget the catalogue built in this request. Tests call it too.
+	 *
+	 * @return void
+	 */
+	public static function flush(): void {
+		self::$memo = array(
+			'key'   => null,
+			'all'   => array(),
+			'index' => null,
+		);
+		wp_cache_delete( 'last_changed', self::CACHE_GROUP );
+	}
+
+	/**
 	 * Every school, normalised.
+	 *
+	 * Se construye una vez por petición: la pantalla que pregunta por varios
+	 * códigos no vuelve a recorrer el catálogo. Lo que lo cambia —la opción
+	 * del catálogo, la de los tipos privados o quién contesta los filtros—
+	 * lo vacía.
 	 *
 	 * @return array<int, array{code:string, name:string, ownership:string, kind:string, island:string, municipality:string, type:string, zone:string, zone_name:string, active:bool}>
 	 */
@@ -57,14 +116,16 @@ final class CentreCatalog {
 		 *
 		 * @param array<int, array<string, mixed>> $centres Schools as {code, name, ownership, kind, island, municipality, type, zone, active}.
 		 */
+		$clave = self::memo_key();
+		if ( $clave === self::$memo['key'] ) {
+			return self::$memo['all'];
+		}
 		$default = class_exists( '\Prc\Centre\CentreCatalogue' ) ? \Prc\Centre\CentreCatalogue::for_domain() : array();
 		if ( empty( $default ) ) {
 			$default = self::from_uploads();
 		}
 		$raw = apply_filters( 'prc_centres', $default );
-		if ( ! is_array( $raw ) ) {
-			return array();
-		}
+		$raw = is_array( $raw ) ? $raw : array();
 
 		$privados = self::private_types();
 		$out      = array();
@@ -81,7 +142,30 @@ final class CentreCatalog {
 		foreach ( $out as $i => $centro ) {
 			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
 		}
+		self::$memo = array(
+			'key'   => $clave,
+			'all'   => $out,
+			'index' => null,
+		);
 		return $out;
+	}
+
+	/**
+	 * What the memo depends on: the cache stamp and who answers the filters.
+	 *
+	 * @return string
+	 */
+	private static function memo_key(): string {
+		global $wp_filter;
+		$clave = (string) wp_cache_get_last_changed( self::CACHE_GROUP );
+		foreach ( array( 'prc_centres', 'prc_private_centre_types' ) as $hook ) {
+			$clave  .= '|' . $hook;
+			$ganchos = isset( $wp_filter[ $hook ] ) && $wp_filter[ $hook ] instanceof \WP_Hook ? $wp_filter[ $hook ]->callbacks : array();
+			foreach ( $ganchos as $prioridad => $funciones ) {
+				$clave .= ':' . $prioridad . '=' . implode( ',', array_keys( $funciones ) );
+			}
+		}
+		return $clave;
 	}
 
 	/**
@@ -90,11 +174,11 @@ final class CentreCatalog {
 	 * @return array<string, array<string, mixed>>
 	 */
 	public static function index(): array {
-		$out = array();
-		foreach ( self::all() as $centro ) {
-			$out[ $centro['code'] ] = $centro;
+		$todos = self::all();
+		if ( null === self::$memo['index'] ) {
+			self::$memo['index'] = array_column( $todos, null, 'code' );
 		}
-		return $out;
+		return self::$memo['index'];
 	}
 
 	/**
@@ -108,12 +192,7 @@ final class CentreCatalog {
 		if ( '' === $code ) {
 			return array();
 		}
-		foreach ( self::all() as $centro ) {
-			if ( $centro['code'] === $code ) {
-				return $centro;
-			}
-		}
-		return array();
+		return self::index()[ $code ] ?? array();
 	}
 
 	/**

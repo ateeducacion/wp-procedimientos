@@ -631,16 +631,17 @@ final class Applications {
 	 *
 	 * @param int             $procedure_id Procedure post ID.
 	 * @param \WP_Post[]|null $applications Its applications, if already loaded; null to load them.
+	 * @param bool            $centre       Whether the catalogue columns are painted; without them the catalogue is not read.
 	 * @return array<int, array<string, mixed>> One row per application, keyed by columns(); `id`, `state_key`, `date_label` and {@see KEY_FILES} on top.
 	 */
-	public static function rows( int $procedure_id, ?array $applications = null ): array {
+	public static function rows( int $procedure_id, ?array $applications = null, bool $centre = false ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
 		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 		// Quién presentó cada una: todas las personas en una consulta, no una por fila.
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 		// Y el catálogo, una vez: no una búsqueda por fila.
-		$catalogo = CentreColumns::index_for( $solicitudes );
+		$catalogo = CentreColumns::index_for( $solicitudes, $centre );
 		foreach ( $solicitudes as $solicitud ) {
 			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}

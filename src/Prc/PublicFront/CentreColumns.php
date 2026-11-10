@@ -100,10 +100,11 @@ final class CentreColumns {
 	 * not at all when there are none.
 	 *
 	 * @param \WP_Post[] $applications Applications about to be painted.
+	 * @param bool       $wanted       Whether any catalogue column is painted.
 	 * @return array<string, array<string, mixed>>
 	 */
-	public static function index_for( array $applications ): array {
-		return array() === $applications ? array() : CentreCatalog::index();
+	public static function index_for( array $applications, bool $wanted = true ): array {
+		return $wanted && array() !== $applications ? CentreCatalog::index() : array();
 	}
 
 	/**

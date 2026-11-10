@@ -28,6 +28,7 @@ return array(
 	'Domain/ApplicationInput.php',
 	'Domain/PeopleSpec.php',
 	'Domain/ApplicationPeople.php',
+	'Domain/CentreEligibility.php',
 	'Centre/CentreCatalogue.php',
 	'Centre/CentreCatalogueSync.php',
 	'Domain/CentreCatalog.php',

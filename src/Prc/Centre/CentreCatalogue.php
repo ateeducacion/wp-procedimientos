@@ -25,7 +25,7 @@ final class CentreCatalogue {
 	/**
 	 * All stored centres (both active and inactive), indexed by 8-digit code.
 	 *
-	 * @return array<string, array{code:string, name:string, island:string, municipality:string, type:string, active:bool}>
+	 * @return array<string, array{code:string, name:string, island:string, municipality:string, type:string, zone?:string, ownership?:string, active:bool}>
 	 */
 	public static function all(): array {
 		$raw = get_option( self::OPTION_CATALOGUE, array() );
@@ -35,7 +35,7 @@ final class CentreCatalogue {
 	/**
 	 * All active centres, indexed by code.
 	 *
-	 * @return array<string, array{code:string, name:string, island:string, municipality:string, type:string, active:bool}>
+	 * @return array<string, array{code:string, name:string, island:string, municipality:string, type:string, zone?:string, ownership?:string, active:bool}>
 	 */
 	public static function all_active(): array {
 		$all = self::all();
@@ -76,27 +76,33 @@ final class CentreCatalogue {
 	/**
 	 * Formatted list for Procedure CentreCatalog::all().
 	 *
-	 * @return array<int, array{code:string, name:string, ownership:string}>
+	 * La titularidad solo va si está guardada: la fuente no la trae, y es
+	 * {@see \Prc\Domain\CentreCatalog} quien la deriva del tipo. Rellenarla
+	 * aquí con «público» es lo que hacía que todo centro sincronizado saliera
+	 * público (ADR-0042). Un catálogo guardado antes de la zona no la tiene:
+	 * sale vacía.
+	 *
+	 * @return array<int, array<string, mixed>> {code, name, island, municipality, type, zone, active} and `ownership` when stored.
 	 */
 	public static function for_domain(): array {
-		$all = self::all();
-		if ( empty( $all ) ) {
-			return array();
-		}
-
 		$out = array();
-		foreach ( $all as $code => $centre ) {
-			$ownership = isset( $centre['ownership'] ) && is_string( $centre['ownership'] )
-				? $centre['ownership']
-				: ProcedureMetaKeys::OWNERSHIP_PUBLIC;
-
-			$out[] = array(
-				'code'      => (string) $code,
-				'name'      => isset( $centre['name'] ) ? (string) $centre['name'] : '',
-				'ownership' => ProcedureMetaKeys::in_list( $ownership, ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+		foreach ( self::all() as $code => $centre ) {
+			if ( ! is_array( $centre ) ) {
+				continue;
+			}
+			$fila = array(
+				'code'   => (string) $code,
+				'active' => ! isset( $centre['active'] ) || (bool) $centre['active'],
 			);
+			foreach ( array( 'name', 'island', 'municipality', 'type', 'zone' ) as $campo ) {
+				$fila[ $campo ] = isset( $centre[ $campo ] ) && is_scalar( $centre[ $campo ] ) ? (string) $centre[ $campo ] : '';
+			}
+			$titular = isset( $centre['ownership'] ) && is_string( $centre['ownership'] ) ? $centre['ownership'] : '';
+			if ( '' !== ProcedureMetaKeys::in_list( $titular, ProcedureMetaKeys::ownerships() ) ) {
+				$fila['ownership'] = $titular;
+			}
+			$out[] = $fila;
 		}
-
 		return $out;
 	}
 
@@ -104,7 +110,7 @@ final class CentreCatalogue {
 	 * Find a centre by code (active or inactive).
 	 *
 	 * @param string $code 8-digit official code.
-	 * @return array{code:string, name:string, island:string, municipality:string, type:string, active:bool}|null
+	 * @return array{code:string, name:string, island:string, municipality:string, type:string, zone?:string, ownership?:string, active:bool}|null
 	 */
 	public static function find( string $code ): ?array {
 		$code = trim( $code );

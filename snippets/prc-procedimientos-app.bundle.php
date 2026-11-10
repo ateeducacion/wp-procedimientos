@@ -3357,6 +3357,239 @@ final class ApplicationPeople {
 
 
 
+namespace Prc\Domain;
+
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\CentreEligibility', false ) ) {
+final class CentreEligibility {
+
+
+
+
+	public const MAX_CODES = 2000;
+
+
+
+
+	public const MAX_VALUES = 200;
+
+
+
+
+
+
+
+	public static function fold( string $value ): string {
+		return mb_strtolower( trim( (string) preg_replace( '/\s+/u', ' ', $value ) ), 'UTF-8' );
+	}
+
+
+
+
+
+
+
+	public static function values( $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/\R/u', $raw );
+		}
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $valor ) {
+			$valor = is_scalar( $valor ) ? trim( (string) preg_replace( '/\s+/u', ' ', (string) $valor ) ) : '';
+			if ( '' !== $valor && ! isset( $out[ self::fold( $valor ) ] ) ) {
+				$out[ self::fold( $valor ) ] = $valor;
+			}
+		}
+		return array_slice( array_values( $out ), 0, self::MAX_VALUES );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function parse_codes( $raw ): array {
+		$trozos = is_array( $raw ) ? $raw : preg_split( '/[\s,;]+/u', is_scalar( $raw ) ? (string) $raw : '' );
+		$codes  = array();
+		$malos  = array();
+		foreach ( (array) $trozos as $trozo ) {
+			$trozo = is_scalar( $trozo ) ? trim( (string) $trozo ) : '';
+			if ( '' === $trozo ) {
+				continue;
+			}
+			if ( self::is_code( $trozo ) ) {
+				$codes[ $trozo ] = true;
+			} else {
+				$malos[ $trozo ] = true;
+			}
+		}
+		return array(
+			'codes'   => array_map( 'strval', array_keys( $codes ) ),
+			'invalid' => array_map( 'strval', array_keys( $malos ) ),
+		);
+	}
+
+
+
+
+
+
+
+	public static function codes( $raw ): array {
+		return array_slice( self::parse_codes( $raw )['codes'], 0, self::MAX_CODES );
+	}
+
+
+
+
+
+
+
+
+
+	public static function is_code( string $code ): bool {
+		return (bool) preg_match( '/^[A-Za-z0-9]{3,20}$/', $code );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function input( array $raw, bool $schools ): array {
+		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
+		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
+		return array(
+			'data'   => array(
+				'centre_types'    => $schools ? self::values( $raw['centre_types'] ?? array() ) : array(),
+				'islands'         => $schools ? self::values( $raw['islands'] ?? array() ) : array(),
+				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
+			),
+			'errors' => $schools ? $errors : array(),
+		);
+	}
+
+
+
+
+
+
+
+	public static function rules( array $raw ): array {
+		$titular = is_array( $raw['ownership'] ?? null ) ? array_map( 'strval', array_filter( $raw['ownership'], 'is_scalar' ) ) : array();
+		return array(
+			'ownership' => array_values( array_intersect( array_keys( ProcedureMetaKeys::ownerships() ), $titular ) ),
+			'types'     => self::values( $raw['types'] ?? array() ),
+			'islands'   => self::values( $raw['islands'] ?? array() ),
+			'codes'     => self::codes( $raw['codes'] ?? array() ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function restricted( array $rules ): bool {
+		$titular = (array) ( $rules['ownership'] ?? array() );
+		return ( array() !== $titular && count( $titular ) < count( ProcedureMetaKeys::ownerships() ) )
+			|| array() !== (array) ( $rules['types'] ?? array() )
+			|| array() !== (array) ( $rules['islands'] ?? array() )
+			|| array() !== (array) ( $rules['codes'] ?? array() );
+	}
+
+
+
+
+
+
+
+
+
+	public static function why_not( array $rules, string $code, array $centre ): string {
+		$rules = self::rules( $rules );
+		if ( ! self::restricted( $rules ) ) {
+			return '';
+		}
+		if ( array() !== $rules['codes'] && ! in_array( $code, $rules['codes'], true ) ) {
+			return 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.';
+		}
+		if ( array() === $centre ) {
+			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos. Si cree que es un error, escriba a los correos de contacto del procedimiento.';
+		}
+		$titular = $rules['ownership'];
+		if ( array() !== $titular && ! in_array( (string) ( $centre['ownership'] ?? '' ), $titular, true ) ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::ownerships(), array_flip( $titular ) ) );
+			return 'Este procedimiento es solo para ' . implode( ' y ', $rotulos ) . '.';
+		}
+		if ( ! self::takes( $rules['types'], (string) ( $centre['type'] ?? '' ) ) ) {
+			return 'Este procedimiento es solo para centros de tipo ' . self::either( $rules['types'] ) . '.';
+		}
+		if ( ! self::takes( $rules['islands'], (string) ( $centre['island'] ?? '' ) ) ) {
+			return 'Este procedimiento es solo para centros de ' . self::either( $rules['islands'] ) . '.';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+	private static function takes( array $allowed, string $value ): bool {
+		return array() === $allowed || in_array( self::fold( $value ), array_map( array( self::class, 'fold' ), $allowed ), true );
+	}
+
+
+
+
+
+
+
+	private static function either( array $allowed ): string {
+		$ultimo = (string) array_pop( $allowed );
+		return array() === $allowed ? $ultimo : implode( ', ', $allowed ) . ' o ' . $ultimo;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\Centre;
 
 use Prc\Meta\ProcedureMetaKeys;
@@ -3431,25 +3664,31 @@ final class CentreCatalogue {
 
 
 
+
+
+
+
+
+
 	public static function for_domain(): array {
-		$all = self::all();
-		if ( empty( $all ) ) {
-			return array();
-		}
-
 		$out = array();
-		foreach ( $all as $code => $centre ) {
-			$ownership = isset( $centre['ownership'] ) && is_string( $centre['ownership'] )
-				? $centre['ownership']
-				: ProcedureMetaKeys::OWNERSHIP_PUBLIC;
-
-			$out[] = array(
-				'code'      => (string) $code,
-				'name'      => isset( $centre['name'] ) ? (string) $centre['name'] : '',
-				'ownership' => ProcedureMetaKeys::in_list( $ownership, ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+		foreach ( self::all() as $code => $centre ) {
+			if ( ! is_array( $centre ) ) {
+				continue;
+			}
+			$fila = array(
+				'code'   => (string) $code,
+				'active' => ! isset( $centre['active'] ) || (bool) $centre['active'],
 			);
+			foreach ( array( 'name', 'island', 'municipality', 'type', 'zone' ) as $campo ) {
+				$fila[ $campo ] = isset( $centre[ $campo ] ) && is_scalar( $centre[ $campo ] ) ? (string) $centre[ $campo ] : '';
+			}
+			$titular = isset( $centre['ownership'] ) && is_string( $centre['ownership'] ) ? $centre['ownership'] : '';
+			if ( '' !== ProcedureMetaKeys::in_list( $titular, ProcedureMetaKeys::ownerships() ) ) {
+				$fila['ownership'] = $titular;
+			}
+			$out[] = $fila;
 		}
-
 		return $out;
 	}
 
@@ -3534,6 +3773,7 @@ final class CentreCatalogue {
 
 namespace Prc\Centre;
 
+use Prc\Meta\ProcedureMetaKeys;
 use RuntimeException;
 
 
@@ -3557,6 +3797,47 @@ final class CentreCatalogueSync {
 	public const CRON_HOOK = 'prc_centres_cron_sync';
 
 	public const HTTP_TIMEOUT = 30;
+
+
+
+
+
+	public const SOURCE_ZONE_FIELD = 'cep';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function record( array $item, string $code, string $name, bool $is_active ): array {
+		$texto   = static function ( string $campo ) use ( $item ): string {
+			return isset( $item[ $campo ] ) && is_scalar( $item[ $campo ] ) ? trim( (string) $item[ $campo ] ) : '';
+		};
+		$zona    = $texto( self::SOURCE_ZONE_FIELD );
+		$record  = array(
+			'code'         => $code,
+			'name'         => $name,
+			'island'       => $texto( 'island' ),
+			'municipality' => $texto( 'municipality' ),
+			'type'         => $texto( 'type' ),
+			'zone'         => 1 === preg_match( '/^\d{8}$/', $zona ) ? $zona : '',
+			'active'       => $is_active,
+		);
+		$titular = strtolower( $texto( 'ownership' ) );
+		if ( in_array( $titular, array( ProcedureMetaKeys::OWNERSHIP_PUBLIC, ProcedureMetaKeys::OWNERSHIP_PRIVATE ), true ) ) {
+			$record['ownership'] = $titular;
+		}
+		return $record;
+	}
 
 
 
@@ -3899,14 +4180,7 @@ final class CentreCatalogueSync {
 					++$active_count;
 				}
 
-				$indexed[ $code ] = array(
-					'code'         => $code,
-					'name'         => $name,
-					'island'       => isset( $item['island'] ) && is_scalar( $item['island'] ) ? trim( (string) $item['island'] ) : '',
-					'municipality' => isset( $item['municipality'] ) && is_scalar( $item['municipality'] ) ? trim( (string) $item['municipality'] ) : '',
-					'type'         => isset( $item['type'] ) && is_scalar( $item['type'] ) ? trim( (string) $item['type'] ) : '',
-					'active'       => $is_active,
-				);
+				$indexed[ $code ] = self::record( $item, $code, $name, $is_active );
 			}
 
 
@@ -3967,6 +4241,15 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+
+
+
+
+
+
+
+
+
 if ( ! class_exists( 'Prc\Domain\CentreCatalog', false ) ) {
 final class CentreCatalog {
 
@@ -3974,6 +4257,12 @@ final class CentreCatalog {
 
 
 	public const SEARCH_LIMIT = 20;
+
+
+
+
+
+	public const OPTION_PRIVATE_TYPES = 'prc_private_centre_types';
 
 
 
@@ -3998,23 +4287,33 @@ final class CentreCatalog {
 			return array();
 		}
 
-		$out    = array();
-		$vistos = array();
+		$privados = self::private_types();
+		$out      = array();
+		$nombres  = array();
 		foreach ( $raw as $item ) {
-			if ( ! is_array( $item ) ) {
+			$centro = is_array( $item ) ? self::normalise( $item, $privados ) : null;
+			if ( null === $centro || isset( $nombres[ $centro['code'] ] ) ) {
 				continue;
 			}
-			$code = isset( $item['code'] ) && is_scalar( $item['code'] ) ? trim( (string) $item['code'] ) : '';
-			if ( '' === $code || isset( $vistos[ $code ] ) ) {
-				continue;
-			}
-			$vistos[ $code ] = true;
-			$out[]           = array(
-				'code'      => $code,
-				'name'      => isset( $item['name'] ) && is_scalar( $item['name'] ) ? trim( (string) $item['name'] ) : '',
-				'ownership' => ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
-				'kind'      => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
-			);
+			$nombres[ $centro['code'] ] = $centro['name'];
+			$out[]                      = $centro;
+		}
+
+		foreach ( $out as $i => $centro ) {
+			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+	public static function index(): array {
+		$out = array();
+		foreach ( self::all() as $centro ) {
+			$out[ $centro['code'] ] = $centro;
 		}
 		return $out;
 	}
@@ -4059,6 +4358,87 @@ final class CentreCatalog {
 			}
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function values( string $field ): array {
+		$out = array();
+		foreach ( self::all() as $centro ) {
+			$valor = (string) ( $centro[ $field ] ?? '' );
+			if ( '' !== $valor && ! isset( $out[ CentreEligibility::fold( $valor ) ] ) ) {
+				$out[ CentreEligibility::fold( $valor ) ] = $valor;
+			}
+		}
+		$out = array_values( $out );
+		usort( $out, 'strnatcasecmp' );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function private_types(): array {
+		$guardados = get_option( self::OPTION_PRIVATE_TYPES, array() );
+
+
+
+
+
+		$tipos = apply_filters( 'prc_private_centre_types', is_array( $guardados ) ? $guardados : array() );
+		return array_map( array( CentreEligibility::class, 'fold' ), CentreEligibility::values( $tipos ) );
+	}
+
+
+
+
+
+
+
+
+	private static function normalise( array $item, array $privados ): ?array {
+		$code = self::text( $item, 'code' );
+		if ( '' === $code ) {
+			return null;
+		}
+		$tipo      = self::text( $item, 'type' );
+		$explicita = ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships() );
+		$derivada  = in_array( CentreEligibility::fold( $tipo ), $privados, true ) ? ProcedureMetaKeys::OWNERSHIP_PRIVATE : ProcedureMetaKeys::OWNERSHIP_PUBLIC;
+		return array(
+			'code'         => $code,
+			'name'         => self::text( $item, 'name' ),
+			'ownership'    => '' !== $explicita ? $explicita : $derivada,
+			'kind'         => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
+			'island'       => self::text( $item, 'island' ),
+			'municipality' => self::text( $item, 'municipality' ),
+			'type'         => $tipo,
+			'zone'         => self::text( $item, 'zone' ),
+			'zone_name'    => '',
+			'active'       => ! array_key_exists( 'active', $item ) || (bool) $item['active'],
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function text( array $item, string $field ): string {
+		return isset( $item[ $field ] ) && is_scalar( $item[ $field ] ) ? trim( (string) $item[ $field ] ) : '';
 	}
 
 

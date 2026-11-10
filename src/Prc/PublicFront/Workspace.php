@@ -416,15 +416,14 @@ final class Workspace {
 	 *
 	 * @param int                $pedido What the URL asked for.
 	 * @param array<int, string> $cursos The courses in scope, newest first.
-	 * @return int 0 = todos los cursos.
+	 * @return int 0 when there are no available courses.
 	 */
 	private static function course_shown( int $pedido, array $cursos ): int {
 		if ( isset( $cursos[ $pedido ] ) ) {
 			return $pedido;
 		}
-		// Un curso que no está deja de acotar; sin pedir ninguno se enseña el
-		// más reciente, que es el que se trabaja.
-		return $pedido > 0 || array() === $cursos ? 0 : (int) array_key_first( $cursos );
+		// Un curso que no está no debe mezclar convocatorias: se vuelve al más reciente.
+		return array() === $cursos ? 0 : (int) array_key_first( $cursos );
 	}
 
 	/**

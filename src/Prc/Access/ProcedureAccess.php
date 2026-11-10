@@ -740,6 +740,9 @@ final class ProcedureAccess {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
+			return array();
+		}
 		$kinds     = self::centre_kinds( $post_id );
 		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
 		$ownership = is_array( $ownership ) ? $ownership : array();
@@ -750,7 +753,7 @@ final class ProcedureAccess {
 			if ( ! in_array( $kind, $kinds, true ) ) {
 				continue;
 			}
-			if ( array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
+			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
 				continue;
 			}
 			$out[ $code ] = $kind;

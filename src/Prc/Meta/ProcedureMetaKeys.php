@@ -249,7 +249,7 @@ final class ProcedureMetaKeys {
 	public static function centre_kinds(): array {
 		return array(
 			self::KIND_SCHOOL      => 'Cada centro educativo, con su código',
-			self::KIND_RURAL_GROUP => 'Agrupaciones de escuelas rurales, como colectivo',
+			self::KIND_RURAL_GROUP => 'Un CER, como colectivo y con su código',
 		);
 	}
 

@@ -263,11 +263,11 @@ class Test_Workspace extends WP_UnitTestCase {
 		$_GET[ Workspace::VAR_COURSE ] = (string) $viejo;
 		$this->assertSame( array( 'La del curso pasado' ), $this->titulos( Workspace::model() ) );
 
-		// Un curso que no está deja de acotar en vez de vaciar la pantalla.
+		// Un curso inválido vuelve al más reciente, sin mezclar cursos.
 		$_GET[ Workspace::VAR_COURSE ] = '999999';
 		$m                             = Workspace::model();
-		$this->assertSame( 0, $m['selection']['course'] );
-		$this->assertSame( array( 'La de este curso', 'La del curso pasado' ), $this->titulos( $m ) );
+		$this->assertSame( $nuevo, $m['selection']['course'] );
+		$this->assertSame( array( 'La de este curso' ), $this->titulos( $m ) );
 	}
 
 	/**
@@ -473,7 +473,7 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Buscar en la tabla', $html );
 		$this->assertStringContainsString( 'value="red"', $html );
 		$seguido = (string) preg_replace( '/\s+/', ' ', $html );
-		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento de <strong>todos los cursos</strong> que contiene «<strong>red</strong>»:', $seguido, 'una fila es un procedimiento, no «1 procedimientos»' );
+		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento que contiene «<strong>red</strong>»:', $seguido, 'una fila es un procedimiento, no «1 procedimientos»' );
 	}
 
 	/**
@@ -519,12 +519,12 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertSame( 7, count( Workspace::state_icons() ) );
 		$this->assertStringContainsString( 'fechas no cuadran', $html );
 
-		// Una pestaña por curso, navegables por URL, más la de todos.
+		// Una pestaña por curso, navegables por URL.
 		// El rótulo de la pestaña es el nombre del término tal cual: en el sitio
 		// el vocabulario ya se llama «Curso 2026-2027» y aquí «2026-2027».
 		$this->assertStringContainsString( 'aria-current="page"> 2026-2027 </a>', $seguido );
 		$this->assertStringContainsString( '> 2025-2026 </a>', $seguido );
-		$this->assertStringContainsString( 'Todos los cursos', $html );
+		$this->assertStringNotContainsString( 'Todos los cursos', $html );
 		$this->assertStringContainsString( esc_url( Workspace::url( $m['selection'], array( 'course' => $viejo ) ) ), $html );
 
 		// El recuento del curso que se está mirando.

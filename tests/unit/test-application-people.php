@@ -218,8 +218,20 @@ class Test_Application_People extends WP_UnitTestCase {
 			$res = PeopleSpec::from_input( array( 'enabled' => true ) + $crudo, $vacia );
 			$this->assertNotSame( '', $res['error'], $caso );
 		}
-		// Apagada no exige nada.
+		// Apagada no exige papeles, pero lo demás se valida igual: al volver
+		// a encenderla, lo guardado tiene que servir.
 		$this->assertSame( '', PeopleSpec::from_input( array( 'enabled' => false ), $vacia )['error'] );
+		$this->assertNotSame(
+			'',
+			PeopleSpec::from_input(
+				array(
+					'enabled' => false,
+					'min'     => '5',
+					'max'     => '4',
+				),
+				$vacia
+			)['error']
+		);
 	}
 
 	/**

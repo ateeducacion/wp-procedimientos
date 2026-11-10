@@ -97,6 +97,9 @@ final class ApplyFormView {
 			echo self::summary( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
 		self::deliveries( $m );
+		// La lista de personas, con su propia ventana: fuera del formulario de
+		// la solicitud, que puede estar cerrado mientras ella sigue abierta.
+		echo PeopleView::section( (array) ( $m['people'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 

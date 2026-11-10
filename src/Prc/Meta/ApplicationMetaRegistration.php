@@ -9,6 +9,7 @@ namespace Prc\Meta;
 
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
 
 /**
@@ -283,12 +284,32 @@ final class ApplicationMetaRegistration {
 			if ( ! ProcedureQuestions::is_key( $key ) ) {
 				continue;
 			}
-			if ( is_bool( $respuesta ) ) {
+			if ( is_bool( $respuesta ) || is_int( $respuesta ) ) {
 				$out[ $key ] = $respuesta;
 			} elseif ( is_array( $respuesta ) ) {
-				$out[ $key ] = array_values( array_map( 'sanitize_text_field', array_filter( $respuesta, 'is_scalar' ) ) );
+				$out[ $key ] = self::answer_list( $respuesta );
 			} elseif ( is_scalar( $respuesta ) ) {
 				$out[ $key ] = sanitize_textarea_field( (string) $respuesta );
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The values of an answer that is a list: the ticked choices, or the
+	 * counts of a grid by row key (ADR-0040).
+	 *
+	 * @param array<mixed> $values Raw values.
+	 * @return array<int|string, int|string>
+	 */
+	private static function answer_list( array $values ): array {
+		$out = array();
+		foreach ( array_filter( $values, 'is_scalar' ) as $clave => $valor ) {
+			$limpio = is_int( $valor ) ? $valor : sanitize_text_field( (string) $valor );
+			if ( QuestionGrid::is_row_key( (string) $clave ) ) {
+				$out[ (string) $clave ] = $limpio;
+			} else {
+				$out[] = $limpio;
 			}
 		}
 		return $out;

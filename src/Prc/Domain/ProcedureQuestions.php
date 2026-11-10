@@ -15,20 +15,27 @@ namespace Prc\Domain;
  * Hoy las «opciones» de una convocatoria son cuatro pares título/indicaciones
  * con respuesta libre, más un subformulario de casillas o lista, más —si no
  * basta— un formulario anexo clonado de una plantilla por convocatoria. Aquí
- * son una lista de hasta veinte preguntas de cinco tipos (ADR-0019, y `file`
- * desde la ADR-0028), y el
- * tipo es toda la validación que existe: ni condiciones ni reglas propias.
+ * son una lista de hasta cuarenta preguntas de ocho tipos (ADR-0019; `file`
+ * desde la ADR-0028; número, fecha y rejilla, y los puntos de «varias
+ * opciones», desde la ADR-0040), y el tipo es toda la validación que existe:
+ * ni condiciones ni reglas propias.
  *
  * Cada pregunta lleva una `key` que genera el aplicativo (`q` + número) y que
  * no cambia al reordenar: las respuestas se guardan bajo ella, así que
- * reescribir un rótulo no desconecta lo ya contestado.
+ * reescribir un rótulo no desconecta lo ya contestado. Las filas de una
+ * rejilla, igual: cada una lleva la suya (`r` + número).
  */
 final class ProcedureQuestions {
 
 	/**
 	 * Cuántas preguntas como mucho.
 	 */
-	public const MAX = 20;
+	public const MAX = 40;
+
+	/**
+	 * Cuántas filas como mucho en una rejilla.
+	 */
+	public const MAX_ROWS = 30;
 
 	/**
 	 * Cuántas opciones como mucho en una pregunta.
@@ -59,7 +66,27 @@ final class ProcedureQuestions {
 	public const TYPE_FILE = 'file';
 
 	/**
-	 * The five question types, with their label.
+	 * Un número entero: cero o más, salvo que el mínimo diga otra cosa (ADR-0040).
+	 */
+	public const TYPE_NUMBER = 'number';
+
+	/**
+	 * Un día del calendario, `Y-m-d` (ADR-0040).
+	 */
+	public const TYPE_DATE = 'date';
+
+	/**
+	 * Una cantidad entera por fila: alumnado por etapa, grupos por nivel (ADR-0040).
+	 */
+	public const TYPE_GRID = 'grid';
+
+	/**
+	 * Largest integer a number answer may have, in digits: no overflow anywhere.
+	 */
+	private const INT_RE = '/^-?\d{1,9}$/';
+
+	/**
+	 * The eight question types, with their label.
 	 *
 	 * @return array<string, string>
 	 */
@@ -70,6 +97,9 @@ final class ProcedureQuestions {
 			self::TYPE_MULTIPLE => 'Varias opciones',
 			self::TYPE_YESNO    => 'Sí o no',
 			self::TYPE_FILE     => 'Archivo',
+			self::TYPE_NUMBER   => 'Número',
+			self::TYPE_DATE     => 'Fecha',
+			self::TYPE_GRID     => 'Cantidades por fila',
 		);
 	}
 
@@ -102,8 +132,13 @@ final class ProcedureQuestions {
 	 * creadas— reciben la siguiente libre, contando desde la mayor vista, así
 	 * que borrar una y crear otra nunca reutiliza una clave con respuestas.
 	 *
+	 * Cada tipo añade lo suyo detrás de esas seis claves: `number`, `min` y
+	 * `max` (enteros o null); `grid`, `rows` (`{key, label}`) y `row_seq`, la
+	 * mayor clave de fila que ha tenido, para no darle a una fila nueva la de
+	 * una borrada; `multiple` con puntos, `points`, un entero por opción.
+	 *
 	 * @param mixed $raw Raw list.
-	 * @return array<int, array{key:string, label:string, help:string, type:string, required:bool, choices:string[]}>
+	 * @return array<int, array<string, mixed>>
 	 */
 	public static function sanitize( $raw ): array {
 		if ( ! is_array( $raw ) ) {
@@ -144,7 +179,7 @@ final class ProcedureQuestions {
 	 * Normalise one question.
 	 *
 	 * @param array<string, mixed> $raw Raw question.
-	 * @return array{key:string, label:string, help:string, type:string, required:bool, choices:string[]}
+	 * @return array<string, mixed>
 	 */
 	private static function one( array $raw ): array {
 		$type = isset( $raw['type'] ) && is_scalar( $raw['type'] ) ? (string) $raw['type'] : '';
@@ -159,14 +194,38 @@ final class ProcedureQuestions {
 			'help'     => self::text( $raw, 'help' ),
 			'type'     => $type,
 			'required' => ! empty( $raw['required'] ),
-			'choices'  => self::has_choices( $type ) ? self::choices( $raw['choices'] ?? array() ) : array(),
+			'choices'  => array(),
 		);
+		if ( self::has_choices( $type ) ) {
+			$question = array_merge( $question, QuestionPoints::choices( $type, $raw ) );
+		}
 		if ( self::TYPE_FILE === $type && ! empty( $raw['delivery'] ) ) {
 			$question['delivery']  = true;
 			$question['opens_at']  = self::text( $raw, 'opens_at' );
 			$question['closes_at'] = self::text( $raw, 'closes_at' );
 		}
+		if ( self::TYPE_NUMBER === $type ) {
+			$question['min'] = self::integer( $raw['min'] ?? null );
+			$question['max'] = self::integer( $raw['max'] ?? null );
+		}
+		if ( self::TYPE_GRID === $type ) {
+			$question += QuestionGrid::rows( $raw['rows'] ?? array(), (int) ( $raw['row_seq'] ?? 0 ) );
+		}
 		return $question;
+	}
+
+	/**
+	 * An integer, or null: what a range limit or a count may be.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int|null
+	 */
+	public static function integer( $value ): ?int {
+		if ( is_int( $value ) ) {
+			return $value;
+		}
+		$texto = is_string( $value ) ? trim( $value ) : '';
+		return preg_match( self::INT_RE, $texto ) ? (int) $texto : null;
 	}
 
 	/**
@@ -256,7 +315,11 @@ final class ProcedureQuestions {
 	 * Validate the answers of one school against the questions of the procedure.
 	 *
 	 * El tipo es toda la validación que hay: una opción de la lista es una de
-	 * la lista, y un texto es un texto de hasta {@see TEXT_MAX} caracteres.
+	 * la lista, un texto es un texto de hasta {@see TEXT_MAX} caracteres, un
+	 * número es un entero en su rango, una fecha es un día que existe y una
+	 * rejilla, un entero de cero en adelante por fila. Lo que no encaja es un
+	 * error aunque la pregunta sea opcional; sin responder solo lo es si es
+	 * obligatoria.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
 	 * @param array<string, mixed>             $answers   Raw answers, keyed by question key.
@@ -267,8 +330,7 @@ final class ProcedureQuestions {
 		$datos   = array();
 
 		foreach ( $questions as $pregunta ) {
-			$key   = (string) ( $pregunta['key'] ?? '' );
-			$valor = $answers[ $key ] ?? null;
+			$key = (string) ( $pregunta['key'] ?? '' );
 
 			// Un documento no pasa por aquí, ni para validarse ni para
 			// guardarse: esto es puro y no lee `$_FILES`. El fichero es del
@@ -278,42 +340,9 @@ final class ProcedureQuestions {
 				continue;
 			}
 
-			switch ( $pregunta['type'] ?? self::TYPE_TEXT ) {
-				case self::TYPE_YESNO:
-					$datos[ $key ] = self::yes( $valor );
-					if ( ! empty( $pregunta['required'] ) && ! $datos[ $key ] ) {
-						$errores[] = $key;
-					}
-					break;
-
-				case self::TYPE_SINGLE:
-					$elegida       = is_scalar( $valor ) ? trim( (string) $valor ) : '';
-					$datos[ $key ] = in_array( $elegida, (array) ( $pregunta['choices'] ?? array() ), true ) ? $elegida : '';
-					if ( ! empty( $pregunta['required'] ) && '' === $datos[ $key ] ) {
-						$errores[] = $key;
-					}
-					break;
-
-				case self::TYPE_MULTIPLE:
-					$limpias = array();
-					foreach ( is_array( $valor ) ? $valor : array() as $una ) {
-						$una = is_scalar( $una ) ? trim( (string) $una ) : '';
-						if ( in_array( $una, (array) ( $pregunta['choices'] ?? array() ), true ) && ! in_array( $una, $limpias, true ) ) {
-							$limpias[] = $una;
-						}
-					}
-					$datos[ $key ] = $limpias;
-					if ( ! empty( $pregunta['required'] ) && array() === $limpias ) {
-						$errores[] = $key;
-					}
-					break;
-
-				default:
-					$texto         = is_scalar( $valor ) ? trim( (string) $valor ) : '';
-					$datos[ $key ] = mb_substr( $texto, 0, self::TEXT_MAX );
-					if ( ! empty( $pregunta['required'] ) && '' === $datos[ $key ] ) {
-						$errores[] = $key;
-					}
+			list( $datos[ $key ], $mal ) = self::answer( $pregunta, $answers[ $key ] ?? null );
+			if ( $mal ) {
+				$errores[] = $key;
 			}
 		}
 
@@ -325,6 +354,87 @@ final class ProcedureQuestions {
 	}
 
 	/**
+	 * One answer, cleaned, and whether it is wrong.
+	 *
+	 * @param array<string, mixed> $question Normalised question.
+	 * @param mixed                $value    Raw answer.
+	 * @return array{0:mixed, 1:bool}
+	 */
+	private static function answer( array $question, $value ): array {
+		$tipo = (string) ( $question['type'] ?? self::TYPE_TEXT );
+		if ( self::has_choices( $tipo ) ) {
+			return self::choice_answer( $question, $value );
+		}
+		if ( self::TYPE_NUMBER === $tipo ) {
+			return self::number_answer( $question, $value );
+		}
+		if ( self::TYPE_GRID === $tipo ) {
+			return QuestionGrid::answer( $question, $value );
+		}
+		$obliga = ! empty( $question['required'] );
+		if ( self::TYPE_YESNO === $tipo ) {
+			$si = self::yes( $value );
+			return array( $si, $obliga && ! $si );
+		}
+		$texto = is_scalar( $value ) ? trim( (string) $value ) : '';
+		if ( self::TYPE_DATE === $tipo ) {
+			return array( $texto, '' === $texto ? $obliga : ! ProcedureInput::is_valid_date( $texto ) );
+		}
+		$texto = mb_substr( $texto, 0, self::TEXT_MAX );
+		return array( $texto, $obliga && '' === $texto );
+	}
+
+	/**
+	 * A choice answer: one of the list, or several of it without repeats.
+	 *
+	 * @param array<string, mixed> $question Normalised question with choices.
+	 * @param mixed                $value    Raw answer.
+	 * @return array{0:string|string[], 1:bool}
+	 */
+	private static function choice_answer( array $question, $value ): array {
+		$opciones = (array) ( $question['choices'] ?? array() );
+		$obliga   = ! empty( $question['required'] );
+		if ( self::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
+			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
+			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
+			return array( $elegida, $obliga && '' === $elegida );
+		}
+		$limpias = array();
+		foreach ( is_array( $value ) ? $value : array() as $una ) {
+			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
+			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
+				$limpias[] = $una;
+			}
+		}
+		return array( $limpias, $obliga && array() === $limpias );
+	}
+
+	/**
+	 * A number answer: an integer between the question's limits, or empty.
+	 *
+	 * Sin mínimo, el mínimo es cero. Se aceptan los espacios de alrededor y
+	 * los ceros a la izquierda; no el signo «+», ni decimales, ni separadores
+	 * de miles. Cero es una respuesta; vacío, no.
+	 *
+	 * @param array<string, mixed> $question Normalised question.
+	 * @param mixed                $value    Raw answer.
+	 * @return array{0:int|string, 1:bool}
+	 */
+	private static function number_answer( array $question, $value ): array {
+		$texto = is_scalar( $value ) ? trim( (string) $value ) : '';
+		if ( '' === $texto ) {
+			return array( '', ! empty( $question['required'] ) );
+		}
+		$numero = self::integer( $texto );
+		$minimo = self::integer( $question['min'] ?? null ) ?? 0;
+		$maximo = self::integer( $question['max'] ?? null );
+		if ( null === $numero || $numero < $minimo || ( null !== $maximo && $numero > $maximo ) ) {
+			return array( $texto, true );
+		}
+		return array( $numero, false );
+	}
+
+	/**
 	 * One stored answer, as the text that goes in a column.
 	 *
 	 * @param array<string, mixed> $question Normalised question.
@@ -332,8 +442,15 @@ final class ProcedureQuestions {
 	 * @return string
 	 */
 	public static function as_text( array $question, $answer ): string {
-		if ( self::TYPE_YESNO === ( $question['type'] ?? '' ) ) {
+		$tipo = $question['type'] ?? '';
+		if ( self::TYPE_YESNO === $tipo ) {
 			return self::yes( $answer ) ? 'Sí' : 'No';
+		}
+		if ( self::TYPE_GRID === $tipo ) {
+			return QuestionGrid::text( $question, $answer );
+		}
+		if ( self::TYPE_DATE === $tipo && is_string( $answer ) && ProcedureInput::is_valid_date( $answer ) ) {
+			return implode( '/', array_reverse( explode( '-', $answer ) ) );
 		}
 		if ( is_array( $answer ) ) {
 			return implode( ', ', array_map( 'strval', $answer ) );

@@ -817,4 +817,158 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 		);
 		$this->assertStringContainsString( 'mínimo', QuestionChanges::refusal( array(), $rango, array() ) );
 	}
+
+	// ─── correcciones de la revisión ───────────────────────────────────────
+
+	/**
+	 * Las claves nuevas salen de un contador que nunca baja: borrar la última
+	 * y crear otra no le da su clave.
+	 */
+	public function test_new_keys_follow_a_counter_that_never_goes_down() {
+		$seq       = 3;
+		$preguntas = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'   => 'q1',
+					'label' => 'Queda',
+				),
+				array( 'label' => 'Nueva' ),
+			),
+			$seq
+		);
+		$this->assertSame( array( 'q1', 'q4' ), wp_list_pluck( $preguntas, 'key' ), 'q3 se borró: no vuelve' );
+		$this->assertSame( 4, $seq );
+
+		$seq = 0;
+		ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'   => 'q7',
+					'label' => 'Más alta',
+				),
+			),
+			$seq
+		);
+		$this->assertSame( 7, $seq, 'el contador sube con la mayor clave vista' );
+
+		$this->assertSame( array( 'q1' ), wp_list_pluck( ProcedureQuestions::sanitize( array( array( 'label' => 'Sin contador' ) ) ), 'key' ) );
+	}
+
+	/**
+	 * Unas opciones guardadas como lista y sin `points` se toman tal cual:
+	 * los puntos solo se leen en el texto que escribe el taller.
+	 */
+	public function test_stored_choices_without_points_are_taken_literally() {
+		$q = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Curso',
+					'type'    => 'multiple',
+					'choices' => array( 'Curso | 2024', 'Otro' ),
+				),
+			)
+		);
+
+		$this->assertSame( array( 'Curso | 2024', 'Otro' ), $q[0]['choices'] );
+		$this->assertArrayNotHasKey( 'points', $q[0] );
+		$this->assertFalse( QuestionPoints::has_points( $q ) );
+		$this->assertSame( array( 'Curso | 2024' ), ProcedureQuestions::validate_answers( $q, array( 'q1' => array( 'Curso | 2024' ) ) )['data']['q1'], 'lo guardado sigue casando' );
+		$this->assertNull( QuestionPoints::score( $q, array( 'q1' => array( 'Curso | 2024' ) ) ) );
+	}
+
+	/**
+	 * Sin mínimo, el mínimo es cero: un máximo negativo es un rango imposible.
+	 */
+	public function test_a_negative_maximum_without_minimum_is_refused() {
+		$q = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label' => 'Grupos',
+					'type'  => 'number',
+					'max'   => -3,
+				),
+			)
+		);
+		$this->assertStringContainsString( 'mínimo', QuestionChanges::refusal( array(), $q, array() ) );
+	}
+
+	/**
+	 * Si una línea igual que una fila de antes cambió de sitio, ninguna otra
+	 * hereda clave por posición.
+	 */
+	public function test_a_shifted_exact_line_stops_positional_keys() {
+		$antes = array(
+			array(
+				'key'   => 'r1',
+				'label' => 'Infantil',
+			),
+			array(
+				'key'   => 'r2',
+				'label' => 'Primaria',
+			),
+			array(
+				'key'   => 'r3',
+				'label' => 'ESO',
+			),
+		);
+		$this->assertSame( array( 'r2', '', '' ), wp_list_pluck( QuestionGrid::match_rows( "Primaria\nX\nY", $antes ), 'key' ) );
+	}
+
+	/**
+	 * Una fila que llega como lista no es una cantidad: es un error, no un vacío.
+	 */
+	public function test_a_nested_grid_row_is_an_error() {
+		$r = ProcedureQuestions::validate_answers( $this->rejilla(), array( 'q4' => array( 'r1' => array( 'x' ) ) ) );
+		$this->assertSame( array( 'q4' ), $r['errors'] );
+	}
+
+	/**
+	 * Unos puntos o un rango mal escritos en el taller se avisan, no se guardan como texto.
+	 */
+	public function test_badly_written_points_and_ranges_are_reported() {
+		$pregunta = function ( array $cambios ): array {
+			return array(
+				array_merge(
+					array(
+						'label' => 'Méritos',
+						'type'  => 'multiple',
+					),
+					$cambios
+				),
+			);
+		};
+
+		$this->assertStringContainsString( '«B | -2»', QuestionChanges::input_errors( $pregunta( array( 'choices' => "A | 3\nB | -2" ) ) ) );
+		$this->assertStringContainsString( '«C | 1.5»', QuestionChanges::input_errors( $pregunta( array( 'choices' => 'C | 1.5' ) ) ) );
+		$this->assertSame( '', QuestionChanges::input_errors( $pregunta( array( 'choices' => "A | B\nSin número | x\nC | 0\nD" ) ) ) );
+		$this->assertSame( '', QuestionChanges::input_errors( $pregunta( array( 'choices' => array( 'B | -2' ) ) ) ), 'lo guardado no se revisa' );
+		$this->assertSame(
+			'',
+			QuestionChanges::input_errors(
+				$pregunta(
+					array(
+						'type'    => 'single',
+						'choices' => 'B | -2',
+					)
+				)
+			),
+			'una sola opción no lleva puntos'
+		);
+
+		$numero = function ( string $min, string $max ): array {
+			return array(
+				array(
+					'label' => 'Grupos',
+					'type'  => 'number',
+					'min'   => $min,
+					'max'   => $max,
+				),
+			);
+		};
+		$this->assertStringContainsString( 'mínimo', QuestionChanges::input_errors( $numero( 'abc', '' ) ) );
+		$this->assertStringContainsString( 'máximo', QuestionChanges::input_errors( $numero( '', '1,5' ) ) );
+		$this->assertSame( '', QuestionChanges::input_errors( $numero( ' -2 ', '10' ) ) );
+		$this->assertSame( '', QuestionChanges::input_errors( $numero( '', '' ) ) );
+	}
 }

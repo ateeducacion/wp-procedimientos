@@ -29,8 +29,8 @@ use Prc\Meta\ProcedureMetaKeys;
  * también y no solo en la pantalla: un POST armado a mano se para igual.
  *
  * Tocar personas **no** devuelve la solicitud a «presentada» ni cambia la
- * nota de revisión: solo escribe `prc_people`, una entrada en el historial
- * ({@see ApplicationLog}) y emite `prc_people_changed`.
+ * nota de revisión: solo escribe `prc_people` y emite `prc_people_changed`,
+ * que el historial ({@see ApplicationHistory}) y el correo escuchan.
  */
 final class People {
 
@@ -226,7 +226,7 @@ final class People {
 	}
 
 	/**
-	 * Log a change already written and tell whoever listens.
+	 * Tell whoever listens —the history, the mail— of a change already written.
 	 *
 	 * @param int                   $application_id Application post ID.
 	 * @param int                   $user_id        Who did it.
@@ -236,20 +236,12 @@ final class People {
 	 * @return array{ok:bool, error:string, errors:array<string, string>, changed:bool, stale:bool}
 	 */
 	private static function written( int $application_id, int $user_id, string $change, array $before, array $after ): array {
-		ApplicationLog::add(
-			$application_id,
-			'person_' . $change,
-			array(
-				'before' => $before,
-				'after'  => $after,
-			),
-			$user_id
-		);
-
 		/**
 		 * One person of the list of an application has just been added, changed or removed.
 		 *
-		 * Solo después de que la lista quede escrita.
+		 * Solo después de que la lista quede escrita. El historial lo anota
+		 * escuchando esta acción ({@see ApplicationHistory}), como el resto de
+		 * actuaciones sobre la solicitud.
 		 *
 		 * @param int                   $application_id Application post ID.
 		 * @param string                $change         `added`, `changed` or `removed`.

@@ -53,6 +53,7 @@ return array(
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
 	'PublicFront/ApplicationLog.php',
+	'PublicFront/ApplicationHistory.php',
 	'PublicFront/People.php',
 	'PublicFront/PeopleExport.php',
 	'PublicFront/ApplicationExport.php',

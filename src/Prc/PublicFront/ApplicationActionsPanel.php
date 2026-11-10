@@ -85,6 +85,15 @@ final class ApplicationActionsPanel {
 	);
 
 	/**
+	 * Who withdrew an application, as «Retiradas» says it.
+	 */
+	private const ORIGINS = array(
+		ApplicationOperations::BY_APPLICANT => 'Quien la presentó',
+		ApplicationOperations::BY_REVIEWER  => 'Quien revisa',
+		ApplicationOperations::BY_DESK      => 'Desde el escritorio',
+	);
+
+	/**
 	 * What a refused submit sent, to paint it again.
 	 *
 	 * @var array<string, string>
@@ -350,7 +359,7 @@ final class ApplicationActionsPanel {
 				'id'      => $id,
 				'who'     => '' !== $codigo ? trim( ( '' !== $nombre ? $nombre : '(centro fuera del catálogo)' ) . ' (' . $codigo . ')' ) : ( false !== $autor ? (string) $autor->display_name : '' ),
 				'when'    => '' !== (string) ( $ultima['at'] ?? '' ) ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( (string) $ultima['at'] ) ) : (string) get_the_modified_date( 'd-m-Y H:i', $post ),
-				'by'      => ApplicationOperations::BY_APPLICANT === ( $ultima['data']['by'] ?? '' ) ? 'El centro' : 'Quien revisa',
+				'by'      => self::ORIGINS[ (string) ( $ultima['data']['by'] ?? '' ) ] ?? self::ORIGINS[ ApplicationOperations::BY_DESK ],
 				'reason'  => (string) ( $ultima['data']['reason'] ?? '' ),
 				'can'     => '' === $porque,
 				'why'     => $porque,

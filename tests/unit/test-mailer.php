@@ -830,4 +830,78 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertSame( array( 'servicio@example.org' ), $this->destinos( $this->enviados ) );
 		$this->assertContains( $jefa, ProcedureAccess::area_managers( $id ) );
 	}
+
+	// ─── tipos de pregunta (ADR-0040) ──────────────────────────────────────
+
+	/**
+	 * El acuse de un procedimiento sin tipos nuevos es, letra a letra, el de antes.
+	 */
+	public function test_the_acknowledgement_without_new_types_does_not_change() {
+		$procedimiento = $this->procedimiento();
+		$id            = Applications::save( $procedimiento, $this->direccion(), $this->nucleo() );
+
+		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
+		$cuerpo = str_replace(
+			array( ApplyForm::url( $procedimiento ), (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $id, 'modified' ) ) ),
+			array( '{enlace}', '{fecha}' ),
+			$cuerpo
+		);
+		$this->assertSame(
+			"Se ha presentado la solicitud al procedimiento «Red de huertos escolares». Este es el resumen de lo presentado.\n\n"
+				. "Procedimiento: Red de huertos escolares\n"
+				. "Centro: Centro de prueba Norte (C0001)\n"
+				. "Presentada por: Persona de prueba\n"
+				. "Cargo: Dirección\n"
+				. "Fecha: {fecha}\n\n"
+				. "Respuestas:\n"
+				. "- Observaciones: Tenemos invernadero\n"
+				. "- Tiene huerto: Sí\n"
+				. "- Etapas: Infantil, Primaria\n\n"
+				. "Puede consultarla, y modificarla mientras el plazo siga abierto, en:\n"
+				. "{enlace}\n\n"
+				. "Este correo es un acuse automático: no hace falta responderlo.\n",
+			$cuerpo
+		);
+	}
+
+	/**
+	 * El acuse escribe el número, la fecha como día/mes/año y la rejilla en una línea.
+	 */
+	public function test_the_acknowledgement_reads_the_new_types() {
+		$procedimiento     = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_NUMBER,
+					),
+					array(
+						'label' => 'Fecha del claustro',
+						'type'  => ProcedureQuestions::TYPE_DATE,
+					),
+					array(
+						'label' => 'Alumnado',
+						'type'  => ProcedureQuestions::TYPE_GRID,
+						'rows'  => "Infantil\nPrimaria",
+					),
+				),
+			)
+		);
+		$nucleo            = $this->nucleo();
+		$nucleo['answers'] = array(
+			'q1' => 0,
+			'q2' => '2026-02-28',
+			'q3' => array(
+				'r1' => 3,
+				'r2' => 0,
+			),
+		);
+		Applications::save( $procedimiento, $this->direccion(), $nucleo );
+
+		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
+		$this->assertStringContainsString( '- Grupos: 0', $cuerpo );
+		$this->assertStringContainsString( '- Fecha del claustro: 28/02/2026', $cuerpo );
+		$this->assertStringContainsString( '- Alumnado: Infantil: 3; Primaria: 0', $cuerpo );
+		$this->assertDoesNotMatchRegularExpression( '/\br[0-9]+\b/', $this->sin_enlaces( $cuerpo ), 'ninguna clave de fila' );
+	}
 }

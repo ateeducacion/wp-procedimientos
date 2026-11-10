@@ -458,7 +458,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$m    = $this->modelo( $procedimiento );
 		$html = ProcedureEditorView::html( $m );
 		$this->assertSame( array( 'CEIP', 'IES' ), $m['centre_options']['types'] );
-		$this->assertSame( array( 'Isla Dos', 'Isla Uno', 'Isla Perdida' ), $m['centre_options']['islands'], 'lo elegido se ofrece aunque el catálogo ya no lo traiga' );
+		$this->assertSame( array( 'Isla Dos', 'Isla Perdida', 'Isla Uno' ), $m['centre_options']['islands'], 'lo elegido se ofrece aunque el catálogo ya no lo traiga' );
 		$this->assertStringContainsString( '<legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::CENTRE_TYPES . '[]" value="IES"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::ALLOWED_CENTRES . '"', $html );
@@ -499,6 +499,58 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso ) ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+	}
+
+	/**
+	 * Lo guardado con otras mayúsculas que el catálogo sale marcado, y guardar
+	 * «Datos» sin tocar las casillas no borra el acotado.
+	 */
+	public function test_the_data_panel_keeps_choices_that_differ_only_in_case() {
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code'   => 'C0001',
+						'name'   => 'Escuela Inventada',
+						'type'   => 'CEIP',
+						'island' => 'Isla Uno (inventada)',
+					),
+					array(
+						'code'   => 'C0002',
+						'name'   => 'Instituto Inventado',
+						'type'   => 'IES',
+						'island' => 'Isla Dos (inventada)',
+					),
+				);
+			}
+		);
+		list( $area, $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::CENTRE_TYPES => array( 'ceip' ),
+				ProcedureMetaKeys::ISLANDS      => array( 'isla uno (inventada)' ),
+			)
+		);
+		$curso                              = $this->course( '2027-2028' );
+
+		$this->acting_as( $uid );
+		$m    = $this->modelo( $procedimiento );
+		$html = ProcedureEditorView::html( $m );
+		$this->assertSame( array( 'ceip', 'IES' ), $m['centre_options']['types'], 'una sola casilla, con la grafía guardada' );
+		$this->assertSame( array( 'Isla Dos (inventada)', 'isla uno (inventada)' ), $m['centre_options']['islands'] );
+
+		// Lo que mandaría el navegador: las casillas marcadas, tal cual.
+		$marcadas = array();
+		foreach ( array( ProcedureMetaKeys::CENTRE_TYPES, ProcedureMetaKeys::ISLANDS ) as $nombre ) {
+			preg_match_all( '/name="' . preg_quote( $nombre, '/' ) . '\[\]" value="([^"]*)"\s*checked=/', $html, $coincidencias );
+			$marcadas[ $nombre ] = array_map( 'html_entity_decode', $coincidencias[1] );
+		}
+		$this->assertSame( array( 'ceip' ), $marcadas[ ProcedureMetaKeys::CENTRE_TYPES ], 'la casilla sale marcada' );
+		$this->assertSame( array( 'isla uno (inventada)' ), $marcadas[ ProcedureMetaKeys::ISLANDS ], 'la casilla sale marcada' );
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $marcadas ) ) );
+		$this->assertSame( array( 'ceip' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array( 'isla uno (inventada)' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
 	}
 
 	/**

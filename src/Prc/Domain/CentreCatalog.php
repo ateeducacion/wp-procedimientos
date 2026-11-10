@@ -244,6 +244,10 @@ final class CentreCatalog {
 	 * What the workshop offers to narrow a procedure: the types and islands
 	 * of the catalogue, and the chosen ones even if the catalogue lost them.
 	 *
+	 * Lo elegido va primero: si solo difiere del catálogo en mayúsculas, se
+	 * queda con su grafía, para que la casilla salga marcada y se reenvíe tal
+	 * cual en vez de borrar el acotado al guardar.
+	 *
 	 * @param bool     $wanted  Whether the screen paints them; false reads nothing.
 	 * @param string[] $types   Types already chosen.
 	 * @param string[] $islands Islands already chosen.
@@ -257,9 +261,23 @@ final class CentreCatalog {
 			);
 		}
 		return array(
-			'types'   => CentreEligibility::values( array_merge( self::values( 'type' ), $types ) ),
-			'islands' => CentreEligibility::values( array_merge( self::values( 'island' ), $islands ) ),
+			'types'   => self::chosen_first( $types, self::values( 'type' ) ),
+			'islands' => self::chosen_first( $islands, self::values( 'island' ) ),
 		);
+	}
+
+	/**
+	 * The chosen values and the catalogue ones, without repeats in another
+	 * case, keeping how the chosen ones are written; sorted.
+	 *
+	 * @param string[] $chosen    Values already chosen.
+	 * @param string[] $catalogue Values the catalogue takes.
+	 * @return string[]
+	 */
+	private static function chosen_first( array $chosen, array $catalogue ): array {
+		$out = CentreEligibility::values( array_merge( $chosen, $catalogue ) );
+		usort( $out, 'strnatcasecmp' );
+		return $out;
 	}
 
 	/**

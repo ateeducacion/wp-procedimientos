@@ -7644,6 +7644,30 @@ final class Applications {
 
 
 
+
+
+
+
+	public static function answered_keys( int $procedure_id ): array {
+		$out = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			$respuestas = array_filter(
+				(array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ],
+				static function ( $valor ): bool {
+					return '' !== $valor && array() !== $valor && null !== $valor;
+				}
+			);
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
 	public static function spec( int $procedure_id ): array {
 		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
 		return array(
@@ -12581,6 +12605,8 @@ final class Workspace {
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionPoints;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationExport;
@@ -13319,6 +13345,10 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
 	private static function questions_panel( array $m ): string {
 		$op    = ProcedureEditor::PANEL_QUESTIONS;
 		$filas = (array) $m['questions'];
@@ -13344,13 +13374,19 @@ final class ProcedureEditorView {
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
 				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
+				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
 
 			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'] );?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) );?>
 			<?php endforeach; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
+		</form>
+		<form id="prc-q-mover" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_MOVE_QUESTION ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -13364,7 +13400,74 @@ final class ProcedureEditorView {
 
 
 
-	private static function question_row( int $i, array $p, array $tipos ): string {
+	private static function move_buttons( int $i, array $p, int $total ): string {
+		$botones = array(
+			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
+			QuestionChanges::MOVE_DOWN => array( 'Bajar', $i >= $total - 1 ),
+		);
+		$out     = '';
+		foreach ( $botones as $hacia => $boton ) {
+			$out .= sprintf(
+				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
+				esc_attr( Assets::button_class( true ) ),
+				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
+				esc_attr( (string) $p['key'] . ':' . $hacia ),
+				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
+				$boton[1] ? ' disabled' : '',
+				esc_html( $boton[0] )
+			);
+		}
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+	}
+
+
+
+
+
+
+
+
+	private static function type_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$filas = implode( "\n", array_map( 'strval', wp_list_pluck( (array) ( $p['rows'] ?? array() ), 'label' ) ) );
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo">
+			<?php
+			foreach ( array(
+				'min' => 'Mínimo',
+				'max' => 'Máximo',
+			) as $limite => $rotulo ) :
+				?>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
+			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
+			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco.</p>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
 		$nueva  = '' === (string) $p['key'];
 		$campo  = ProcedureEditor::FIELD_Q;
 		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
@@ -13373,6 +13476,7 @@ final class ProcedureEditorView {
 		?>
 		<fieldset class="prc-seccion-campos prc-pregunta">
 			<legend class="prc-seccion__titulo"><?php echo esc_html( $rotulo ); ?></legend>
+			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total );?>
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
@@ -13397,9 +13501,11 @@ final class ProcedureEditorView {
 			</div>
 			<div class="prc-campo">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
-				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"><?php echo esc_textarea( implode( "\n", (array) $p['choices'] ) ); ?></textarea>
-				<p class="prc-campo__ayuda">Solo para «Una opción» y «Varias opciones».</p>
+				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
+			<?php echo self::type_fields( $i, $p );?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
 				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
@@ -13510,6 +13616,7 @@ final class ProcedureEditorView {
 							<th class="prc-th" scope="col">Cargo</th>
 							<th class="prc-th" scope="col">Coordinación</th>
 						<?php endif; ?>
+						<?php echo self::score_cell( $m );?>
 						<th class="prc-th" scope="col">Revisión</th>
 						<th class="prc-th" scope="col">Acciones</th>
 					</tr>
@@ -13529,6 +13636,7 @@ final class ProcedureEditorView {
 								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
 					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) );?></td>
 							<?php endif; ?>
+							<?php echo self::score_cell( $m, $fila );?>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] );?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
 						</tr>
@@ -13538,6 +13646,26 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function score_cell( array $m, ?array $fila = null ): string {
+		if ( ! isset( $m['app_cols']['score'] ) ) {
+			return '';
+		}
+		if ( null === $fila ) {
+			return '<th class="prc-th" scope="col">Puntos</th>';
+		}
+		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
 	}
 
 
@@ -14138,6 +14266,8 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionGrid;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -14200,6 +14330,7 @@ final class ProcedureEditor {
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_NOTIFY              = 'notify';
+	public const OP_MOVE_QUESTION       = 'move_question';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -14247,6 +14378,11 @@ final class ProcedureEditor {
 
 
 
+	public const FIELD_Q_MOVE = 'prc_q_move';
+
+
+
+
 
 
 
@@ -14273,6 +14409,7 @@ final class ProcedureEditor {
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
+		self::OP_MOVE_QUESTION,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
@@ -14295,6 +14432,7 @@ final class ProcedureEditor {
 		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Preguntas guardadas.',
+		'ordenadas'    => 'Orden de las preguntas guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
@@ -14578,11 +14716,11 @@ final class ProcedureEditor {
 			self::save_data( $procedure_id, $user_id );
 			return;
 		}
-		if ( self::PANEL_QUESTIONS === $op ) {
+		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
 			if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_QUESTIONS ) ) {
 				return;
 			}
-			self::save_questions( $procedure_id );
+			self::PANEL_QUESTIONS === $op ? self::save_questions( $procedure_id ) : self::move_question( $procedure_id );
 			return;
 		}
 		if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_LINKS ) ) {
@@ -14924,6 +15062,11 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
+
 	private static function save_questions( int $procedure_id ): void {
 
 		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
@@ -14935,12 +15078,18 @@ final class ProcedureEditor {
 		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
 		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
 		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
+		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
+		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
+		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
 
 
-		$crudas = array();
+		$antes   = Applications::questions( $procedure_id );
+		$previas = array_column( $antes, null, 'key' );
+		$crudas  = array();
 		foreach ( $rotulos as $i => $rotulo ) {
+			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
-				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'key'       => $key,
 				'label'     => sanitize_text_field( (string) $rotulo ),
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
@@ -14949,6 +15098,15 @@ final class ProcedureEditor {
 				'delivery'  => ! empty( $deliveries[ $i ] ),
 				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
 				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
+				'min'       => sanitize_text_field( (string) ( $minimos[ $i ] ?? '' ) ),
+				'max'       => sanitize_text_field( (string) ( $maximos[ $i ] ?? '' ) ),
+
+
+				'rows'      => QuestionGrid::match_rows(
+					implode( "\n", array_map( 'sanitize_text_field', (array) preg_split( '/\r\n|\r|\n/', (string) ( $filas[ $i ] ?? '' ) ) ) ),
+					(array) ( $previas[ $key ]['rows'] ?? array() )
+				),
+				'row_seq'   => (int) ( $previas[ $key ]['row_seq'] ?? 0 ),
 			);
 		}
 
@@ -14959,8 +15117,34 @@ final class ProcedureEditor {
 				return;
 			}
 		}
+		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ) );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function move_question( int $procedure_id ): void {
+		$pedido  = explode( ':', self::field( self::FIELD_Q_MOVE ) . ':' );
+		$antes   = Applications::questions( $procedure_id );
+		$despues = QuestionChanges::move( $antes, $pedido[0], $pedido[1] );
+		if ( $despues === $antes ) {
+			Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS ) );
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $despues ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'ordenadas' ) ) );
 	}
 
 

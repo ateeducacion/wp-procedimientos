@@ -804,4 +804,26 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '<b>', $dialogo );
 		$this->assertStringNotContainsString( '& "más"', $dialogo );
 	}
+
+	/**
+	 * Borrar el procedimiento para siempre se lleva la elección de cada persona.
+	 */
+	public function test_deleting_the_procedure_forgets_every_choice() {
+		$procedimiento = $this->procedimiento();
+		$otro          = $this->procedimiento();
+		$una           = $this->administrator();
+		$dos           = $this->administrator();
+		$eleccion      = array( 'columns' => array( 'code' ) );
+		ApplicationExport::remember( $una, $procedimiento, $eleccion );
+		ApplicationExport::remember( $dos, $procedimiento, $eleccion );
+		ApplicationExport::remember( $una, $otro, $eleccion );
+
+		wp_trash_post( $procedimiento );
+		$this->assertNotSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $procedimiento, true ), 'la papelera no borra nada' );
+
+		wp_delete_post( $procedimiento, true );
+		$this->assertSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $procedimiento, true ) );
+		$this->assertSame( '', get_user_meta( $dos, ApplicationExport::CHOICE_META . $procedimiento, true ) );
+		$this->assertNotSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $otro, true ), 'la de otro procedimiento se queda' );
+	}
 }

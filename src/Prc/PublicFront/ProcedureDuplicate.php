@@ -66,6 +66,10 @@ final class ProcedureDuplicate {
 		if ( $copia['contacts_left'] ) {
 			$args[ self::ARG_NO_CONTACTS ] = 1;
 		}
+		// Quien duplica desde el taller del original se va al duplicado: su
+		// bloqueo del original se suelta ya, y solo si es suyo. El guion de la
+		// pantalla no manda la baliza de salida al enviar un formulario.
+		EditLock::release( $procedure_id );
 		Shell::leave( ProcedureEditor::url( $copia['id'], ProcedureEditor::PANEL_DATA, $args ) );
 		return '';
 	}

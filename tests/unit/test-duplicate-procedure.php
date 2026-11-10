@@ -440,6 +440,28 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertSame( $otra, (int) wp_check_post_lock( $id ), 'el bloqueo del original sigue donde estaba' );
 	}
 
+	/**
+	 * Quien duplica desde el taller del original tenía su bloqueo: al irse al
+	 * duplicado lo suelta, para que nadie vea el original ocupado un par de
+	 * minutos por alguien que ya no está en él.
+	 */
+	public function test_duplicating_releases_the_originals_lock_of_who_duplicates() {
+		$area = $this->area( 'Área de prueba' );
+		$uid  = $this->manager( array( $area ) );
+		$otra = $this->manager( array( $area ) );
+		$id   = $this->completo( $uid, array( $area ) );
+		require_once ABSPATH . 'wp-admin/includes/post.php';
+		wp_set_current_user( $uid );
+		wp_set_post_lock( $id );
+
+		$copia = $this->copia_de( $this->duplicar( $uid, $id ) );
+
+		$this->assertGreaterThan( 0, $copia );
+		$this->assertFalse( metadata_exists( 'post', $id, '_edit_lock' ), 'el original queda sin bloqueo' );
+		wp_set_current_user( $otra );
+		$this->assertSame( 0, (int) wp_check_post_lock( $id ), 'y otra persona lo ve libre' );
+	}
+
 	// ─── quién duplica ─────────────────────────────────────────────────────
 
 	/**

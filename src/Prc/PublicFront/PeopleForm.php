@@ -11,6 +11,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\DateRange;
 use Prc\Domain\PeopleSpec;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -274,6 +275,8 @@ final class PeopleForm {
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
+			// El último día, dicho siempre: es lo que se pregunta después de presentar.
+			'until'          => self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ),
 			'rows'           => $filas,
 			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
 			'can_edit'       => $puede,

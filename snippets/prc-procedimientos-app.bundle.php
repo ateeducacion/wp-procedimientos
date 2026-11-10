@@ -26241,6 +26241,7 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
+				<?php echo self::until( $p );?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
 				</p>
@@ -26261,6 +26262,25 @@ final class PeopleView {
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function until( array $p ): string {
+		$dia = (string) ( $p['until'] ?? '' );
+		if ( '' === $dia || ( empty( $p['can_edit'] ) && (int) $p['application_id'] > 0 ) ) {
+			return '';
+		}
+		return '<p class="prc-personas__plazo prc-campo--completo"><strong>'
+			. esc_html( 'Puede dar de alta, cambiar o sustituir personas hasta el ' . $dia . ', incluido.' )
+			. '</strong></p>';
 	}
 
 
@@ -28161,6 +28181,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\DateRange;
 use Prc\Domain\PeopleSpec;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -28425,6 +28446,8 @@ final class PeopleForm {
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
+
+			'until'          => self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ),
 			'rows'           => $filas,
 			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
 			'can_edit'       => $puede,

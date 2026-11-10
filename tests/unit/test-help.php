@@ -287,10 +287,11 @@ class Test_Help extends WP_UnitTestCase {
 	 * @param string $html  The screen.
 	 * @param string $guia  Guide key.
 	 * @param string $ancla Section id.
+	 * @param string $texto Text of the link.
 	 * @return void
 	 */
-	private function assert_help_link( string $html, string $guia, string $ancla ): void {
-		$this->assertStringContainsString( 'Consulte la ayuda', $html );
+	private function assert_help_link( string $html, string $guia, string $ancla, string $texto = 'Consulte la ayuda' ): void {
+		$this->assertStringContainsString( $texto, $html );
 		$this->assertStringContainsString( esc_url( Help::url( $guia, $ancla ) ), $html );
 		$this->assertContains( $ancla, array_column( HelpContent::sections( $guia ), 'id' ) );
 	}
@@ -301,7 +302,7 @@ class Test_Help extends WP_UnitTestCase {
 	public function test_the_public_card_links_to_the_help() {
 		$id = $this->abierto();
 		$this->acting_as( 0 );
-		$this->assert_help_link( ProcedureChrome::html( ProcedureView::model( $id ) ), 'solicitar', 'antes-de-empezar' );
+		$this->assert_help_link( ProcedureChrome::html( ProcedureView::model( $id ) ), 'solicitar', 'antes-de-empezar', 'Cómo se solicita' );
 	}
 
 	/**

@@ -8,8 +8,11 @@
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\Help;
+use Prc\PublicFront\HelpContent;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
 /**
@@ -213,7 +216,7 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$this->acting_as( 0 );
 
 		$accion = ProcedureView::model( $abierta )['action'];
-		$this->assertSame( 'Solicitar', $accion['label'] );
+		$this->assertSame( 'Entrar y solicitar', $accion['label'], 'dice lo que va a pasar: primero se entra' );
 		$this->assertSame( 'edit_note', $accion['icon'] );
 		$this->assertTrue( $accion['primary'] );
 		$this->assertSame( wp_login_url( Shell::url( 'apply', array( Shell::ARG_PROCEDURE => $abierta ) ) ), $accion['url'] );
@@ -321,6 +324,159 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		update_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) );
 		$this->acting_as( $this->school_head( 'C0002' ) );
 		$this->assertSame( '', ProcedureView::model( $procedimiento )['action']['label'] );
+	}
+
+	// ─── por qué no hay botón ──────────────────────────────────────────────
+
+	/**
+	 * Con sesión y sin botón, la ficha dice por qué, con qué cuenta se entró
+	 * y cómo cambiar de cuenta, en vez de esconder el botón sin una palabra.
+	 */
+	public function test_without_a_button_the_page_says_why() {
+		$area          = $this->area( 'Área de prueba' );
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge( $this->abierto(), array( ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ) ) )
+		);
+		$generica      = (int) self::factory()->user->create(
+			array(
+				'role'         => 'subscriber',
+				'display_name' => 'Cuenta del centro',
+				'user_email'   => 'centro@example.org',
+			)
+		);
+
+		$this->acting_as( $generica );
+		$m = ProcedureView::model( $procedimiento );
+		$this->assertSame( '', $m['action']['url'] );
+		$this->assertStringContainsString( 'cuenta genérica del centro', $m['why_not'] );
+		$this->assertSame( 'Cuenta del centro', $m['account']['name'] );
+		$this->assertSame( 'centro@example.org', $m['account']['email'] );
+		$this->assertSame( wp_logout_url( wp_login_url( (string) get_permalink( $procedimiento ) ) ), $m['switch_url'] );
+
+		$html = ProcedureChrome::html( $m );
+		$this->assertStringContainsString( 'role="status"', $html );
+		$this->assertStringContainsString( 'No puede solicitar con esta cuenta', $html );
+		$this->assertStringContainsString( 'cuenta genérica del centro', $html );
+		$this->assertStringContainsString( 'Ha entrado como', $html );
+		$this->assertStringContainsString( 'centro@example.org', $html );
+		$this->assertStringContainsString( 'Salir y entrar con otra cuenta', $html );
+		$this->assertStringContainsString( esc_url( $m['switch_url'] ), $html );
+		$this->assertStringContainsString( esc_url( Help::url( HelpContent::GUIDE_FAQ, 'no-veo-el-boton-solicitar' ) ), $html );
+
+		// Sin sesión no hay motivo que dar: el botón lleva al acceso.
+		$this->acting_as( 0 );
+		$m = ProcedureView::model( $procedimiento );
+		$this->assertSame( '', $m['why_not'] );
+		$this->assertStringNotContainsString( 'No puede solicitar con esta cuenta', ProcedureChrome::html( $m ) );
+
+		// Fuera de plazo no hay botón para nadie: lo dice el estado, no la cuenta.
+		$cerrada = $this->procedure( $this->administrator(), array( $area ), $this->cerrado() );
+		$this->acting_as( $generica );
+		$this->assertSame( '', ProcedureView::model( $cerrada )['why_not'] );
+
+		// Y a quien gestiona no se le explica que no solicita.
+		$this->acting_as( $this->manager( array( $area ) ) );
+		$this->assertSame( '', ProcedureView::model( $procedimiento )['why_not'] );
+	}
+
+	/**
+	 * Un centro de otra titularidad lee el motivo, su correo de contacto incluido.
+	 */
+	public function test_a_school_of_another_ownership_reads_the_reason() {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code'      => 'C0002',
+						'name'      => 'Colegio Sur',
+						'ownership' => 'private',
+					),
+				);
+			}
+		);
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array_merge(
+				$this->abierto(),
+				array(
+					ProcedureMetaKeys::OWNERSHIP      => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+					ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+				)
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0002' ) );
+
+		$m = ProcedureView::model( $procedimiento );
+		$this->assertSame( 'Este procedimiento es solo para centros públicos. Si cree que es un error, escriba a contacto@example.org.', $m['why_not'] );
+		$this->assertSame( 'Centros públicos', $m['who_can_apply'] );
+	}
+
+	// ─── la tarjeta de acceso y quién puede solicitar ──────────────────────
+
+	/**
+	 * La tarjeta de acceso dice quién solicita según a quién se dirige.
+	 */
+	public function test_the_access_card_follows_the_audience() {
+		$area     = $this->area( 'Área de prueba' );
+		$centros  = $this->procedure( $this->administrator(), array( $area ), $this->abierto() );
+		$docentes = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) )
+		);
+		$this->acting_as( 0 );
+
+		$html = ProcedureChrome::html( ProcedureView::model( $centros ) );
+		$this->assertStringContainsString( 'Lo solicita la dirección del centro', $html );
+		$this->assertStringContainsString( 'no con la cuenta genérica del centro', $html );
+		$this->assertStringContainsString( 'Entrar y solicitar', $html );
+		$this->assertStringContainsString( 'Cómo se solicita', $html );
+		$this->assertStringNotContainsString( 'enlace de acceso de la cabecera', $html );
+
+		$html = ProcedureChrome::html( ProcedureView::model( $docentes ) );
+		$this->assertStringContainsString( 'Lo solicita cada docente', $html );
+		$this->assertStringContainsString( 'No lo presenta el centro', $html );
+		$this->assertStringNotContainsString( 'Lo solicita la dirección del centro', $html );
+	}
+
+	/**
+	 * «Pueden solicitar» va en el resumen, y deja de ir en letra menuda al pie.
+	 */
+	public function test_the_summary_says_who_may_apply() {
+		$area     = $this->area( 'Área de prueba' );
+		$publicos = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge(
+				$this->abierto(),
+				array(
+					ProcedureMetaKeys::OWNERSHIP    => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+					ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ),
+				)
+			)
+		);
+		$docentes = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) )
+		);
+		// Uno de antes, sin titularidad guardada: se dirige a todos, como dice can_apply().
+		$antiguo = $this->procedure( $this->administrator(), array( $area ), $this->abierto() );
+		$this->acting_as( 0 );
+
+		$m = ProcedureView::model( $publicos );
+		$this->assertSame( 'Centros públicos de tipo CEIP', $m['who_can_apply'] );
+		$html = ProcedureChrome::html( $m );
+		$this->assertMatchesRegularExpression( '#<dt>Pueden solicitar</dt>\s*<dd>\s*Centros públicos de tipo CEIP\s*</dd>#u', $html );
+		$this->assertStringNotContainsString( 'prc-acceso__cifra', $html, 'la titularidad ya no va en grande y en azul de enlace' );
+		$this->assertStringNotContainsString( 'prc-ficha-meta', $html, 'ni en letra menuda al pie' );
+
+		$this->assertSame( 'Profesorado: cada docente con su cuenta', ProcedureView::model( $docentes )['who_can_apply'] );
+		$this->assertSame( 'Todos los centros', ProcedureView::model( $antiguo )['who_can_apply'] );
 	}
 
 	/**
@@ -501,7 +657,8 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Una red de centros.', $documento );
 		$this->assertStringContainsString( 'Abierto', $documento );
 		$this->assertStringContainsString( 'Inscripción', $documento );
-		$this->assertStringContainsString( 'Solicitar', $documento );
+		$this->assertStringContainsString( 'Entrar y solicitar', $documento );
+		$this->assertStringContainsString( 'Pueden solicitar', $documento );
 		// El título del procedimiento lo pinta la ficha, no el armazón.
 		$this->assertStringContainsString( 'prc-titulo-proc', $documento );
 	}

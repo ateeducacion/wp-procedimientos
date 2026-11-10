@@ -1156,7 +1156,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		);
 
 		$una = $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_name' ) ) );
-		$this->assertSame( '"C0001";"Luis, Marta"', $una[1], 'una fila por solicitud junta a sus personas' );
+		$this->assertSame( '"C0001";"Luis · Marta"', $una[1], 'una fila por solicitud junta a sus personas' );
 	}
 
 	/**
@@ -1175,5 +1175,81 @@ class Test_Application_Export extends WP_UnitTestCase {
 			"username,firstname,lastname,email\nluis.diaz,Luis,Díaz,luis.diaz@example.org\nmarta,Marta,Díaz,marta@example.org",
 			ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_PEOPLE ) ) )
 		);
+	}
+
+	/**
+	 * Por persona, cada grupo da filas solo si alguna de sus columnas sale:
+	 * con `code` y columnas de personas, ni una fila de coordinación; sin
+	 * ninguna de los dos grupos, una fila por solicitud.
+	 */
+	public function test_person_shape_only_gives_rows_of_the_groups_exported() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Eva', 'Ruiz', 'eva@example.org' ) ) );
+		$this->alta( $solicitud, 'Luis', 'luis@example.org', '11111111H' );
+		$this->alta( $solicitud, 'Marta', 'marta@example.org', 'X1234567L' );
+
+		$this->assertSame(
+			array( '"Código";"Nombre (persona)";"Papel (persona)"', '"C0001";"Luis";"Participante"', '"C0001";"Marta";"Participante"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_name', 'person_role' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertSame(
+			array( '"Código";"Coordinación"', '"C0001";"Eva Ruiz"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'coordinator' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertSame(
+			array( '"Código"', '"C0001"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertCount( 4, $this->lineas( ApplicationExport::csv( $procedimiento, array(), ApplicationExport::SHAPE_PERSON ) ), 'todas: una de coordinación y dos de personas' );
+	}
+
+	/**
+	 * Un teléfono con «+» sale tal cual, sin la comilla de las fórmulas.
+	 */
+	public function test_a_phone_with_a_plus_is_not_neutralised() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array() );
+		$res           = People::add(
+			$solicitud,
+			(int) get_post_field( 'post_author', $solicitud ),
+			array(
+				'name'    => 'Luis',
+				'surname' => 'Díaz',
+				'dni'     => '11111111H',
+				'email'   => 'luis@example.org',
+				'phone'   => '+34 600 000 000',
+				'role'    => 'r1',
+			)
+		);
+		$this->assertTrue( $res['ok'], $res['error'] );
+		$this->assertSame( '"C0001";"+34 600 000 000"', $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_phone' ), ApplicationExport::SHAPE_PERSON ) )[1] );
+		$this->assertSame( "'+1", ApplicationExport::neutralize( '+1' ), 'lo demás se sigue neutralizando' );
+	}
+
+	/**
+	 * Un procedimiento que tuvo lista y la apagó: el fichero de usuarios no
+	 * la lleva y la elección recordada la olvida.
+	 */
+	public function test_a_list_switched_off_leaves_the_user_file() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array() );
+		$this->alta( $solicitud, 'Luis', 'luis@example.org', '11111111H' );
+		$quien = $this->administrator();
+		ApplicationExport::remember(
+			$quien,
+			$procedimiento,
+			array(
+				'format' => ApplicationExport::FORMAT_MOODLE,
+				'who'    => array( ApplicationExport::WHO_PEOPLE ),
+			)
+		);
+		$this->assertSame( array( ApplicationExport::WHO_PEOPLE ), ApplicationExport::choice( $quien, $procedimiento )['who'] );
+
+		$spec            = get_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, true );
+		$spec['enabled'] = false;
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+
+		$this->assertSame( ApplicationExport::MOODLE_HEADER, ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_PEOPLE ) ) ) );
+		$this->assertSame( array(), ApplicationExport::choice( $quien, $procedimiento )['who'] );
 	}
 }

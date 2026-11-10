@@ -193,13 +193,13 @@ final class ApplicationExport {
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
-				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas ) : array( $fila ) as $una ) {
+				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
 					// Solo lo que se va a escribir: la fila entera no se guarda.
 					$filas[] = array_intersect_key( $una, $claves );
 				}
 			}
 		}
-		return Applications::csv_lines( $columnas, $filas );
+		return Applications::csv_lines( $columnas, $filas, PeopleExport::VERBATIM );
 	}
 
 	/**
@@ -210,16 +210,22 @@ final class ApplicationExport {
 	 * cada una van sus columnas, y las del otro grupo vacías: una persona de
 	 * la lista no es de la coordinación. Sin nadie —una solicitud de
 	 * profesorado, o un procedimiento que no pide ninguna de las dos— la
-	 * solicitud sale en una fila, la de quien la presenta.
+	 * solicitud sale en una fila, la de quien la presenta. Lo mismo si no se
+	 * exporta ninguna columna de esos dos grupos: cada grupo da sus filas solo
+	 * si alguna de sus columnas sale.
 	 *
 	 * @param \WP_Post                  $application The application.
 	 * @param array<string, mixed>      $row         Its row from {@see Applications::row()}.
 	 * @param array<string, mixed>|null $people      Specification of the list; null without one.
+	 * @param array<string, int>        $keys        The exported columns, as keys.
 	 * @return array<int, array<string, mixed>>
 	 */
-	private static function per_person( \WP_Post $application, array $row, ?array $people = null ): array {
-		$out = array();
-		foreach ( self::coordinators( $application ) as $persona ) {
+	private static function per_person( \WP_Post $application, array $row, ?array $people, array $keys ): array {
+		// Solo salen las filas del grupo que se exporta: sin ninguna columna
+		// de coordinación, no hay filas de coordinación.
+		$coordinacion = array() !== array_intersect_key( $keys, array_flip( self::GROUPS['coordination'] ) );
+		$out          = array();
+		foreach ( $coordinacion ? self::coordinators( $application ) : array() as $persona ) {
 			$out[] = array_merge(
 				$row,
 				PeopleExport::cells( $people, array() ),
@@ -230,7 +236,7 @@ final class ApplicationExport {
 				)
 			);
 		}
-		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID ) );
+		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID, $keys ) );
 		return array() === $out ? array( $row ) : $out;
 	}
 
@@ -605,7 +611,7 @@ final class ApplicationExport {
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
 			'format'  => self::FORMAT_MOODLE === ( $raw['format'] ?? '' ) ? self::FORMAT_MOODLE : self::FORMAT_CSV,
-			'who'     => array_values( array_intersect( array_keys( self::who() ), $quienes ) ),
+			'who'     => array_values( array_intersect( array_keys( self::who( $procedure_id ) ), $quienes ) ),
 		);
 	}
 

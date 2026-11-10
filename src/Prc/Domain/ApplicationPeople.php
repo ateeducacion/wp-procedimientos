@@ -116,7 +116,7 @@ final class ApplicationPeople {
 			'surname' => array( '' !== $row['surname'], 'los apellidos' ),
 			'dni'     => array( ApplicationInput::is_dni( $row['dni'] ), 'el DNI o NIE, completo y con su letra' ),
 			'email'   => array( ProcedureInput::is_email( $row['email'] ), 'el correo electrónico' ),
-			'phone'   => array( '' === $row['phone'] || (bool) preg_match( '/^\+?[0-9][0-9 ()-]{5,19}$/', $row['phone'] ), 'el teléfono, solo con cifras' ),
+			'phone'   => array( '' === $row['phone'] || (bool) preg_match( '/^\+?[0-9][0-9 ]{5,19}$/', $row['phone'] ), 'el teléfono, solo con cifras, espacios y un «+» delante si hace falta' ),
 			'role'    => array( array() !== $papel, 'el papel' ),
 		);
 		if ( array() !== $papel ) {

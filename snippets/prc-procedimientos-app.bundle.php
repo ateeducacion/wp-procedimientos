@@ -5497,11 +5497,40 @@ final class ProcedureAccess {
 	public static function apply_codes( int $user_id, int $post_id ): array {
 		$out = array();
 		foreach ( self::kind_codes( $user_id, $post_id ) as $code => $kind ) {
-			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) ) {
+			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) || self::has_application( $post_id, (string) $code ) ) {
 				$out[ $code ] = $kind;
 			}
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function has_application( int $post_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $post_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $code,
+				'suppress_filters' => true,
+			)
+		);
+		return array() !== $ids;
 	}
 
 
@@ -5560,9 +5589,10 @@ final class ProcedureAccess {
 			$rules['ownership'] = array();
 		}
 		return CentreEligibility::restricted( $rules )
-			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ) )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ), array() !== CentreCatalog::all() )
 			: '';
 	}
+
 
 
 
@@ -5583,7 +5613,7 @@ final class ProcedureAccess {
 		$primero = '';
 		foreach ( $codes as $uno => $kind ) {
 			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
-			if ( '' === $porque ) {
+			if ( '' === $porque || self::has_application( $post_id, (string) $uno ) ) {
 				return '';
 			}
 			$primero = '' !== $primero ? $primero : $porque;

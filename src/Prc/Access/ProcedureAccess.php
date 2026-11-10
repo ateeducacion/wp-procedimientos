@@ -735,11 +735,40 @@ final class ProcedureAccess {
 	public static function apply_codes( int $user_id, int $post_id ): array {
 		$out = array();
 		foreach ( self::kind_codes( $user_id, $post_id ) as $code => $kind ) {
-			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) ) {
+			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) || self::has_application( $post_id, (string) $code ) ) {
 				$out[ $code ] = $kind;
 			}
 		}
 		return $out;
+	}
+
+	/**
+	 * Whether that code already has an application to this procedure.
+	 *
+	 * La elegibilidad se mira al **crear** la solicitud: un centro que ya la
+	 * presentó la sigue editando o subsanando cuando el estado lo permita,
+	 * aunque el procedimiento se acote después (ADR-0042). Solo se pregunta
+	 * cuando el código no pasa los acotados.
+	 *
+	 * @param int    $post_id Procedure ID.
+	 * @param string $code    School code.
+	 * @return bool
+	 */
+	private static function has_application( int $post_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $post_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- la solicitud de un centro se busca por su código (ADR-0018).
+				'meta_value'       => $code, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
+				'suppress_filters' => true,
+			)
+		);
+		return array() !== $ids;
 	}
 
 	/**
@@ -798,7 +827,7 @@ final class ProcedureAccess {
 			$rules['ownership'] = array();
 		}
 		return CentreEligibility::restricted( $rules )
-			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ) )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ), array() !== CentreCatalog::all() )
 			: '';
 	}
 
@@ -806,7 +835,8 @@ final class ProcedureAccess {
 	 * Why none of the person's codes —or that one— may apply by the procedure's rules.
 	 *
 	 * Es lo que lee el centro en su pantalla: «este procedimiento es solo
-	 * para…». Con un código, el motivo de ese; sin él, el del primero.
+	 * para…». Con un código, el motivo de ese; sin él, el del primero. Un
+	 * código que ya tiene solicitud no tiene motivo: la sigue editando.
 	 *
 	 * @param int    $user_id User ID.
 	 * @param int    $post_id Procedure ID.
@@ -821,7 +851,7 @@ final class ProcedureAccess {
 		$primero = '';
 		foreach ( $codes as $uno => $kind ) {
 			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
-			if ( '' === $porque ) {
+			if ( '' === $porque || self::has_application( $post_id, (string) $uno ) ) {
 				return '';
 			}
 			$primero = '' !== $primero ? $primero : $porque;

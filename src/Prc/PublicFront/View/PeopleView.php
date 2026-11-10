@@ -116,7 +116,7 @@ final class PeopleView {
 							<?php if ( $editable ) : ?>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
-									<details class="prc-personas__cambio"<?php echo array() !== $tecleado ? ' open' : ''; ?>>
+									<details class="prc-personas__cambio"<?php echo (string) $p['typed_row'] === $fila['id'] ? ' open' : ''; ?>>
 										<summary>Cambiar o sustituir</summary>
 										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 									</details>
@@ -173,7 +173,7 @@ final class PeopleView {
 			$campos[ PeopleForm::FIELD_ROW ]   = (string) $fila['id'];
 			$campos[ PeopleForm::FIELD_PRINT ] = (string) $fila['print'];
 		}
-		$out = wp_nonce_field( PeopleForm::NONCE_ACTION, PeopleForm::NONCE_FIELD, false, false );
+		$out = wp_nonce_field( PeopleForm::nonce_action( $op, (int) $p['application_id'] ), PeopleForm::NONCE_FIELD, false, false );
 		foreach ( $campos as $nombre => $valor ) {
 			$out .= '<input type="hidden" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( $valor ) . '" />';
 		}
@@ -283,13 +283,17 @@ final class PeopleView {
 				<?php endif; ?>
 			</p>
 			<?php echo self::table( array(), $filas, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<?php if ( array() !== (array) $r['log'] ) : ?>
-				<details class="prc-personas__historial">
-					<summary>Historial de la lista</summary>
+			<?php if ( empty( $r['open'] ) ) : ?>
+				<p><a href="<?php echo esc_url( (string) ( $r['log_url'] ?? '' ) ); ?>">Ver el historial de la lista</a></p>
+			<?php elseif ( array() === (array) $r['log'] ) : ?>
+				<p class="prc-vacio">La lista todavía no tiene historial.</p>
+			<?php else : ?>
+				<div class="prc-personas__historial">
+					<p><strong>Historial de la lista</strong></p>
 					<ol class="prc-historial">
 						<?php foreach ( (array) $r['log'] as $entrada ) : ?>
 							<li>
-								<?php echo esc_html( trim( $entrada['when'] . ' · ' . $entrada['who'] . ' · ' . $entrada['what'] ) ); ?>
+								<?php echo esc_html( implode( ' · ', array_filter( array( $entrada['when'], $entrada['who'], $entrada['what'] ), 'strlen' ) ) ); ?>
 								<?php if ( '' !== $entrada['before'] ) : ?>
 									<br /><?php echo esc_html( 'Antes: ' . $entrada['before'] ); ?>
 								<?php endif; ?>
@@ -299,7 +303,7 @@ final class PeopleView {
 							</li>
 						<?php endforeach; ?>
 					</ol>
-				</details>
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php

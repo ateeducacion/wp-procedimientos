@@ -41,6 +41,10 @@ final class PeopleForm {
 	public const FIELD_PRINT       = 'prc_people_print';
 	public const FIELD_PERSON      = 'prc_person';
 
+	/**
+	 * Prefix of the nonce action: the operation and the application follow
+	 * ({@see nonce_action()}).
+	 */
 	public const NONCE_ACTION = 'prc_people';
 	public const NONCE_FIELD  = '_prc_people_nonce';
 
@@ -63,6 +67,15 @@ final class PeopleForm {
 		'persona-alta'   => 'Persona dada de alta en la lista.',
 		'persona-cambio' => 'Cambios guardados en la persona.',
 		'persona-baja'   => 'Persona dada de baja de la lista.',
+	);
+
+	/**
+	 * Notices that say nothing was done, and why.
+	 *
+	 * @var array<string, string>
+	 */
+	private const NEUTRAL = array(
+		'persona-sin-cambios' => 'Esa persona ya tenía esos datos: no había nada que cambiar.',
 	);
 
 	/**
@@ -91,6 +104,13 @@ final class PeopleForm {
 	private static $rejected_row = '';
 
 	/**
+	 * Whether the last refusal was because the row changed since it was painted.
+	 *
+	 * @var bool
+	 */
+	private static $stale = false;
+
+	/**
 	 * Register the POST handler.
 	 *
 	 * @return void
@@ -116,26 +136,35 @@ final class PeopleForm {
 	}
 
 	/**
+	 * Nonce action of one operation on one application: a nonce of one
+	 * application does not serve for another.
+	 *
+	 * @param string $op             Operation.
+	 * @param int    $application_id Application post ID.
+	 * @return string
+	 */
+	public static function nonce_action( string $op, int $application_id ): string {
+		return self::NONCE_ACTION . '_' . $op . '_' . $application_id;
+	}
+
+	/**
 	 * Take a submit, when it is ours.
 	 *
 	 * @return void
 	 */
 	public static function handle(): void {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- se comprueba justo debajo.
-		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
-		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$op = self::posted_op();
 		if ( ! isset( self::NOTICE[ $op ] ) || ! is_user_logged_in() ) {
 			return;
 		}
 		$fila               = self::field( self::FIELD_ROW );
 		self::$rejected_row = self::OP_ADD === $op ? self::NEW_ROW : $fila;
-		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+		if ( ! self::nonce_ok() ) {
 			self::$rejected = 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a enviarlo.';
 			return;
 		}
 
-		$solicitud = absint( self::field( self::FIELD_APPLICATION ) );
+		$solicitud = self::posted_application();
 		$user_id   = get_current_user_id();
 		$huella    = self::field( self::FIELD_PRINT );
 		if ( self::OP_ADD === $op ) {
@@ -147,9 +176,10 @@ final class PeopleForm {
 		}
 		if ( ! $res['ok'] ) {
 			self::$rejected = $res['error'];
+			self::$stale    = $res['stale'];
 			return;
 		}
-		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => self::NOTICE[ $op ] ) ) );
+		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => $res['changed'] ? self::NOTICE[ $op ] : 'persona-sin-cambios' ) ) );
 	}
 
 	/**
@@ -194,7 +224,28 @@ final class PeopleForm {
 	 */
 	private static function nonce_ok(): bool {
 		return isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] )
-			&& false !== wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION );
+			&& false !== wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::nonce_action( self::posted_op(), self::posted_application() ) );
+	}
+
+	/**
+	 * The operation the POST asks for, before checking its nonce: the nonce
+	 * action is made from it.
+	 *
+	 * @return string
+	 */
+	private static function posted_op(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo compone la acción del nonce, que se comprueba con ella.
+		return isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+	}
+
+	/**
+	 * The application the POST is about, before checking its nonce.
+	 *
+	 * @return int
+	 */
+	private static function posted_application(): int {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo compone la acción del nonce, que se comprueba con ella.
+		return isset( $_POST[ self::FIELD_APPLICATION ] ) && is_string( $_POST[ self::FIELD_APPLICATION ] ) ? absint( wp_unslash( $_POST[ self::FIELD_APPLICATION ] ) ) : 0;
 	}
 
 	/**
@@ -228,7 +279,10 @@ final class PeopleForm {
 			'can_edit'       => $puede,
 			'why'            => self::why( $solicitud, $user_id, $puede ),
 			'flash'          => self::flash(),
-			'typed'          => '' !== self::$rejected ? self::person() : array(),
+			// Rechazado por la huella, el formulario de esa fila se repinta con
+			// lo guardado ahora y su huella nueva, no con lo tecleado: así un
+			// segundo envío no pisa a ciegas el cambio de la otra cuenta.
+			'typed'          => '' !== self::$rejected && ! self::$stale ? self::person() : array(),
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
 		);
 	}
@@ -300,6 +354,12 @@ final class PeopleForm {
 		}
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige qué aviso fijo se pinta.
 		$hecho = sanitize_key( wp_unslash( (string) ( $_GET[ ApplyForm::ARG_NOTICE ] ?? '' ) ) );
+		if ( isset( self::NEUTRAL[ $hecho ] ) ) {
+			return array(
+				'tipo'  => 'aviso',
+				'texto' => self::NEUTRAL[ $hecho ],
+			);
+		}
 		return array(
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
 			'texto' => (string) ( self::DONE[ $hecho ] ?? '' ),
@@ -314,10 +374,11 @@ final class PeopleForm {
 	 * revisa lo ve entero en la lista, y en el historial basta para saber de
 	 * quién se habla.
 	 *
-	 * @param int $application_id Application post ID.
+	 * @param int  $application_id Application post ID.
+	 * @param bool $history        Whether to read its history too.
 	 * @return array<string, mixed> `show` false when the procedure has no list.
 	 */
-	public static function review( int $application_id ): array {
+	public static function review( int $application_id, bool $history = false ): array {
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -329,7 +390,12 @@ final class PeopleForm {
 			'rows'     => $filas,
 			'min'      => (int) $spec['min'],
 			'complete' => ApplicationPeople::is_complete( $spec, $filas ),
-			'log'      => self::history( $spec, $application_id ),
+			// El historial se lee solo para la solicitud que se pide: con
+			// cientos de solicitudes en el panel, leerlos todos para pintar la
+			// tabla sería leer cientos de metas que nadie va a abrir.
+			'open'     => $history,
+			'log'      => $history ? self::history( $spec, $application_id ) : array(),
+			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) ),
 		);
 	}
 
@@ -341,13 +407,26 @@ final class PeopleForm {
 	 * @return array<int, array{when:string, who:string, what:string, before:string, after:string}>
 	 */
 	private static function history( array $spec, int $application_id ): array {
-		$que = array(
+		$que      = array(
 			'person_added'   => 'Alta',
 			'person_changed' => 'Cambio',
 			'person_removed' => 'Baja',
 		);
-		$out = array();
-		foreach ( array_reverse( ApplicationLog::all( $application_id ) ) as $entrada ) {
+		$out      = array();
+		$entradas = array_reverse( ApplicationLog::all( $application_id ) );
+		// Quién hizo cada cosa: todas las cuentas en una consulta.
+		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
+		foreach ( $entradas as $entrada ) {
+			if ( ApplicationLog::TRIMMED === $entrada['event'] ) {
+				$out[] = array(
+					'when'   => '',
+					'who'    => '',
+					'what'   => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $entrada['data']['dropped'] ?? 0 ) ),
+					'before' => '',
+					'after'  => '',
+				);
+				continue;
+			}
 			if ( ! isset( $que[ $entrada['event'] ] ) ) {
 				continue;
 			}

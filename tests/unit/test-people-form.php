@@ -49,7 +49,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		add_filter( 'pre_wp_mail', '__return_true' );
 		foreach ( array(
 			ApplyForm::class  => array( 'rejected' ),
-			PeopleForm::class => array( 'rejected', 'rejected_row' ),
+			PeopleForm::class => array( 'rejected', 'rejected_row', 'stale' ),
 		) as $clase => $estaticas ) {
 			\Closure::bind(
 				static function () use ( $estaticas ): void {
@@ -136,7 +136,7 @@ class Test_People_Form extends WP_UnitTestCase {
 	 */
 	private function enviar( array $campos, bool $nonce = true ): ?string {
 		if ( $nonce ) {
-			$this->post( $campos, PeopleForm::NONCE_ACTION, PeopleForm::NONCE_FIELD );
+			$this->post( $campos, PeopleForm::nonce_action( (string) $campos[ PeopleForm::FIELD_OP ], (int) $campos[ PeopleForm::FIELD_APPLICATION ] ), PeopleForm::NONCE_FIELD );
 		} else {
 			$this->post( $campos + array( PeopleForm::NONCE_FIELD => 'falso' ) );
 		}
@@ -299,10 +299,62 @@ class Test_People_Form extends WP_UnitTestCase {
 				)
 			)
 		);
-		$html = $this->pintar( $procedimiento );
+		$html  = $this->pintar( $procedimiento );
+		$ahora = People::of( $solicitud )[0];
 		$this->assertStringContainsString( 'ha cambiado esta persona', $html );
-		$this->assertStringContainsString( 'value="Ana Tecleada"', $html, 'lo tecleado no se pierde' );
-		$this->assertSame( '600000000', People::of( $solicitud )[0]['phone'] );
+		$this->assertStringNotContainsString( 'value="Ana Tecleada"', $html, 'se repinta lo guardado ahora, no lo tecleado' );
+		$this->assertStringContainsString( 'value="600000000"', $html );
+		$this->assertStringContainsString( 'value="' . ApplicationPeople::fingerprint( $ahora ) . '"', $html, 'con la huella nueva' );
+		$this->assertStringContainsString( '<details class="prc-personas__cambio" open>', $html, 'el formulario de esa fila, abierto' );
+		$this->assertSame( '600000000', $ahora['phone'] );
+	}
+
+	/**
+	 * El nonce es de la operación y de la solicitud: el de otra no sirve, y un
+	 * centro no escribe en la lista de otro aunque mande su número.
+	 */
+	public function test_another_school_or_another_nonce_writes_nothing() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$suya          = $this->application( $procedimiento, $director );
+		$intruso       = $this->school_head( 'C0002' );
+		$propia        = $this->application( $procedimiento, $intruso, 'C0002' );
+
+		$this->acting_as( $intruso );
+		$campos = array(
+			PeopleForm::FIELD_OP          => PeopleForm::OP_ADD,
+			PeopleForm::FIELD_APPLICATION => (string) $suya,
+			PeopleForm::FIELD_PERSON      => $this->persona(),
+		);
+		$this->assertNull( $this->enviar( $campos ), 'otro centro, con su nonce bueno' );
+		$this->assertSame( array(), People::of( $suya ) );
+
+		// El nonce de su propia solicitud, con el número de la otra.
+		$this->post( $campos, PeopleForm::nonce_action( PeopleForm::OP_ADD, $propia ), PeopleForm::NONCE_FIELD );
+		$this->assertNull( $this->exit_url( array( PeopleForm::class, 'handle' ) ) );
+		$this->assertSame( array(), People::of( $suya ) );
+	}
+
+	/**
+	 * Guardar una persona sin cambiar nada vuelve con un aviso neutro.
+	 */
+	public function test_a_change_without_differences_says_so() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		$this->acting_as( $director );
+		$url = $this->enviar(
+			array(
+				PeopleForm::FIELD_OP          => PeopleForm::OP_CHANGE,
+				PeopleForm::FIELD_APPLICATION => (string) $solicitud,
+				PeopleForm::FIELD_ROW         => $fila['id'],
+				PeopleForm::FIELD_PRINT       => ApplicationPeople::fingerprint( $fila ),
+				PeopleForm::FIELD_PERSON      => $this->persona(),
+			)
+		);
+		$this->assertSame( 'persona-sin-cambios', $this->query_arg( strtok( (string) $url, '#' ), ApplyForm::ARG_NOTICE ) );
 	}
 
 	/**

@@ -18201,7 +18201,7 @@ final class PeopleView {
 							<?php if ( $editable ) : ?>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
-									<details class="prc-personas__cambio"<?php echo array() !== $tecleado ? ' open' : ''; ?>>
+									<details class="prc-personas__cambio"<?php echo (string) $p['typed_row'] === $fila['id'] ? ' open' : ''; ?>>
 										<summary>Cambiar o sustituir</summary>
 										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila );?>
 									</details>
@@ -18258,7 +18258,7 @@ final class PeopleView {
 			$campos[ PeopleForm::FIELD_ROW ]   = (string) $fila['id'];
 			$campos[ PeopleForm::FIELD_PRINT ] = (string) $fila['print'];
 		}
-		$out = wp_nonce_field( PeopleForm::NONCE_ACTION, PeopleForm::NONCE_FIELD, false, false );
+		$out = wp_nonce_field( PeopleForm::nonce_action( $op, (int) $p['application_id'] ), PeopleForm::NONCE_FIELD, false, false );
 		foreach ( $campos as $nombre => $valor ) {
 			$out .= '<input type="hidden" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( $valor ) . '" />';
 		}
@@ -18368,13 +18368,17 @@ final class PeopleView {
 				<?php endif; ?>
 			</p>
 			<?php echo self::table( array(), $filas, false );?>
-			<?php if ( array() !== (array) $r['log'] ) : ?>
-				<details class="prc-personas__historial">
-					<summary>Historial de la lista</summary>
+			<?php if ( empty( $r['open'] ) ) : ?>
+				<p><a href="<?php echo esc_url( (string) ( $r['log_url'] ?? '' ) ); ?>">Ver el historial de la lista</a></p>
+			<?php elseif ( array() === (array) $r['log'] ) : ?>
+				<p class="prc-vacio">La lista todavía no tiene historial.</p>
+			<?php else : ?>
+				<div class="prc-personas__historial">
+					<p><strong>Historial de la lista</strong></p>
 					<ol class="prc-historial">
 						<?php foreach ( (array) $r['log'] as $entrada ) : ?>
 							<li>
-								<?php echo esc_html( trim( $entrada['when'] . ' · ' . $entrada['who'] . ' · ' . $entrada['what'] ) ); ?>
+								<?php echo esc_html( implode( ' · ', array_filter( array( $entrada['when'], $entrada['who'], $entrada['what'] ), 'strlen' ) ) ); ?>
 								<?php if ( '' !== $entrada['before'] ) : ?>
 									<br /><?php echo esc_html( 'Antes: ' . $entrada['before'] ); ?>
 								<?php endif; ?>
@@ -18384,7 +18388,7 @@ final class PeopleView {
 							</li>
 						<?php endforeach; ?>
 					</ol>
-				</details>
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
@@ -19908,6 +19912,10 @@ final class PeopleForm {
 	public const FIELD_PRINT       = 'prc_people_print';
 	public const FIELD_PERSON      = 'prc_person';
 
+
+
+
+
 	public const NONCE_ACTION = 'prc_people';
 	public const NONCE_FIELD  = '_prc_people_nonce';
 
@@ -19930,6 +19938,15 @@ final class PeopleForm {
 		'persona-alta'   => 'Persona dada de alta en la lista.',
 		'persona-cambio' => 'Cambios guardados en la persona.',
 		'persona-baja'   => 'Persona dada de baja de la lista.',
+	);
+
+
+
+
+
+
+	private const NEUTRAL = array(
+		'persona-sin-cambios' => 'Esa persona ya tenía esos datos: no había nada que cambiar.',
 	);
 
 
@@ -19962,6 +19979,13 @@ final class PeopleForm {
 
 
 
+	private static $stale = false;
+
+
+
+
+
+
 	public static function register(): void {
 		add_action( 'init', array( self::class, 'handle' ), 20 );
 	}
@@ -19987,22 +20011,31 @@ final class PeopleForm {
 
 
 
+
+
+
+	public static function nonce_action( string $op, int $application_id ): string {
+		return self::NONCE_ACTION . '_' . $op . '_' . $application_id;
+	}
+
+
+
+
+
+
 	public static function handle(): void {
-
-		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
-		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
-
+		$op = self::posted_op();
 		if ( ! isset( self::NOTICE[ $op ] ) || ! is_user_logged_in() ) {
 			return;
 		}
 		$fila               = self::field( self::FIELD_ROW );
 		self::$rejected_row = self::OP_ADD === $op ? self::NEW_ROW : $fila;
-		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+		if ( ! self::nonce_ok() ) {
 			self::$rejected = 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a enviarlo.';
 			return;
 		}
 
-		$solicitud = absint( self::field( self::FIELD_APPLICATION ) );
+		$solicitud = self::posted_application();
 		$user_id   = get_current_user_id();
 		$huella    = self::field( self::FIELD_PRINT );
 		if ( self::OP_ADD === $op ) {
@@ -20014,9 +20047,10 @@ final class PeopleForm {
 		}
 		if ( ! $res['ok'] ) {
 			self::$rejected = $res['error'];
+			self::$stale    = $res['stale'];
 			return;
 		}
-		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => self::NOTICE[ $op ] ) ) );
+		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => $res['changed'] ? self::NOTICE[ $op ] : 'persona-sin-cambios' ) ) );
 	}
 
 
@@ -20061,7 +20095,28 @@ final class PeopleForm {
 
 	private static function nonce_ok(): bool {
 		return isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] )
-			&& false !== wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION );
+			&& false !== wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::nonce_action( self::posted_op(), self::posted_application() ) );
+	}
+
+
+
+
+
+
+
+	private static function posted_op(): string {
+
+		return isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+	}
+
+
+
+
+
+
+	private static function posted_application(): int {
+
+		return isset( $_POST[ self::FIELD_APPLICATION ] ) && is_string( $_POST[ self::FIELD_APPLICATION ] ) ? absint( wp_unslash( $_POST[ self::FIELD_APPLICATION ] ) ) : 0;
 	}
 
 
@@ -20095,7 +20150,10 @@ final class PeopleForm {
 			'can_edit'       => $puede,
 			'why'            => self::why( $solicitud, $user_id, $puede ),
 			'flash'          => self::flash(),
-			'typed'          => '' !== self::$rejected ? self::person() : array(),
+
+
+
+			'typed'          => '' !== self::$rejected && ! self::$stale ? self::person() : array(),
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
 		);
 	}
@@ -20167,6 +20225,12 @@ final class PeopleForm {
 		}
 
 		$hecho = sanitize_key( wp_unslash( (string) ( $_GET[ ApplyForm::ARG_NOTICE ] ?? '' ) ) );
+		if ( isset( self::NEUTRAL[ $hecho ] ) ) {
+			return array(
+				'tipo'  => 'aviso',
+				'texto' => self::NEUTRAL[ $hecho ],
+			);
+		}
 		return array(
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
 			'texto' => (string) ( self::DONE[ $hecho ] ?? '' ),
@@ -20184,7 +20248,8 @@ final class PeopleForm {
 
 
 
-	public static function review( int $application_id ): array {
+
+	public static function review( int $application_id, bool $history = false ): array {
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -20196,7 +20261,12 @@ final class PeopleForm {
 			'rows'     => $filas,
 			'min'      => (int) $spec['min'],
 			'complete' => ApplicationPeople::is_complete( $spec, $filas ),
-			'log'      => self::history( $spec, $application_id ),
+
+
+
+			'open'     => $history,
+			'log'      => $history ? self::history( $spec, $application_id ) : array(),
+			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) ),
 		);
 	}
 
@@ -20208,13 +20278,26 @@ final class PeopleForm {
 
 
 	private static function history( array $spec, int $application_id ): array {
-		$que = array(
+		$que      = array(
 			'person_added'   => 'Alta',
 			'person_changed' => 'Cambio',
 			'person_removed' => 'Baja',
 		);
-		$out = array();
-		foreach ( array_reverse( ApplicationLog::all( $application_id ) ) as $entrada ) {
+		$out      = array();
+		$entradas = array_reverse( ApplicationLog::all( $application_id ) );
+
+		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
+		foreach ( $entradas as $entrada ) {
+			if ( ApplicationLog::TRIMMED === $entrada['event'] ) {
+				$out[] = array(
+					'when'   => '',
+					'who'    => '',
+					'what'   => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $entrada['data']['dropped'] ?? 0 ) ),
+					'before' => '',
+					'after'  => '',
+				);
+				continue;
+			}
 			if ( ! isset( $que[ $entrada['event'] ] ) ) {
 				continue;
 			}

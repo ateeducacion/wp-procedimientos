@@ -17521,6 +17521,316 @@ final class MeasuredQuestionView {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\PeopleView', false ) ) {
+final class PeopleView {
+
+
+
+
+
+
+
+	public static function section( array $p ): string {
+		if ( empty( $p['show'] ) ) {
+			return '';
+		}
+		$flash = (array) ( $p['flash'] ?? array() );
+		$filas = (array) $p['rows'];
+		$lleno = count( $filas ) >= (int) $p['max'];
+
+		ob_start();
+		?>
+		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
+			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
+			<div class="prc-seccion__cuerpo">
+				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
+				<p class="prc-campo__ayuda prc-campo--completo">
+					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
+				</p>
+				<?php if ( (int) $p['application_id'] > 0 && empty( $p['complete'] ) ) : ?>
+					<?php echo Shell::notice( 'aviso', sprintf( 'La lista tiene %1$d %2$s y el procedimiento pide al menos %3$d: la solicitud queda incompleta hasta que la complete.', count( $filas ), 1 === count( $filas ) ? 'persona' : 'personas', (int) $p['min'] ) );?>
+				<?php endif; ?>
+				<?php echo Shell::notice( 'aviso', (string) $p['why'] );?>
+				<?php echo self::table( $p, $filas, ! empty( $p['can_edit'] ) );?>
+				<?php if ( ! empty( $p['can_edit'] ) && $lleno ) : ?>
+					<p class="prc-campo--completo">La lista ha llegado al máximo de personas que admite este procedimiento. Para añadir a alguien, dé antes de baja a otra persona o cámbiela.</p>
+				<?php elseif ( ! empty( $p['can_edit'] ) ) : ?>
+					<details class="prc-personas__alta prc-campo--completo"<?php echo PeopleForm::NEW_ROW === (string) $p['typed_row'] ? ' open' : ''; ?>>
+						<summary>Dar de alta a una persona</summary>
+						<?php echo self::form( $p, PeopleForm::OP_ADD, PeopleForm::NEW_ROW === (string) $p['typed_row'] ? (array) $p['typed'] : array() );?>
+					</details>
+				<?php endif; ?>
+			</div>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function limits( int $min, int $max, int $count ): string {
+		$pide = $min > 0 ? sprintf( 'Pide entre %1$d y %2$d personas.', $min, $max ) : sprintf( 'Admite hasta %d personas.', $max );
+		return $pide . ' ' . sprintf( 'Ahora hay %d.', $count );
+	}
+
+
+
+
+
+
+
+
+
+	private static function table( array $p, array $filas, bool $editable ): string {
+		if ( array() === $filas ) {
+			return '<p class="prc-vacio prc-campo--completo">Todavía no hay nadie en la lista.</p>';
+		}
+		ob_start();
+		?>
+		<div class="prc-tabla-caja prc-campo--completo">
+			<table class="prc-tabla prc-tabla--densa">
+				<caption class="screen-reader-text">Personas de la solicitud</caption>
+				<thead>
+					<tr>
+						<th class="prc-th" scope="col">Nombre y apellidos</th>
+						<th class="prc-th" scope="col">DNI o NIE</th>
+						<th class="prc-th" scope="col">Correo</th>
+						<th class="prc-th" scope="col">Teléfono</th>
+						<th class="prc-th" scope="col">Papel</th>
+						<th class="prc-th" scope="col">Grupo</th>
+						<?php if ( $editable ) : ?>
+							<th class="prc-th" scope="col">Acciones</th>
+						<?php endif; ?>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $filas as $fila ) : ?>
+						<tr>
+							<?php echo self::cells( $fila );?>
+							<?php if ( $editable ) : ?>
+								<td class="prc-celda" data-rotulo="Acciones">
+									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
+									<details class="prc-personas__cambio"<?php echo array() !== $tecleado ? ' open' : ''; ?>>
+										<summary>Cambiar o sustituir</summary>
+										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila );?>
+									</details>
+									<?php echo self::remove_form( $p, $fila );?>
+								</td>
+							<?php endif; ?>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function cells( array $fila ): string {
+		$celdas = array(
+			'Nombre y apellidos' => trim( $fila['name'] . ' ' . $fila['surname'] ),
+			'DNI o NIE'          => $fila['dni'],
+			'Correo'             => $fila['email'],
+			'Teléfono'           => $fila['phone'],
+			'Papel'              => $fila['role_label'],
+			'Grupo'              => $fila['group_label'],
+		);
+		$out    = '';
+		foreach ( $celdas as $rotulo => $valor ) {
+			$out .= '<td class="prc-celda" data-rotulo="' . esc_attr( $rotulo ) . '">'
+				. ( '' !== (string) $valor ? esc_html( (string) $valor ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>' )
+				. '</td>';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function hidden( array $p, string $op, array $fila ): string {
+		$campos = array(
+			PeopleForm::FIELD_OP          => $op,
+			PeopleForm::FIELD_APPLICATION => (string) (int) $p['application_id'],
+		);
+		if ( array() !== $fila ) {
+			$campos[ PeopleForm::FIELD_ROW ]   = (string) $fila['id'];
+			$campos[ PeopleForm::FIELD_PRINT ] = (string) $fila['print'];
+		}
+		$out = wp_nonce_field( PeopleForm::NONCE_ACTION, PeopleForm::NONCE_FIELD, false, false );
+		foreach ( $campos as $nombre => $valor ) {
+			$out .= '<input type="hidden" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( $valor ) . '" />';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function form( array $p, string $op, array $valores, array $fila = array() ): string {
+		$base   = 'prc-person-' . ( array() !== $fila ? (string) $fila['id'] : PeopleForm::NEW_ROW ) . '-';
+		$campos = array(
+			'name'    => array( 'Nombre', 'text', true, 'given-name' ),
+			'surname' => array( 'Apellidos', 'text', true, 'family-name' ),
+			'dni'     => array( 'DNI o NIE', 'text', true, 'off' ),
+			'email'   => array( 'Correo electrónico', 'email', true, 'email' ),
+			'phone'   => array( 'Teléfono', 'tel', false, 'tel' ),
+		);
+
+		ob_start();
+		?>
+		<form class="prc-form prc-personas__form" method="post" action="<?php echo esc_url( '#' . PeopleForm::ANCHOR ); ?>">
+			<?php echo self::hidden( $p, $op, $fila );?>
+			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $obliga, $auto ) ) : ?>
+				<div class="prc-campo prc-campo--cuarto">
+					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $base . $campo ); ?>"><?php echo esc_html( $rotulo ); ?><?php echo $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : ''; ?></label>
+					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $base . $campo ); ?>"
+						name="<?php echo esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ); ?>" autocomplete="<?php echo esc_attr( $auto ); ?>"
+						value="<?php echo esc_attr( (string) ( $valores[ $campo ] ?? '' ) ); ?>"<?php echo $obliga ? ' required' : ''; ?> />
+				</div>
+			<?php endforeach; ?>
+			<?php echo self::select( $base . 'role', 'role', 'Papel', (array) $p['roles'], (string) ( $valores['role'] ?? '' ), true );?>
+			<?php if ( array() !== (array) $p['groups'] ) : ?>
+				<?php echo self::select( $base . 'group', 'group', 'Grupo', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
+			<?php endif; ?>
+			<div class="prc-campo prc-campo--completo">
+				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
+			</div>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function select( string $id, string $campo, string $rotulo, array $opciones, string $elegida, bool $obliga ): string {
+		$out = '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $rotulo )
+			. ( $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' ) . '</label>'
+			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ) . '"' . ( $obliga ? ' required' : '' ) . '>'
+			. ( $obliga ? '<option value="">— Elija —</option>' : '' );
+		foreach ( $opciones as $clave => $texto ) {
+			$out .= '<option value="' . esc_attr( (string) $clave ) . '"' . selected( (string) $clave, $elegida, false ) . '>' . esc_html( (string) $texto ) . '</option>';
+		}
+		return $out . '</select></div>';
+	}
+
+
+
+
+
+
+
+
+	private static function remove_form( array $p, array $fila ): string {
+		$nombre   = trim( $fila['name'] . ' ' . $fila['surname'] );
+		$pregunta = sprintf( '¿Dar de baja a %s de la lista de personas? Quedará anotado en el historial de la solicitud.', $nombre );
+		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
+			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
+			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
+			. '<button type="submit" class="' . esc_attr( Assets::button_class() . ' prc-btn-borrar' ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
+			. '</form>';
+	}
+
+
+
+
+
+
+
+	public static function review( array $r ): string {
+		if ( empty( $r['show'] ) ) {
+			return '';
+		}
+		$filas = (array) $r['rows'];
+		ob_start();
+		?>
+		<div class="prc-personas-revision">
+			<p><strong>Personas</strong>
+				<?php echo esc_html( sprintf( '(%d)', count( $filas ) ) ); ?>
+				<?php if ( empty( $r['complete'] ) ) : ?>
+					<span class="<?php echo esc_attr( Assets::state_class( 'amend' ) ); ?>"><?php echo esc_html( sprintf( 'Incompleta: pide al menos %d', (int) $r['min'] ) ); ?></span>
+				<?php endif; ?>
+			</p>
+			<?php echo self::table( array(), $filas, false );?>
+			<?php if ( array() !== (array) $r['log'] ) : ?>
+				<details class="prc-personas__historial">
+					<summary>Historial de la lista</summary>
+					<ol class="prc-historial">
+						<?php foreach ( (array) $r['log'] as $entrada ) : ?>
+							<li>
+								<?php echo esc_html( trim( $entrada['when'] . ' · ' . $entrada['who'] . ' · ' . $entrada['what'] ) ); ?>
+								<?php if ( '' !== $entrada['before'] ) : ?>
+									<br /><?php echo esc_html( 'Antes: ' . $entrada['before'] ); ?>
+								<?php endif; ?>
+								<?php if ( '' !== $entrada['after'] ) : ?>
+									<br /><?php echo esc_html( 'Después: ' . $entrada['after'] ); ?>
+								<?php endif; ?>
+							</li>
+						<?php endforeach; ?>
+					</ol>
+				</details>
+			<?php endif; ?>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -17612,6 +17922,9 @@ final class ApplyFormView {
 			echo self::summary( $m );
 		}
 		self::deliveries( $m );
+
+
+		echo PeopleView::section( (array) ( $m['people'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 
@@ -18873,7 +19186,404 @@ final class ApplyForm {
 	public static function render( $atts = array() ): string {
 		unset( $atts );
 		Assets::enqueue();
-		return ApplyFormView::html( self::model() );
+		$m = self::model();
+
+		$m['people'] = PeopleForm::model( $m );
+		return ApplyFormView::html( $m );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
+use Prc\Domain\DateRange;
+use Prc\Domain\PeopleSpec;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\PeopleForm', false ) ) {
+final class PeopleForm {
+
+	public const FIELD_OP = 'prc_people_op';
+
+	public const OP_ADD    = 'add';
+	public const OP_CHANGE = 'change';
+	public const OP_REMOVE = 'remove';
+
+	public const FIELD_APPLICATION = 'prc_people_application';
+	public const FIELD_ROW         = 'prc_people_row';
+	public const FIELD_PRINT       = 'prc_people_print';
+	public const FIELD_PERSON      = 'prc_person';
+
+	public const NONCE_ACTION = 'prc_people';
+	public const NONCE_FIELD  = '_prc_people_nonce';
+
+
+
+
+	public const ANCHOR = 'prc-personas';
+
+
+
+
+	public const NEW_ROW = 'nueva';
+
+
+
+
+
+
+	private const DONE = array(
+		'persona-alta'   => 'Persona dada de alta en la lista.',
+		'persona-cambio' => 'Cambios guardados en la persona.',
+		'persona-baja'   => 'Persona dada de baja de la lista.',
+	);
+
+
+
+
+
+
+	private const NOTICE = array(
+		self::OP_ADD    => 'persona-alta',
+		self::OP_CHANGE => 'persona-cambio',
+		self::OP_REMOVE => 'persona-baja',
+	);
+
+
+
+
+
+
+	private static $rejected = '';
+
+
+
+
+
+
+	private static $rejected_row = '';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'init', array( self::class, 'handle' ), 20 );
+	}
+
+
+
+
+
+
+
+
+	public static function url( int $application_id, array $args = array() ): string {
+		$base = ApplyForm::url_for_code(
+			(int) wp_get_post_parent_id( $application_id ),
+			(string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ),
+			$args
+		);
+		return '' === $base ? '' : $base . '#' . self::ANCHOR;
+	}
+
+
+
+
+
+
+	public static function handle(): void {
+
+		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
+
+		if ( ! isset( self::NOTICE[ $op ] ) || ! is_user_logged_in() ) {
+			return;
+		}
+		$fila               = self::field( self::FIELD_ROW );
+		self::$rejected_row = self::OP_ADD === $op ? self::NEW_ROW : $fila;
+		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+			self::$rejected = 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a enviarlo.';
+			return;
+		}
+
+		$solicitud = absint( self::field( self::FIELD_APPLICATION ) );
+		$user_id   = get_current_user_id();
+		$huella    = self::field( self::FIELD_PRINT );
+		if ( self::OP_ADD === $op ) {
+			$res = People::add( $solicitud, $user_id, self::person() );
+		} elseif ( self::OP_CHANGE === $op ) {
+			$res = People::change( $solicitud, $user_id, $fila, $huella, self::person() );
+		} else {
+			$res = People::remove( $solicitud, $user_id, $fila, $huella );
+		}
+		if ( ! $res['ok'] ) {
+			self::$rejected = $res['error'];
+			return;
+		}
+		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => self::NOTICE[ $op ] ) ) );
+	}
+
+
+
+
+
+
+	private static function person(): array {
+		if ( ! self::nonce_ok() ) {
+			return array();
+		}
+
+		$crudo = isset( $_POST[ self::FIELD_PERSON ] ) ? wp_unslash( $_POST[ self::FIELD_PERSON ] ) : array();
+		$out   = array();
+		foreach ( array_diff( ApplicationPeople::FIELDS, array( 'id' ) ) as $campo ) {
+			$valor         = is_array( $crudo ) ? ( $crudo[ $campo ] ?? '' ) : '';
+			$out[ $campo ] = is_string( $valor ) ? sanitize_text_field( $valor ) : '';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function field( string $nombre ): string {
+		if ( ! self::nonce_ok() ) {
+			return '';
+		}
+
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] )
+			? trim( sanitize_text_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
+
+	}
+
+
+
+
+
+
+	private static function nonce_ok(): bool {
+		return isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] )
+			&& false !== wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION );
+	}
+
+
+
+
+
+
+
+
+	public static function model( array $apply ): array {
+		$procedure_id = (int) ( $apply['procedure_id'] ?? 0 );
+		if ( $procedure_id <= 0 || '' !== (string) ( $apply['aviso'] ?? '' ) || ! People::enabled( $procedure_id )
+			|| ApplicationMetaKeys::TYPE_TEACHER === (string) ( $apply['applicant_type'] ?? '' ) ) {
+			return array( 'show' => false );
+		}
+		$spec      = People::spec( $procedure_id );
+		$solicitud = (int) ( $apply['application']['id'] ?? 0 );
+		$user_id   = get_current_user_id();
+		$filas     = $solicitud > 0 ? self::rows( $spec, People::of( $solicitud ) ) : array();
+		$puede     = $solicitud > 0 && ProcedureAccess::can_edit_people( $user_id, $solicitud );
+		return array(
+			'show'           => true,
+			'application_id' => $solicitud,
+			'roles'          => array_column( $spec['roles'], 'label', 'key' ),
+			'groups'         => array_column( $spec['groups'], 'label', 'key' ),
+			'min'            => (int) $spec['min'],
+			'max'            => (int) $spec['max'],
+			'window'         => self::window( $spec ),
+			'rows'           => $filas,
+			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
+			'can_edit'       => $puede,
+			'why'            => self::why( $solicitud, $user_id, $puede ),
+			'flash'          => self::flash(),
+			'typed'          => '' !== self::$rejected ? self::person() : array(),
+			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function rows( array $spec, array $rows ): array {
+		$out = array();
+		foreach ( $rows as $fila ) {
+			$out[] = $fila + array(
+				'role_label'  => PeopleSpec::label( $spec, 'roles', $fila['role'] ),
+				'group_label' => PeopleSpec::label( $spec, 'groups', $fila['group'] ),
+				'print'       => ApplicationPeople::fingerprint( $fila ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function window( array $spec ): string {
+		$fechas = DateRange::of( (string) $spec['opens_at'], (string) $spec['closes_at'] );
+		if ( '' !== (string) $spec['opens_at'] && '' !== (string) $spec['closes_at'] && '' !== $fechas ) {
+			return 'Plazo para gestionar la lista: ' . lcfirst( $fechas ) . '.';
+		}
+		if ( '' === (string) $spec['opens_at'] && '' === (string) $spec['closes_at'] ) {
+			return 'La lista se gestiona mientras se pueda modificar la solicitud.';
+		}
+		return '' !== (string) $spec['opens_at']
+			? 'La lista se puede gestionar desde el ' . self::day( (string) $spec['opens_at'] ) . '.'
+			: 'La lista se puede gestionar hasta el ' . self::day( (string) $spec['closes_at'] ) . '.';
+	}
+
+
+
+
+
+
+
+
+
+	private static function why( int $application_id, int $user_id, bool $puede ): string {
+		if ( $application_id <= 0 ) {
+			return 'Cuando presente la solicitud podrá dar de alta aquí a las personas que participan.';
+		}
+		return $puede ? '' : ProcedureAccess::why_not_people( $user_id, $application_id );
+	}
+
+
+
+
+
+
+	private static function flash(): array {
+		if ( '' !== self::$rejected ) {
+			return array(
+				'tipo'  => 'error',
+				'texto' => self::$rejected,
+			);
+		}
+
+		$hecho = sanitize_key( wp_unslash( (string) ( $_GET[ ApplyForm::ARG_NOTICE ] ?? '' ) ) );
+		return array(
+			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
+			'texto' => (string) ( self::DONE[ $hecho ] ?? '' ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function review( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
+			return array( 'show' => false );
+		}
+		$spec  = People::spec( $procedure_id );
+		$filas = self::rows( $spec, People::of( $application_id ) );
+		return array(
+			'show'     => true,
+			'rows'     => $filas,
+			'min'      => (int) $spec['min'],
+			'complete' => ApplicationPeople::is_complete( $spec, $filas ),
+			'log'      => self::history( $spec, $application_id ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function history( array $spec, int $application_id ): array {
+		$que = array(
+			'person_added'   => 'Alta',
+			'person_changed' => 'Cambio',
+			'person_removed' => 'Baja',
+		);
+		$out = array();
+		foreach ( array_reverse( ApplicationLog::all( $application_id ) ) as $entrada ) {
+			if ( ! isset( $que[ $entrada['event'] ] ) ) {
+				continue;
+			}
+			$cuenta = $entrada['user'] > 0 ? get_userdata( $entrada['user'] ) : false;
+			$out[]  = array(
+				'when'   => '' !== $entrada['at'] ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( $entrada['at'] ) ) : '',
+				'who'    => false !== $cuenta ? (string) $cuenta->display_name : '(cuenta que ya no existe)',
+				'what'   => $que[ $entrada['event'] ],
+				'before' => self::line( $spec, (array) ( $entrada['data']['before'] ?? array() ) ),
+				'after'  => self::line( $spec, (array) ( $entrada['data']['after'] ?? array() ) ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function line( array $spec, array $row ): string {
+		if ( array() === $row ) {
+			return '';
+		}
+		$dni = ApplicationPeople::masked_dni( (string) ( $row['dni'] ?? '' ) );
+		return ApplicationPeople::describe( $spec, $row ) . ( '' !== $dni ? ' · DNI ' . $dni : '' );
+	}
+
+
+
+
+
+
+
+	private static function day( string $ymd ): string {
+		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
 	}
 }
 
@@ -19068,6 +19778,9 @@ final class MyCentreView {
 				<?php endif; ?>
 				<?php if ( '' !== (string) $fila['url'] ) : ?>
 					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['url'] ); ?>">Ver la solicitud</a>
+				<?php endif; ?>
+				<?php if ( '' !== (string) ( $fila['people_url'] ?? '' ) ) : ?>
+					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['people_url'] ); ?>"><?php echo esc_html( sprintf( 'Personas (%d)', (int) $fila['people_count'] ) ); ?></a>
 				<?php endif; ?>
 			</td>
 		</tr>
@@ -19292,6 +20005,8 @@ final class MyCentre {
 		$opciones     = self::options( $procedure_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] );
 		$cierre       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
 		$estado       = ProcedureState::of_post( $procedure_id );
+		$personas     = ApplicationMetaKeys::TYPE_TEACHER !== ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+			&& People::enabled( $procedure_id );
 
 
 
@@ -19322,6 +20037,9 @@ final class MyCentre {
 			'note'         => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 			'amend'        => $subsanar,
 			'amend_closes' => $cierre,
+
+			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
+			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
 		);
 	}
 
@@ -21058,6 +21776,7 @@ use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
@@ -21108,6 +21827,7 @@ final class App {
 
 		ApplicationExport::class,
 		ApplyForm::class,
+		PeopleForm::class,
 		MyCentre::class,
 		Workspace::class,
 		ProcedureEditor::class,

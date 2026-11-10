@@ -364,6 +364,30 @@ final class PeopleSpec {
 	}
 
 	/**
+	 * The last day the list can be changed, to say it before it is too late.
+	 *
+	 * Con fechas propias, su último día; sin ninguna, el cierre del plazo de
+	 * solicitud, que es la ventana que sigue. Una ventana con apertura y sin
+	 * cierre no tiene último día que decir, y uno que ya ha pasado tampoco:
+	 * en subsanación o con prórroga la ventana es otra, y la dice el motivo
+	 * de {@see why_closed()}.
+	 *
+	 * @param array<string, mixed> $spec      Specification.
+	 * @param string               $closes_at Last day of the application window, Y-m-d.
+	 * @param string               $today     Today, Y-m-d.
+	 * @return string Y-m-d, or empty.
+	 */
+	public static function until( array $spec, string $closes_at, string $today ): string {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] ) {
+			return '';
+		}
+		$propia = '' !== (string) $spec['opens_at'] || '' !== (string) $spec['closes_at'];
+		$ultimo = $propia ? (string) $spec['closes_at'] : self::date( $closes_at );
+		return '' !== $ultimo && $ultimo >= $today ? $ultimo : '';
+	}
+
+	/**
 	 * Whether the school may edit its application in this state: the rule of
 	 * the application screen (ADR-0020).
 	 *

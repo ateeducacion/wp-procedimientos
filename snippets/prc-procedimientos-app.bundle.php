@@ -3238,6 +3238,30 @@ final class PeopleSpec {
 
 
 
+
+	public static function until( array $spec, string $closes_at, string $today ): string {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] ) {
+			return '';
+		}
+		$propia = '' !== (string) $spec['opens_at'] || '' !== (string) $spec['closes_at'];
+		$ultimo = $propia ? (string) $spec['closes_at'] : self::date( $closes_at );
+		return '' !== $ultimo && $ultimo >= $today ? $ultimo : '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	public static function application_editable( string $state, string $review, bool $late = false ): bool {
 		return '' === ProcedureState::application_window( $state, $review, false, $late );
 	}

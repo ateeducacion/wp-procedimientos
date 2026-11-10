@@ -325,7 +325,8 @@ final class Applications {
 			return 0;
 		}
 
-		$id = self::save_post( $procedure_id, $user_id, $centro, $files );
+		$created = null === self::find( $procedure_id, $centro['code'] );
+		$id      = self::save_post( $procedure_id, $user_id, $centro, $files );
 		if ( 0 === $id ) {
 			return 0;
 		}
@@ -349,6 +350,7 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
+		self::saved( $id, $created );
 		return $id;
 	}
 
@@ -366,7 +368,8 @@ final class Applications {
 		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 0;
 		}
-		$id = self::save_post(
+		$created = null === self::find_for_teacher( $procedure_id, $user_id );
+		$id      = self::save_post(
 			$procedure_id,
 			$user_id,
 			array(
@@ -395,7 +398,29 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
+		self::saved( $id, $created );
 		return $id;
+	}
+
+	/**
+	 * Tell whoever listens that an application has just been stored.
+	 *
+	 * Después de escribir todas las metas: quien escucha —el correo, por
+	 * ejemplo (ADR-0038)— lee la solicitud ya entera. Lo que haga no cambia lo
+	 * que esta función devuelve: la solicitud ya está guardada.
+	 *
+	 * @param int  $id      Application post ID.
+	 * @param bool $created Whether it did not exist before.
+	 * @return void
+	 */
+	private static function saved( int $id, bool $created ): void {
+		/**
+		 * An application has just been stored, new or edited.
+		 *
+		 * @param int  $id      Application post ID.
+		 * @param bool $created Whether it did not exist before.
+		 */
+		do_action( 'prc_application_saved', $id, $created );
 	}
 
 	/**
@@ -474,8 +499,21 @@ final class Applications {
 			return self::refused( 'note' );
 		}
 
+		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
+
+		/**
+		 * The review state of an application has just been set.
+		 *
+		 * Se emite también cuando el estado no cambia —se reescribe la nota—:
+		 * quien escucha decide si eso le importa. El correo, no (ADR-0038).
+		 *
+		 * @param int    $application_id Application post ID.
+		 * @param string $state          New review state.
+		 * @param string $previous       Review state before.
+		 */
+		do_action( 'prc_application_reviewed', $application_id, $state, $previous );
 
 		return array(
 			'ok'    => true,

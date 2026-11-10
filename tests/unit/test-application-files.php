@@ -1444,6 +1444,27 @@ class Test_Application_Files extends WP_UnitTestCase {
 		return $this->exit_url( array( ApplyForm::class, 'handle' ) );
 	}
 
+	/** A stored delivery announces itself once, with its question key; a refused one does not. */
+	public function test_a_delivery_emits_its_action() {
+		$data  = $this->delivery_fixture();
+		$visto = array();
+		add_action(
+			'prc_delivery_saved',
+			static function ( int $application_id, string $key ) use ( &$visto ): void {
+				$visto[] = array( $application_id, $key );
+			},
+			10,
+			2
+		);
+
+		$this->assertFalse( ApplicationFiles::deliver( $data['application'], 'q1', array() ), 'sin documento no hay entrega' );
+		$this->assertSame( array(), $visto );
+
+		$this->en_files( array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ) );
+		$this->assertNotNull( $this->deliver_document( $data ) );
+		$this->assertSame( array( array( $data['application'], 'q1' ) ), $visto );
+	}
+
 	/** A resolved procedure accepts its document without reopening or resetting review. */
 	public function test_a_resolved_procedure_accepts_a_delivery_without_changing_the_application() {
 		$data   = $this->delivery_fixture();

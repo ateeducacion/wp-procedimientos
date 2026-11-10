@@ -358,6 +358,33 @@ final class ApplicationFiles {
 	}
 
 	/**
+	 * Store the document of a delivery with its own deadline, and say so.
+	 *
+	 * Es {@see store_all()} con un solo documento y, si se guarda, la acción
+	 * `prc_delivery_saved`, que escucha el correo (ADR-0038). Quién puede
+	 * entregar y cuándo lo decide antes {@see ProcedureAccess::can_deliver()}.
+	 *
+	 * @param int                                 $application_id Application post ID.
+	 * @param string                              $question_key   Key of the delivery question.
+	 * @param array<string, array<string, mixed>> $files          What submitted() returned for it.
+	 * @return bool
+	 */
+	public static function deliver( int $application_id, string $question_key, array $files ): bool {
+		if ( ! isset( $files[ $question_key ] ) || ! self::store_all( $application_id, array( $question_key => $files[ $question_key ] ) ) ) {
+			return false;
+		}
+
+		/**
+		 * A document with its own deadline has just been delivered.
+		 *
+		 * @param int    $application_id Application post ID.
+		 * @param string $question_key   Key of the delivery question.
+		 */
+		do_action( 'prc_delivery_saved', $application_id, $question_key );
+		return true;
+	}
+
+	/**
 	 * Put one validated file in the private store and describe it.
 	 *
 	 * El nombre físico es **aleatorio y nada más**: no lleva el nombre del

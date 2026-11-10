@@ -456,6 +456,43 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * The accounts that manage the ámbitos of a procedure.
+	 *
+	 * Quien tiene la capacidad de gestionar procedimientos y un ámbito en su
+	 * perfil que alcanza a alguno de los del procedimiento —el mismo o uno
+	 * por encima—: la regla de {@see in_scope()}, leída al revés. Quien
+	 * trabaja sobre todos los ámbitos no entra: alcanzarlos todos no es
+	 * gestionar este, y sería mandarle cada aviso del sitio.
+	 *
+	 * @param int $procedure_id Procedure ID, or an application under it.
+	 * @return int[] User IDs.
+	 */
+	public static function area_managers( int $procedure_id ): array {
+		$theirs = $procedure_id > 0 ? self::post_areas( $procedure_id ) : array();
+		if ( array() === $theirs ) {
+			return array();
+		}
+		$candidatos = get_users(
+			array(
+				'fields'       => 'ID',
+				'meta_key'     => self::USER_AREA_META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- solo quien tiene un ámbito en el perfil puede gestionarlo.
+				'meta_compare' => 'EXISTS',
+			)
+		);
+		$out        = array();
+		foreach ( (array) $candidatos as $user_id ) {
+			$user_id = (int) $user_id;
+			if ( ! user_can( $user_id, self::CAP_MANAGE_PROCEDURES ) || self::can_edit_all_areas( $user_id ) ) {
+				continue;
+			}
+			if ( array() !== array_intersect( self::scope_areas( $user_id ), $theirs ) ) {
+				$out[] = $user_id;
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * Ámbitos a post belongs to.
 	 *
 	 * Una solicitud no lleva ámbito propio: el de su procedimiento manda.

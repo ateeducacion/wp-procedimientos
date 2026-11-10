@@ -10,6 +10,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ProcedureEditorView;
@@ -210,6 +211,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
 				ProcedureEditor::PANEL_PUBLISH,
+				ProcedureEditor::PANEL_NOTICES,
 				ProcedureEditor::PANEL_CODE,
 			),
 			array_keys( $m['panels'] )
@@ -1495,6 +1497,50 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->assertTrue( shortcode_exists( ProcedureEditor::SHORTCODE ) );
 		$this->assertSame( 20, has_action( 'init', array( ProcedureEditor::class, 'handle' ) ) );
+	}
+
+	/**
+	 * El panel «Avisos»: una casilla por evento, encendida salvo que se apague;
+	 * lo que se guarda es la lista de los apagados.
+	 */
+	public function test_the_notices_panel_saves_what_is_switched_off() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$todos                         = array_keys( ProcedureMetaKeys::notify_events() );
+
+		// Recién creado, todo encendido.
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_NOTICES ) );
+		foreach ( ProcedureMetaKeys::notify_events() as $evento => $rotulo ) {
+			$this->assertStringContainsString( esc_html( $rotulo ), $html );
+			$this->assertMatchesRegularExpression( '/value="' . $evento . '"[^>]*checked/', $html, $evento . ' encendido' );
+		}
+
+		$url = $this->submit(
+			$uid,
+			ProcedureEditor::OP_NOTIFY,
+			$procedimiento,
+			0,
+			array( ProcedureEditor::FIELD_NOTIFY => array( Mailer::EVENT_APPLICATION_SUBMITTED, Mailer::EVENT_REVIEW_CHANGED, 'inventado' ) )
+		);
+		$this->assertSame( 'avisos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( ProcedureEditor::PANEL_NOTICES, $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ) );
+		$this->assertEqualsCanonicalizing(
+			array_values( array_diff( $todos, array( Mailer::EVENT_APPLICATION_SUBMITTED, Mailer::EVENT_REVIEW_CHANGED ) ) ),
+			get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true )
+		);
+
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_NOTICES ) );
+		$this->assertDoesNotMatchRegularExpression( '/value="' . Mailer::EVENT_APPLICATION_RECEIVED . '"[^>]*checked/', $html, 'apagado, sin marcar' );
+
+		// Ninguna marcada: todas apagadas.
+		$this->submit( $uid, ProcedureEditor::OP_NOTIFY, $procedimiento );
+		$this->assertEqualsCanonicalizing( $todos, get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true ) );
+
+		// Otro ámbito no toca nada.
+		$ajena = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
+		$this->assertNull( $this->submit( $ajena, ProcedureEditor::OP_NOTIFY, $procedimiento, 0, array( ProcedureEditor::FIELD_NOTIFY => $todos ) ) );
+		$this->assertEqualsCanonicalizing( $todos, get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true ) );
 	}
 	/** The editor persists complete delivery windows and rejects malformed dates without replacing them. */
 	public function test_the_editor_saves_and_validates_delivery_dates() {

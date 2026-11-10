@@ -206,9 +206,11 @@ navegador, y sin código válido `prc_apply` no sirve para nada.**
 ## Adenda — 2026-11-10 (ADR-0042)
 
 «Autorizar es tener código» sigue valiendo para un procedimiento sin
-acotados. Con cualquier acotado —una sola titularidad, tipos, islas o una
-lista cerrada—, el código tiene que estar además en el catálogo, porque si no
-está no se puede comprobar si cumple
+acotados. Para crear una solicitud en uno acotado por una sola titularidad,
+por tipos o por islas, el código tiene que estar además en el catálogo, porque
+si no está no se puede comprobar si cumple; con la lista cerrada sola, basta
+estar en ella, y con el catálogo entero vacío la titularidad no cierra. Quien
+ya presentó su solicitud la sigue editando
 ([ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)). El nombre se sigue
 guardando como foto, igual que antes.
 

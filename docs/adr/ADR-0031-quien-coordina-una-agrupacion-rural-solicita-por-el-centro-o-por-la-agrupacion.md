@@ -154,7 +154,7 @@ solicita.**
 Los acotados nuevos del procedimiento —tipos, islas y lista cerrada— se miran
 con la entrada del catálogo de **cada código**: la agrupación, por la suya. La
 titularidad sigue sin filtrar a una agrupación que solicita como colectivo. Con
-algún acotado que le aplique, una agrupación que no está en el catálogo no
-solicita ([ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)).
+tipos o islas, una agrupación que no está en el catálogo no solicita; con la
+lista cerrada sola, basta que esté en ella ([ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)).
 
 Asistencia de IA: Claude Code, claude-opus-5-5.

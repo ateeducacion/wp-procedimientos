@@ -183,7 +183,7 @@ coincide con `prc_centre_code` de la solicitud.
 | Crear, editar, publicar, despublicar, enviar a la papelera | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | Que **no** esté archivado |
 | Marcar como histórico | Los mismos | Con confirmación: no hay vuelta atrás sin administración |
 | Desarchivar | Solo `prc_manage_app` | — |
-| Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa) |
+| Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; para crear, el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno además de la lista, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa aunque el procedimiento se haya acotado después) |
 | Editar su solicitud | `prc_apply` de **ese** centro | Procedimiento `open`; o `amendment` **y** la solicitud en `amend` |
 | Ver su solicitud y la nota de revisión | `prc_apply` de ese centro | Siempre |
 | Ver las solicitudes de un procedimiento | `prc_review_applications` en su ámbito, o `prc_manage_all_areas` | Que el procedimiento no esté archivado |
@@ -265,8 +265,10 @@ Cuatro reglas:
 3. **Un centro que no está en el catálogo solicita igual a un procedimiento
    sin acotados**, con el código y el nombre vacío, y quien gestiona lo ve
    marcado, porque el catálogo puede ir por detrás de la realidad. Si el
-   procedimiento acota por titularidad, tipo de centro, isla o lista cerrada
-   de códigos, no: no se puede comprobar que cumpla, y la pantalla lo dice
+   procedimiento acota por titularidad, tipo de centro o isla, no crea
+   solicitud: no se puede comprobar que cumpla, y la pantalla lo dice. Con la
+   lista cerrada sola, basta estar en ella; con el catálogo entero vacío, la
+   titularidad no cierra. Quien ya presentó la suya la sigue editando
    ([ADR-0042](adr/ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)).
 4. **La solicitud es del centro, no de la persona.** Dos cuentas con el mismo
    código de centro editan la misma solicitud; quien la presentó es

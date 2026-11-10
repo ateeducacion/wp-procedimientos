@@ -427,6 +427,11 @@ copia de todo `procedure_created` y `application_received`). Con
   `::restricted( array $rules ): bool`, `::why_not( array $rules, string $code, array $centre ): string`,
   `::parse_codes( $raw ): array{codes, invalid}`, `::codes( $raw )`,
   `::values( $raw )`, `::input( array $raw, bool $schools )`, `MAX_CODES = 2000`.
+- `CentreEligibility::why_not( array $rules, string $code, array $centre, bool $catalogue = true )`
+  y `CentreEligibility::warnings( array $rules, bool $empty_catalogue, bool $no_private ): array{ownership?, catalogue?}`;
+  `CentreCatalog::flush()`, `CentreCatalog::register()`;
+  `Applications::rows( int $procedure_id, ?array $applications = null, bool $centre = false )`
+  (sin `$centre` no lee el catálogo); `CentreColumns::index_for( array $applications, bool $wanted = true )`.
 - Guardián: `ProcedureAccess::eligibility( int $post_id ): array`,
   `::why_not_code( int $post_id, string $code, string $kind = 'school' ): string` y
   `::why_not_eligible( int $user_id, int $post_id, string $code = '' ): string`;
@@ -451,11 +456,23 @@ copia de todo `procedure_created` y `application_received`). Con
 **Decisiones:**
 - La titularidad se deriva del tipo; una explícita manda. Sin configurar, todo
   es público.
-- Un centro que no está en el catálogo no solicita a un procedimiento con
-  cualquier acotado (titularidad distinta de «todas», tipos, islas o lista),
-  aunque esté en la lista; sin acotados, sí. Una agrupación rural se mide por
-  su propio código, y la titularidad no la filtra.
-- Acotar después no toca lo presentado; solo impide volver a enviarlo.
+- Un centro que no está en el catálogo no crea solicitud en un procedimiento
+  acotado por titularidad (distinta de «todas»), tipos o islas; sin acotados,
+  sí. Con la lista cerrada como único acotado, estar en ella basta aunque no
+  esté en el catálogo; con lista y otros acotados, hace falta el catálogo. Con
+  el catálogo entero vacío, la titularidad sola no cierra. La lista no
+  distingue mayúsculas. Una agrupación rural se mide por su propio código, y
+  la titularidad no la filtra.
+- La elegibilidad se mira al crear: quien ya presentó su solicitud la sigue
+  editando o subsanando aunque el procedimiento se acote después
+  (`apply_codes()` admite el código que ya tiene solicitud).
+- El taller avisa del catálogo vacío y de una sola titularidad sin tipos
+  privados (`CentreEligibility::warnings()`); los ajustes cuentan los centros
+  que sirve el dominio y los procedimientos publicados que dependen de lo que
+  falta (`Settings::dependents()`).
+- `CentreCatalog::all()`, `find()` e `index()` se construyen una vez por
+  petición; `CentreCatalog::flush()` lo vacía, y se llama al sincronizar y al
+  cambiar la opción del catálogo o la de los tipos privados.
 - Las seis columnas solo salen si se eligen: «Todas las columnas» y el CSV sin
   columnas son el de siempre, byte a byte; con «Todas» marcada, las del
   catálogo que se marquen se suman. En el diálogo van con
@@ -471,7 +488,9 @@ copia de todo `procedure_created` y `application_received`). Con
       lista de tipos privados que contesta el filtro `prc_private_centre_types`.
 - [x] El procedimiento puede acotar por tipo de centro, por isla y por lista
       cerrada de códigos (`prc_allowed_centres`). Un centro que no está en el
-      catálogo **no** solicita en un procedimiento acotado (hoy sí).
+      catálogo **no** crea solicitud en un procedimiento acotado por
+      titularidad, tipo o isla (hoy sí); con la lista sola, basta estar en
+      ella.
 - [x] La exportación gana las columnas isla, municipio, tipo, titularidad y zona.
 - [x] ADR-0042.
 

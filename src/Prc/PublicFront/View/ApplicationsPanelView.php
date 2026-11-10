@@ -216,7 +216,7 @@ final class ApplicationsPanelView {
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE_ROWS ); ?>" value="<?php echo esc_attr( implode( ',', $pagina ) ); ?>" />
 				<?php echo self::carry( (array) $t['args'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<p class="prc-campo__ayuda">Marque las solicitudes en la primera columna de la tabla, o todas las de esta página. Como mucho <?php echo esc_html( (string) (int) $t['bulk_max'] ); ?> a la vez.</p>
+				<p class="prc-campo__ayuda">Marque las solicitudes en la primera columna de la tabla, o todas las de esta página. Como mucho <?php echo esc_html( (string) (int) $t['bulk_max'] ); ?> a la vez: a cada centro le sale su correo en el mismo envío, así que con muchas tarda un poco.</p>
 				<label class="prc-casilla">
 					<input type="checkbox" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE ); ?>" value="1" data-prc-bulk-page />
 					<?php echo esc_html( sprintf( 'Marcar las de esta página (%d)', count( $pagina ) ) ); ?>
@@ -232,7 +232,7 @@ final class ApplicationsPanelView {
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="prc-bloque-nota">Nota para los centros</label>
 					<textarea class="prc-control" id="prc-bloque-nota" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3" aria-describedby="prc-bloque-nota-ayuda"></textarea>
-					<p class="prc-campo__ayuda" id="prc-bloque-nota-ayuda">La misma para todas. Obligatoria al pedir subsanar y al excluir: cada centro la lee en su solicitud.</p>
+					<p class="prc-campo__ayuda" id="prc-bloque-nota-ayuda">La nota se aplica a todas las marcadas y sustituye la que tuvieran. En blanco, cada una conserva la suya; al pedir subsanar y al excluir es obligatoria. Cada centro la lee en su solicitud.</p>
 				</div>
 				<?php echo PanelParts::submit( 'Cambiar la revisión de las marcadas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</form>

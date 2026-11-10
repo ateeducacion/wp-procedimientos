@@ -42,8 +42,13 @@ final class ApplicationsPanel {
 	public const SCOPE_FILTER = 'filter';
 	public const SCOPE_ALL    = 'all';
 
-	/** Most applications one bulk review changes. */
-	public const BULK_MAX = 200;
+	/**
+	 * Most applications one bulk review changes: one page.
+	 *
+	 * Cada una manda su correo dentro de la misma petición, sin cola: con más,
+	 * el envío tardaría lo que tarden todos los correos.
+	 */
+	public const BULK_MAX = 50;
 
 	/** Notice code of a bulk review, and the counts that go with it. */
 	public const NOTICE_BULK = 'bloque';
@@ -124,7 +129,7 @@ final class ApplicationsPanel {
 				'key'     => '',
 				'label'   => 'Todas',
 				'count'   => (int) $res['all'],
-				'url'     => self::url( $procedure_id, $filtro, array(), array( 'review' => '' ) ),
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ) ),
 				'current' => '' === $filtro['review'],
 			),
 		);
@@ -133,7 +138,8 @@ final class ApplicationsPanel {
 				'key'     => $clave,
 				'label'   => $rotulo,
 				'count'   => (int) ( $res['counts'][ $clave ] ?? 0 ),
-				'url'     => self::url( $procedure_id, $filtro, array(), array( 'review' => $clave ) ),
+				// Atajos sobre el total: el enlace lleva el estado y nada más.
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ), array(), array( 'review' => $clave ) ),
 				'current' => $clave === $filtro['review'],
 			);
 		}
@@ -206,8 +212,10 @@ final class ApplicationsPanel {
 	 *
 	 * La descarga es la respuesta del envío, así que no puede volver con un
 	 * aviso: cuántas personas se quedan fuera, y por qué, se cuenta aquí,
-	 * sobre lo que se va a exportar —las del filtro si hay alguno, todas si
-	 * no— y antes de descargar (ADR-0039).
+	 * antes de descargar (ADR-0039). Con un filtro se cuenta dos veces —las
+	 * del filtro y todas—, porque el diálogo deja elegir: `who[clave]` trae
+	 * las cifras de todas y, con filtro, `who[clave]['filter']` las de las
+	 * del filtro. Las metas ya leídas por el censo bastan para las dos.
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param int                  $user_id      Who is looking.
@@ -215,14 +223,18 @@ final class ApplicationsPanel {
 	 * @return array<string, mixed>
 	 */
 	private static function export_model( int $procedure_id, int $user_id, array $res ): array {
-		$ids   = $res['active'] ? $res['ids'] : array_keys( $res['stored'] );
-		$posts = array_values( array_filter( array_map( 'get_post', $ids ) ) );
-		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) ) ) );
-
-		$quienes = array();
+		$todas = array_values( array_filter( array_map( 'get_post', array_keys( $res['stored'] ) ) ) );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $todas, 'post_author' ) ) ) );
 		$fuentes = ApplicationExport::who( $procedure_id );
-		foreach ( ApplicationExport::who_counts( $posts, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+		$quienes = array();
+		foreach ( ApplicationExport::who_counts( $todas, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
 			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
+		}
+		if ( $res['active'] ) {
+			$del_filtro = array_values( array_filter( array_map( 'get_post', $res['ids'] ) ) );
+			foreach ( ApplicationExport::who_counts( $del_filtro, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+				$quienes[ $clave ]['filter'] = $cuenta;
+			}
 		}
 		return array(
 			'groups'       => ApplicationExport::groups( $procedure_id ),
@@ -230,7 +242,7 @@ final class ApplicationsPanel {
 			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
 			'who'          => $quienes,
 			'filtered'     => $res['active'],
-			'count'        => count( $ids ),
+			'count'        => $res['active'] ? count( $res['ids'] ) : (int) $res['all'],
 			'all'          => (int) $res['all'],
 			'args'         => ApplicationFilter::query( array( 'page' => 1 ) + $res['filter'] ),
 		);
@@ -285,6 +297,8 @@ final class ApplicationsPanel {
 	 *
 	 * Las mismas reglas que una a una: un estado que no existe o la falta de
 	 * nota donde es obligatoria rechazan el envío entero, sin tocar ninguna.
+	 * Una nota escrita sustituye la de todas; vacía, con un estado que no la
+	 * exige, deja la de cada una como estaba.
 	 * Cada una cambia por {@see Applications::review()}, que emite
 	 * `prc_application_reviewed`: sale su correo como si se hubiera revisado
 	 * sola. Una que no es de este procedimiento no se toca y se cuenta; no
@@ -318,9 +332,11 @@ final class ApplicationsPanel {
 			$out['error'] = 'Para pedir subsanar o para excluir hay que escribir una nota: cada centro tiene que leer qué se le pide o por qué. No se ha cambiado ninguna solicitud.';
 			return $out;
 		}
+		// Vacía y sin hacer falta, la nota de cada una se queda como estaba.
+		$nota = '' === trim( $note ) ? null : $note;
 		foreach ( $ids as $id ) {
 			$suya = ApplicationPostType::POST_TYPE === get_post_type( $id ) && 'publish' === get_post_status( $id ) && (int) wp_get_post_parent_id( $id ) === $procedure_id;
-			if ( $suya && Applications::review( $id, $state, $note )['ok'] ) {
+			if ( $suya && Applications::review( $id, $state, $nota )['ok'] ) {
 				++$out['done'];
 				continue;
 			}
@@ -341,8 +357,8 @@ final class ApplicationsPanel {
 		$texto  = 1 === $hechas ? 'Se ha cambiado la revisión de 1 solicitud.' : sprintf( 'Se ha cambiado la revisión de %d solicitudes.', $hechas );
 		if ( $fallos > 0 ) {
 			$texto .= ' ' . ( 1 === $fallos
-				? '1 no se ha cambiado: no es una solicitud de este procedimiento.'
-				: sprintf( '%d no se han cambiado: no son solicitudes de este procedimiento.', $fallos ) );
+				? '1 no se ha podido cambiar (no es de este procedimiento o ya no está publicada).'
+				: sprintf( '%d no se han podido cambiar (no son de este procedimiento o ya no están publicadas).', $fallos ) );
 		}
 		return array(
 			'tipo'  => $fallos > 0 ? 'aviso' : 'ok',

@@ -121,7 +121,7 @@ final class ExportDialogView {
 					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
 						<label class="prc-casilla">
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
-							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
+							<?php echo self::who_counts( (array) $quien, ! empty( $export['filtered'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						</label>
 					<?php endforeach; ?>
 					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
@@ -153,14 +153,15 @@ final class ExportDialogView {
 		return ApplicationsPanelView::carry( (array) ( $export['args'] ?? array() ) )
 			. '<fieldset class="prc-exportar__grupo prc-exportar__cuales">'
 			. '<legend>Qué solicitudes</legend>'
-			. '<p class="prc-campo__ayuda">' . esc_html( sprintf( 1 === $cuenta ? 'Se exportará %d solicitud (filtro activo).' : 'Se exportarán %d solicitudes (filtro activo).', $cuenta ) ) . ' Los recuentos de quién no sale en el fichero de usuarios son de las del filtro.</p>'
+			. '<p class="prc-campo__ayuda">' . esc_html( sprintf( 1 === $cuenta ? 'Se exportará %d solicitud (filtro activo).' : 'Se exportarán %d solicitudes (filtro activo).', $cuenta ) ) . ' Los recuentos de quién sale en el fichero de usuarios se dan para las dos opciones.</p>'
 			. self::radios(
 				ApplicationsPanel::FIELD_EXPORT_SCOPE,
 				array(
 					ApplicationsPanel::SCOPE_FILTER => sprintf( 'Las del filtro (%d)', $cuenta ),
 					ApplicationsPanel::SCOPE_ALL    => sprintf( 'Todas (%d)', $todas ),
 				),
-				ApplicationsPanel::SCOPE_FILTER
+				ApplicationsPanel::SCOPE_FILTER,
+				'data-prc-export-scope'
 			)
 			. '</fieldset>';
 	}
@@ -185,6 +186,32 @@ final class ExportDialogView {
 				checked( (string) $valor, $selected, false ),
 				esc_html( $rotulo )
 			);
+		}
+		return $out;
+	}
+
+	/**
+	 * One source of the user upload file with its counts: those of the filter
+	 * and those of all when there is a filter, each with its own label.
+	 *
+	 * Sin guion se leen las dos; con guion, `prc-app.js` esconde la que no
+	 * corresponde a la opción elegida en «Qué solicitudes».
+	 *
+	 * @param array<string, mixed> $quien    One source: `label`, its counts over all and, with a filter, `filter`.
+	 * @param bool                 $filtered Whether there is a filter.
+	 * @return string
+	 */
+	private static function who_counts( array $quien, bool $filtered ): string {
+		if ( ! $filtered ) {
+			return esc_html( self::who_label( $quien ) );
+		}
+		$out = esc_html( (string) ( $quien['label'] ?? '' ) );
+		foreach ( array(
+			ApplicationsPanel::SCOPE_FILTER => array( 'las del filtro', (array) ( $quien['filter'] ?? array() ) ),
+			ApplicationsPanel::SCOPE_ALL    => array( 'todas', $quien ),
+		) as $ambito => list( $rotulo, $cuenta ) ) {
+			$out .= ' <span data-prc-export-scope-count="' . esc_attr( $ambito ) . '">'
+				. esc_html( self::who_label( array( 'label' => $rotulo . ':' ) + $cuenta ) ) . '</span>';
 		}
 		return $out;
 	}
@@ -215,10 +242,12 @@ final class ExportDialogView {
 				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
 			}
 		}
-		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		$texto = sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
 		if ( array() !== $fuera ) {
 			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
 		}
-		return $texto . ')';
+		$rotulo = (string) ( $quien['label'] ?? '' );
+		// «Coordinación (3 personas)» o, por opción, «(todas: 3 personas)».
+		return ':' === substr( $rotulo, -1 ) ? '(' . $rotulo . ' ' . $texto . ')' : $rotulo . ' (' . $texto . ')';
 	}
 }

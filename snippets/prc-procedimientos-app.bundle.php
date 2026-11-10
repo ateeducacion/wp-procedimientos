@@ -12885,9 +12885,11 @@ final class ApplicationQuery {
 		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
 		$opciones = self::options( $census['stored'], $catalogo );
 		$filter   = ApplicationFilter::against( $filter, $opciones );
-		$motivos  = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
-		$ids      = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
-		$ventana  = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+
+		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
+		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
+		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
 		$filter['page'] = $ventana['page'];
 		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );
@@ -13392,7 +13394,12 @@ final class ApplicationsPanel {
 	public const SCOPE_ALL    = 'all';
 
 
-	public const BULK_MAX = 200;
+
+
+
+
+
+	public const BULK_MAX = 50;
 
 
 	public const NOTICE_BULK = 'bloque';
@@ -13473,7 +13480,7 @@ final class ApplicationsPanel {
 				'key'     => '',
 				'label'   => 'Todas',
 				'count'   => (int) $res['all'],
-				'url'     => self::url( $procedure_id, $filtro, array(), array( 'review' => '' ) ),
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ) ),
 				'current' => '' === $filtro['review'],
 			),
 		);
@@ -13482,7 +13489,8 @@ final class ApplicationsPanel {
 				'key'     => $clave,
 				'label'   => $rotulo,
 				'count'   => (int) ( $res['counts'][ $clave ] ?? 0 ),
-				'url'     => self::url( $procedure_id, $filtro, array(), array( 'review' => $clave ) ),
+
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ), array(), array( 'review' => $clave ) ),
 				'current' => $clave === $filtro['review'],
 			);
 		}
@@ -13563,15 +13571,21 @@ final class ApplicationsPanel {
 
 
 
-	private static function export_model( int $procedure_id, int $user_id, array $res ): array {
-		$ids   = $res['active'] ? $res['ids'] : array_keys( $res['stored'] );
-		$posts = array_values( array_filter( array_map( 'get_post', $ids ) ) );
-		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) ) ) );
 
-		$quienes = array();
+
+	private static function export_model( int $procedure_id, int $user_id, array $res ): array {
+		$todas = array_values( array_filter( array_map( 'get_post', array_keys( $res['stored'] ) ) ) );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $todas, 'post_author' ) ) ) );
 		$fuentes = ApplicationExport::who( $procedure_id );
-		foreach ( ApplicationExport::who_counts( $posts, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+		$quienes = array();
+		foreach ( ApplicationExport::who_counts( $todas, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
 			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
+		}
+		if ( $res['active'] ) {
+			$del_filtro = array_values( array_filter( array_map( 'get_post', $res['ids'] ) ) );
+			foreach ( ApplicationExport::who_counts( $del_filtro, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+				$quienes[ $clave ]['filter'] = $cuenta;
+			}
 		}
 		return array(
 			'groups'       => ApplicationExport::groups( $procedure_id ),
@@ -13579,7 +13593,7 @@ final class ApplicationsPanel {
 			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
 			'who'          => $quienes,
 			'filtered'     => $res['active'],
-			'count'        => count( $ids ),
+			'count'        => $res['active'] ? count( $res['ids'] ) : (int) $res['all'],
 			'all'          => (int) $res['all'],
 			'args'         => ApplicationFilter::query( array( 'page' => 1 ) + $res['filter'] ),
 		);
@@ -13645,6 +13659,8 @@ final class ApplicationsPanel {
 
 
 
+
+
 	public static function bulk( int $procedure_id, array $ids, string $state, string $note ): array {
 		$out = array(
 			'error'  => '',
@@ -13667,9 +13683,11 @@ final class ApplicationsPanel {
 			$out['error'] = 'Para pedir subsanar o para excluir hay que escribir una nota: cada centro tiene que leer qué se le pide o por qué. No se ha cambiado ninguna solicitud.';
 			return $out;
 		}
+
+		$nota = '' === trim( $note ) ? null : $note;
 		foreach ( $ids as $id ) {
 			$suya = ApplicationPostType::POST_TYPE === get_post_type( $id ) && 'publish' === get_post_status( $id ) && (int) wp_get_post_parent_id( $id ) === $procedure_id;
-			if ( $suya && Applications::review( $id, $state, $note )['ok'] ) {
+			if ( $suya && Applications::review( $id, $state, $nota )['ok'] ) {
 				++$out['done'];
 				continue;
 			}
@@ -13690,8 +13708,8 @@ final class ApplicationsPanel {
 		$texto  = 1 === $hechas ? 'Se ha cambiado la revisión de 1 solicitud.' : sprintf( 'Se ha cambiado la revisión de %d solicitudes.', $hechas );
 		if ( $fallos > 0 ) {
 			$texto .= ' ' . ( 1 === $fallos
-				? '1 no se ha cambiado: no es una solicitud de este procedimiento.'
-				: sprintf( '%d no se han cambiado: no son solicitudes de este procedimiento.', $fallos ) );
+				? '1 no se ha podido cambiar (no es de este procedimiento o ya no está publicada).'
+				: sprintf( '%d no se han podido cambiar (no son de este procedimiento o ya no están publicadas).', $fallos ) );
 		}
 		return array(
 			'tipo'  => $fallos > 0 ? 'aviso' : 'ok',
@@ -16779,7 +16797,7 @@ final class ExportDialogView {
 					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
 						<label class="prc-casilla">
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
-							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
+							<?php echo self::who_counts( (array) $quien, ! empty( $export['filtered'] ) );?>
 						</label>
 					<?php endforeach; ?>
 					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
@@ -16811,14 +16829,15 @@ final class ExportDialogView {
 		return ApplicationsPanelView::carry( (array) ( $export['args'] ?? array() ) )
 			. '<fieldset class="prc-exportar__grupo prc-exportar__cuales">'
 			. '<legend>Qué solicitudes</legend>'
-			. '<p class="prc-campo__ayuda">' . esc_html( sprintf( 1 === $cuenta ? 'Se exportará %d solicitud (filtro activo).' : 'Se exportarán %d solicitudes (filtro activo).', $cuenta ) ) . ' Los recuentos de quién no sale en el fichero de usuarios son de las del filtro.</p>'
+			. '<p class="prc-campo__ayuda">' . esc_html( sprintf( 1 === $cuenta ? 'Se exportará %d solicitud (filtro activo).' : 'Se exportarán %d solicitudes (filtro activo).', $cuenta ) ) . ' Los recuentos de quién sale en el fichero de usuarios se dan para las dos opciones.</p>'
 			. self::radios(
 				ApplicationsPanel::FIELD_EXPORT_SCOPE,
 				array(
 					ApplicationsPanel::SCOPE_FILTER => sprintf( 'Las del filtro (%d)', $cuenta ),
 					ApplicationsPanel::SCOPE_ALL    => sprintf( 'Todas (%d)', $todas ),
 				),
-				ApplicationsPanel::SCOPE_FILTER
+				ApplicationsPanel::SCOPE_FILTER,
+				'data-prc-export-scope'
 			)
 			. '</fieldset>';
 	}
@@ -16858,6 +16877,32 @@ final class ExportDialogView {
 
 
 
+	private static function who_counts( array $quien, bool $filtered ): string {
+		if ( ! $filtered ) {
+			return esc_html( self::who_label( $quien ) );
+		}
+		$out = esc_html( (string) ( $quien['label'] ?? '' ) );
+		foreach ( array(
+			ApplicationsPanel::SCOPE_FILTER => array( 'las del filtro', (array) ( $quien['filter'] ?? array() ) ),
+			ApplicationsPanel::SCOPE_ALL    => array( 'todas', $quien ),
+		) as $ambito => list( $rotulo, $cuenta ) ) {
+			$out .= ' <span data-prc-export-scope-count="' . esc_attr( $ambito ) . '">'
+				. esc_html( self::who_label( array( 'label' => $rotulo . ':' ) + $cuenta ) ) . '</span>';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 	private static function who_label( array $quien ): string {
 		$cuenta  = (int) ( $quien['count'] ?? 0 );
 		$motivos = array(
@@ -16873,11 +16918,13 @@ final class ExportDialogView {
 				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
 			}
 		}
-		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		$texto = sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
 		if ( array() !== $fuera ) {
 			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
 		}
-		return $texto . ')';
+		$rotulo = (string) ( $quien['label'] ?? '' );
+
+		return ':' === substr( $rotulo, -1 ) ? '(' . $rotulo . ' ' . $texto . ')' : $rotulo . ' (' . $texto . ')';
 	}
 }
 
@@ -17102,7 +17149,7 @@ final class ApplicationsPanelView {
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE_ROWS ); ?>" value="<?php echo esc_attr( implode( ',', $pagina ) ); ?>" />
 				<?php echo self::carry( (array) $t['args'] );?>
-				<p class="prc-campo__ayuda">Marque las solicitudes en la primera columna de la tabla, o todas las de esta página. Como mucho <?php echo esc_html( (string) (int) $t['bulk_max'] ); ?> a la vez.</p>
+				<p class="prc-campo__ayuda">Marque las solicitudes en la primera columna de la tabla, o todas las de esta página. Como mucho <?php echo esc_html( (string) (int) $t['bulk_max'] ); ?> a la vez: a cada centro le sale su correo en el mismo envío, así que con muchas tarda un poco.</p>
 				<label class="prc-casilla">
 					<input type="checkbox" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE ); ?>" value="1" data-prc-bulk-page />
 					<?php echo esc_html( sprintf( 'Marcar las de esta página (%d)', count( $pagina ) ) ); ?>
@@ -17118,7 +17165,7 @@ final class ApplicationsPanelView {
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="prc-bloque-nota">Nota para los centros</label>
 					<textarea class="prc-control" id="prc-bloque-nota" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3" aria-describedby="prc-bloque-nota-ayuda"></textarea>
-					<p class="prc-campo__ayuda" id="prc-bloque-nota-ayuda">La misma para todas. Obligatoria al pedir subsanar y al excluir: cada centro la lee en su solicitud.</p>
+					<p class="prc-campo__ayuda" id="prc-bloque-nota-ayuda">La nota se aplica a todas las marcadas y sustituye la que tuvieran. En blanco, cada una conserva la suya; al pedir subsanar y al excluir es obligatoria. Cada centro la lee en su solicitud.</p>
 				</div>
 				<?php echo PanelParts::submit( 'Cambiar la revisión de las marcadas' );?>
 			</form>

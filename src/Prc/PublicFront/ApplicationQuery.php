@@ -67,9 +67,11 @@ final class ApplicationQuery {
 		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
 		$opciones = self::options( $census['stored'], $catalogo );
 		$filter   = ApplicationFilter::against( $filter, $opciones );
-		$motivos  = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
-		$ids      = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
-		$ventana  = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+		// Donde ninguna puede estar incompleta, «incompletas» no es un filtro.
+		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
+		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
+		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
 		$filter['page'] = $ventana['page'];
 		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );

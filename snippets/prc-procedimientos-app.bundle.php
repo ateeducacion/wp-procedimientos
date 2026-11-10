@@ -11515,6 +11515,11 @@ final class PeopleSpecPanel {
 
 
 
+	public const ARG_HISTORY = 'historial';
+
+
+
+
 
 
 	private const FIELDS = array(
@@ -11608,9 +11613,11 @@ final class PeopleSpecPanel {
 
 
 	public static function reviews( array $applications ): array {
-		$out = array();
+
+		$pedido = absint( wp_unslash( $_GET[ self::ARG_HISTORY ] ?? 0 ) );
+		$out    = array();
 		foreach ( $applications as $solicitud ) {
-			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID );
+			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido );
 		}
 		return $out;
 	}
@@ -15697,7 +15704,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<details class="prc-revision">
+		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
 			<summary class="prc-revision__abrir">Revisar</summary>
 			<dl class="prc-respuestas">
 				<dt>Presentada por</dt>

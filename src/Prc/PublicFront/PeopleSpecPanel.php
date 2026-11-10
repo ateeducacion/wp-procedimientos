@@ -38,6 +38,11 @@ final class PeopleSpecPanel {
 	public const FIELD_ADMITTED = 'prc_people_admitted_only';
 
 	/**
+	 * Query arg of the «Solicitudes» panel: the application whose history is open.
+	 */
+	public const ARG_HISTORY = 'historial';
+
+	/**
 	 * The field each key of the typed specification comes from.
 	 *
 	 * @var array<string, string>
@@ -133,9 +138,11 @@ final class PeopleSpecPanel {
 	 * @return array<int, array<string, mixed>> Application ID => what PeopleForm::review() returns.
 	 */
 	public static function reviews( array $applications ): array {
-		$out = array();
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige qué historial se lee; leerlo lo autoriza el panel.
+		$pedido = absint( wp_unslash( $_GET[ self::ARG_HISTORY ] ?? 0 ) );
+		$out    = array();
 		foreach ( $applications as $solicitud ) {
-			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID );
+			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido );
 		}
 		return $out;
 	}

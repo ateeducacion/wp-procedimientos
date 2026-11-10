@@ -36,13 +36,14 @@ final class ApplicationCompleteness {
 	 * @param mixed                            $files     Stored documents of the application, by question key.
 	 * @param string                           $today     Today, `Y-m-d`.
 	 * @param string                           $review    Review state of the application.
+	 * @param bool                             $pending   Whether it was submitted on behalf of the school and the school has not completed it yet (ADR-0044).
 	 * @return string[] Reasons, in words; empty when nothing is missing.
 	 */
-	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review ): array {
+	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review, bool $pending = false ): array {
 		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
 			return array();
 		}
-		$out  = array();
+		$out  = $pending ? array( 'Pendiente de que el centro la complete' ) : array();
 		$spec = PeopleSpec::sanitize( $spec );
 		$hay  = ApplicationPeople::rows( $people );
 		if ( ! ApplicationPeople::is_complete( $spec, $hay ) ) {

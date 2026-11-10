@@ -107,6 +107,7 @@ src/Prc/
 ├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, map_meta_cap, pre_get_posts
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
 ├── Meta/ApplicationMetaRegistration.php    Ídem para la solicitud
+├── Meta/MetaSwap.php                       Escribe una meta solo si sigue como se leyó (comparar y cambiar)
 ├── PostType/ProcedurePostType.php          CPT prc_procedure
 ├── PostType/ApplicationPostType.php        CPT prc_application
 ├── Taxonomy/ProcedureTaxonomies.php        prc_area (jerárquica), prc_course
@@ -412,8 +413,9 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   contenido público del sitio sigue por el camino normal de WordPress.
 - **Las personas de una solicitud son una meta de la solicitud, no un tipo
   de contenido** (ADR-0041): `prc_people`, escrita de fila en fila por
-  `PublicFront/People`, que relee la meta al escribir y rechaza un cambio
-  sobre una fila que cambió desde que se pintó. Quién y cuándo, siempre
+  `PublicFront/People`, que escribe con `Meta/MetaSwap` (solo si nadie
+  escribió entremedias) y rechaza un cambio sobre una fila que cambió desde
+  que se pintó. Sin lista escrita, ni historial ni aviso. Quién y cuándo, siempre
   `ProcedureAccess::can_edit_people()`. Tocarla no devuelve la solicitud a
   «presentada», y el DNI no va nunca en un correo.
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.

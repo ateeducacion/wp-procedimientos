@@ -319,7 +319,10 @@ copia de todo `procedure_created` y `application_received`). Con
   `::why_not_people( int $user_id, int $application_id ): string` y la meta
   capacidad `ProcedureAccess::CAP_EDIT_PEOPLE` (`prc_edit_people`), resuelta en
   `map_meta_cap`.
-- `People::add( int $application_id, int $user_id, array $raw ): array{ok, error, errors}`,
+- `MetaSwap::change( int $post_id, string $key, callable $change, int $tries = 2 ): array`
+  — comparar y cambiar sobre una meta (`update_post_meta()` con el valor
+  leído, `add_post_meta( …, true )` sin meta); la usan la lista y el historial.
+- `People::add( int $application_id, int $user_id, array $raw ): array{ok, error, errors, changed, stale}`,
   `::change( …, string $id, string $huella, array $raw )`,
   `::remove( …, string $id, string $huella )`, `::of( int $application_id ): array`,
   `::spec( int $procedure_id ): array`, `::enabled( int $procedure_id ): bool`,
@@ -328,23 +331,32 @@ copia de todo `procedure_created` y `application_received`). Con
 - Acción `prc_people_changed( int $id, string $change, array $before, array $after, int $user_id )`
   y evento de correo `Mailer::EVENT_PEOPLE_CHANGED` (`people_changed`), solo a
   los contactos, apagable en «Avisos».
-- `ApplicationLog::add( int $application_id, string $event, array $data, int $user_id = 0 ): void`
+- `ApplicationLog::add( int $application_id, string $event, array $data, int $user_id = 0 ): bool`
   y `ApplicationLog::all( int $application_id ): array` — quién, cuándo y qué.
+  Al pasar del tope, la primera entrada es `ApplicationLog::TRIMMED`
+  (`log_trimmed`, `data.dropped`); `ApplicationLog::append()` es puro.
   Eventos de las personas: `person_added`, `person_changed`, `person_removed`
   con `{before, after}`.
-- `PeopleForm::model( array $apply ): array`, `::review( int $application_id ): array`,
+- `PeopleForm::model( array $apply ): array`, `::review( int $application_id, bool $history = false ): array`,
+  `::nonce_action( string $op, int $application_id ): string` (`prc_people_{op}_{id}`),
   `::url( int $application_id, array $args = array() ): string` (con el ancla
   `#prc-personas`); campos `FIELD_OP`, `FIELD_APPLICATION`, `FIELD_ROW`,
-  `FIELD_PRINT`, `FIELD_PERSON`, nonce `prc_people`.
+  `FIELD_PRINT`, `FIELD_PERSON`; aviso `persona-sin-cambios` para un cambio
+  que no cambia nada.
 - `ProcedureEditor::PANEL_PEOPLE` (`personas`) y `OP_PEOPLE_SPEC`; aviso
   `personas`; `PeopleSpecPanel::save( int $procedure_id ): string`,
-  `::model()`, `::reviews( array $applications ): array`.
+  `::model()`, `::reviews( array $applications ): array` y
+  `PeopleSpecPanel::ARG_HISTORY` (`historial`): el historial solo se lee para
+  la solicitud que lo pide.
 - Exportación: `ApplicationExport::WHO_PEOPLE` (`people`), columnas
   `person_name`, `person_surname`, `person_dni`, `person_email`,
   `person_phone`, `person_role`, `person_group` en el grupo `people`;
   `ApplicationExport::who( int $procedure_id = 0 )` y
   `::group_labels( int $procedure_id = 0 )` dejan fuera la lista cuando el
-  procedimiento no la pide. «Mi centro» gana `people_url` y `people_count`.
+  procedimiento no la pide. Por persona, cada grupo da filas solo si se
+  exporta alguna de sus columnas. `Applications::csv_lines( $columns, $rows, $verbatim = array() )`
+  deja sin neutralizar las columnas de `PeopleExport::VERBATIM` (el teléfono)
+  cuando casan con su patrón. «Mi centro» gana `people_url` y `people_count`.
 
 **Decisiones:**
 - La ventana de personas es propia: se puede dar de alta, cambiar o dar de

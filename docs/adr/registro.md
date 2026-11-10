@@ -54,7 +54,9 @@ con su propia ventana, fuera del núcleo de la
 [ADR-0020](ADR-0020-la-subsanacion-es-un-plazo-y-un-estado.md) y la
 [ADR-0023](ADR-0023-el-estado-historico-cierra-la-edicion.md) con una adenda
 en cada una: la lista no sigue el plazo de la solicitud, y el histórico la
-cierra igual.
+cierra igual. También lleva adenda la
+[ADR-0039](ADR-0039-la-exportacion-a-medida-y-el-fichero-de-usuarios-viven-en-el-aplicativo.md):
+la exportación y el fichero de usuarios ganan la lista de personas.
 
 | ID | Título | Estado | Fecha |
 |----|--------|--------|-------|

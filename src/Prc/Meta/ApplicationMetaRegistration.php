@@ -84,6 +84,18 @@ final class ApplicationMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( ApplicationLog::class, 'sanitize' ),
 			),
+			ApplicationMetaKeys::LATE_UNTIL         => array(
+				'type'     => 'string',
+				'sanitize' => array( ProcedureMetaRegistration::class, 'sanitize_date' ),
+			),
+			ApplicationMetaKeys::INTERNAL_NOTE      => array(
+				'type'     => 'string',
+				'sanitize' => 'sanitize_textarea_field',
+			),
+			ApplicationMetaKeys::CREATED_BY         => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 		);
 	}
 

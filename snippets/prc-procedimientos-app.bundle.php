@@ -571,6 +571,25 @@ final class ApplicationMetaKeys {
 
 	public const LOG = 'prc_log';
 
+
+
+
+
+
+	public const LATE_UNTIL = 'prc_late_until';
+
+
+
+
+
+	public const INTERNAL_NOTE = 'prc_internal_note';
+
+
+
+
+
+	public const CREATED_BY = 'prc_created_by';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -600,6 +619,9 @@ final class ApplicationMetaKeys {
 			self::REVIEW_NOTE,
 			self::PEOPLE,
 			self::LOG,
+			self::LATE_UNTIL,
+			self::INTERNAL_NOTE,
+			self::CREATED_BY,
 		);
 	}
 
@@ -776,6 +798,7 @@ final class DateRange {
 
 namespace Prc\Domain;
 
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 
 
@@ -979,6 +1002,60 @@ final class ProcedureState {
 
 	public static function accepts_applications( string $state ): bool {
 		return ProcedureMetaKeys::STATE_OPEN === $state;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function application_window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		if ( $late || self::accepts_applications( $state ) ) {
+			return '';
+		}
+		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
+			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
+				? ''
+				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
+		}
+		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
+			return 'El plazo de solicitud todavía no está abierto.';
+		}
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function late_open( string $state, string $late_until, string $today ): bool {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_ARCHIVED, ProcedureMetaKeys::STATE_DRAFT ), true ) ) {
+			return false;
+		}
+		$late_until = trim( $late_until );
+		return 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $late_until ) && trim( $today ) <= $late_until;
 	}
 
 
@@ -7774,6 +7851,18 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::LOG                => array(
 				'type'     => 'array',
 				'sanitize' => array( ApplicationLog::class, 'sanitize' ),
+			),
+			ApplicationMetaKeys::LATE_UNTIL         => array(
+				'type'     => 'string',
+				'sanitize' => array( ProcedureMetaRegistration::class, 'sanitize_date' ),
+			),
+			ApplicationMetaKeys::INTERNAL_NOTE      => array(
+				'type'     => 'string',
+				'sanitize' => 'sanitize_textarea_field',
+			),
+			ApplicationMetaKeys::CREATED_BY         => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
 			),
 		);
 	}
@@ -23316,22 +23405,9 @@ final class ApplyForm {
 
 
 
-	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
-		if ( ProcedureState::accepts_applications( $state ) ) {
-			return '';
-		}
-		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
-			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
-				? ''
-				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
-		}
-		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
-			return 'El plazo de solicitud todavía no está abierto.';
-		}
-		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
-			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
-		}
-		return 'Las solicitudes están cerradas.';
+
+	public static function window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		return ProcedureState::application_window( $state, $review_state, $manually_closed, $late );
 	}
 
 

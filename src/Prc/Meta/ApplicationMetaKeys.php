@@ -84,6 +84,25 @@ final class ApplicationMetaKeys {
 	 */
 	public const LOG = 'prc_log';
 
+	/**
+	 * Prórroga de esta solicitud: el último día (`Y-m-d`, inclusive) en que el
+	 * centro puede editarla entera aunque el plazo general esté cerrado.
+	 * La concede quien revisa; vacía, no hay prórroga (PLAN-0003, PR 9).
+	 */
+	public const LATE_UNTIL = 'prc_late_until';
+
+	/**
+	 * Nota interna de quien revisa: no la ve nunca quien solicita ni quien
+	 * consulta, y no viaja en ningún correo.
+	 */
+	public const INTERNAL_NOTE = 'prc_internal_note';
+
+	/**
+	 * La cuenta que revisa y presentó esta solicitud en nombre del centro;
+	 * vacía cuando la presentó el propio centro.
+	 */
+	public const CREATED_BY = 'prc_created_by';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -113,6 +132,9 @@ final class ApplicationMetaKeys {
 			self::REVIEW_NOTE,
 			self::PEOPLE,
 			self::LOG,
+			self::LATE_UNTIL,
+			self::INTERNAL_NOTE,
+			self::CREATED_BY,
 		);
 	}
 

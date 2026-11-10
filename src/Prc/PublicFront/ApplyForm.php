@@ -164,32 +164,19 @@ final class ApplyForm {
 	/**
 	 * Whether a school may submit or edit its application right now, and why not.
 	 *
-	 * La tabla de la SDD, en código: abierto se presenta o se edita; en
-	 * subsanación solo edita quien tiene la solicitud «a subsanar»; en el
-	 * resto se mira y ya. Quién puede —capacidad, centro, titularidad— lo
-	 * dice {@see ProcedureAccess::can_apply()} antes de llegar aquí.
+	 * Lo decide el dominio ({@see ProcedureState::application_window()}): la
+	 * tabla de la SDD y, por encima, la prórroga de esa solicitud. Quién
+	 * puede —capacidad, centro, titularidad— lo dice
+	 * {@see ProcedureAccess::can_apply()} antes de llegar aquí.
 	 *
-	 * @param string $state        One of ProcedureMetaKeys::states().
-	 * @param string $review_state Review state of the existing application, '' when there is none.
+	 * @param string $state           One of ProcedureMetaKeys::states().
+	 * @param string $review_state    Review state of the existing application, '' when there is none.
 	 * @param bool   $manually_closed Whether new applications were closed manually.
+	 * @param bool   $late            Whether the existing application has a live extension.
 	 * @return string Empty when the form is open; otherwise why it is not.
 	 */
-	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
-		if ( ProcedureState::accepts_applications( $state ) ) {
-			return '';
-		}
-		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
-			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
-				? ''
-				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
-		}
-		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
-			return 'El plazo de solicitud todavía no está abierto.';
-		}
-		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
-			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
-		}
-		return 'Las solicitudes están cerradas.';
+	public static function window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		return ProcedureState::application_window( $state, $review_state, $manually_closed, $late );
 	}
 
 	/**

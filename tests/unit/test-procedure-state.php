@@ -265,4 +265,22 @@ class Test_Procedure_State extends WP_UnitTestCase {
 		$this->assertSame( current_time( 'Y-m-d' ), ProcedureState::today() );
 		$this->assertSame( ProcedureState::of_post( $procedimiento ), ProcedureState::of_post( $procedimiento, ProcedureState::today() ) );
 	}
+
+	/**
+	 * La prórroga vale hasta su último día incluido, y nunca en histórico.
+	 */
+	public function test_the_extension_rule_is_inclusive_and_never_archived() {
+		$hoy = '2026-11-10';
+		$this->assertTrue( ProcedureState::late_open( ProcedureMetaKeys::STATE_CLOSED, '2026-11-10', $hoy ), 'el último día, incluido' );
+		$this->assertFalse( ProcedureState::late_open( ProcedureMetaKeys::STATE_CLOSED, '2026-11-09', $hoy ), 'al día siguiente, no' );
+		$this->assertTrue( ProcedureState::late_open( ProcedureMetaKeys::STATE_RESOLVED, '2026-12-01', $hoy ) );
+		$this->assertFalse( ProcedureState::late_open( ProcedureMetaKeys::STATE_ARCHIVED, '2026-12-01', $hoy ) );
+		$this->assertFalse( ProcedureState::late_open( ProcedureMetaKeys::STATE_DRAFT, '2026-12-01', $hoy ) );
+		$this->assertFalse( ProcedureState::late_open( ProcedureMetaKeys::STATE_CLOSED, '', $hoy ) );
+		$this->assertFalse( ProcedureState::late_open( ProcedureMetaKeys::STATE_CLOSED, 'mañana', $hoy ) );
+
+		$this->assertSame( '', ProcedureState::application_window( ProcedureMetaKeys::STATE_CLOSED, '', false, true ) );
+		$this->assertSame( '', ProcedureState::application_window( ProcedureMetaKeys::STATE_AMENDMENT, 'admitted', false, true ) );
+		$this->assertSame( 'Las solicitudes están cerradas.', ProcedureState::application_window( ProcedureMetaKeys::STATE_CLOSED, '' ) );
+	}
 }

@@ -27321,9 +27321,13 @@ final class ApplyForm {
 		$user_id      = get_current_user_id();
 
 
-		$cuenta = $user_id > 0 && 'publish' === get_post_status( $procedure_id ) && ! ProcedureAccess::can_apply( $user_id, $procedure_id );
+
+		$publicado = ProcedurePostType::POST_TYPE === get_post_type( $procedure_id ) && 'publish' === get_post_status( $procedure_id );
+
+
+		$cuenta = $user_id > 0 && $publicado && ! ProcedureAccess::can_apply( $user_id, $procedure_id );
 		return array(
-			'contact_email'  => (string) ( ProcedureInput::emails( get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' ),
+			'contact_email'  => $publicado ? (string) ( ProcedureInput::emails( get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' ) : '',
 			'start_help_url' => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
 			'switch_url'     => $cuenta ? wp_logout_url( wp_login_url( self::url( $procedure_id ) ) ) : '',
 		);

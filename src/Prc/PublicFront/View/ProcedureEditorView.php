@@ -20,8 +20,7 @@ use Prc\PublicFront\Shell;
  * Solo pinta: no lee la petición, no consulta, no decide.
  *
  * El marco del taller —la cabecera del procedimiento, las pestañas y el
- * aviso de lo último que se hizo— y los cinco paneles: Datos, Preguntas,
- * Enlaces, Solicitudes y Publicación.
+ * aviso de lo último que se hizo— y los paneles del taller.
  */
 final class ProcedureEditorView {
 
@@ -73,6 +72,9 @@ final class ProcedureEditorView {
 			echo self::links_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
 			echo self::applications_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+			echo self::deliveries_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
 			echo self::publish_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} else {
@@ -101,6 +103,9 @@ final class ProcedureEditorView {
 		if ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
 			return true !== $m['can_review'];
 		}
+		if ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
+			return true !== $m['can_edit'];
+		}
 		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
 			return ! self::open_group( $m, ProcedureState::GROUP_QUESTIONS );
 		}
@@ -122,6 +127,39 @@ final class ProcedureEditorView {
 	 */
 	private static function open_group( array $m, string $group ): bool {
 		return true === ( ( (array) $m['groups'] )[ $group ] ?? false );
+	}
+
+	/**
+	 * Extend the closing date of independent deliveries.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function deliveries_panel( array $m ): string {
+		ob_start();
+		?>
+		<section aria-labelledby="prc-deliveries-title">
+			<h2 id="prc-deliveries-title">Plazos de entregas documentales</h2>
+			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y las preguntas se conservan; el nuevo cierre no puede ser anterior al actual.</p>
+			<?php if ( empty( $m['deliveries'] ) ) : ?>
+				<p>Este procedimiento no tiene entregas con plazo propio.</p>
+			<?php else : ?>
+				<form class="prc-form" method="post" action="">
+					<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
+					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
+					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+						<div class="prc-campo">
+							<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
+							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
+						</div>
+					<?php endforeach; ?>
+					<?php echo PanelParts::submit( 'Guardar nuevos cierres' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				</form>
+			<?php endif; ?>
+		</section>
+		<?php
+		return (string) ob_get_clean();
 	}
 
 	/**

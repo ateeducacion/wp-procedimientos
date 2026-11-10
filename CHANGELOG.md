@@ -12,6 +12,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
 
 ### Añadido
 
+- Panel «Entregas» para ampliar el cierre de documentos ya configurados aunque las preguntas estén bloqueadas. Conserva apertura y definición, rechaza cierres anteriores y mantiene el ámbito y bloqueo del procedimiento (ADR-0034).
 - Entregas documentales con plazo propio: una pregunta «Archivo» puede recibirse después de la inscripción y del listado definitivo, sin modificar la solicitud ni su revisión. Configuración en «Preguntas», calendario público y entrega privada desde «Mi centro» (ADR-0033).
 - Arranque del repositorio: entorno de desarrollo (wp-env en los puertos 8698 y 8699), empaquetado del aplicativo en un Code Snippet y herramientas de calidad (PHPCS, PHPMD, PHPUnit, Plugin Check, `check-public`, `check-provision`), a partir del esqueleto del aplicativo de eventos (ADR-0010)
 - Modelo de datos de la fase 1: el tipo de contenido `prc_procedure` (el procedimiento: plazos de solicitud y de subsanación, enlaces a la resolución y a los listados, a quién va dirigido, compromisos y preguntas propias) y `prc_application` (la solicitud de un centro, que cuelga del procedimiento, una por centro), con las taxonomías `prc_area` (ámbito convocante, jerárquica) y `prc_course` (curso escolar)

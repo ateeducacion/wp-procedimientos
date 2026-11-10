@@ -3168,21 +3168,24 @@ final class ProcedureAccess {
 		if ( array() === $theirs ) {
 			return array();
 		}
+
+
+
 		$candidatos = get_users(
 			array(
-				'fields'       => 'ID',
+				'capability'   => self::CAP_MANAGE_PROCEDURES,
+				'fields'       => 'all_with_meta',
 				'meta_key'     => self::USER_AREA_META,
 				'meta_compare' => 'EXISTS',
 			)
 		);
 		$out        = array();
-		foreach ( (array) $candidatos as $user_id ) {
-			$user_id = (int) $user_id;
-			if ( ! user_can( $user_id, self::CAP_MANAGE_PROCEDURES ) || self::can_edit_all_areas( $user_id ) ) {
+		foreach ( (array) $candidatos as $user ) {
+			if ( ! $user instanceof \WP_User || self::can_edit_all_areas( (int) $user->ID ) ) {
 				continue;
 			}
-			if ( array() !== array_intersect( self::scope_areas( $user_id ), $theirs ) ) {
-				$out[] = $user_id;
+			if ( array() !== array_intersect( self::scope_areas( (int) $user->ID ), $theirs ) ) {
+				$out[] = (int) $user->ID;
 			}
 		}
 		return $out;

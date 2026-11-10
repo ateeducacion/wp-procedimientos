@@ -722,6 +722,30 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Saber quién gestiona un ámbito no cuesta una consulta por cuenta.
+	 */
+	public function test_area_managers_does_not_query_once_per_account() {
+		global $wpdb;
+		$area = $this->area( 'Área de prueba' );
+		$this->manager( array( $area ) );
+		$this->manager( array( $area ) );
+		$procedimiento = $this->procedure( $this->administrator(), array( $area ) );
+
+		$contar  = function () use ( $wpdb, $procedimiento ): int {
+			wp_cache_flush();
+			$antes = $wpdb->num_queries;
+			ProcedureAccess::area_managers( $procedimiento );
+			return $wpdb->num_queries - $antes;
+		};
+		$con_dos = $contar();
+		for ( $i = 0; $i < 6; $i++ ) {
+			$this->manager( array( $area ) );
+		}
+		$this->assertCount( 8, ProcedureAccess::area_managers( $procedimiento ) );
+		$this->assertSame( $con_dos, $contar(), 'seis cuentas más, las mismas consultas' );
+	}
+
+	/**
 	 * Solicitar sigue siendo crear una solicitud en un procedimiento de cualquier ámbito.
 	 */
 	public function test_an_application_is_still_created_under_its_procedure() {

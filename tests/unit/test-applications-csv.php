@@ -224,14 +224,51 @@ class Test_Applications_Csv extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El CSV de siempre es la exportación a medida sin nada elegido, y un
-	 * envío sin los campos del diálogo descarga ese mismo fichero (ADR-0039).
+	 * Un envío sin los campos del diálogo descarga el CSV de siempre: todas
+	 * las columnas, en el orden de la tabla, una fila por solicitud (ADR-0039).
 	 */
-	public function test_the_csv_of_always_is_the_export_without_a_choice() {
-		list( $procedimiento, $area ) = $this->con_solicitudes();
+	public function test_a_post_without_a_choice_downloads_the_csv_of_always() {
+		$area          = $this->area( 'Área de prueba' );
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Tiene huerto',
+						'type'  => ProcedureQuestions::TYPE_YESNO,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+		wp_update_user(
+			array(
+				'ID'           => $direccion,
+				'display_name' => 'Dirección Norte',
+				'user_email'   => 'norte@example.org',
+			)
+		);
+		$id = Applications::save(
+			$procedimiento,
+			$direccion,
+			array(
+				'position'    => ApplicationMetaKeys::POSITION_HEAD,
+				'coordinator' => array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				),
+				'answers'     => array( 'q1' => true ),
+			)
+		);
 
-		$this->assertSame( ApplicationExport::csv( $procedimiento, array(), ApplicationExport::SHAPE_APPLICATION ), Applications::csv( $procedimiento ) );
-		$this->assertSame( Applications::csv( $procedimiento ), $this->exportar( $this->manager( array( $area ) ), $procedimiento ) );
+		$esperado = "\xEF\xBB\xBF"
+			. '"Centro";"Código";"Fecha";"Presentada por";"Correo";"Cargo";"Coordinación";"DNI o NIE de coordinación";"Correo de coordinación";"Estado de revisión";"Nota";"Tiene huerto"' . "\r\n"
+			. '"Centro de prueba Norte";"C0001";"' . get_the_date( 'Y-m-d H:i', $id ) . '";"Dirección Norte";"norte@example.org";"Dirección";"Ana Pérez";"";"ana@example.org";"Presentada";"";"Sí"' . "\r\n";
+
+		$this->assertSame( $esperado, $this->exportar( $this->manager( array( $area ) ), $procedimiento ) );
+		$this->assertSame( $esperado, Applications::csv( $procedimiento ) );
 	}
 
 	/**

@@ -244,6 +244,30 @@ final class Applications {
 	}
 
 	/**
+	 * The question keys some application of the procedure has answered.
+	 *
+	 * Una respuesta vacía no cuenta; un «no», sí. Un documento aportado
+	 * cuenta como respuesta a su pregunta. Es lo que decide si una pregunta
+	 * puede cambiar de tipo (ADR-0040).
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return array<string, bool> Question key => true.
+	 */
+	public static function answered_keys( int $procedure_id ): array {
+		$out = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			$respuestas = array_filter(
+				(array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ],
+				static function ( $valor ): bool {
+					return '' !== $valor && array() !== $valor && null !== $valor;
+				}
+			);
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+		}
+		return $out;
+	}
+
+	/**
 	 * What a procedure asks of a school, in the shape ApplicationInput wants.
 	 *
 	 * @param int $procedure_id Procedure post ID.

@@ -1657,4 +1657,280 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
 		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', ProcedureEditorView::html( $model ) );
 	}
+
+	// ─── tipos de pregunta y orden (ADR-0040) ──────────────────────────────
+
+	/**
+	 * Un procedimiento propio con tres preguntas: texto, rejilla y méritos con puntos.
+	 *
+	 * @return array{0:int, 1:int} Manager, procedure.
+	 */
+	private function con_preguntas(): array {
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_TEXT,
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Alumnado',
+						'type'  => ProcedureQuestions::TYPE_GRID,
+						'rows'  => "Infantil\nPrimaria\nSecundaria",
+					),
+					array(
+						'key'     => 'q3',
+						'label'   => 'Méritos',
+						'type'    => ProcedureQuestions::TYPE_MULTIPLE,
+						'choices' => "Huerto | 3\nRadio",
+					),
+				),
+			)
+		);
+		return array( $uid, $procedimiento );
+	}
+
+	/**
+	 * Lo que el panel enviaría hoy, sin tocar nada, con los cambios que se digan.
+	 *
+	 * @param int                  $procedimiento Procedure ID.
+	 * @param array<string, array> $cambios       Field suffix => values by row.
+	 * @return array<string, mixed>
+	 */
+	private function preguntas_tal_cual( int $procedimiento, array $cambios = array() ): array {
+		$q      = ProcedureEditor::FIELD_Q;
+		$campos = array();
+		foreach ( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) as $i => $p ) {
+			$campos[ $q . 'key' ][ $i ]     = $p['key'];
+			$campos[ $q . 'label' ][ $i ]   = $p['label'];
+			$campos[ $q . 'type' ][ $i ]    = $p['type'];
+			$campos[ $q . 'choices' ][ $i ] = implode( "\n", \Prc\Domain\QuestionPoints::lines( $p ) );
+			$campos[ $q . 'rows' ][ $i ]    = implode( "\n", wp_list_pluck( (array) ( $p['rows'] ?? array() ), 'label' ) );
+		}
+		foreach ( $cambios as $sufijo => $valores ) {
+			foreach ( $valores as $i => $valor ) {
+				$campos[ $q . $sufijo ][ $i ] = $valor;
+			}
+		}
+		return $campos;
+	}
+
+	/**
+	 * Número, fecha y rejilla se guardan desde el taller, con su rango y sus filas.
+	 */
+	public function test_the_panel_saves_number_date_and_grid() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$q                             = ProcedureEditor::FIELD_Q;
+
+		$url = $this->submit(
+			$uid,
+			ProcedureEditor::PANEL_QUESTIONS,
+			$procedimiento,
+			0,
+			array(
+				$q . 'key'     => array( '', '', '', '' ),
+				$q . 'label'   => array( 'Grupos', 'Fecha del claustro', 'Alumnado', 'Méritos' ),
+				$q . 'type'    => array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID, ProcedureQuestions::TYPE_MULTIPLE ),
+				$q . 'min'     => array( '1', '', '', '' ),
+				$q . 'max'     => array( '12', '', '', '' ),
+				$q . 'rows'    => array( '', '', "Infantil\nPrimaria", '' ),
+				$q . 'choices' => array( '', '', '', "Huerto | 3\nRadio" ),
+			)
+		);
+
+		$this->assertSame( 'preguntas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$guardadas = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertSame( array( 1, 12 ), array( $guardadas[0]['min'], $guardadas[0]['max'] ) );
+		$this->assertSame( ProcedureQuestions::TYPE_DATE, $guardadas[1]['type'] );
+		$this->assertSame(
+			array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Infantil',
+				),
+				array(
+					'key'   => 'r2',
+					'label' => 'Primaria',
+				),
+			),
+			$guardadas[2]['rows']
+		);
+		$this->assertSame( array( 'Huerto', 'Radio' ), $guardadas[3]['choices'] );
+		$this->assertSame( array( 3, 0 ), $guardadas[3]['points'] );
+
+		// Un mínimo por encima del máximo no se guarda.
+		$this->assertNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_QUESTIONS,
+				$procedimiento,
+				0,
+				$this->preguntas_tal_cual(
+					$procedimiento,
+					array(
+						'min' => array( '20' ),
+						'max' => array( '12' ),
+					)
+				)
+			)
+		);
+		$this->assertSame( $guardadas, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertStringContainsString( 'mínimo', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+	}
+
+	/**
+	 * Con respuestas, el tipo de una pregunta no cambia; el rótulo, sí.
+	 */
+	public function test_the_type_of_an_answered_question_is_refused() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'tres' ) ) );
+		$antes = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( ProcedureQuestions::TYPE_NUMBER ) ) ) ),
+			'no se guarda ni vuelve'
+		);
+		$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+		$flash = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash'];
+		$this->assertSame( 'error', $flash['tipo'] );
+		$this->assertStringContainsString( 'No se puede cambiar el tipo de «Grupos»', $flash['texto'] );
+		$this->olvidar_rechazo();
+
+		$url = $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'label' => array( 'Número de grupos' ) ) ) );
+		$this->assertSame( 'preguntas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), 'el rótulo sí cambia' );
+
+		// La de méritos no tiene respuestas: su tipo sí puede cambiar.
+		$url = $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( 2 => ProcedureQuestions::TYPE_SINGLE ) ) ) );
+		$this->assertNotNull( $url );
+		$this->assertSame( ProcedureQuestions::TYPE_SINGLE, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[2]['type'] );
+	}
+
+	/**
+	 * Una fila renombrada en su línea sigue con sus cantidades; una borrada
+	 * dejando su línea en blanco deja de salir y su clave no se reutiliza.
+	 */
+	public function test_renaming_and_removing_grid_rows_keeps_the_answers_in_place() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$this->application(
+			$procedimiento,
+			$this->school_head( 'C0001' ),
+			'',
+			array(
+				ApplicationMetaKeys::ANSWERS => array(
+					'q2' => array(
+						'r1' => 3,
+						'r2' => 5,
+						'r3' => 7,
+					),
+				),
+			)
+		);
+
+		$this->assertNotNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'rows' => array( 1 => "Infantil\nEducación Primaria\n" ) ) ) )
+		);
+		$rejilla = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[1];
+		$this->assertSame( array( 'r1', 'r2' ), wp_list_pluck( $rejilla['rows'], 'key' ) );
+		$this->assertSame( 3, $rejilla['row_seq'] );
+
+		$fila = \Prc\PublicFront\Applications::rows( $procedimiento )[0];
+		$this->assertSame( 'Infantil: 3; Educación Primaria: 5', $fila['q2'], 'la renombrada sigue con lo suyo, y la borrada no sale' );
+
+		// Una fila nueva no hereda las cantidades de la borrada.
+		$this->assertNotNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'rows' => array( 1 => "Infantil\nEducación Primaria\nBachillerato" ) ) ) )
+		);
+		$rejilla = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[1];
+		$this->assertSame( array( 'r1', 'r2', 'r4' ), wp_list_pluck( $rejilla['rows'], 'key' ) );
+		$this->assertSame( 'Infantil: 3; Educación Primaria: 5', \Prc\PublicFront\Applications::rows( $procedimiento )[0]['q2'] );
+	}
+
+	/**
+	 * Subir y bajar mueven la pregunta y nada más: la clave va con ella y las
+	 * respuestas no se tocan. En los extremos no hacen nada, y sin error.
+	 */
+	public function test_moving_a_question_keeps_keys_and_answers() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$solicitud                   = $this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'tres' ) ) );
+		$respuestas                  = get_post_meta( $solicitud, ApplicationMetaKeys::ANSWERS, true );
+		$mover                       = function ( string $pedido ) use ( $uid, $procedimiento ): ?string {
+			return $this->submit( $uid, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => $pedido ) );
+		};
+		$claves                      = function () use ( $procedimiento ): array {
+			return wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' );
+		};
+
+		$url = $mover( 'q2:' . \Prc\Domain\QuestionChanges::MOVE_UP );
+		$this->assertSame( 'ordenadas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( array( 'q2', 'q1', 'q3' ), $claves() );
+
+		$this->assertNotNull( $mover( 'q1:' . \Prc\Domain\QuestionChanges::MOVE_DOWN ) );
+		$this->assertSame( array( 'q2', 'q3', 'q1' ), $claves() );
+
+		$url = $mover( 'q2:' . \Prc\Domain\QuestionChanges::MOVE_UP );
+		$this->assertNotNull( $url, 'la primera hacia arriba vuelve sin error' );
+		$this->assertSame( '', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertNotNull( $mover( 'q1:' . \Prc\Domain\QuestionChanges::MOVE_DOWN ), 'y la última hacia abajo, igual' );
+		$this->assertNotNull( $mover( 'basura' ) );
+		$this->assertSame( array( 'q2', 'q3', 'q1' ), $claves() );
+
+		$this->assertSame( $respuestas, get_post_meta( $solicitud, ApplicationMetaKeys::ANSWERS, true ), 'las respuestas no se tocan' );
+		$this->assertSame( 'tres', \Prc\PublicFront\Applications::rows( $procedimiento )[0]['q1'] );
+
+		// Sin el nonce de mover, o con el estado cerrado, no se mueve.
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => 'q1:up' ), 'falso' ) );
+		$this->assertSame( array( 'q2', 'q3', 'q1' ), $claves() );
+		$ajena = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
+		$this->assertNull( $this->submit( $ajena, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => 'q1:up' ) ) );
+		$this->assertSame( array( 'q2', 'q3', 'q1' ), $claves() );
+	}
+
+	/**
+	 * Con las preguntas cerradas por el estado, tampoco se reordenan.
+	 */
+	public function test_a_locked_question_list_is_not_reordered() {
+		list( , $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_AMENDMENT );
+		update_post_meta(
+			$procedimiento,
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array( 'label' => 'Una' ),
+				array( 'label' => 'Dos' ),
+			)
+		);
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => 'q2:up' ) ) );
+		$this->assertSame( array( 'q1', 'q2' ), wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' ) );
+	}
+
+	/**
+	 * El panel pinta el rango, las filas, los puntos y los botones de mover,
+	 * que envían su propio formulario; la tabla de solicitudes, los puntos.
+	 */
+	public function test_the_panels_paint_the_new_fields() {
+		list( , $procedimiento ) = $this->con_preguntas();
+		$this->acting_as( $this->administrator() );
+
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) );
+		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'min[0]"', $html );
+		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'max[0]"', $html );
+		$this->assertStringContainsString( "Infantil\nPrimaria\nSecundaria</textarea>", $html );
+		$this->assertStringContainsString( "Huerto | 3\nRadio | 0</textarea>", $html );
+		$this->assertStringContainsString( 'id="prc-q-mover"', $html );
+		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_MOVE_QUESTION . '"', $html );
+		$this->assertStringContainsString( 'form="prc-q-mover" name="' . ProcedureEditor::FIELD_Q_MOVE . '" value="q2:up"', $html );
+		$this->assertMatchesRegularExpression( '/value="q1:up"[^>]*disabled/', $html, 'la primera no sube' );
+		$this->assertMatchesRegularExpression( '/value="q3:down"[^>]*disabled/', $html, 'la última no baja' );
+
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q3' => array( 'Huerto' ) ) ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertStringContainsString( '>Puntos</th>', $html );
+		$this->assertStringContainsString( 'data-rotulo="Puntos">3</td>', $html );
+
+		list( , , $sin ) = $this->mio();
+		$this->application( $sin, $this->school_head( 'C0002' ) );
+		$this->assertStringNotContainsString( 'Puntos', ProcedureEditorView::html( $this->modelo( $sin, ProcedureEditor::PANEL_APPLICATIONS ) ) );
+	}
 }

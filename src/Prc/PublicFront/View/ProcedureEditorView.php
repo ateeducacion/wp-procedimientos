@@ -8,6 +8,8 @@
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionPoints;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationExport;
@@ -742,6 +744,10 @@ final class ProcedureEditorView {
 	 * reglas (ADR-0019). Sin JavaScript: las filas son campos paralelos y la
 	 * última va en blanco; se borra el rótulo y la pregunta se va.
 	 *
+	 * «Subir» y «bajar» son botones de otro formulario, el de mover, que va
+	 * fuera de este (`form="prc-q-mover"`): mueven una pregunta por POST y
+	 * nada más (ADR-0040).
+	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
@@ -770,14 +776,86 @@ final class ProcedureEditorView {
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
 				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
+				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
 
 			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endforeach; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
+		<form id="prc-q-mover" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_MOVE_QUESTION ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The «Subir» and «Bajar» buttons of one saved question.
+	 *
+	 * @param int                  $i     Row index.
+	 * @param array<string, mixed> $p     Question.
+	 * @param int                  $total Saved questions.
+	 * @return string
+	 */
+	private static function move_buttons( int $i, array $p, int $total ): string {
+		$botones = array(
+			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
+			QuestionChanges::MOVE_DOWN => array( 'Bajar', $i >= $total - 1 ),
+		);
+		$out     = '';
+		foreach ( $botones as $hacia => $boton ) {
+			$out .= sprintf(
+				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
+				esc_attr( Assets::button_class( true ) ),
+				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
+				esc_attr( (string) $p['key'] . ':' . $hacia ),
+				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
+				$boton[1] ? ' disabled' : '',
+				esc_html( $boton[0] )
+			);
+		}
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+	}
+
+	/**
+	 * The fields only some types use: the range of a number and the rows of a grid.
+	 *
+	 * @param int                  $i Row index.
+	 * @param array<string, mixed> $p Question.
+	 * @return string
+	 */
+	private static function type_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$filas = implode( "\n", array_map( 'strval', wp_list_pluck( (array) ( $p['rows'] ?? array() ), 'label' ) ) );
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo">
+			<?php
+			foreach ( array(
+				'min' => 'Mínimo',
+				'max' => 'Máximo',
+			) as $limite => $rotulo ) :
+				?>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
+			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
+			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco.</p>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -788,9 +866,10 @@ final class ProcedureEditorView {
 	 * @param int                   $i     Row index.
 	 * @param array<string, mixed>  $p     Question.
 	 * @param array<string, string> $tipos Question types.
+	 * @param int                   $total Saved questions, to know the last one.
 	 * @return string
 	 */
-	private static function question_row( int $i, array $p, array $tipos ): string {
+	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
 		$nueva  = '' === (string) $p['key'];
 		$campo  = ProcedureEditor::FIELD_Q;
 		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
@@ -799,6 +878,7 @@ final class ProcedureEditorView {
 		?>
 		<fieldset class="prc-seccion-campos prc-pregunta">
 			<legend class="prc-seccion__titulo"><?php echo esc_html( $rotulo ); ?></legend>
+			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
@@ -823,9 +903,11 @@ final class ProcedureEditorView {
 			</div>
 			<div class="prc-campo">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
-				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"><?php echo esc_textarea( implode( "\n", (array) $p['choices'] ) ); ?></textarea>
-				<p class="prc-campo__ayuda">Solo para «Una opción» y «Varias opciones».</p>
+				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
+			<?php echo self::type_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
 				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
@@ -936,6 +1018,7 @@ final class ProcedureEditorView {
 							<th class="prc-th" scope="col">Cargo</th>
 							<th class="prc-th" scope="col">Coordinación</th>
 						<?php endif; ?>
+						<?php echo self::score_cell( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						<th class="prc-th" scope="col">Revisión</th>
 						<th class="prc-th" scope="col">Acciones</th>
 					</tr>
@@ -955,6 +1038,7 @@ final class ProcedureEditorView {
 								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
 					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 							<?php endif; ?>
+							<?php echo self::score_cell( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 						</tr>
@@ -964,6 +1048,26 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The «Puntos» heading, or one row's score, when some question gives points.
+	 *
+	 * Los puntos no se guardan: es una columna calculada que solo existe si
+	 * alguna pregunta los da (ADR-0040).
+	 *
+	 * @param array<string, mixed>      $m    Model.
+	 * @param array<string, mixed>|null $fila Row; null for the heading.
+	 * @return string
+	 */
+	private static function score_cell( array $m, ?array $fila = null ): string {
+		if ( ! isset( $m['app_cols']['score'] ) ) {
+			return '';
+		}
+		if ( null === $fila ) {
+			return '<th class="prc-th" scope="col">Puntos</th>';
+		}
+		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
 	}
 
 	/**

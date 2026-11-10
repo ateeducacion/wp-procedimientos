@@ -11,6 +11,8 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionGrid;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -72,6 +74,7 @@ final class ProcedureEditor {
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_NOTIFY              = 'notify';
+	public const OP_MOVE_QUESTION       = 'move_question';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
@@ -117,6 +120,11 @@ final class ProcedureEditor {
 	public const FIELD_Q = 'prc_q_';
 
 	/**
+	 * Button of «subir» or «bajar»: `q3:up`, `q3:down` (ADR-0040).
+	 */
+	public const FIELD_Q_MOVE = 'prc_q_move';
+
+	/**
 	 * Checkboxes of the «Avisos» panel: the mail events left switched on.
 	 *
 	 * Lo que se guarda es lo contrario, los apagados, en `prc_notify`: así un
@@ -145,6 +153,7 @@ final class ProcedureEditor {
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
+		self::OP_MOVE_QUESTION,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
@@ -167,6 +176,7 @@ final class ProcedureEditor {
 		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Preguntas guardadas.',
+		'ordenadas'    => 'Orden de las preguntas guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
@@ -450,11 +460,11 @@ final class ProcedureEditor {
 			self::save_data( $procedure_id, $user_id );
 			return;
 		}
-		if ( self::PANEL_QUESTIONS === $op ) {
+		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
 			if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_QUESTIONS ) ) {
 				return;
 			}
-			self::save_questions( $procedure_id );
+			self::PANEL_QUESTIONS === $op ? self::save_questions( $procedure_id ) : self::move_question( $procedure_id );
 			return;
 		}
 		if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_LINKS ) ) {
@@ -793,6 +803,11 @@ final class ProcedureEditor {
 	 * también para no añadir ninguna. Las respuestas ya dadas a una pregunta
 	 * que se borra se quedan bajo su clave (ADR-0019).
 	 *
+	 * Las filas de una rejilla llegan como texto y se casan con las que tenía
+	 * guardadas para conservar su clave ({@see QuestionGrid::match_rows()}).
+	 * El tipo de una pregunta que ya tiene respuestas no cambia: el envío
+	 * entero se rechaza y no se guarda nada (ADR-0040).
+	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return void
 	 */
@@ -807,12 +822,18 @@ final class ProcedureEditor {
 		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
 		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
 		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
+		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
+		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
+		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
-		$crudas = array();
+		$antes   = Applications::questions( $procedure_id );
+		$previas = array_column( $antes, null, 'key' );
+		$crudas  = array();
 		foreach ( $rotulos as $i => $rotulo ) {
+			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
-				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'key'       => $key,
 				'label'     => sanitize_text_field( (string) $rotulo ),
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
@@ -821,6 +842,15 @@ final class ProcedureEditor {
 				'delivery'  => ! empty( $deliveries[ $i ] ),
 				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
 				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
+				'min'       => sanitize_text_field( (string) ( $minimos[ $i ] ?? '' ) ),
+				'max'       => sanitize_text_field( (string) ( $maximos[ $i ] ?? '' ) ),
+				// Línea a línea y sin recortar el conjunto: una línea en blanco
+				// al final es una fila que se quita, y cuenta.
+				'rows'      => QuestionGrid::match_rows(
+					implode( "\n", array_map( 'sanitize_text_field', (array) preg_split( '/\r\n|\r|\n/', (string) ( $filas[ $i ] ?? '' ) ) ) ),
+					(array) ( $previas[ $key ]['rows'] ?? array() )
+				),
+				'row_seq'   => (int) ( $previas[ $key ]['row_seq'] ?? 0 ),
 			);
 		}
 
@@ -831,8 +861,34 @@ final class ProcedureEditor {
 				return;
 			}
 		}
+		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ) );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+	/**
+	 * Move one question a place up or down, and nothing else.
+	 *
+	 * La `key` va con la pregunta y las respuestas no se tocan. En los
+	 * extremos, o con un botón que no es uno de los nuestros, no cambia nada
+	 * y se vuelve al panel sin aviso (ADR-0040).
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function move_question( int $procedure_id ): void {
+		$pedido  = explode( ':', self::field( self::FIELD_Q_MOVE ) . ':' );
+		$antes   = Applications::questions( $procedure_id );
+		$despues = QuestionChanges::move( $antes, $pedido[0], $pedido[1] );
+		if ( $despues === $antes ) {
+			Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS ) );
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $despues ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'ordenadas' ) ) );
 	}
 
 	/**

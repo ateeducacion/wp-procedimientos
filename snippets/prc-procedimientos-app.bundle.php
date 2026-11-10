@@ -2382,6 +2382,31 @@ final class ProcedureInput {
 
 
 
+
+
+
+
+
+
+	public static function not_ready( int $course, array $questions ): array {
+		$faltan = array();
+		if ( $course <= 0 ) {
+			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
+		}
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+			}
+		}
+		return $faltan;
+	}
+
+
+
+
+
+
+
 	public static function term_ids( $raw ): array {
 		$out = array();
 		foreach ( self::listed( $raw ) as $valor ) {
@@ -3173,6 +3198,278 @@ final class PeopleSpec {
 	private static function text( array $raw, string $key ): string {
 		$value = $raw[ $key ] ?? '';
 		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ProcedureCopy', false ) ) {
+final class ProcedureCopy {
+
+
+
+
+	public const COPY = 'copy';
+
+
+
+
+
+	public const TRANSFORM = 'transform';
+
+
+
+
+	public const NEVER = 'never';
+
+
+
+
+	public const SUFFIX = ' (copia)';
+
+
+
+
+
+
+	public static function policy(): array {
+		return array(
+
+			ProcedureMetaKeys::OPENS_AT             => self::NEVER,
+			ProcedureMetaKeys::CLOSES_AT            => self::NEVER,
+			ProcedureMetaKeys::AMEND_OPENS_AT       => self::NEVER,
+			ProcedureMetaKeys::AMEND_CLOSES_AT      => self::NEVER,
+			ProcedureMetaKeys::RESOLUTION_URL       => self::NEVER,
+			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::NEVER,
+			ProcedureMetaKeys::FINAL_LIST_URL       => self::NEVER,
+
+			ProcedureMetaKeys::ARCHIVED             => self::NEVER,
+			ProcedureMetaKeys::APPLICATIONS_CLOSED  => self::NEVER,
+
+			ProcedureMetaKeys::CONTACT_EMAILS       => self::COPY,
+			ProcedureMetaKeys::HEADER_COLOR         => self::COPY,
+			ProcedureMetaKeys::AUDIENCE             => self::COPY,
+			ProcedureMetaKeys::OWNERSHIP            => self::COPY,
+			ProcedureMetaKeys::CENTRE_KINDS         => self::COPY,
+			ProcedureMetaKeys::CENTRE_TYPES         => self::COPY,
+			ProcedureMetaKeys::ISLANDS              => self::COPY,
+			ProcedureMetaKeys::ALLOWED_CENTRES      => self::COPY,
+			ProcedureMetaKeys::REQUIRES_COORDINATOR => self::COPY,
+			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
+			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
+			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
+			ProcedureMetaKeys::NOTIFY               => self::COPY,
+			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
+			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
+			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::COPY,
+
+			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
+			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,
+			ProcedureMetaKeys::PEOPLE_SPEC          => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_COLUMNS     => self::TRANSFORM,
+
+			ProcedureMetaKeys::CUSTOM_JS            => self::TRANSFORM,
+		);
+	}
+
+
+
+
+
+
+
+	public static function rule( string $key ): string {
+		return self::policy()[ $key ] ?? '';
+	}
+
+
+
+
+
+
+
+	public static function title( string $title ): string {
+		$title = trim( $title );
+		return ( '' !== $title ? $title : 'Procedimiento sin título' ) . self::SUFFIX;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function meta( array $source, bool $with_js ): array {
+		$meta = array();
+		foreach ( self::policy() as $key => $rule ) {
+			if ( self::COPY === $rule && array_key_exists( $key, $source ) ) {
+				$meta[ $key ] = $source[ $key ];
+			}
+		}
+
+		$preguntas = self::questions( $source[ ProcedureMetaKeys::QUESTIONS ] ?? array() );
+		if ( array_key_exists( ProcedureMetaKeys::QUESTIONS, $source ) ) {
+			$meta[ ProcedureMetaKeys::QUESTIONS ]     = $preguntas['questions'];
+			$meta[ ProcedureMetaKeys::QUESTIONS_SEQ ] = $preguntas['seq'];
+		}
+		if ( array_key_exists( ProcedureMetaKeys::PEOPLE_SPEC, $source ) ) {
+			$meta[ ProcedureMetaKeys::PEOPLE_SPEC ] = self::people_spec( $source[ ProcedureMetaKeys::PEOPLE_SPEC ] );
+		}
+		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
+			$meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $preguntas['map'] );
+		}
+
+		$js = $source[ ProcedureMetaKeys::CUSTOM_JS ] ?? '';
+		$js = is_string( $js ) ? $js : '';
+		if ( $with_js && '' !== $js ) {
+			$meta[ ProcedureMetaKeys::CUSTOM_JS ] = $js;
+		}
+
+		return array(
+			'meta'    => $meta,
+			'js_left' => ! $with_js && '' !== trim( $js ),
+			'undated' => $preguntas['undated'],
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function questions( $raw ): array {
+		$out     = array();
+		$map     = array();
+		$undated = array();
+		foreach ( ProcedureQuestions::sanitize( $raw ) as $i => $pregunta ) {
+			$antes           = (string) $pregunta['key'];
+			$pregunta['key'] = 'q' . ( $i + 1 );
+			$map[ $antes ]   = $pregunta['key'];
+			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
+				$pregunta['opens_at']  = '';
+				$pregunta['closes_at'] = '';
+				$undated[]             = (string) $pregunta['label'];
+			}
+			if ( ProcedureQuestions::TYPE_GRID === $pregunta['type'] ) {
+				$filas               = self::renumber( (array) $pregunta['rows'], 'r' );
+				$pregunta['rows']    = $filas['items'];
+				$pregunta['row_seq'] = count( $filas['items'] );
+				foreach ( $filas['map'] as $fila => $nueva ) {
+					$map[ $antes . ':' . $fila ] = $pregunta['key'] . ':' . $nueva;
+				}
+			}
+			$out[] = $pregunta;
+		}
+		return array(
+			'questions' => $out,
+			'seq'       => count( $out ),
+			'map'       => $map,
+			'undated'   => $undated,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function people_spec( $raw ): array {
+		$spec   = PeopleSpec::sanitize( $raw );
+		$roles  = self::renumber( $spec['roles'], 'r' );
+		$groups = self::renumber( $spec['groups'], 'g' );
+
+		$spec['roles']     = $roles['items'];
+		$spec['role_seq']  = count( $roles['items'] );
+		$spec['groups']    = $groups['items'];
+		$spec['group_seq'] = count( $groups['items'] );
+		$spec['opens_at']  = '';
+		$spec['closes_at'] = '';
+		return $spec;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function observer_columns( $raw, array $map ): array {
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $columna ) {
+			$columna = is_string( $columna ) ? $columna : '';
+			if ( preg_match( '/^q\d+(:r\d+)?$/', $columna ) ) {
+				$columna = $map[ $columna ] ?? '';
+			}
+			if ( '' !== $columna && ! in_array( $columna, $out, true ) ) {
+				$out[] = $columna;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function renumber( array $items, string $prefix ): array {
+		$out = array();
+		$map = array();
+		foreach ( array_values( $items ) as $i => $item ) {
+			$nueva                        = $prefix . ( $i + 1 );
+			$map[ (string) $item['key'] ] = $nueva;
+			$item['key']                  = $nueva;
+			$out[]                        = $item;
+		}
+		return array(
+			'items' => $out,
+			'map'   => $map,
+		);
 	}
 }
 

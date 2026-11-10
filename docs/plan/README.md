@@ -24,6 +24,7 @@ golpe.
 |----|--------|--------|
 | [PLAN-0001](PLAN-0001-implantacion-por-fases.md) | Implantación por fases del aplicativo de procedimientos | Propuesta |
 | [PLAN-0002](PLAN-0002-continuar-el-esqueleto.md) | Continuar el esqueleto: dónde está el trabajo y cómo seguir | Propuesta |
+| [PLAN-0003](PLAN-0003-lo-que-falta-para-sustituir-al-sistema-anterior.md) | Lo que falta para sustituir al sistema anterior: nueve PR apilados | Propuesta |
 
 Los pendientes vigentes se mantienen en la §9 del plan y en la sección
 *Pendientes y trabajo futuro* de

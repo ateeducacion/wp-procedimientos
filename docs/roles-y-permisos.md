@@ -183,7 +183,7 @@ coincide con `prc_centre_code` de la solicitud.
 | Crear, editar, publicar, despublicar, enviar a la papelera | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | Que **no** esté archivado |
 | Marcar como histórico | Los mismos | Con confirmación: no hay vuelta atrás sin administración |
 | Desarchivar | Solo `prc_manage_app` | — |
-| Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; titularidad del centro admitida; sin solicitud previa del centro (si la hay, se edita esa) |
+| Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa) |
 | Editar su solicitud | `prc_apply` de **ese** centro | Procedimiento `open`; o `amendment` **y** la solicitud en `amend` |
 | Ver su solicitud y la nota de revisión | `prc_apply` de ese centro | Siempre |
 | Ver las solicitudes de un procedimiento | `prc_review_applications` en su ámbito, o `prc_manage_all_areas` | Que el procedimiento no esté archivado |
@@ -251,7 +251,7 @@ la meta que hoy escribe su inicio de sesión**, sin migrar nada.
 | Pieza | Dónde |
 |---|---|
 | Código de centro de la persona | meta de usuario, clave por `prc_centre_code_meta_key` |
-| Nombre y titularidad del centro | `CentreCatalog::find( $code )`, por el filtro `prc_centres` ([ADR-0017](adr/ADR-0017-el-catalogo-de-centros-no-se-versiona.md)) |
+| Nombre, titularidad, tipo, isla y zona del centro | `CentreCatalog::find( $code )`, por el filtro `prc_centres` ([ADR-0017](adr/ADR-0017-el-catalogo-de-centros-no-se-versiona.md)); la titularidad, derivada del tipo si no viene escrita (ADR-0042) |
 | Centro de la solicitud | metas `prc_centre_code` y `prc_centre_name` (foto en el momento de solicitar) |
 | Quién escribe el campo de la ficha | solo `prc_manage_app` o `edit_users` |
 
@@ -262,9 +262,12 @@ Cuatro reglas:
    formulario.
 2. **El centro no se teclea.** En la solicitud, código y nombre son de solo
    lectura; vienen de la cuenta.
-3. **Un centro que no está en el catálogo solicita igual**, con el código y el
-   nombre vacío, y quien gestiona lo ve marcado. No se bloquea, porque el
-   catálogo puede ir por detrás de la realidad.
+3. **Un centro que no está en el catálogo solicita igual a un procedimiento
+   sin acotados**, con el código y el nombre vacío, y quien gestiona lo ve
+   marcado, porque el catálogo puede ir por detrás de la realidad. Si el
+   procedimiento acota por titularidad, tipo de centro, isla o lista cerrada
+   de códigos, no: no se puede comprobar que cumpla, y la pantalla lo dice
+   ([ADR-0042](adr/ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)).
 4. **La solicitud es del centro, no de la persona.** Dos cuentas con el mismo
    código de centro editan la misma solicitud; quien la presentó es
    `post_author` y sirve para los correos y para las peticiones de acceso.

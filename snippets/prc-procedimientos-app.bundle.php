@@ -18880,6 +18880,29 @@ final class App {
 .prc-revision[open] .prc-revision__abrir { margin-bottom: 8px; }
 
 .prc-revision__form { min-width: 16rem; }
+
+/* El diálogo de exportar (ADR-0039). Sin guion es un desplegable con el
+   formulario dentro; con guion, `prc-app.js` mete el formulario en un
+   `.prc-dialogo` y estas reglas valen igual en los dos sitios. */
+.prc-exportar { margin: 0; }
+.prc-exportar > summary { list-style: none; cursor: pointer; }
+.prc-exportar > summary::-webkit-details-marker { display: none; }
+.prc-exportar[open] > .prc-exportar__form {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--prc-linea);
+  border-radius: var(--prc-r);
+  background: var(--prc-sup);
+}
+.prc-exportar__titulo { margin: 0 0 12px; font-size: 18px; }
+.prc-exportar__grupo,
+.prc-exportar__columnas { margin: 0 0 12px; padding: 0; border: 0; min-width: 0; }
+.prc-exportar__grupo > legend,
+.prc-exportar__columnas > legend { margin-bottom: 4px; font-weight: 700; font-size: 14px; }
+.prc-exportar__columnas { display: flex; flex-wrap: wrap; gap: 2px 16px; }
+.prc-exportar__columnas > legend { flex-basis: 100%; font-weight: 600; color: var(--prc-c-medio); }
+.prc-exportar .prc-casilla { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; font-size: 14px; }
+.prc-dialogo--exportar[open] { width: min(720px, calc(100vw - 32px)); }
 .prc-revision__form .prc-btn.prc-envio { margin: 10px 0 0; }
 
 .prc-respuestas {
@@ -21412,10 +21435,10 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   'js/prc-app.js' => '/*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.
  *
- * Cuatro cosas, y las cuatro son mejora sobre algo que ya funciona sin ellas:
- * si el guion no llega, el formulario se envía igual, el aviso del bloqueo ya
- * viene pintado desde el servidor, el `title` del botón sigue ahí y el botón
- * de publicar hace lo mismo que el interruptor. Nada aquí valida ni autoriza:
+ * Todo es mejora sobre algo que ya funciona sin ellas: si el guion no llega,
+ * el formulario se envía igual, el aviso del bloqueo ya viene pintado desde
+ * el servidor, el `title` del botón sigue ahí, el botón de publicar hace lo
+ * mismo que el interruptor y el diálogo de exportar es un desplegable. Nada aquí valida ni autoriza:
  * eso está en el servidor, con su nonce y su comprobación de ProcedureAccess.
  *
  * Delegado en `document`: las pantallas repintan trozos y un `addEventListener`
@@ -21704,6 +21727,115 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 		Array.prototype.forEach.call( botones, function ( boton ) {
 			boton.hidden = true;
 		} );
+	} );
+
+	/* --- 6. El diálogo de exportar --------------------------------------- */
+
+	/*
+	 * `data-prc-export` en un `<details>` con el formulario dentro: sin guion
+	 * se despliega y se envía igual, y «Todas las columnas» es un campo que
+	 * lee el servidor. Con guion, el formulario pasa a un `<dialog>` modal que
+	 * abre el mismo botón; «Todas» marca y desmarca las casillas, y solo se
+	 * ve lo del formato elegido. Nada se desactiva: lo escondido viaja igual y
+	 * el servidor recuerda la elección entera (ADR-0039).
+	 */
+	function abrirDialogo( dialogo ) {
+		if ( dialogo.showModal ) {
+			dialogo.showModal();
+		} else {
+			dialogo.setAttribute( \'open\', \'\' );
+		}
+	}
+
+	function cerrarDialogo( dialogo ) {
+		if ( dialogo.close ) {
+			dialogo.close();
+		} else {
+			dialogo.removeAttribute( \'open\' );
+		}
+	}
+
+	function formatoElegido( form ) {
+		var marcado = form.querySelector( \'[data-prc-export-format]:checked\' );
+		Array.prototype.forEach.call( form.querySelectorAll( \'[data-prc-export-for]\' ), function ( caja ) {
+			caja.hidden = !! marcado && caja.getAttribute( \'data-prc-export-for\' ) !== marcado.value;
+		} );
+	}
+
+	function prepararExportar( caja ) {
+		var form = caja.querySelector( \'form\' );
+		if ( ! form || caja.dataset.prcDialog ) {
+			return;
+		}
+		var dialogo = document.createElement( \'dialog\' );
+		dialogo.className = \'prc-dialogo prc-dialogo--exportar\';
+		dialogo.id = \'prc-exportar-dialogo-\' + document.querySelectorAll( \'.prc-dialogo--exportar\' ).length;
+		var titulo = form.getAttribute( \'aria-labelledby\' );
+		if ( titulo ) {
+			dialogo.setAttribute( \'aria-labelledby\', titulo );
+		}
+		var cancelar = document.createElement( \'button\' );
+		cancelar.type = \'button\';
+		cancelar.className = \'prc-btn btn btn-light\';
+		cancelar.textContent = \'Cancelar\';
+		cancelar.setAttribute( \'data-prc-export-close\', \'\' );
+		var acciones = form.querySelector( \'.prc-acciones\' ) || form;
+		acciones.appendChild( cancelar );
+
+		dialogo.appendChild( form );
+		caja.parentNode.insertBefore( dialogo, caja.nextSibling );
+		caja.open = false;
+		caja.dataset.prcDialog = dialogo.id;
+		formatoElegido( form );
+	}
+
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-export]\' ), prepararExportar );
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		var resumen = e.target.closest ? e.target.closest( \'[data-prc-export] > summary\' ) : null;
+		var dialogo = resumen ? document.getElementById( resumen.parentNode.dataset.prcDialog || \'\' ) : null;
+		if ( dialogo ) {
+			e.preventDefault();
+			abrirDialogo( dialogo );
+			return;
+		}
+		var cerrar = e.target.closest ? e.target.closest( \'[data-prc-export-close]\' ) : null;
+		if ( cerrar && cerrar.closest( \'dialog\' ) ) {
+			cerrarDialogo( cerrar.closest( \'dialog\' ) );
+		}
+	} );
+
+	document.addEventListener( \'change\', function ( e ) {
+		var form = e.target.closest ? e.target.closest( \'.prc-exportar__form\' ) : null;
+		if ( ! form ) {
+			return;
+		}
+		var columnas = form.querySelectorAll( \'[data-prc-export-col]\' );
+		var todas = form.querySelector( \'[data-prc-export-all]\' );
+		if ( e.target.hasAttribute( \'data-prc-export-all\' ) ) {
+			Array.prototype.forEach.call( columnas, function ( casilla ) {
+				casilla.checked = e.target.checked;
+			} );
+		} else if ( e.target.hasAttribute( \'data-prc-export-col\' ) && todas ) {
+			todas.checked = Array.prototype.every.call( columnas, function ( casilla ) {
+				return casilla.checked;
+			} );
+		} else if ( e.target.hasAttribute( \'data-prc-export-format\' ) ) {
+			formatoElegido( form );
+		}
+	} );
+
+	// La descarga es la respuesta del envío: la página no cambia, así que el
+	// diálogo se cierra a mano, después de que el envío haya salido.
+	document.addEventListener( \'submit\', function ( e ) {
+		var dialogo = e.target.closest ? e.target.closest( \'.prc-dialogo--exportar\' ) : null;
+		if ( dialogo && ! e.defaultPrevented ) {
+			window.setTimeout( function () {
+				cerrarDialogo( dialogo );
+			}, 0 );
+		}
 	} );
 }() );
 ',

@@ -329,6 +329,18 @@
 		} );
 	}
 
+	/*
+	 * Con un filtro en la tabla, el diálogo cuenta quién sale en el fichero
+	 * de usuarios para «las del filtro» y para «todas»; sin guion se leen las
+	 * dos, con su rótulo. Con guion, solo la de la opción elegida.
+	 */
+	function ambitoElegido( form ) {
+		var marcado = form.querySelector( '[data-prc-export-scope]:checked' );
+		Array.prototype.forEach.call( form.querySelectorAll( '[data-prc-export-scope-count]' ), function ( cifra ) {
+			cifra.hidden = !! marcado && cifra.getAttribute( 'data-prc-export-scope-count' ) !== marcado.value;
+		} );
+	}
+
 	function prepararExportar( caja ) {
 		var form = caja.querySelector( 'form' );
 		var resumen = caja.querySelector( 'summary' );
@@ -365,6 +377,7 @@
 		caja.hidden = true;
 		caja.dataset.prcDialog = dialogo.id;
 		formatoElegido( form );
+		ambitoElegido( form );
 	}
 
 	document.addEventListener( 'DOMContentLoaded', function () {
@@ -401,6 +414,8 @@
 			} );
 		} else if ( e.target.hasAttribute( 'data-prc-export-format' ) ) {
 			formatoElegido( form );
+		} else if ( e.target.hasAttribute( 'data-prc-export-scope' ) ) {
+			ambitoElegido( form );
 		}
 	} );
 

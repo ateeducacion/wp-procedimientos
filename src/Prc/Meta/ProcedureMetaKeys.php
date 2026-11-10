@@ -106,6 +106,10 @@ final class ProcedureMetaKeys {
 	// shortcut: diez personas como máximo; ampliar cuando una convocatoria necesite más.
 	public const COORDINATOR_COUNT_MAX = 10;
 
+	/** CSS and JavaScript intended for a single procedure's public page. */
+	public const CUSTOM_CSS = 'prc_custom_css';
+	public const CUSTOM_JS  = 'prc_custom_js';
+
 	/**
 	 * Las preguntas del procedimiento ({@see \Prc\Domain\ProcedureQuestions}).
 	 */
@@ -178,6 +182,8 @@ final class ProcedureMetaKeys {
 			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
 			self::COORDINATOR_COUNT,
+			self::CUSTOM_CSS,
+			self::CUSTOM_JS,
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,

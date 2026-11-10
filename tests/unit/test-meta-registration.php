@@ -109,6 +109,19 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 		$this->assertTrue( ProcedureMetaRegistration::auth_archived( false, ProcedureMetaKeys::ARCHIVED, $procedimiento, $this->administrator() ) );
 	}
 
+	/** Executable metadata is restricted to trusted procedure administrators. */
+	public function test_custom_javascript_requires_administrator_and_unfiltered_html() {
+		$area          = $this->area( 'Área de prueba' );
+		$procedimiento = $this->procedure( $this->administrator(), array( $area ) );
+		$mio           = $this->manager( array( $area ) );
+		$admin         = $this->administrator();
+
+		$this->assertFalse( ProcedureMetaRegistration::auth_custom_js( false, ProcedureMetaKeys::CUSTOM_JS, $procedimiento, $mio ) );
+		$this->assertTrue( ProcedureMetaRegistration::auth_custom_js( false, ProcedureMetaKeys::CUSTOM_JS, $procedimiento, $admin ) );
+		$this->assertSame( 'a < b', ProcedureMetaRegistration::sanitize_custom_code( 'a < b' ) );
+		$this->assertSame( '', ProcedureMetaRegistration::sanitize_custom_code( array( 'code' ) ) );
+	}
+
 	// ─── sanean lo que entra ───────────────────────────────────────────────
 
 	/**

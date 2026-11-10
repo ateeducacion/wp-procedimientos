@@ -253,6 +253,32 @@
 .prc-ambitos { margin: 0; padding-left: 1.1em; }
 .prc-ambitos li { line-height: var(--prc-i-tabla); }
 
+/* CodeMirror es una mejora progresiva del textarea nativo. */
+.prc-code { margin-bottom: 16px; }
+.prc-code > label { display: block; margin-bottom: 4px; font-weight: 600; }
+.prc-code textarea {
+  width: 100%;
+  min-height: 12rem;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+}
+.prc-code .CodeMirror {
+  height: 20rem;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.prc-code .CodeMirror-focused { outline: 2px solid var(--prc-pri); outline-offset: 2px; }
+.prc-codigo-admin h3 { margin: 0 0 4px; font-size: 1rem; }
+.prc-codigo-admin p { margin: 0; }
+
 /* En tarjetas, la fila deja de ser una rejilla: la cabecera está escondida y
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */

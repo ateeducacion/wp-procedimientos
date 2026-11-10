@@ -84,6 +84,23 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$this->assertFalse( ProcedureView::takes_over() );
 	}
 
+	/** Stored code is attached to the public assets on its published single. */
+	public function test_custom_code_is_added_only_to_the_published_procedure_page() {
+		$area = $this->area( 'Área de prueba' );
+		$id   = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array(
+				ProcedureMetaKeys::CUSTOM_CSS => 'body::before { content: "<ok>"; }',
+				ProcedureMetaKeys::CUSTOM_JS  => 'window.prcCustomCode = true;',
+			)
+		);
+		$this->go_to( (string) get_permalink( $id ) );
+		ProcedureView::enqueue_custom_code();
+		$this->assertStringContainsString( '\\3C ok>', implode( '', wp_styles()->registered['prc-app']->extra['after'] ) );
+		$this->assertStringContainsString( 'window.prcCustomCode = true;', implode( '', wp_scripts()->registered['prc-app']->extra['after'] ) );
+	}
+
 	/**
 	 * Lo que no es un procedimiento no tiene ficha: el modelo viene en blanco.
 	 */

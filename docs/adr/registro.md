@@ -78,4 +78,6 @@ versión global del aplicativo.
 | [ADR-0033](ADR-0033-los-documentos-pueden-tener-un-plazo-de-entrega-propio.md) | Los documentos pueden tener un plazo de entrega propio | Propuesta | 2026-11-06 |
 | [ADR-0034](ADR-0034-ampliar-el-cierre-de-entregas-sin-editar-las-preguntas.md) | Ampliar el cierre de entregas sin editar las preguntas | Propuesta | 2026-11-06 |
 | [ADR-0035](ADR-0035-cierre-manual-de-solicitudes-conservando-plazos.md) | Cierre manual de solicitudes sin cambiar los plazos | Propuesta | 2026-11-07 |
+| [ADR-0036](ADR-0036-codigo-adicional-por-procedimiento.md) | El código adicional se limita a la ficha pública del procedimiento | Propuesta | 2026-11-06 |
 | [ADR-0046](ADR-0046-el-bundle-protege-cada-declaracion-de-clase.md) | El bundle protege cada declaración de clase | Propuesta | 2026-11-06 |
+

@@ -1084,9 +1084,15 @@ final class ProcedureEditor {
 	private static function export_request(): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
 		$listas = array();
-		foreach ( array( self::FIELD_EXPORT_COLUMNS, self::FIELD_EXPORT_WHO ) as $campo ) {
-			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cada clave pasa por sanitize_key() justo abajo.
-			$listas[ $campo ] = is_array( $valor ) ? array_map( 'sanitize_key', array_filter( $valor, 'is_string' ) ) : array();
+		// Las columnas, con `sanitize_text_field()` y no `sanitize_key()`: la de
+		// una fila de rejilla lleva dos puntos (`q4:r1`, ADR-0040). Lo que no
+		// sea exactamente una columna lo descarta ApplicationExport.
+		foreach ( array(
+			self::FIELD_EXPORT_COLUMNS => 'sanitize_text_field',
+			self::FIELD_EXPORT_WHO     => 'sanitize_key',
+		) as $campo => $limpia ) {
+			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cada clave pasa por su saneado justo abajo.
+			$listas[ $campo ] = is_array( $valor ) ? array_map( $limpia, array_filter( $valor, 'is_string' ) ) : array();
 		}
 		$todas = ! empty( $_POST[ self::FIELD_EXPORT_ALL ] );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing

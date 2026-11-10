@@ -11,6 +11,8 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
+use Prc\Domain\QuestionPoints;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
@@ -566,7 +568,9 @@ final class Applications {
 	 *
 	 * Las fijas y, detrás, una por pregunta del procedimiento: la clave es la
 	 * `key` de la pregunta, así que reescribir un rótulo mueve la cabecera y
-	 * no descoloca ni un dato (ADR-0019).
+	 * no descoloca ni un dato (ADR-0019). Si alguna pregunta da puntos, la
+	 * columna calculada `score` va tras la nota (ADR-0040). Una rejilla es
+	 * aquí una columna; la exportación la abre en una por fila.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
 	 * @return array<string, string> clave => rótulo.
@@ -585,6 +589,9 @@ final class Applications {
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
 		);
+		if ( QuestionPoints::has_points( $questions ) ) {
+			$out['score'] = 'Puntos';
+		}
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -615,7 +622,7 @@ final class Applications {
 	 *
 	 * @param \WP_Post                         $application The application.
 	 * @param array<int, array<string, mixed>> $questions   Normalised questions of its procedure.
-	 * @return array<string, mixed> Columns as strings, plus {@see KEY_FILES}, which is not one.
+	 * @return array<string, mixed> Columns as strings —each grid row too, as `q4:r1`—, plus {@see KEY_FILES}, which is not one.
 	 */
 	public static function row( \WP_Post $application, array $questions ): array {
 		$meta   = self::meta( (int) $application->ID );
@@ -645,6 +652,10 @@ final class Applications {
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la
 		// meta bajo su clave: solo salen las preguntas que hoy tiene el procedimiento.
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
+		$puntos     = QuestionPoints::score( $questions, $respuestas );
+		if ( null !== $puntos ) {
+			$fila['score'] = (string) $puntos;
+		}
 		$documentos = ApplicationFiles::descriptors( (int) $application->ID );
 		$adjuntos   = array();
 		foreach ( $questions as $pregunta ) {
@@ -666,6 +677,7 @@ final class Applications {
 				continue;
 			}
 			$fila[ $key ] = ProcedureQuestions::as_text( $pregunta, $respuestas[ $key ] ?? null );
+			$fila        += QuestionGrid::cells( $pregunta, $respuestas[ $key ] ?? null );
 		}
 		$fila[ self::KEY_FILES ] = $adjuntos;
 		return $fila;

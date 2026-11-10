@@ -7405,6 +7405,8 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
+use Prc\Domain\QuestionPoints;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
@@ -7966,6 +7968,8 @@ final class Applications {
 
 
 
+
+
 	public static function columns( array $questions ): array {
 		$out = array(
 			'centre'            => 'Centro',
@@ -7980,6 +7984,9 @@ final class Applications {
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
 		);
+		if ( QuestionPoints::has_points( $questions ) ) {
+			$out['score'] = 'Puntos';
+		}
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -8040,6 +8047,10 @@ final class Applications {
 
 
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
+		$puntos     = QuestionPoints::score( $questions, $respuestas );
+		if ( null !== $puntos ) {
+			$fila['score'] = (string) $puntos;
+		}
 		$documentos = ApplicationFiles::descriptors( (int) $application->ID );
 		$adjuntos   = array();
 		foreach ( $questions as $pregunta ) {
@@ -8061,6 +8072,7 @@ final class Applications {
 				continue;
 			}
 			$fila[ $key ] = ProcedureQuestions::as_text( $pregunta, $respuestas[ $key ] ?? null );
+			$fila        += QuestionGrid::cells( $pregunta, $respuestas[ $key ] ?? null );
 		}
 		$fila[ self::KEY_FILES ] = $adjuntos;
 		return $fila;
@@ -8911,6 +8923,7 @@ final class ApplicationFiles {
 namespace Prc\PublicFront;
 
 use Prc\Domain\ProcedureInput;
+use Prc\Domain\QuestionGrid;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
@@ -8970,7 +8983,7 @@ final class ApplicationExport {
 		'centre'       => array( 'centre', 'code' ),
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
-		'review'       => array( 'state', 'note' ),
+		'review'       => array( 'state', 'note', 'score' ),
 	);
 
 
@@ -9025,16 +9038,37 @@ final class ApplicationExport {
 
 
 
+
 	public static function groups( int $procedure_id ): array {
-		$preguntas = Applications::questions( $procedure_id );
-		$todas     = Applications::columns( $preguntas );
-		$out       = array();
+		$todas = self::columns( Applications::questions( $procedure_id ) );
+		$out   = array();
+		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
+			$fijas        += $out[ $grupo ];
 		}
-		$out['questions'] = array();
-		foreach ( $preguntas as $pregunta ) {
-			$out['questions'][ (string) $pregunta['key'] ] = (string) $pregunta['label'];
+		$out['questions'] = array_diff_key( $todas, $fijas );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function columns( array $questions ): array {
+		$rejillas = array();
+		foreach ( $questions as $pregunta ) {
+			$rejillas[ (string) $pregunta['key'] ] = QuestionGrid::columns( $pregunta );
+		}
+		$out = array();
+		foreach ( Applications::columns( $questions ) as $clave => $rotulo ) {
+			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
 		}
 		return $out;
 	}
@@ -9047,7 +9081,7 @@ final class ApplicationExport {
 
 
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = Applications::columns( Applications::questions( $procedure_id ) );
+		$todas = self::columns( Applications::questions( $procedure_id ) );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -9074,7 +9108,7 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = Applications::columns( $preguntas );
+		$todas     = self::columns( $preguntas );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
 
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
@@ -15178,9 +15212,15 @@ final class ProcedureEditor {
 	private static function export_request(): array {
 
 		$listas = array();
-		foreach ( array( self::FIELD_EXPORT_COLUMNS, self::FIELD_EXPORT_WHO ) as $campo ) {
+
+
+
+		foreach ( array(
+			self::FIELD_EXPORT_COLUMNS => 'sanitize_text_field',
+			self::FIELD_EXPORT_WHO     => 'sanitize_key',
+		) as $campo => $limpia ) {
 			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array();
-			$listas[ $campo ] = is_array( $valor ) ? array_map( 'sanitize_key', array_filter( $valor, 'is_string' ) ) : array();
+			$listas[ $campo ] = is_array( $valor ) ? array_map( $limpia, array_filter( $valor, 'is_string' ) ) : array();
 		}
 		$todas = ! empty( $_POST[ self::FIELD_EXPORT_ALL ] );
 

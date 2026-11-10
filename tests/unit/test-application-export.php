@@ -896,4 +896,121 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$this->assertSame( '', get_user_meta( $dos, ApplicationExport::CHOICE_META . $procedimiento, true ) );
 		$this->assertNotSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $otro, true ), 'la de otro procedimiento se queda' );
 	}
+
+	// ─── rejilla y puntos (ADR-0040) ───────────────────────────────────────
+
+	/**
+	 * Un procedimiento con una rejilla, unos méritos con puntos y un número.
+	 *
+	 * @return int Procedure ID.
+	 */
+	private function con_tipos_nuevos(): int {
+		return $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'     => 'q1',
+						'label'   => 'Méritos',
+						'type'    => ProcedureQuestions::TYPE_MULTIPLE,
+						'choices' => "Huerto | 3\nRadio | 2\nBiblioteca",
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_NUMBER,
+					),
+					array(
+						'key'   => 'q4',
+						'label' => 'Alumnado',
+						'type'  => ProcedureQuestions::TYPE_GRID,
+						'rows'  => "Infantil\nPrimaria",
+					),
+				),
+			),
+			array( 'post_title' => 'Red de méritos' )
+		);
+	}
+
+	/**
+	 * Cada fila de una rejilla es una columna `q4:fila` en la exportación, y
+	 * los puntos, una columna calculada en el grupo de revisión.
+	 */
+	public function test_each_grid_row_is_a_column_and_the_score_is_a_review_column() {
+		$procedimiento = $this->con_tipos_nuevos();
+		$this->solicitud(
+			$procedimiento,
+			'C0001',
+			array(),
+			array(
+				'q1' => array( 'Huerto', 'Biblioteca' ),
+				'q2' => 0,
+				'q4' => array(
+					'r1' => 3,
+					'r2' => '',
+				),
+			)
+		);
+
+		$grupos = ApplicationExport::groups( $procedimiento );
+		$this->assertSame(
+			array(
+				'q1'    => 'Méritos',
+				'q2'    => 'Grupos',
+				'q4:r1' => 'Alumnado — Infantil',
+				'q4:r2' => 'Alumnado — Primaria',
+			),
+			$grupos['questions']
+		);
+		$this->assertSame( array( 'state', 'note', 'score' ), array_keys( $grupos['review'] ) );
+		$this->assertSame( 'Puntos', $grupos['review']['score'] );
+
+		$lineas = $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'score', 'q2', 'q4:r1', 'q4:r2' ) ) );
+		$this->assertSame( array( '"Código";"Puntos";"Grupos";"Alumnado — Infantil";"Alumnado — Primaria"', '"C0001";"3";"0";"3";""' ), $lineas );
+
+		$lineas = $this->lineas( ApplicationExport::csv( $procedimiento ) );
+		$this->assertStringEndsWith( ';"Nota";"Puntos";"Méritos";"Grupos";"Alumnado — Infantil";"Alumnado — Primaria"', $lineas[0], 'todas: la rejilla, por filas' );
+		$this->assertStringEndsWith( ';"";"3";"Huerto, Biblioteca";"0";"3";""', $lineas[1] );
+
+		// La tabla del taller la lleva en una sola celda.
+		$fila = Applications::rows( $procedimiento )[0];
+		$this->assertSame( 'Infantil: 3', $fila['q4'] );
+		$this->assertSame( '3', $fila['score'] );
+		$this->assertArrayHasKey( 'q4', Applications::columns( Applications::questions( $procedimiento ) ) );
+	}
+
+	/**
+	 * Las columnas de una rejilla llegan al servidor con sus dos puntos y se recuerdan.
+	 */
+	public function test_a_grid_column_survives_the_dialog() {
+		$procedimiento = $this->con_tipos_nuevos();
+		$this->solicitud( $procedimiento, 'C0001', array(), array( 'q4' => array( 'r2' => 5 ) ) );
+		$quien = $this->administrator();
+
+		$csv = $this->exportar(
+			$quien,
+			$procedimiento,
+			array(
+				ProcedureEditor::FIELD_EXPORT_COLUMNS => array( 'code', 'q4:r2' ),
+				ProcedureEditor::FIELD_EXPORT_FORMAT  => ApplicationExport::FORMAT_CSV,
+			)
+		);
+		$this->assertSame( "\xEF\xBB\xBF\"Código\";\"Alumnado — Primaria\"\r\n\"C0001\";\"5\"\r\n", $csv );
+		$this->assertSame( array( 'code', 'q4:r2' ), ApplicationExport::choice( $quien, $procedimiento )['columns'] );
+	}
+
+	/**
+	 * Sin puntos no hay columna de puntos, y el CSV de siempre no cambia ni un byte.
+	 */
+	public function test_without_points_there_is_no_score_column() {
+		$procedimiento = $this->procedimiento();
+
+		$this->assertArrayNotHasKey( 'score', Applications::columns( Applications::questions( $procedimiento ) ) );
+		$this->assertArrayNotHasKey( 'score', ApplicationExport::groups( $procedimiento )['review'] );
+		$id = $this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Ana', 'Pérez', 'ana@example.org' ) ) );
+		$this->assertArrayNotHasKey( 'score', Applications::rows( $procedimiento )[0] );
+		$this->assertStringEndsWith( '"Nota";"Observaciones";"Tiene huerto";"Modalidad"', $this->lineas( ApplicationExport::csv( $procedimiento ) )[0] );
+		$this->assertSame( 1, substr_count( ApplicationExport::csv( $procedimiento ), (string) get_the_date( 'Y-m-d H:i', $id ) ) );
+	}
 }

@@ -58,17 +58,6 @@ final class Applications {
 	 */
 	public const EXTRA_COLUMNS = array( 'internal_note' );
 
-	/**
-	 * Why a new application was not kept: another one of the same school got in first.
-	 */
-	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
-
-	/**
-	 * Why the last save did not keep anything, when it is not a plain failure.
-	 *
-	 * @var string
-	 */
-	private static $refusal = '';
 
 	// ─── leer ──────────────────────────────────────────────────────────────
 
@@ -367,8 +356,8 @@ final class Applications {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
-		$centro        = self::centre_of( $user_id, $code );
-		self::$refusal = '';
+		$centro = self::centre_of( $user_id, $code );
+		ApplicationOperations::forget_refusal();
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}
@@ -401,7 +390,7 @@ final class Applications {
 		}
 		// Una por centro (ADR-0018): si otra petición creó la suya entre la
 		// búsqueda y la escritura, se queda la más antigua y esta se borra.
-		if ( $created && self::lost_race( $id, $procedure_id, $centro['code'] ) ) {
+		if ( $created && ApplicationOperations::lost_race( $id, $procedure_id, $centro['code'] ) ) {
 			return 0;
 		}
 		// Una presentada en su nombre (PLAN-0003, PR 9) la presenta de verdad
@@ -458,54 +447,6 @@ final class Applications {
 		}
 		self::saved( $id, $created, $user_id, $antes );
 		return $id;
-	}
-
-	/**
-	 * Whether a brand new application lost the race to another of the same school.
-	 *
-	 * La unicidad es una búsqueda, no un índice (ADR-0018): dos envíos a la vez
-	 * pueden crear dos. Después de crear se vuelve a mirar, y si hay otra
-	 * publicada de ese centro con un ID más bajo, la nueva se borra para
-	 * siempre —no tiene historial ni avisos todavía— y {@see why_not_saved()}
-	 * dice por qué.
-	 *
-	 * @param int    $id           The application just created, its centre code already written.
-	 * @param int    $procedure_id Procedure post ID.
-	 * @param string $code         School code.
-	 * @return bool Whether it lost, and is gone.
-	 */
-	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
-		$ids = get_posts(
-			array(
-				'post_type'        => ApplicationPostType::POST_TYPE,
-				'post_parent'      => $procedure_id,
-				'post_status'      => 'publish',
-				'numberposts'      => 1,
-				'orderby'          => 'ID',
-				'order'            => 'ASC',
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una por centro (ADR-0018).
-				'meta_value'       => $code, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
-				'suppress_filters' => true,
-			)
-		);
-		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
-			return false;
-		}
-		wp_delete_post( $id, true );
-		self::$refusal = self::DUPLICATE;
-		return true;
-	}
-
-	/**
-	 * Why the last save kept nothing, in words: the race, or the generic text.
-	 *
-	 * @param string $generic What to say when it was a plain failure.
-	 * @return string
-	 */
-	public static function why_not_saved( string $generic ): string {
-		return '' !== self::$refusal ? self::$refusal : $generic;
 	}
 
 	/**

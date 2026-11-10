@@ -990,7 +990,7 @@ class Test_Application_Actions extends WP_UnitTestCase {
 		$sur = $this->school_head( 'C0002' );
 		$this->gemela_en_medio( $c['procedure'], $sur, 'C0002' );
 		$this->assertSame( 0, Applications::save( $c['procedure'], $sur, array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) ) );
-		$this->assertSame( Applications::DUPLICATE, Applications::why_not_saved( 'otro' ) );
+		$this->assertSame( ApplicationOperations::DUPLICATE, ApplicationOperations::why_not_saved( 'otro' ) );
 		$this->assertSame( 1, $this->de_centro( $c['procedure'], 'C0002' ) );
 
 		// Lo mismo en nombre de un centro.

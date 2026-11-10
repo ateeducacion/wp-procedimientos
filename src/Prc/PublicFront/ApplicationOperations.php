@@ -48,6 +48,18 @@ final class ApplicationOperations {
 	private static $context = null;
 
 	/**
+	 * Why a new application was not kept: another one of the same school got in first.
+	 */
+	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
+
+	/**
+	 * Why the last save did not keep anything, when it is not a plain failure.
+	 *
+	 * @var string
+	 */
+	private static $refusal = '';
+
+	/**
 	 * Hook registration.
 	 *
 	 * @return void
@@ -55,6 +67,65 @@ final class ApplicationOperations {
 	public static function register(): void {
 		add_action( 'trashed_post', array( self::class, 'on_trashed' ) );
 		add_action( 'untrashed_post', array( self::class, 'on_untrashed' ) );
+	}
+
+	// ─── una por centro ───────────────────────────────────────────────────
+
+	/**
+	 * Whether a brand new application lost the race to another of the same school.
+	 *
+	 * La unicidad es una búsqueda, no un índice (ADR-0018): dos envíos a la vez
+	 * pueden crear dos. Después de crear se vuelve a mirar, y si hay otra
+	 * publicada de ese centro con un ID más bajo, la nueva se borra para
+	 * siempre —no tiene historial ni avisos todavía— y {@see why_not_saved()}
+	 * dice por qué.
+	 *
+	 * @param int    $id           The application just created, its centre code already written.
+	 * @param int    $procedure_id Procedure post ID.
+	 * @param string $code         School code.
+	 * @return bool Whether it lost, and is gone.
+	 */
+	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'orderby'          => 'ID',
+				'order'            => 'ASC',
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una por centro (ADR-0018).
+				'meta_value'       => $code, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
+				'suppress_filters' => true,
+			)
+		);
+		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
+			return false;
+		}
+		wp_delete_post( $id, true );
+		self::$refusal = self::DUPLICATE;
+		return true;
+	}
+
+	/**
+	 * Why the last save kept nothing, in words: the race, or the generic text.
+	 *
+	 * @param string $generic What to say when it was a plain failure.
+	 * @return string
+	 */
+	public static function why_not_saved( string $generic ): string {
+		return '' !== self::$refusal ? self::$refusal : $generic;
+	}
+
+	/**
+	 * Forget why the last save kept nothing: a new save starts clean.
+	 *
+	 * @return void
+	 */
+	public static function forget_refusal(): void {
+		self::$refusal = '';
 	}
 
 	// ─── retirar y restaurar ───────────────────────────────────────────────
@@ -317,7 +388,7 @@ final class ApplicationOperations {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
 		// Una por centro: si el centro presentó la suya entretanto, gana la suya.
-		if ( Applications::lost_race( $id, $procedure_id, $codigo ) ) {
+		if ( self::lost_race( $id, $procedure_id, $codigo ) ) {
 			return 0;
 		}
 

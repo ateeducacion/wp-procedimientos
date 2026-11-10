@@ -836,8 +836,8 @@ acotada para la consulta de solo lectura):
 - `PeopleSpec::application_editable( string $state, string $review, bool $late = false )`
   y el contexto `late` de `PeopleSpec::why_closed()`: la prórroga abre la
   lista de personas que sigue el plazo de la solicitud.
-- `Applications::lost_race( int $id, int $procedure_id, string $code ): bool`,
-  `::why_not_saved( string $generic ): string` y `Applications::DUPLICATE`:
+- `ApplicationOperations::lost_race( int $id, int $procedure_id, string $code ): bool`,
+  `::why_not_saved( string $generic ): string` y `ApplicationOperations::DUPLICATE`:
   una por centro también con dos altas a la vez.
 - `ApplicationCompleteness::reasons( …, bool $pending = false )`: «Pendiente de
   que el centro la complete»; `ApplicationQuery` lee `prc_created_by` en el

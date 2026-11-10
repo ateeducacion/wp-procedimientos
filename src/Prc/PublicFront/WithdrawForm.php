@@ -133,15 +133,4 @@ final class WithdrawForm {
 			'nonce_action' => self::nonce_action( $id ),
 		);
 	}
-
-	/**
-	 * Where «Mi centro» sends whoever wants to withdraw one application; empty when they may not.
-	 *
-	 * @param int    $application_id Application ID.
-	 * @param string $url            URL of the application screen.
-	 * @return string
-	 */
-	public static function link( int $application_id, string $url ): string {
-		return '' !== $url && ApplicationActions::can_withdraw( get_current_user_id(), $application_id ) ? $url . '#' . self::ANCHOR : '';
-	}
 }

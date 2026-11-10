@@ -11,6 +11,8 @@ use Prc\Access\CentreScope;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -188,14 +190,31 @@ final class Applications {
 	 * What a procedure asks of a school, in the shape ApplicationInput wants.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
+	 * @return array{coordinator_count:int, requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
 	 */
 	public static function spec( int $procedure_id ): array {
 		return array(
-			'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
+			'coordinator_count'    => self::coordinator_count( $procedure_id ),
+			'requires_coordinator' => self::coordinator_count( $procedure_id ) > 0,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
+	}
+
+	/**
+	 * Number of coordinators requested, including procedures saved before the count field existed.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return int
+	 */
+	public static function coordinator_count( int $procedure_id ): int {
+		if ( $procedure_id <= 0 ) {
+			return 0;
+		}
+		$count = metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT )
+			? get_post_meta( $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT, true )
+			: ( ! empty( get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ) ? 1 : 0 );
+		return ProcedureMetaRegistration::sanitize_coordinator_count( $count );
 	}
 
 	/**
@@ -407,6 +426,7 @@ final class Applications {
 			'email'             => 'Correo',
 			'position'          => 'Cargo',
 			'coordinator'       => 'Coordinación',
+			'coordinator_dni'   => 'DNI o NIE de coordinación',
 			'coordinator_email' => 'Correo de coordinación',
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
@@ -445,7 +465,7 @@ final class Applications {
 	public static function row( \WP_Post $application, array $questions ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
-		$coord  = (array) $meta[ ApplicationMetaKeys::COORDINATOR ];
+		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
 		$fila = array(
@@ -461,8 +481,9 @@ final class Applications {
 			'applicant'         => false !== $autor ? (string) $autor->display_name : '',
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'       => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator_dni'   => implode( ', ', array_filter( array_column( $coord, 'dni' ) ) ),
+			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);

@@ -32,7 +32,13 @@ final class ProcedureInput {
 	 * @return array{ok:bool, errors:string[], data:array<string, mixed>}
 	 */
 	public static function validate( array $raw ): array {
-		$errors = array();
+		$errors                = array();
+		$raw_coordinator_count = $raw['coordinator_count'] ?? ( ! empty( $raw['requires_coordinator'] ) ? 1 : 0 );
+		$coordinator_count     = is_scalar( $raw_coordinator_count ) && false !== filter_var( $raw_coordinator_count, FILTER_VALIDATE_INT ) ? (int) $raw_coordinator_count : -1;
+		if ( $coordinator_count < 0 || $coordinator_count > ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) {
+			$errors[]          = 'coordinator_count';
+			$coordinator_count = 0;
+		}
 
 		$title        = self::text( $raw, 'title' );
 		$description  = self::text( $raw, 'description' );
@@ -139,7 +145,8 @@ final class ProcedureInput {
 					'audience'             => $audience,
 					'ownership'            => $ownership,
 					'centre_kinds'         => $kinds,
-					'requires_coordinator' => ! empty( $raw['requires_coordinator'] ),
+					'coordinator_count'    => $coordinator_count,
+					'requires_coordinator' => $coordinator_count > 0,
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
 				$urls
@@ -173,6 +180,7 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
 			'centre_kinds'         => 'con qué códigos se solicita: centros, agrupaciones de escuelas rurales o las dos',
+			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
 		$faltan = array();

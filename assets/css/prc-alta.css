@@ -112,6 +112,19 @@
   color: var(--prc-c-fuerte);
 }
 
+/* «Sí, varias personas: [5]»: el número va en la misma línea que su radio. */
+.prc-form.prc-form--taller .prc-opcion--varias {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prc-form.prc-form--taller .prc-opcion--varias .prc-control {
+  width: auto;
+  min-width: 4.5rem;
+}
+
 /* --- la banda de sección ------------------------------------------------
    Beige macizo, 18px en negrita y en mayúsculas por CSS (escritas, un lector
    de pantalla las deletrea), con filete de 2px solo arriba. */

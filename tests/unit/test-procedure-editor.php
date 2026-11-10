@@ -343,13 +343,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				$area,
 				$curso,
 				array(
-					ProcedureEditor::FIELD_TITLE       => 'Red de prueba 2027',
-					ProcedureMetaKeys::AMEND_OPENS_AT  => $this->dia( '+29 days' ),
-					ProcedureMetaKeys::AMEND_CLOSES_AT => $this->dia( '+34 days' ),
-					ProcedureMetaKeys::CONTACT_EMAILS  => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
-					ProcedureMetaKeys::REQUIRES_COORDINATOR => '1',
-					ProcedureMetaKeys::COMMITMENTS     => 'El centro se compromete.',
-					ProcedureMetaKeys::OWNERSHIP       => array( 'public', 'private', 'inventada' ),
+					ProcedureEditor::FIELD_TITLE         => 'Red de prueba 2027',
+					ProcedureMetaKeys::AMEND_OPENS_AT    => $this->dia( '+29 days' ),
+					ProcedureMetaKeys::AMEND_CLOSES_AT   => $this->dia( '+34 days' ),
+					ProcedureMetaKeys::CONTACT_EMAILS    => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
+					ProcedureMetaKeys::COORDINATOR_COUNT => '2',
+					ProcedureMetaKeys::COMMITMENTS       => 'El centro se compromete.',
+					ProcedureMetaKeys::OWNERSHIP         => array( 'public', 'private', 'inventada' ),
 				)
 			)
 		);
@@ -366,7 +366,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			get_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 			'tres campos, dos escritos'
 		);
-		$this->assertTrue( (bool) get_post_meta( $procedimiento, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) );
+		$this->assertSame( 2, (int) get_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 		$this->assertSame( 'El centro se compromete.', get_post_meta( $procedimiento, ProcedureMetaKeys::COMMITMENTS, true ) );
 		$this->assertSame( array( 'public', 'private' ), get_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, true ), 'solo la lista cerrada' );
 	}
@@ -443,6 +443,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
+		$this->assertStringNotContainsString( '¿Pide la solicitud personas coordinadoras?', $html, 'la configuración de la solicitud aparece en el taller después del alta' );
 		foreach ( ProcedureMetaKeys::audiences() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
@@ -500,6 +501,106 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureMetaKeys::AUDIENCE_TEACHERS, get_post_meta( $id, ProcedureMetaKeys::AUDIENCE, true ) );
 		$this->assertSame( array( 'uno@example.org', 'tres@example.org' ), get_post_meta( $id, ProcedureMetaKeys::CONTACT_EMAILS, true ) );
 		$this->assertSame( 'granate', get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) );
+	}
+
+	/**
+	 * La coordinación se pregunta en tres casos —ninguna, una o varias— y el
+	 * número va dentro de la opción «varias».
+	 *
+	 * Es la misma meta de siempre: el formulario no guarda el caso, guarda
+	 * cuántas. Así lo que ya estaba escrito como cero o uno se sigue leyendo.
+	 */
+	public function test_the_coordinator_question_offers_none_one_or_several() {
+		list( , $uid, $id ) = $this->mio( array( ProcedureMetaKeys::COORDINATOR_COUNT => 5 ) );
+		$this->acting_as( $uid );
+
+		$html = ProcedureEditorView::html( $this->modelo( $id ) );
+
+		$this->assertStringContainsString( '¿Pide la solicitud personas coordinadoras?', $html );
+		$this->assertStringContainsString( 'No se piden', $html );
+		$this->assertStringContainsString( 'Sí, una persona', $html );
+		$this->assertStringContainsString( 'Sí, varias personas:', $html );
+		foreach ( array( 'none', 'one', 'several' ) as $tipo ) {
+			$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_COORDINATOR_KIND . '" value="' . $tipo . '"', $html );
+		}
+		$this->assertMatchesRegularExpression( '/value="several"\s+checked/', $html );
+		$this->assertStringContainsString( 'id="prc-coordinator-count"', $html );
+		$this->assertMatchesRegularExpression( '/value="5"\s+selected/', $html );
+	}
+
+	/**
+	 * El radio manda sobre el número: «ninguna» y «una» no dependen de lo que
+	 * quede en el desplegable, y «varias» nunca guarda menos de dos.
+	 */
+	public function test_the_coordinator_radio_decides_the_number_that_is_saved() {
+		list( $area, $uid, $id ) = $this->mio();
+		$curso                   = $this->course( '2027-2028' );
+
+		$this->assertNotNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_DATA,
+				$id,
+				0,
+				$this->datos(
+					$area,
+					$curso,
+					array(
+						ProcedureEditor::FIELD_COORDINATOR_KIND => 'several',
+						ProcedureMetaKeys::COORDINATOR_COUNT    => '6',
+					)
+				)
+			)
+		);
+		$this->assertSame( 6, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'one',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '6',
+				)
+			)
+		);
+		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'none',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '6',
+				)
+			)
+		);
+		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'several',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '1',
+				)
+			)
+		);
+		$this->assertSame( 2, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ), 'varias no puede quedarse en una' );
 	}
 
 	/**

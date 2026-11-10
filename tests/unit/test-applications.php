@@ -285,6 +285,7 @@ class Test_Applications extends WP_UnitTestCase {
 			array(
 				'position'          => ApplicationMetaKeys::POSITION_HEAD,
 				'coordinator_name'  => 'Ana Pérez',
+				'coordinator_dni'   => '12345678Z',
 				'coordinator_email' => 'ana@example.org',
 				'accept'            => '1',
 				'answers'           => array( 'q1' => 'B' ),
@@ -328,6 +329,7 @@ class Test_Applications extends WP_UnitTestCase {
 				array(
 					'coordinator' => array(
 						'name'  => 'Ana Pérez',
+						'dni'   => '12345678Z',
 						'email' => 'ana@example.org',
 					),
 					'answers'     => array(
@@ -352,6 +354,8 @@ class Test_Applications extends WP_UnitTestCase {
 		$this->assertSame( 'C0001', $fila['code'] );
 		$this->assertSame( 'Dirección', $fila['position'] );
 		$this->assertSame( 'Ana Pérez', $fila['coordinator'] );
+		$this->assertSame( '12345678Z', $fila['coordinator_dni'] );
+		$this->assertSame( 'DNI o NIE de coordinación', $columnas['coordinator_dni'] );
 		$this->assertSame( 'Presentada', $fila['state'] );
 		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, $fila['state_key'] );
 		$this->assertSame( 'B', $fila['q1'] );

@@ -93,6 +93,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
+			ProcedureMetaKeys::COORDINATOR_COUNT    => array(
+				'type'     => 'integer',
+				'sanitize' => array( self::class, 'sanitize_coordinator_count' ),
+			),
 			ProcedureMetaKeys::QUESTIONS            => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
@@ -287,6 +291,17 @@ final class ProcedureMetaRegistration {
 			return in_array( strtolower( trim( $value ) ), array( '1', 'on', 'true', 'si', 'sí', 'yes' ), true );
 		}
 		return (bool) $value;
+	}
+
+	/**
+	 * Keep the requested coordinator count within the form's supported range.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public static function sanitize_coordinator_count( $value ): int {
+		$count = is_scalar( $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT ) ? (int) $value : 0;
+		return min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, max( 0, $count ) );
 	}
 
 	/**

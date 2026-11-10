@@ -858,7 +858,7 @@ final class ProcedureEditor {
 		if ( '' !== self::$rejected ) {
 			return;
 		}
-		$seq       = Applications::question_seq( $procedure_id );
+		$seq       = self::question_seq( $procedure_id, $antes );
 		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
@@ -873,6 +873,26 @@ final class ProcedureEditor {
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, $seq );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+	/**
+	 * The question counter of a procedure: the highest key it ever gave.
+	 *
+	 * Un procedimiento de antes del contador empieza por la mayor clave entre
+	 * sus preguntas y las que aparecen en las respuestas y documentos de sus
+	 * solicitudes, para no dar a una pregunta nueva la clave de una borrada
+	 * (ADR-0040).
+	 *
+	 * @param int                              $procedure_id Procedure post ID.
+	 * @param array<int, array<string, mixed>> $questions    Its questions today.
+	 * @return int
+	 */
+	private static function question_seq( int $procedure_id, array $questions ): int {
+		$claves = array_column( $questions, 'key' );
+		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
+			$claves = array_merge( $claves, array_keys( Applications::answered_keys( $procedure_id, true ) ) );
+		}
+		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
 	}
 
 	/**

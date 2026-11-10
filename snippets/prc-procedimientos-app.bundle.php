@@ -7804,44 +7804,16 @@ final class Applications {
 
 
 
-	public static function answered_keys( int $procedure_id ): array {
-		return array_fill_keys( self::stored_keys( $procedure_id, true ), true );
-	}
 
 
-
-
-
-
-
-
-
-
-
-
-	public static function question_seq( int $procedure_id ): int {
-		$claves = array_column( self::questions( $procedure_id ), 'key' );
-		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
-			$claves = array_merge( $claves, self::stored_keys( $procedure_id, false ) );
-		}
-		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
-	}
-
-
-
-
-
-
-
-
-	private static function stored_keys( int $procedure_id, bool $answered ): array {
+	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
 			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
-			$respuestas = $answered ? array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) ) : $respuestas;
-			$out        = array_merge( $out, array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) );
+			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
 		}
-		return array_map( 'strval', $out );
+		return $out;
 	}
 
 
@@ -15271,7 +15243,7 @@ final class ProcedureEditor {
 		if ( '' !== self::$rejected ) {
 			return;
 		}
-		$seq       = Applications::question_seq( $procedure_id );
+		$seq       = self::question_seq( $procedure_id, $antes );
 		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
@@ -15286,6 +15258,26 @@ final class ProcedureEditor {
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, $seq );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function question_seq( int $procedure_id, array $questions ): int {
+		$claves = array_column( $questions, 'key' );
+		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
+			$claves = array_merge( $claves, array_keys( Applications::answered_keys( $procedure_id, true ) ) );
+		}
+		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
 	}
 
 

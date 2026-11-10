@@ -230,9 +230,9 @@ copia de todo `procedure_created` y `application_received`). Con
   `::highest_key( array $keys ): int` y `::is_answer( $value ): bool`.
 - `ProcedureQuestions::sanitize( $raw, int &$seq = 0 ): array` — `$seq` es el
   contador de preguntas del procedimiento: las claves nuevas salen detrás y
-  se devuelve actualizado. Meta `prc_questions_seq` (entero, sin REST);
-  `Applications::question_seq( int $procedure_id ): int` la lee o, en un
-  procedimiento de antes, la deduce de sus preguntas y respuestas.
+  se devuelve actualizado. Meta `prc_questions_seq` (entero, sin REST); el
+  taller la lee o, en un procedimiento de antes, la deduce de sus preguntas
+  y de las claves de sus respuestas.
 - Pregunta `number`: `min`, `max` (`int|null`); `grid`: `rows`
   (`{key:'r1', label}`) y `row_seq`; `multiple` con puntos: `points`
   (`int[]`, uno por opción). Respuestas: `number` entero o `''`; `date`
@@ -249,7 +249,7 @@ copia de todo `procedure_created` y `application_received`). Con
 - `QuestionChanges::move( array $questions, string $key, string $direction ): array`,
   `::refusal( array $before, array $after, array $answered ): string` y
   `::input_errors( array $raw ): string` (puntos o rango mal escritos).
-- `Applications::answered_keys( int $procedure_id ): array<string,bool>`;
+- `Applications::answered_keys( int $procedure_id, bool $empty_too = false ): array<string,bool>`;
   columna calculada `score` en `Applications::columns()` y `row()`.
 - Operación `ProcedureEditor::OP_MOVE_QUESTION` con el campo
   `FIELD_Q_MOVE` (`q3:up`, `q3:down`); aviso `ordenadas`.

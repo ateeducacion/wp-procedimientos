@@ -248,50 +248,22 @@ final class Applications {
 	 *
 	 * Una respuesta vacía no cuenta —tampoco una rejilla con todas las filas
 	 * vacías—; un «no», sí. Un documento aportado cuenta como respuesta a su
-	 * pregunta. Es lo que decide si una pregunta puede cambiar de tipo
-	 * (ADR-0040).
-	 *
-	 * @param int $procedure_id Procedure post ID.
-	 * @return array<string, bool> Question key => true.
-	 */
-	public static function answered_keys( int $procedure_id ): array {
-		return array_fill_keys( self::stored_keys( $procedure_id, true ), true );
-	}
-
-	/**
-	 * The question counter of a procedure: the highest key it ever gave.
-	 *
-	 * Un procedimiento de antes del contador empieza por la mayor clave entre
-	 * sus preguntas y las respuestas guardadas en sus solicitudes, para no
-	 * dar a una pregunta nueva la clave de una borrada con respuestas
-	 * (ADR-0040).
-	 *
-	 * @param int $procedure_id Procedure post ID.
-	 * @return int
-	 */
-	public static function question_seq( int $procedure_id ): int {
-		$claves = array_column( self::questions( $procedure_id ), 'key' );
-		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
-			$claves = array_merge( $claves, self::stored_keys( $procedure_id, false ) );
-		}
-		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
-	}
-
-	/**
-	 * The question keys stored in the applications of a procedure: answers and documents.
+	 * pregunta. Es lo que decide si una pregunta puede cambiar de tipo, y,
+	 * con las vacías, por dónde empieza el contador de un procedimiento de
+	 * antes (ADR-0040).
 	 *
 	 * @param int  $procedure_id Procedure post ID.
-	 * @param bool $answered     Whether to leave out the empty answers.
-	 * @return string[]
+	 * @param bool $empty_too    Whether an empty answer counts too.
+	 * @return array<string, bool> Question key => true.
 	 */
-	private static function stored_keys( int $procedure_id, bool $answered ): array {
+	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
 			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
-			$respuestas = $answered ? array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) ) : $respuestas;
-			$out        = array_merge( $out, array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) );
+			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
 		}
-		return array_map( 'strval', $out );
+		return $out;
 	}
 
 	/**

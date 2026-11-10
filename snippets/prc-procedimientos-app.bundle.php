@@ -19186,10 +19186,13 @@ final class ProcedureChrome {
 
 
 
-	public static function audience_label( string $audience, array $ownership ): string {
+
+
+
+	public static function audience_label( string $audience, string $schools ): string {
 		return ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience
 			? (string) ProcedureMetaKeys::audiences()[ ProcedureMetaKeys::AUDIENCE_TEACHERS ]
-			: self::ownership_label( $ownership );
+			: $schools;
 	}
 
 
@@ -20372,7 +20375,6 @@ use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
-use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\WorkspaceView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -20762,7 +20764,8 @@ final class Workspace {
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
 
-			'ownership_label'  => ProcedureMetaKeys::AUDIENCE_SCHOOLS === $publico ? ProcedureChrome::ownership_label( (array) get_post_meta( $id, ProcedureMetaKeys::OWNERSHIP, true ) ) : '',
+
+			'ownership_label'  => ProcedureMetaKeys::AUDIENCE_SCHOOLS === $publico ? ProcedureView::who_can_apply( $id, $publico ) : '',
 			'state'            => $state,
 			'state_label'      => ProcedureState::label(
 				$state,
@@ -25200,7 +25203,8 @@ final class ProcedureEditor {
 		$m['status']         = (string) $procedimiento->post_status;
 		$m['status_label']   = self::status_label( (string) $procedimiento->post_status );
 		$m['area_names']     = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
-		$m['audience_label'] = ProcedureChrome::audience_label( (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ), (array) get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) );
+		$audiencia           = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$m['audience_label'] = ProcedureChrome::audience_label( $audiencia, ProcedureView::who_can_apply( $procedure_id, $audiencia ) );
 		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );

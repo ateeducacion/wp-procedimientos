@@ -420,13 +420,17 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PRIVATE ) ) ), array( 'post_title' => 'Solo concertados' ) );
 		$this->procedure( $quien, array( $area ), $this->abierto(), array( 'post_title' => 'De antes' ) );
 		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) ), array( 'post_title' => 'Para docentes' ) );
+		// Acotado sin una sola titularidad: la pastilla dice lo mismo que la ficha, no «Todos los centros».
+		$this->procedure( $quien, array( $area ), array_merge( $this->abierto(), array( ProcedureMetaKeys::ALLOWED_CENTRES => array( '38000001' ) ) ), array( 'post_title' => 'Lista cerrada' ) );
 
 		$this->acting_as( $quien );
 		$html = Workspace::render();
 
+		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Solo los centros de una lista cerrada</span>', $html );
+
 		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Centros privados y concertados</span>', $html );
 		$this->assertStringContainsString( '<span class="prc-state prc-state-audience">Todos los centros</span>', $html );
-		$this->assertSame( 2, substr_count( $html, 'prc-state-audience' ), 'el profesorado ya lo dice la columna: sin pastilla' );
+		$this->assertSame( 3, substr_count( $html, 'prc-state-audience' ), 'el profesorado ya lo dice la columna: sin pastilla' );
 	}
 
 	/**

@@ -604,14 +604,17 @@ final class ProcedureChrome {
 	/**
 	 * Who a procedure is for, as a short label for a chip: the listing and the workshop.
 	 *
-	 * @param string   $audience  One of ProcedureMetaKeys::audiences(); anything else counts as schools.
-	 * @param string[] $ownership Stored list, keys of ProcedureMetaKeys::ownerships().
+	 * Para centros es lo mismo que la fila «Pueden solicitar» de la ficha, con
+	 * el tipo, la isla y la lista cerrada: no solo la titularidad.
+	 *
+	 * @param string $audience One of ProcedureMetaKeys::audiences(); anything else counts as schools.
+	 * @param string $schools  Who may apply, as \Prc\PublicFront\ProcedureView::who_can_apply() writes it.
 	 * @return string
 	 */
-	public static function audience_label( string $audience, array $ownership ): string {
+	public static function audience_label( string $audience, string $schools ): string {
 		return ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience
 			? (string) ProcedureMetaKeys::audiences()[ ProcedureMetaKeys::AUDIENCE_TEACHERS ]
-			: self::ownership_label( $ownership );
+			: $schools;
 	}
 
 	/**

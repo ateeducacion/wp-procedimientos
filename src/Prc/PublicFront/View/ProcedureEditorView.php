@@ -1123,7 +1123,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<details class="prc-revision">
+		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
 			<summary class="prc-revision__abrir">Revisar</summary>
 			<dl class="prc-respuestas">
 				<dt>Presentada por</dt>

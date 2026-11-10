@@ -602,6 +602,19 @@ final class ProcedureChrome {
 	}
 
 	/**
+	 * Who a procedure is for, as a short label for a chip: the listing and the workshop.
+	 *
+	 * @param string   $audience  One of ProcedureMetaKeys::audiences(); anything else counts as schools.
+	 * @param string[] $ownership Stored list, keys of ProcedureMetaKeys::ownerships().
+	 * @return string
+	 */
+	public static function audience_label( string $audience, array $ownership ): string {
+		return ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience
+			? (string) ProcedureMetaKeys::audiences()[ ProcedureMetaKeys::AUDIENCE_TEACHERS ]
+			: self::ownership_label( $ownership );
+	}
+
+	/**
 	 * The ownerships of a procedure, written out.
 	 *
 	 * @param string[] $ownership Stored list, keys of ProcedureMetaKeys::ownerships().

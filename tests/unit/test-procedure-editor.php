@@ -213,6 +213,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_PEOPLE,
 				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_NOTICES,
+				ProcedureEditor::PANEL_OBSERVE,
 				ProcedureEditor::PANEL_CODE,
 			),
 			array_keys( $m['panels'] )

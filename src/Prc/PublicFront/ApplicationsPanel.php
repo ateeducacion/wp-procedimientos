@@ -162,7 +162,13 @@ final class ApplicationsPanel {
 			'options'    => $res['options'],
 			'zone_label' => CentreColumns::zone_label(),
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
-			'pager'      => self::pager( $procedure_id, $filtro, (int) $res['pages'] ),
+			'pager'      => self::pager(
+				static function ( array $changes ) use ( $procedure_id, $filtro ): string {
+					return self::url( $procedure_id, $filtro, array(), $changes );
+				},
+				$filtro,
+				(int) $res['pages']
+			),
 			'action'     => strtok( $base, '?' ),
 			'hidden'     => wp_parse_args( (string) wp_parse_url( $base, PHP_URL_QUERY ) ),
 			'reset_url'  => $res['active'] ? $base : '',
@@ -174,16 +180,19 @@ final class ApplicationsPanel {
 	/**
 	 * The links to the pages: the first, the last and two on each side of this one.
 	 *
-	 * @param int                  $procedure_id Procedure post ID.
-	 * @param array<string, mixed> $filter       Checked filter, with its page.
-	 * @param int                  $pages        How many pages.
-	 * @return array{prev:string, next:string, pages:array<int, string>} Page number => URL; a gap is 0 => ''.
+	 * Lo usan el panel del taller y la consulta de solo lectura: cada una da
+	 * su forma de construir la dirección de una página.
+	 *
+	 * @param callable             $url    Receives the filter changes, returns the URL.
+	 * @param array<string, mixed> $filter Checked filter, with its page.
+	 * @param int                  $pages  How many pages.
+	 * @return array{prev:string, next:string, pages:array<int, array{n:int, url:string}>} A gap is n 0 and no URL.
 	 */
-	private static function pager( int $procedure_id, array $filter, int $pages ): array {
+	public static function pager( callable $url, array $filter, int $pages ): array {
 		$actual = (int) $filter['page'];
 		$out    = array(
-			'prev'  => $actual > 1 ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual - 1 ) ) : '',
-			'next'  => $actual < $pages ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual + 1 ) ) : '',
+			'prev'  => $actual > 1 ? (string) $url( array( 'page' => $actual - 1 ) ) : '',
+			'next'  => $actual < $pages ? (string) $url( array( 'page' => $actual + 1 ) ) : '',
 			'pages' => array(),
 		);
 		$antes  = 0;
@@ -199,7 +208,7 @@ final class ApplicationsPanel {
 			}
 			$out['pages'][] = array(
 				'n'   => $n,
-				'url' => self::url( $procedure_id, $filter, array(), array( 'page' => $n ) ),
+				'url' => (string) $url( array( 'page' => $n ) ),
 			);
 			$antes          = $n;
 		}

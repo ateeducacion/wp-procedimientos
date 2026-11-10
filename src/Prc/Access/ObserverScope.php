@@ -8,6 +8,10 @@
 
 namespace Prc\Access;
 
+use Prc\Domain\CentreCatalog;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ProcedurePostType;
+
 /**
  * La zona de quien consulta: una meta de usuario con clave configurable.
  *
@@ -23,8 +27,10 @@ namespace Prc\Access;
  * zona deja de verse desde la antigua en cuanto el catálogo lo dice.
  *
  * Lo que decide quién ve qué está en {@see ProcedureAccess}; aquí solo se lee
- * la meta, se cruza con el catálogo y se nombra lo que nunca se enseña. Todo
- * salvo {@see zones_for()} y {@see meta_key()} es puro.
+ * la meta, se cruza con el catálogo, se dice si un procedimiento admite la
+ * consulta y se nombra lo que nunca se enseña. Lo que no lee la base de datos
+ * —{@see parse_zones()}, {@see codes_in()}, {@see allowed()} y
+ * {@see columns()}— es puro.
  */
 final class ObserverScope {
 
@@ -79,6 +85,55 @@ final class ObserverScope {
 			return array();
 		}
 		return self::parse_zones( get_user_meta( $user_id, $key, true ) );
+	}
+
+	/**
+	 * Whether this is a published procedure that admits consultation.
+	 *
+	 * Es un dato del procedimiento y no un permiso: quién lo consulta lo
+	 * decide {@see ProcedureAccess::can_observe()}.
+	 *
+	 * @param int $procedure_id Procedure ID.
+	 * @return bool
+	 */
+	public static function is_observable( int $procedure_id ): bool {
+		return $procedure_id > 0
+			&& ProcedurePostType::POST_TYPE === get_post_type( $procedure_id )
+			&& 'publish' === get_post_status( $procedure_id )
+			&& (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true );
+	}
+
+	/**
+	 * The accounts that observe the zone of a centre.
+	 *
+	 * Las que tienen la capacidad de consultar y, en su perfil, la zona que el
+	 * catálogo de hoy da a ese centro. Un centro fuera del catálogo no tiene
+	 * zona, y no tiene a nadie.
+	 *
+	 * @param string $code Centre code.
+	 * @return int[] User IDs.
+	 */
+	public static function observers_of( string $code ): array {
+		$zona = '' !== $code ? (string) ( CentreCatalog::find( $code )['zone'] ?? '' ) : '';
+		$meta = self::meta_key();
+		if ( '' === $zona || '' === $meta ) {
+			return array();
+		}
+		$candidatos = get_users(
+			array(
+				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
+				'fields'       => 'all_with_meta',
+				'meta_key'     => $meta, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- solo quien tiene zona en el perfil la consulta.
+				'meta_compare' => 'EXISTS',
+			)
+		);
+		$out        = array();
+		foreach ( (array) $candidatos as $user ) {
+			if ( $user instanceof \WP_User && in_array( $zona, self::zones_for( (int) $user->ID ), true ) ) {
+				$out[] = (int) $user->ID;
+			}
+		}
+		return $out;
 	}
 
 	/**

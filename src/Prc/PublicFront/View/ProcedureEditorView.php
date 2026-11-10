@@ -82,6 +82,8 @@ final class ProcedureEditorView {
 			echo self::notices_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
 			echo PeopleView::spec_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		} elseif ( ProcedureEditor::PANEL_OBSERVE === $panel ) {
+			echo ObserveView::settings( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::custom_code_panel( $m );

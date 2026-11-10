@@ -148,9 +148,11 @@ Las filas se escriben como texto, así que el taller deduce la clave de cada
 línea ([`QuestionGrid::match_rows()`](../../src/Prc/Domain/QuestionGrid.php)):
 una línea igual que una fila de antes es esa fila; una línea cambiada es la
 fila que ocupaba su misma línea —renombrar—, **solo si no se ha quitado
-ninguna línea**. Con una menos no se sabe cuál se fue, y la renombrada pasa
+ninguna línea y toda línea que se dejó igual sigue en su sitio**. Con una
+menos, o con una que se movió, no se sabe cuál se fue, y la renombrada pasa
 por nueva antes que heredar las cantidades de otra. Por eso el taller pide
-dejar en blanco la línea de la fila que se quita.
+dejar en blanco la línea de la fila que se quita. Una fila que llega como
+lista y no como una cantidad es un error, no una fila vacía.
 
 ### Puntos en «varias opciones»
 
@@ -162,6 +164,14 @@ cambiar los puntos después no toca ninguna. La pregunta normalizada guarda
 los textos en `choices` y los puntos aparte, en `points`, un entero por
 opción; sin ninguna opción con puntos, no hay `points` y la pregunta es la de
 siempre. Una sola opción (`single`) no lleva puntos.
+
+Los puntos solo se leen en el texto que escribe el taller. Una lista de
+opciones ya guardada se toma tal cual, con sus `points` si los trae: una
+opción antigua «Curso | 2024», guardada antes de esta ADR, sigue siendo ese
+texto, vale 0 y su respuesta sigue casando. Y si en el taller lo que va tras
+el último `|` parece un número pero no es un entero de 0 en adelante («B |
+-2», «C | 1.5»), el envío se rechaza con aviso en vez de guardarlo como
+texto; lo que no parece un número («A | B») es texto.
 
 Si alguna pregunta del procedimiento da puntos, la solicitud gana la columna
 **calculada** `score` («Puntos»): la suma de los puntos de las opciones
@@ -193,7 +203,19 @@ con cantidad. En la exportación es **una columna por fila**, con clave
   documento aportado, también. Cambiar el rótulo, la ayuda, las opciones o
   el rango sí se puede, mientras el estado del procedimiento deje editar las
   preguntas (ADR-0023).
-- Un número con el mínimo por encima del máximo no se guarda.
+- Un número con el mínimo por encima del máximo no se guarda; sin mínimo, el
+  mínimo es cero, así que un máximo negativo tampoco. Un mínimo o un máximo
+  que no es un entero («abc», «1,5») se rechaza con aviso.
+- **Las claves de pregunta salen de un contador que nunca baja**, la meta
+  `prc_questions_seq` del procedimiento, registrada como las demás y sin
+  REST. `ProcedureQuestions::sanitize( $raw, &$seq )` lo recibe y lo
+  devuelve actualizado. Así una pregunta nueva no hereda la clave —ni las
+  respuestas— de la última borrada, y borrar una pregunta contestada y
+  añadir otra de otro tipo en el mismo envío no se toma por un cambio de
+  tipo. En un procedimiento de antes, sin la meta, el contador empieza por
+  la mayor clave entre sus preguntas y las que aparecen en las respuestas y
+  los documentos guardados. Una rejilla con todas las filas vacías no cuenta
+  como contestada.
 
 ### Dónde vive
 
@@ -237,8 +259,8 @@ tipos nuevos en `View/MeasuredQuestionView`.
 
 - Las respuestas se siguen guardando en `prc_answers` por `key`; la meta
   conserva ahora los enteros como enteros y la rejilla por clave de fila.
-- La clave de una pregunta borrada todavía puede volver a darse a una nueva
-  si era la mayor; las filas de una rejilla ya no tienen ese problema
-  (`row_seq`). Corregirlo en las preguntas queda fuera de esta ADR.
+- Preguntas y filas siguen la misma regla: un contador que nunca baja
+  (`prc_questions_seq` para las preguntas, `row_seq` para las filas de cada
+  rejilla). Una clave borrada no vuelve a darse.
 - El navegador ayuda con `type="number"` y `type="date"`, pero quien decide
   es el servidor: sin ellos se teclea igual.

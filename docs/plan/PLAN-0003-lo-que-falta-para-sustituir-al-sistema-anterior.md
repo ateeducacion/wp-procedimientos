@@ -226,7 +226,13 @@ copia de todo `procedure_created` y `application_received`). Con
 
 **Interfaces que produce:**
 - `ProcedureQuestions::TYPE_NUMBER`, `TYPE_DATE`, `TYPE_GRID`, `MAX = 40`,
-  `MAX_ROWS = 30` y `ProcedureQuestions::integer( $value ): ?int`.
+  `MAX_ROWS = 30`, `ProcedureQuestions::integer( $value ): ?int`,
+  `::highest_key( array $keys ): int` y `::is_answer( $value ): bool`.
+- `ProcedureQuestions::sanitize( $raw, int &$seq = 0 ): array` — `$seq` es el
+  contador de preguntas del procedimiento: las claves nuevas salen detrás y
+  se devuelve actualizado. Meta `prc_questions_seq` (entero, sin REST);
+  `Applications::question_seq( int $procedure_id ): int` la lee o, en un
+  procedimiento de antes, la deduce de sus preguntas y respuestas.
 - Pregunta `number`: `min`, `max` (`int|null`); `grid`: `rows`
   (`{key:'r1', label}`) y `row_seq`; `multiple` con puntos: `points`
   (`int[]`, uno por opción). Respuestas: `number` entero o `''`; `date`
@@ -237,9 +243,12 @@ copia de todo `procedure_created` y `application_received`). Con
   `::expand( array $columns, array $questions ): array`, que abre cada
   rejilla de `Applications::columns()` en sus filas para la exportación.
 - `QuestionPoints::score( array $questions, array $answers ): ?int` —
-  `null` sin puntos; `::has_points()`, `::lines()`.
-- `QuestionChanges::move( array $questions, string $key, string $direction ): array`
-  y `::refusal( array $before, array $after, array $answered ): string`.
+  `null` sin puntos; `::has_points()`, `::lines()`, `::heading()`,
+  `::cell()`. Los puntos solo se leen en el texto del taller; una lista
+  guardada sin `points` se toma tal cual.
+- `QuestionChanges::move( array $questions, string $key, string $direction ): array`,
+  `::refusal( array $before, array $after, array $answered ): string` y
+  `::input_errors( array $raw ): string` (puntos o rango mal escritos).
 - `Applications::answered_keys( int $procedure_id ): array<string,bool>`;
   columna calculada `score` en `Applications::columns()` y `row()`.
 - Operación `ProcedureEditor::OP_MOVE_QUESTION` con el campo

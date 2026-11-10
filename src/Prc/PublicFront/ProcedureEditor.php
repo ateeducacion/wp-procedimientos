@@ -1219,12 +1219,13 @@ final class ProcedureEditor {
 	 */
 	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
 		$quienes = array();
-		foreach ( ApplicationExport::who_counts( $applications ) as $clave => $cuenta ) {
-			$quienes[ $clave ] = array( 'label' => ApplicationExport::who()[ $clave ] ) + $cuenta;
+		$fuentes = ApplicationExport::who( $procedure_id );
+		foreach ( ApplicationExport::who_counts( $applications, array_keys( $fuentes ) ) as $clave => $cuenta ) {
+			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
 		}
 		return array(
 			'groups'       => ApplicationExport::groups( $procedure_id ),
-			'group_labels' => ApplicationExport::group_labels(),
+			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
 			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
 			'who'          => $quienes,
 		);

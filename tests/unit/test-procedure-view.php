@@ -389,6 +389,38 @@ class Test_Procedure_View extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un procedimiento solo para CER dice también los acotados que les
+	 * aplican: el tipo, la isla y la lista cerrada. La titularidad no.
+	 */
+	public function test_a_procedure_only_for_rural_groups_says_its_narrowing() {
+		$area  = $this->area( 'Área de prueba' );
+		$solo  = array( ProcedureMetaKeys::CENTRE_KINDS => array( ProcedureMetaKeys::KIND_RURAL_GROUP ) );
+		$libre = $this->procedure( $this->administrator(), array( $area ), array_merge( $this->abierto(), $solo ) );
+		$isla  = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge(
+				$this->abierto(),
+				$solo,
+				array(
+					ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+					ProcedureMetaKeys::ISLANDS   => array( 'La Palma' ),
+				)
+			)
+		);
+		$lista = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array_merge( $this->abierto(), $solo, array( ProcedureMetaKeys::ALLOWED_CENTRES => array( '38000001' ) ) )
+		);
+		$this->acting_as( 0 );
+
+		$this->assertSame( 'Agrupaciones de escuelas rurales (CER), como colectivo', ProcedureView::model( $libre )['who_can_apply'] );
+		$this->assertSame( 'Agrupaciones de escuelas rurales (CER), como colectivo: centros de La Palma', ProcedureView::model( $isla )['who_can_apply'] );
+		$this->assertSame( 'Agrupaciones de escuelas rurales (CER), como colectivo: solo los centros de una lista cerrada', ProcedureView::model( $lista )['who_can_apply'] );
+	}
+
+	/**
 	 * Un centro de otra titularidad lee el motivo, su correo de contacto incluido.
 	 */
 	public function test_a_school_of_another_ownership_reads_the_reason() {

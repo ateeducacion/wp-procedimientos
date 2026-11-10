@@ -303,6 +303,45 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un número se guarda como entero, y una rejilla, por la clave de cada fila.
+	 */
+	public function test_numbers_and_grids_keep_their_shape() {
+		$datos = ApplicationMetaRegistration::sanitize_answers(
+			array(
+				'q1' => 0,
+				'q2' => array(
+					'r1' => 3,
+					'r2' => '',
+					'r3' => '<b>4</b>',
+				),
+				'q3' => '2026-02-28',
+			)
+		);
+
+		$this->assertSame( 0, $datos['q1'], 'cero es un número, no un texto vacío' );
+		$this->assertSame(
+			array(
+				'r1' => 3,
+				'r2' => '',
+				'r3' => '4',
+			),
+			$datos['q2']
+		);
+		$this->assertSame( '2026-02-28', $datos['q3'] );
+
+		$preguntas = ProcedureMetaRegistration::sanitize_questions(
+			array(
+				array(
+					'label' => 'Alumnado',
+					'type'  => 'grid',
+					'rows'  => "<b>Infantil</b>\nPrimaria",
+				),
+			)
+		);
+		$this->assertSame( array( 'Infantil', 'Primaria' ), wp_list_pluck( $preguntas[0]['rows'], 'label' ) );
+	}
+
+	/**
 	 * Las personas coordinadoras se guardan como una lista de nombre, DNI y correo.
 	 */
 	public function test_the_coordinator_is_a_name_a_dni_and_an_email() {

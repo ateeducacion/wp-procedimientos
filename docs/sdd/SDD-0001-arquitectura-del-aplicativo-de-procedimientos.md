@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -153,6 +153,7 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_commitments` | string | Texto de compromiso que el centro acepta al solicitar |
 | `prc_archived` | boolean | Histórico: cierra la edición (ADR-0023) |
 | `prc_applications_closed` | boolean | Pausa manual de solicitudes, sin modificar fechas ni plazos documentales (ADR-0035) |
+| `prc_people_spec` | array | Lo que pide de la lista de personas de cada solicitud: papeles y grupos con clave estable, mínimo, máximo, una por papel y grupo, ventana propia y «solo admitidas» (ADR-0041) |
 
 **`prc_application` — Solicitud.** `public => false`, `show_ui => true` (solo
 para diagnóstico en el escritorio), `post_parent` = el procedimiento,
@@ -170,6 +171,8 @@ en `Meta/ApplicationMetaKeys`:
 | `prc_files` | array | Descriptores de los documentos privados, indexados por la `key` de su pregunta: `{id, name, mime, size, sha256, stored}`, con `stored` **relativo** a la raíz privada. Ni ruta absoluta, ni URL, ni identificador de adjunto (ADR-0028) |
 | `prc_review_state` | string | `submitted` (presentada), `amend` (a subsanar), `admitted`, `excluded`; lista cerrada `ApplicationMetaKeys::review_states()` |
 | `prc_review_note` | string | Nota de quien gestiona; obligatoria al pedir subsanar o excluir |
+| `prc_people` | lista `{id, name, surname, dni, email, phone, role, group}` | Personas que participan, si el procedimiento pide la lista; la gestiona el centro fila a fila, con su propia ventana y sin tocar la revisión (ADR-0041) |
+| `prc_log` | lista `{at, user, event, data}` | Historial de la solicitud: quién, cuándo y qué, con el antes y el después; tope de 500 entradas; solo lo escribe el aplicativo (ADR-0041) |
 
 **Una solicitud por centro y procedimiento** (ADR-0018): antes de crear,
 `PublicFront/Applications::find( $procedure_id, $centre_code )`; si existe, se

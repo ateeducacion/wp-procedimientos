@@ -19770,10 +19770,19 @@ final class ProcedureView {
 
 
 
+
+
 	private static function why_not( int $post_id, string $state, int $user_id, array $buttons ): string {
 		if ( $user_id <= 0 || array() !== array_filter( $buttons ) || ! ProcedureState::accepts_applications( $state )
 			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
 			return '';
+		}
+		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
+			foreach ( array( ProcedureAccess::CAP_REVIEW, ProcedureAccess::CAP_VIEW_APPLICATIONS, ProcedureAccess::CAP_MANAGE ) as $funcion ) {
+				if ( user_can( $user_id, $funcion ) ) {
+					return '';
+				}
+			}
 		}
 		return ProcedureAccess::why_not_apply( $user_id, $post_id );
 	}

@@ -546,7 +546,9 @@ final class ProcedureView {
 	 * Solo con sesión, con el plazo abierto y sin botón: sin sesión el botón
 	 * lleva al acceso, y fuera de plazo no hay botón para nadie y lo dice el
 	 * estado. A quien gestiona procedimientos no se le explica que no
-	 * solicita. El motivo lo da {@see ProcedureAccess::why_not_apply()}.
+	 * solicita, ni a quien, sin `prc_apply`, revisa o consulta solicitudes:
+	 * no solicita por su función, y mandarle a pedir el cargo de dirección le
+	 * diría algo falso. El motivo lo da {@see ProcedureAccess::why_not_apply()}.
 	 *
 	 * @param int      $post_id Procedure.
 	 * @param string   $state   Derived state.
@@ -558,6 +560,13 @@ final class ProcedureView {
 		if ( $user_id <= 0 || array() !== array_filter( $buttons ) || ! ProcedureState::accepts_applications( $state )
 			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
 			return '';
+		}
+		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
+			foreach ( array( ProcedureAccess::CAP_REVIEW, ProcedureAccess::CAP_VIEW_APPLICATIONS, ProcedureAccess::CAP_MANAGE ) as $funcion ) {
+				if ( user_can( $user_id, $funcion ) ) {
+					return '';
+				}
+			}
 		}
 		return ProcedureAccess::why_not_apply( $user_id, $post_id );
 	}

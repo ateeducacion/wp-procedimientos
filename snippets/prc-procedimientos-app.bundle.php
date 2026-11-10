@@ -937,6 +937,7 @@ final class QuestionPoints {
 
 
 
+
 	public static function choices( string $type, array $raw ): array {
 		$valor = $raw['choices'] ?? array();
 		if ( ProcedureQuestions::TYPE_MULTIPLE !== $type ) {
@@ -946,7 +947,7 @@ final class QuestionPoints {
 		$con    = isset( $raw['points'] ) && is_array( $raw['points'] );
 		$textos = array();
 		$valen  = array();
-		foreach ( self::items( $valor, $con ? array_values( $raw['points'] ) : null ) as $una ) {
+		foreach ( self::items( $valor, $con ? array_values( $raw['points'] ) : array() ) as $una ) {
 			$con = $con || $una[2];
 			if ( '' === $una[0] || in_array( $una[0], $textos, true ) || count( $textos ) >= ProcedureQuestions::MAX_CHOICES ) {
 				continue;
@@ -995,16 +996,16 @@ final class QuestionPoints {
 
 
 
-	private static function items( $value, ?array $points ): array {
-		$lineas = is_string( $value ) ? preg_split( '/\r\n|\r|\n/', $value ) : $value;
+	private static function items( $value, array $points ): array {
+		$texto  = is_string( $value );
+		$lineas = $texto ? preg_split( '/\r\n|\r|\n/', $value ) : $value;
 		$out    = array();
 		foreach ( is_array( $lineas ) ? array_values( $lineas ) : array() as $i => $linea ) {
 			if ( ! is_scalar( $linea ) ) {
 				continue;
 			}
-			$texto = trim( (string) $linea );
 			$valor = $points[ $i ] ?? 0;
-			$out[] = null === $points ? self::split( $texto ) : array( $texto, is_scalar( $valor ) ? (int) $valor : 0, true );
+			$out[] = $texto ? self::split( trim( (string) $linea ) ) : array( trim( (string) $linea ), is_scalar( $valor ) ? (int) $valor : 0, false );
 		}
 		return $out;
 	}
@@ -1076,6 +1077,28 @@ final class QuestionPoints {
 			}
 		}
 		return $total;
+	}
+
+
+
+
+
+
+
+	public static function heading( array $questions ): array {
+		return self::has_points( $questions ) ? array( 'score' => 'Puntos' ) : array();
+	}
+
+
+
+
+
+
+
+
+	public static function cell( array $questions, array $answers ): array {
+		$puntos = self::score( $questions, $answers );
+		return null === $puntos ? array() : array( 'score' => (string) $puntos );
 	}
 
 
@@ -1206,14 +1229,21 @@ final class QuestionGrid {
 
 
 
+
 	public static function match_rows( string $text, array $previous ): array {
 		$lineas = array_map( 'trim', (array) preg_split( '/\r\n|\r|\n/', $text ) );
 		$antes  = array_values( array_filter( $previous, 'is_array' ) );
 		$claves = self::same_text( $lineas, $antes );
 		$usadas = array_flip( array_filter( $claves, 'strlen' ) );
 
+
+
+		$sitio       = array_flip( array_column( $antes, 'key' ) );
 		$en_su_sitio = count( $lineas ) >= count( $antes );
-		$out         = array();
+		foreach ( $claves as $i => $key ) {
+			$en_su_sitio = $en_su_sitio && ( $sitio[ $key ] ?? -1 ) === $i;
+		}
+		$out = array();
 		foreach ( $lineas as $i => $linea ) {
 			if ( '' === $linea ) {
 				continue;
@@ -1268,11 +1298,13 @@ final class QuestionGrid {
 		$out    = array();
 		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
 			$rk         = (string) $fila['key'];
-			$texto      = is_scalar( $dadas[ $rk ] ?? null ) ? trim( (string) $dadas[ $rk ] ) : '';
+			$dada       = $dadas[ $rk ] ?? null;
+			$texto      = is_scalar( $dada ) ? trim( (string) $dada ) : '';
 			$n          = ProcedureQuestions::integer( $texto );
 			$bien       = null !== $n && $n >= 0;
 			$out[ $rk ] = $bien ? $n : $texto;
-			$mal        = $mal || ( '' === $texto ? $obliga : ! $bien );
+
+			$mal = $mal || is_array( $dada ) || ( '' === $texto ? $obliga : ! $bien );
 		}
 		return array( $out, $mal );
 	}
@@ -1488,6 +1520,29 @@ final class ProcedureQuestions {
 
 
 
+	public static function highest_key( array $keys ): int {
+		$mayor = 0;
+		foreach ( array_filter( array_map( 'strval', $keys ), array( self::class, 'is_key' ) ) as $clave ) {
+			$mayor = max( $mayor, (int) substr( $clave, 1 ) );
+		}
+		return $mayor;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function is_answer( $value ): bool {
+		if ( is_array( $value ) ) {
+			return array() !== array_filter( $value, array( self::class, 'is_answer' ) );
+		}
+		return '' !== $value && null !== $value;
+	}
 
 
 
@@ -1499,14 +1554,25 @@ final class ProcedureQuestions {
 
 
 
-	public static function sanitize( $raw ): array {
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( $raw, int &$seq = 0 ): array {
 		if ( ! is_array( $raw ) ) {
 			return array();
 		}
 
 		$out    = array();
 		$vistas = array();
-		$mayor  = 0;
+		$mayor  = max( 0, $seq );
 		foreach ( $raw as $item ) {
 			if ( ! is_array( $item ) ) {
 				continue;
@@ -1531,6 +1597,7 @@ final class ProcedureQuestions {
 				$out[ $i ]['key'] = 'q' . $mayor;
 			}
 		}
+		$seq = $mayor;
 		return $out;
 	}
 
@@ -1888,7 +1955,8 @@ final class QuestionChanges {
 		$cambiadas = array();
 		foreach ( $after as $pregunta ) {
 			$key = (string) ( $pregunta['key'] ?? '' );
-			if ( isset( $pregunta['min'], $pregunta['max'] ) && $pregunta['min'] > $pregunta['max'] ) {
+
+			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
 				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado las preguntas.';
 			}
 			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
@@ -1900,6 +1968,56 @@ final class QuestionChanges {
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
 			. ': ya hay solicitudes que la han contestado. Si necesita otro tipo, cree una pregunta nueva. No se han guardado las preguntas.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function input_errors( array $raw ): string {
+		foreach ( $raw as $pregunta ) {
+			$rotulo = '«' . (string) ( $pregunta['label'] ?? '' ) . '»';
+			$tipo   = (string) ( $pregunta['type'] ?? '' );
+			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '' ) : '';
+			if ( '' !== $mal ) {
+				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
+			}
+			foreach ( array(
+				'min' => 'mínimo',
+				'max' => 'máximo',
+			) as $limite => $nombre ) {
+				$valor = is_scalar( $pregunta[ $limite ] ?? null ) ? trim( (string) $pregunta[ $limite ] ) : '';
+				if ( ProcedureQuestions::TYPE_NUMBER === $tipo && '' !== $valor && null === ProcedureQuestions::integer( $valor ) ) {
+					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado las preguntas.';
+				}
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+	private static function bad_points( $choices ): string {
+		foreach ( is_string( $choices ) ? (array) preg_split( '/\r\n|\r|\n/', $choices ) : array() as $linea ) {
+			$linea = trim( (string) $linea );
+			$cola  = trim( (string) substr( (string) strrchr( $linea, '|' ), 1 ) );
+			if ( false !== strpos( $linea, '|' ) && preg_match( '/^[-+]?[\d.,]*\d[\d.,]*$/', $cola ) && ! preg_match( '/^\d{1,6}$/', $cola ) ) {
+				return $linea;
+			}
+		}
+		return '';
 	}
 }
 

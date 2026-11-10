@@ -124,13 +124,46 @@ final class ProcedureQuestions {
 	}
 
 	/**
+	 * The highest question number among some keys; 0 for none.
+	 *
+	 * @param array<int|string, mixed> $keys Keys; what is not one is ignored.
+	 * @return int
+	 */
+	public static function highest_key( array $keys ): int {
+		$mayor = 0;
+		foreach ( array_filter( array_map( 'strval', $keys ), array( self::class, 'is_key' ) ) as $clave ) {
+			$mayor = max( $mayor, (int) substr( $clave, 1 ) );
+		}
+		return $mayor;
+	}
+
+	/**
+	 * Whether a stored answer says something.
+	 *
+	 * Vacía no; un «no» o un cero, sí; una lista, si dice algo alguna de sus
+	 * partes: una rejilla con todas las filas vacías no está contestada.
+	 *
+	 * @param mixed $value Stored answer.
+	 * @return bool
+	 */
+	public static function is_answer( $value ): bool {
+		if ( is_array( $value ) ) {
+			return array() !== array_filter( $value, array( self::class, 'is_answer' ) );
+		}
+		return '' !== $value && null !== $value;
+	}
+
+	/**
 	 * Normalise a question list: shape, closed types, capped, keyed.
 	 *
 	 * Lo que llega puede venir del constructor, de una versión anterior o
 	 * estar a medias: se normaliza siempre y lo que no se entiende se cae. Una
 	 * pregunta sin rótulo no es una pregunta. Las que llegan sin `key` —recién
-	 * creadas— reciben la siguiente libre, contando desde la mayor vista, así
-	 * que borrar una y crear otra nunca reutiliza una clave con respuestas.
+	 * creadas— reciben la siguiente a `$seq`, el contador del procedimiento
+	 * (`prc_questions_seq`), o a la mayor vista si es mayor. El contador nunca
+	 * baja y se devuelve actualizado: borrar la última pregunta y crear otra
+	 * no le da su clave ni, con ella, sus respuestas (ADR-0040). Sin contador
+	 * se cuenta desde la mayor vista, que es lo que basta para leer.
 	 *
 	 * Cada tipo añade lo suyo detrás de esas seis claves: `number`, `min` y
 	 * `max` (enteros o null); `grid`, `rows` (`{key, label}`) y `row_seq`, la
@@ -138,16 +171,17 @@ final class ProcedureQuestions {
 	 * una borrada; `multiple` con puntos, `points`, un entero por opción.
 	 *
 	 * @param mixed $raw Raw list.
+	 * @param int   $seq Highest question number the procedure ever gave; updated.
 	 * @return array<int, array<string, mixed>>
 	 */
-	public static function sanitize( $raw ): array {
+	public static function sanitize( $raw, int &$seq = 0 ): array {
 		if ( ! is_array( $raw ) ) {
 			return array();
 		}
 
 		$out    = array();
 		$vistas = array();
-		$mayor  = 0;
+		$mayor  = max( 0, $seq );
 		foreach ( $raw as $item ) {
 			if ( ! is_array( $item ) ) {
 				continue;
@@ -172,6 +206,7 @@ final class ProcedureQuestions {
 				$out[ $i ]['key'] = 'q' . $mayor;
 			}
 		}
+		$seq = $mayor;
 		return $out;
 	}
 

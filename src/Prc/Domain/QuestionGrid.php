@@ -98,8 +98,9 @@ final class QuestionGrid {
 	 * Lo que se escribe es texto, así que la clave de cada fila se deduce:
 	 * primero, una línea igual que una fila de antes es esa fila; después,
 	 * una línea cambiada es la fila que ocupaba su misma línea —renombrar—.
-	 * Esto segundo solo si no se ha quitado ninguna línea: con una menos no
-	 * se sabe cuál se fue, y una fila renombrada pasa por nueva antes que
+	 * Esto segundo solo si no se ha quitado ninguna línea y toda línea que se
+	 * dejó igual sigue en su sitio: si no, no se sabe cuál se fue o se movió,
+	 * y una fila renombrada pasa por nueva antes que
 	 * heredar las cantidades de otra. Por eso el taller pide dejar en blanco
 	 * la línea de la fila que se quita.
 	 *
@@ -113,8 +114,14 @@ final class QuestionGrid {
 		$claves = self::same_text( $lineas, $antes );
 		$usadas = array_flip( array_filter( $claves, 'strlen' ) );
 
+		// Por posición solo si no falta ninguna línea y ninguna que se dejó
+		// igual ha cambiado de sitio: si una se movió, las demás también.
+		$sitio       = array_flip( array_column( $antes, 'key' ) );
 		$en_su_sitio = count( $lineas ) >= count( $antes );
-		$out         = array();
+		foreach ( $claves as $i => $key ) {
+			$en_su_sitio = $en_su_sitio && ( $sitio[ $key ] ?? -1 ) === $i;
+		}
+		$out = array();
 		foreach ( $lineas as $i => $linea ) {
 			if ( '' === $linea ) {
 				continue;
@@ -169,11 +176,13 @@ final class QuestionGrid {
 		$out    = array();
 		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
 			$rk         = (string) $fila['key'];
-			$texto      = is_scalar( $dadas[ $rk ] ?? null ) ? trim( (string) $dadas[ $rk ] ) : '';
+			$dada       = $dadas[ $rk ] ?? null;
+			$texto      = is_scalar( $dada ) ? trim( (string) $dada ) : '';
 			$n          = ProcedureQuestions::integer( $texto );
 			$bien       = null !== $n && $n >= 0;
 			$out[ $rk ] = $bien ? $n : $texto;
-			$mal        = $mal || ( '' === $texto ? $obliga : ! $bien );
+			// Una fila que llega como lista no es una fila vacía: es un error.
+			$mal = $mal || is_array( $dada ) || ( '' === $texto ? $obliga : ! $bien );
 		}
 		return array( $out, $mal );
 	}

@@ -1013,4 +1013,31 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$this->assertStringEndsWith( '"Nota";"Observaciones";"Tiene huerto";"Modalidad"', $this->lineas( ApplicationExport::csv( $procedimiento ) )[0] );
 		$this->assertSame( 1, substr_count( ApplicationExport::csv( $procedimiento ), (string) get_the_date( 'Y-m-d H:i', $id ) ) );
 	}
+
+	/**
+	 * Unas opciones guardadas antes de los puntos, con «|» en el texto, siguen
+	 * siendo ese texto: la respuesta casa y no aparece la columna de puntos.
+	 */
+	public function test_old_choices_with_a_bar_keep_their_text() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'     => 'q1',
+						'label'   => 'Curso',
+						'type'    => ProcedureQuestions::TYPE_MULTIPLE,
+						'choices' => array( 'Curso | 2024', 'Otro' ),
+					),
+				),
+			)
+		);
+		$this->solicitud( $procedimiento, 'C0001', array(), array( 'q1' => array( 'Curso | 2024' ) ) );
+
+		$this->assertArrayNotHasKey( 'score', Applications::columns( Applications::questions( $procedimiento ) ) );
+		$fila = Applications::rows( $procedimiento )[0];
+		$this->assertSame( 'Curso | 2024', $fila['q1'] );
+		$this->assertArrayNotHasKey( 'score', $fila );
+	}
 }

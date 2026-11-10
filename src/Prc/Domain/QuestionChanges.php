@@ -65,7 +65,8 @@ final class QuestionChanges {
 		$cambiadas = array();
 		foreach ( $after as $pregunta ) {
 			$key = (string) ( $pregunta['key'] ?? '' );
-			if ( isset( $pregunta['min'], $pregunta['max'] ) && $pregunta['min'] > $pregunta['max'] ) {
+			// Sin mínimo, el mínimo es cero: un máximo negativo tampoco cabe.
+			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
 				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado las preguntas.';
 			}
 			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
@@ -77,5 +78,55 @@ final class QuestionChanges {
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
 			. ': ya hay solicitudes que la han contestado. Si necesita otro tipo, cree una pregunta nueva. No se han guardado las preguntas.';
+	}
+
+	/**
+	 * Why what the workshop typed cannot even be read, or '' when it can.
+	 *
+	 * Se mira lo tecleado, antes de normalizar: unos puntos mal escritos tras
+	 * el último `|` de una opción de «varias opciones» («B | -2», «C | 1.5»)
+	 * se guardarían como parte del texto, y un mínimo o un máximo que no es
+	 * un entero se perdería sin aviso. Lo que no parece un número tras el `|`
+	 * («A | B») es texto, y vale.
+	 *
+	 * @param array<int, array<string, mixed>> $raw Questions as the workshop sent them.
+	 * @return string
+	 */
+	public static function input_errors( array $raw ): string {
+		foreach ( $raw as $pregunta ) {
+			$rotulo = '«' . (string) ( $pregunta['label'] ?? '' ) . '»';
+			$tipo   = (string) ( $pregunta['type'] ?? '' );
+			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '' ) : '';
+			if ( '' !== $mal ) {
+				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
+			}
+			foreach ( array(
+				'min' => 'mínimo',
+				'max' => 'máximo',
+			) as $limite => $nombre ) {
+				$valor = is_scalar( $pregunta[ $limite ] ?? null ) ? trim( (string) $pregunta[ $limite ] ) : '';
+				if ( ProcedureQuestions::TYPE_NUMBER === $tipo && '' !== $valor && null === ProcedureQuestions::integer( $valor ) ) {
+					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado las preguntas.';
+				}
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * The first choice line whose points, after the last `|`, look like a number but are not one.
+	 *
+	 * @param mixed $choices The workshop's text, one choice per line.
+	 * @return string The line, or ''.
+	 */
+	private static function bad_points( $choices ): string {
+		foreach ( is_string( $choices ) ? (array) preg_split( '/\r\n|\r|\n/', $choices ) : array() as $linea ) {
+			$linea = trim( (string) $linea );
+			$cola  = trim( (string) substr( (string) strrchr( $linea, '|' ), 1 ) );
+			if ( false !== strpos( $linea, '|' ) && preg_match( '/^[-+]?[\d.,]*\d[\d.,]*$/', $cola ) && ! preg_match( '/^\d{1,6}$/', $cola ) ) {
+				return $linea;
+			}
+		}
+		return '';
 	}
 }

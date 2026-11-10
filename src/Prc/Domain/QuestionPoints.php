@@ -29,10 +29,11 @@ final class QuestionPoints {
 	/**
 	 * The choices of a question and, for «varias opciones», their points.
 	 *
-	 * Lo que llega del taller es texto, una opción por línea, y de ahí salen
-	 * los puntos. Lo ya normalizado trae `points` aparte, un entero por
-	 * opción, y entonces el texto se toma tal cual: así normalizar dos veces
-	 * no cambia nada. Sin ninguna opción con puntos, no hay `points`.
+	 * Lo que llega del taller es texto, una opción por línea, y solo de ahí
+	 * salen los puntos. Una lista ya guardada se toma tal cual, con sus
+	 * `points` si los trae: así normalizar dos veces no cambia nada, y una
+	 * opción antigua «Curso | 2024» sigue siendo ese texto y vale 0. Sin
+	 * ninguna opción con puntos, no hay `points`.
 	 *
 	 * @param string               $type Question type, one with choices.
 	 * @param array<string, mixed> $raw  Raw question.
@@ -47,7 +48,7 @@ final class QuestionPoints {
 		$con    = isset( $raw['points'] ) && is_array( $raw['points'] );
 		$textos = array();
 		$valen  = array();
-		foreach ( self::items( $valor, $con ? array_values( $raw['points'] ) : null ) as $una ) {
+		foreach ( self::items( $valor, $con ? array_values( $raw['points'] ) : array() ) as $una ) {
 			$con = $con || $una[2];
 			if ( '' === $una[0] || in_array( $una[0], $textos, true ) || count( $textos ) >= ProcedureQuestions::MAX_CHOICES ) {
 				continue;
@@ -92,20 +93,20 @@ final class QuestionPoints {
 	/**
 	 * Each choice as text, points and whether the points were written.
 	 *
-	 * @param mixed      $value  Raw choices: an array or one per line.
-	 * @param int[]|null $points Points by position, when already normalised.
+	 * @param mixed $value  Raw choices: a stored list, or the workshop's text, one per line.
+	 * @param int[] $points Points by position of a stored list.
 	 * @return array<int, array{0:string, 1:int, 2:bool}>
 	 */
-	private static function items( $value, ?array $points ): array {
-		$lineas = is_string( $value ) ? preg_split( '/\r\n|\r|\n/', $value ) : $value;
+	private static function items( $value, array $points ): array {
+		$texto  = is_string( $value );
+		$lineas = $texto ? preg_split( '/\r\n|\r|\n/', $value ) : $value;
 		$out    = array();
 		foreach ( is_array( $lineas ) ? array_values( $lineas ) : array() as $i => $linea ) {
 			if ( ! is_scalar( $linea ) ) {
 				continue;
 			}
-			$texto = trim( (string) $linea );
 			$valor = $points[ $i ] ?? 0;
-			$out[] = null === $points ? self::split( $texto ) : array( $texto, is_scalar( $valor ) ? (int) $valor : 0, true );
+			$out[] = $texto ? self::split( trim( (string) $linea ) ) : array( trim( (string) $linea ), is_scalar( $valor ) ? (int) $valor : 0, false );
 		}
 		return $out;
 	}
@@ -177,6 +178,28 @@ final class QuestionPoints {
 			}
 		}
 		return $total;
+	}
+
+	/**
+	 * The `score` column of the applications table, or nothing without points.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @return array<string, string> `['score' => 'Puntos']`, or empty.
+	 */
+	public static function heading( array $questions ): array {
+		return self::has_points( $questions ) ? array( 'score' => 'Puntos' ) : array();
+	}
+
+	/**
+	 * The `score` cell of an application row, or nothing without points.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @param array<string, mixed>             $answers   Stored answers.
+	 * @return array<string, string> `['score' => '3']`, or empty.
+	 */
+	public static function cell( array $questions, array $answers ): array {
+		$puntos = self::score( $questions, $answers );
+		return null === $puntos ? array() : array( 'score' => (string) $puntos );
 	}
 
 	/**

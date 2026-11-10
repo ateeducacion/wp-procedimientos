@@ -111,7 +111,10 @@ sin dejar pasar en silencio a un centro del que no se sabe nada?
   mismo recorrido; vacío si no está. Un catálogo guardado antes de esta ADR
   no tiene zona: sale vacía. `CentreCatalog::index()` lo da indexado por
   código para quien mira muchos a la vez, y `values( $campo )` los valores
-  distintos de un atributo.
+  distintos de un atributo. El catálogo se construye **una vez por petición**
+  y se guarda en memoria; `CentreCatalog::flush()` lo vacía, y se llama solo
+  al sincronizar y al cambiar la opción del catálogo o la de los tipos
+  privados. Cambiar quién contesta los filtros también lo invalida.
 - **La titularidad se deriva del tipo**: es privada si el `type` está en la
   lista que contesta el filtro `prc_private_centre_types`, sin distinguir
   mayúsculas. Por defecto la lista sale de la opción
@@ -133,7 +136,8 @@ centros pueden solicitar» del panel «Datos»:
 Las casillas de tipos e islas salen de los valores presentes en el catálogo,
 más los ya elegidos aunque el catálogo los haya perdido. Una lista cerrada con
 un código mal formado o con más de 2000 no se guarda y se dice; los espacios y
-los repetidos se van solos.
+los repetidos se van solos. Los códigos se guardan en mayúsculas y se comparan
+con el de la cuenta sin distinguir mayúsculas.
 
 ### El guardián
 
@@ -143,10 +147,16 @@ propia entrada del catálogo:
 
 1. Sin ningún acotado —titularidad «todas» (o ninguna guardada), sin tipos,
    sin islas y sin lista—, pasa, esté o no en el catálogo: **como antes**.
-2. Con alguno: si hay lista y el código no está, no; si el código no está en
-   el catálogo, **no** (aunque esté en la lista: no se puede comprobar lo
-   demás); después, titularidad, tipo e isla.
-3. Una agrupación de escuelas rurales se mide **por su propio código**: su
+2. Con alguno: si hay lista y el código no está, no. **Si la lista es el
+   único acotado, estar en ella basta**, aunque el centro no esté en el
+   catálogo: quien escribe la lista ya ha dicho qué centros quiere.
+3. Con otros acotados además de la lista, o sin lista: si el código no está
+   en el catálogo, **no**, porque no se puede medir; después, titularidad,
+   tipo e isla.
+4. **Con el catálogo entero vacío**, la titularidad no se puede comprobar con
+   nada y no cierra: se hace lo de antes. Los tipos y las islas sí cierran, y
+   la lista sigue su regla.
+5. Una agrupación de escuelas rurales se mide **por su propio código**: su
    isla, su tipo, su sitio en la lista y en el catálogo. La titularidad no la
    filtra, como hasta ahora (ADR-0031).
 
@@ -156,10 +166,23 @@ pantalla de solicitud. Un centro inactivo sigue en el catálogo y se mide igual.
 
 ### Lo ya presentado
 
-Acotar después no toca ninguna solicitud: se sigue viendo y se sigue
-revisando. Lo que se cierra es volver a enviarla, porque el envío pasa por
-`can_apply()`. Las entregas de documentos con plazo propio y la lista de
-personas no pasan por aquí: siguen su propia regla (ADR-0033, ADR-0041).
+**La elegibilidad se mira al crear la solicitud.** Acotar después no toca
+ninguna: se sigue viendo y revisando, y el centro que ya la presentó la sigue
+editando o subsanando cuando el estado lo permita. Lo decide el guardián, no la
+pantalla: `apply_codes()` admite también el código que ya tiene una solicitud
+publicada en ese procedimiento. Las entregas de documentos con plazo propio y
+la lista de personas siguen su propia regla (ADR-0033, ADR-0041).
+
+### Avisos
+
+El panel «Datos» avisa, junto a «Dirigido a» y a «Qué centros pueden
+solicitar», de dos cierres que no se ven: un procedimiento acotado con el
+catálogo vacío, y una sola titularidad sin ningún tipo de centro marcado como
+privado (con «solo públicos» no deja fuera a casi nadie; con «solo privados»,
+casi nadie puede solicitar). El diagnóstico de los ajustes cuenta los centros
+que sirve de verdad el dominio (`CentreCatalog::all()`, venga de la copia
+sincronizada, del fichero o del filtro) y, cuando falta el catálogo o los
+tipos privados, cuántos procedimientos publicados dependen de ellos.
 
 ### Exportación
 
@@ -191,14 +214,15 @@ byte; solo salen si se marcan.
 ### Negativas
 
 - **Cambio de comportamiento.** Un centro que no está en el catálogo ya no
-  solicita a un procedimiento con cualquier acotado; antes sí. Todo
-  procedimiento de centros guardado con una sola titularidad está acotado, así
-  que con el catálogo vacío o sin sincronizar esos procedimientos se cierran
-  para todos. El diagnóstico de los ajustes enseña cuántos centros hay; hay que
-  mirarlo antes de desplegar.
+  crea una solicitud en un procedimiento acotado por titularidad, tipo o
+  isla; antes sí. Con el catálogo entero vacío la titularidad sola no cierra,
+  pero tipos e islas sí: un catálogo vacío cierra esos procedimientos para
+  todos. El taller lo avisa y los ajustes cuentan cuántos dependen de él.
+- **Un catálogo que no está vacío pero va atrasado** deja fuera de los
+  acotados a los centros que faltan, y eso no se avisa.
 - **Sin configurar los tipos privados, todos son públicos.** Un procedimiento
-  «solo privados» no admite a nadie hasta que alguien escriba la lista en los
-  ajustes. No hay aviso automático de que falte.
+  «solo privados» no admite a casi nadie hasta que alguien escriba la lista en
+  los ajustes; el taller y los ajustes lo avisan.
 - **Un tipo que mezcla titularidades** no se puede derivar: hay que corregir
   esos centros uno a uno contestando `prc_centres` con su `ownership`.
 - **La zona sin nombre**: si el centro de zona no está en el catálogo, la

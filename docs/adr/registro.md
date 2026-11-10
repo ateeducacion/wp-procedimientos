@@ -59,8 +59,8 @@ cierra igual. También lleva adenda la
 la exportación y el fichero de usuarios ganan la lista de personas.
 
 La ADR-0042 corrige un defecto —todo centro sincronizado se leía público— y
-cambia una regla: un centro que no está en el catálogo ya no solicita a un
-procedimiento acotado por titularidad, tipo, isla o lista cerrada. Llevan
+cambia una regla: un centro que no está en el catálogo ya no crea solicitud
+en un procedimiento acotado por titularidad, tipo o isla. Llevan
 adenda la [ADR-0016](ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md),
 la [ADR-0017](ADR-0017-el-catalogo-de-centros-no-se-versiona.md), la
 [ADR-0029](ADR-0029-el-catalogo-de-centros-es-externo-y-se-cachea-localmente.md)

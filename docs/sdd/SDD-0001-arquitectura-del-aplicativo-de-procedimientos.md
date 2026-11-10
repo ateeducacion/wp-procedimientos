@@ -305,8 +305,10 @@ Adenda (ADR-0042): `all()` sirve además `kind`, `island`, `municipality`,
 `type`, `zone` —el código de otro centro del catálogo— con su `zone_name`
 resuelto en memoria, y `active`. Si la titularidad no viene escrita, se deriva
 del tipo con el filtro `prc_private_centre_types` (vacío por defecto: todo
-público). Con cualquier acotado del procedimiento —titularidad, tipo, isla o
-lista cerrada— un centro que no está en el catálogo no solicita; lo decide
+público). Con un acotado de titularidad, tipo o isla, un centro que no está
+en el catálogo no crea solicitud (con la lista cerrada sola basta estar en
+ella; con el catálogo vacío la titularidad no cierra; la ya presentada se
+sigue editando); lo decide
 `ProcedureAccess::apply_codes()` con `Domain/CentreEligibility`.
 
 ### Pantallas (`PublicFront/`)

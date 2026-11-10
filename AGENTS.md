@@ -421,9 +421,14 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   que se pintó. Sin lista escrita, ni historial ni aviso. Quién y cuándo, siempre
   `ProcedureAccess::can_edit_people()`. Tocarla no devuelve la solicitud a
   «presentada», y el DNI no va nunca en un correo.
-- **Un centro que no está en el catálogo no solicita a un procedimiento
-  acotado** (ADR-0042): con titularidad, tipos, islas o lista cerrada, el
-  código tiene que estar en el catálogo; sin acotados, solicita igual. La
+- **Un centro que no está en el catálogo no crea solicitud en un
+  procedimiento acotado** (ADR-0042): con titularidad, tipos o islas, el
+  código tiene que estar en el catálogo; con la lista cerrada sola, basta estar
+  en ella (sin distinguir mayúsculas); sin acotados, solicita igual; con el
+  catálogo entero vacío, la titularidad no cierra. La elegibilidad se mira al
+  crear: la solicitud ya presentada se sigue editando. Todo en
+  `ProcedureAccess`. El catálogo se construye una vez por petición
+  (`CentreCatalog::flush()` lo vacía). La
   titularidad se deriva del tipo (`prc_private_centre_types`, vacío por
   defecto); la zona es el código de otro centro del catálogo, `zone` en el
   código —su rótulo, del filtro `prc_zone_label`— y nunca el nombre que le dé

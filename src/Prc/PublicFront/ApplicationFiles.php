@@ -637,11 +637,12 @@ final class ApplicationFiles {
 	 * Serve one private file, when whoever is asking may have it.
 	 *
 	 * El identificador del fichero **no autoriza nada por sí solo**: quien
-	 * decide es la política de solicitudes que ya existe,
-	 * {@see ProcedureAccess::can_view_application()}, sobre **esta** solicitud.
+	 * decide es la política de solicitudes,
+	 * {@see ProcedureAccess::can_download_files()}, sobre **esta** solicitud.
 	 * No se inventa aquí ningún sistema de roles, y no vale una capacidad
-	 * genérica: el centro que la presentó ve la suya, y quien revisa ese
-	 * procedimiento ve las de su ámbito.
+	 * genérica: el centro que la presentó ve la suya, quien revisa ese
+	 * procedimiento ve las de su ámbito y quien consulta una zona, las de su
+	 * zona solo si el procedimiento lo permite (ADR-0043).
 	 *
 	 * @return void
 	 */
@@ -656,7 +657,7 @@ final class ApplicationFiles {
 
 		if ( $application_id <= 0
 			|| ApplicationPostType::POST_TYPE !== (string) get_post_type( $application_id )
-			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id ) ) {
+			|| ! ProcedureAccess::can_download_files( get_current_user_id(), $application_id ) ) {
 			self::deny();
 			return;
 		}

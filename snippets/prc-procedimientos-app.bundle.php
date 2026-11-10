@@ -199,6 +199,35 @@ final class ProcedureMetaKeys {
 
 	public const PEOPLE_SPEC = 'prc_people_spec';
 
+
+
+
+
+	public const OBSERVABLE = 'prc_observable';
+
+
+
+
+
+
+	public const OBSERVER_COLUMNS = 'prc_observer_columns';
+
+
+
+
+	public const OBSERVER_FILES = 'prc_observer_files';
+
+
+
+
+	public const OBSERVER_EXPORT = 'prc_observer_export';
+
+
+
+
+
+	public const OBSERVER_NOTIFY = 'prc_observer_notify';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -259,6 +288,11 @@ final class ProcedureMetaKeys {
 			self::APPLICATIONS_CLOSED,
 			self::NOTIFY,
 			self::PEOPLE_SPEC,
+			self::OBSERVABLE,
+			self::OBSERVER_COLUMNS,
+			self::OBSERVER_FILES,
+			self::OBSERVER_EXPORT,
+			self::OBSERVER_NOTIFY,
 		);
 	}
 
@@ -5232,6 +5266,180 @@ final class CentreScope {
 
 namespace Prc\Access;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Access\ObserverScope', false ) ) {
+final class ObserverScope {
+
+
+
+
+	public const META_KEY = 'prc_zone';
+
+
+
+
+
+
+
+
+
+
+
+	public const FORBIDDEN_COLUMNS = array( 'coordinator_dni', 'person_dni', 'note' );
+
+
+
+
+
+
+	public const DEFAULT_GROUPS = array( 'application', 'centre', 'coordination' );
+
+
+
+
+
+
+	public static function meta_key(): string {
+
+
+
+
+
+		$key = apply_filters( 'prc_zone_meta_key', self::META_KEY );
+		return is_string( $key ) ? trim( $key ) : '';
+	}
+
+
+
+
+
+
+
+	public static function zones_for( int $user_id ): array {
+		$key = self::meta_key();
+		if ( $user_id <= 0 || '' === $key ) {
+			return array();
+		}
+		return self::parse_zones( get_user_meta( $user_id, $key, true ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function parse_zones( $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY );
+		}
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $valor ) {
+			$codigo = is_string( $valor ) ? trim( $valor ) : '';
+			if ( CentreScope::is_code( $codigo ) ) {
+				$out[ $codigo ] = $codigo;
+			}
+		}
+		return array_values( $out );
+	}
+
+
+
+
+
+
+
+
+	public static function codes_in( array $zones, array $catalogue ): array {
+		if ( array() === $zones ) {
+			return array();
+		}
+		$buscadas = array_flip( $zones );
+		$out      = array();
+		foreach ( $catalogue as $codigo => $centro ) {
+			$zona = is_array( $centro ) ? (string) ( $centro['zone'] ?? '' ) : '';
+			if ( '' !== $zona && isset( $buscadas[ $zona ] ) ) {
+				$out[] = (string) $codigo;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function allowed( array $groups ): array {
+		$out = array();
+		foreach ( $groups as $grupo => $columnas ) {
+			$quedan = array_diff_key( (array) $columnas, array_flip( self::FORBIDDEN_COLUMNS ) );
+			if ( array() !== $quedan ) {
+				$out[ (string) $grupo ] = $quedan;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function columns( $chosen, array $groups ): array {
+		$permitidas = self::allowed( $groups );
+		$elegidas   = is_array( $chosen ) ? array_flip( array_filter( $chosen, 'is_string' ) ) : array();
+		$out        = array();
+		foreach ( $permitidas as $columnas ) {
+			$out += array_intersect_key( $columnas, $elegidas );
+		}
+		if ( array() !== $out ) {
+			return $out;
+		}
+		foreach ( self::DEFAULT_GROUPS as $grupo ) {
+			$out += (array) ( $permitidas[ $grupo ] ?? array() );
+		}
+		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\Access;
+
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -5243,6 +5451,9 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\Taxonomy\ProcedureTaxonomies;
+
+
+
 
 
 
@@ -5298,6 +5509,12 @@ final class ProcedureAccess {
 
 
 	public const CAP_EDIT_PEOPLE = 'prc_edit_people';
+
+
+
+
+
+	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
 
 
 
@@ -6102,7 +6319,40 @@ final class ProcedureAccess {
 
 
 
+
 	public static function can_view_application( int $user_id, int $application_id ): bool {
+		return self::can_view_own_or_reviewed( $user_id, $application_id )
+			|| self::can_observe_application( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_download_files( int $user_id, int $application_id ): bool {
+		if ( self::can_view_own_or_reviewed( $user_id, $application_id ) ) {
+			return true;
+		}
+		return self::can_observe_application( $user_id, $application_id )
+			&& (bool) get_post_meta( self::root_id( $application_id ), ProcedureMetaKeys::OBSERVER_FILES, true );
+	}
+
+
+
+
+
+
+
+
+	private static function can_view_own_or_reviewed( int $user_id, int $application_id ): bool {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
@@ -6223,6 +6473,173 @@ final class ProcedureAccess {
 			return self::scope_assignment_message( $user_id );
 		}
 		return 'Este procedimiento es de otro ámbito. Solo lo edita el ámbito que lo convoca o quien administra el aplicativo.';
+	}
+
+
+
+
+
+
+
+
+
+	public static function observer_zones( int $user_id ): array {
+		return ObserverScope::zones_for( $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function observer_codes( int $user_id ): array {
+		$zonas = self::observer_zones( $user_id );
+		return array() === $zonas ? array() : ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+	}
+
+
+
+
+
+
+
+	public static function is_observable( int $procedure_id ): bool {
+		return $procedure_id > 0
+			&& ProcedurePostType::POST_TYPE === get_post_type( $procedure_id )
+			&& 'publish' === get_post_status( $procedure_id )
+			&& (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true );
+	}
+
+
+
+
+
+
+
+
+	public static function can_observe_any( int $user_id ): bool {
+		return self::can_manage_procedures( $user_id ) || self::observes_by_zone( $user_id );
+	}
+
+
+
+
+
+
+
+
+	public static function can_observe( int $user_id, int $procedure_id ): bool {
+		return null !== self::observe_scope( $user_id, $procedure_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function observe_scope( int $user_id, int $procedure_id ): ?array {
+		if ( $user_id <= 0 || ! self::is_observable( $procedure_id ) ) {
+			return null;
+		}
+		if ( self::can_open( $user_id, $procedure_id ) ) {
+			return array();
+		}
+		if ( ! user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) ) {
+			return null;
+		}
+		$codigos = self::observer_codes( $user_id );
+		return array() === $codigos ? null : array( 'codes' => $codigos );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_observe_application( int $user_id, int $application_id ): bool {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || 'publish' !== get_post_status( $application_id ) ) {
+			return false;
+		}
+		$ambito = self::observe_scope( $user_id, (int) wp_get_post_parent_id( $application_id ) );
+		if ( null === $ambito ) {
+			return false;
+		}
+		if ( ! isset( $ambito['codes'] ) ) {
+			return true;
+		}
+		$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		return '' !== $codigo && in_array( $codigo, $ambito['codes'], true );
+	}
+
+
+
+
+
+
+
+
+	public static function can_export_observed( int $user_id, int $procedure_id ): bool {
+		return self::can_observe( $user_id, $procedure_id )
+			&& (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_EXPORT, true );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function zone_observers( string $code ): array {
+		$zona = '' !== $code ? (string) ( CentreCatalog::find( $code )['zone'] ?? '' ) : '';
+		$meta = ObserverScope::meta_key();
+		if ( '' === $zona || '' === $meta ) {
+			return array();
+		}
+		$candidatos = get_users(
+			array(
+				'capability'   => self::CAP_VIEW_APPLICATIONS,
+				'fields'       => 'all_with_meta',
+				'meta_key'     => $meta,
+				'meta_compare' => 'EXISTS',
+			)
+		);
+		$out        = array();
+		foreach ( (array) $candidatos as $user ) {
+			if ( $user instanceof \WP_User && in_array( $zona, self::observer_zones( (int) $user->ID ), true ) ) {
+				$out[] = (int) $user->ID;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function observes_by_zone( int $user_id ): bool {
+		return $user_id > 0 && user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) && array() !== self::observer_codes( $user_id );
 	}
 
 
@@ -6383,6 +6800,7 @@ final class ProcedureAccess {
 
 namespace Prc\Meta;
 
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -6525,6 +6943,26 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::PEOPLE_SPEC          => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_people_spec' ),
+			),
+			ProcedureMetaKeys::OBSERVABLE           => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+			),
+			ProcedureMetaKeys::OBSERVER_FILES       => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
 		);
 	}
@@ -6724,6 +7162,28 @@ final class ProcedureMetaRegistration {
 
 	public static function sanitize_text_list( $value ): array {
 		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize_observer_columns( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $clave ) {
+			$clave = is_string( $clave ) ? trim( $clave ) : '';
+			if ( preg_match( '/^[a-z][a-z0-9_]*(:[a-z0-9_]+)?$/', $clave ) && ! in_array( $clave, ObserverScope::FORBIDDEN_COLUMNS, true ) ) {
+				$out[ $clave ] = $clave;
+			}
+		}
+		return array_values( $out );
 	}
 
 
@@ -11239,6 +11699,7 @@ final class ApplicationFiles {
 
 
 
+
 	public static function handle(): void {
 
 		$file_id = isset( $_GET[ self::ARG_FILE ] ) ? sanitize_text_field( wp_unslash( $_GET[ self::ARG_FILE ] ) ) : '';
@@ -11250,7 +11711,7 @@ final class ApplicationFiles {
 
 		if ( $application_id <= 0
 			|| ApplicationPostType::POST_TYPE !== (string) get_post_type( $application_id )
-			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id ) ) {
+			|| ! ProcedureAccess::can_download_files( get_current_user_id(), $application_id ) ) {
 			self::deny();
 			return;
 		}

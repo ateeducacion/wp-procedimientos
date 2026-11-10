@@ -35,6 +35,7 @@ return array(
 	'Centre/CentreCatalogueSync.php',
 	'Domain/CentreCatalog.php',
 	'Access/CentreScope.php',
+	'Access/ObserverScope.php',
 	'Access/ProcedureAccess.php',
 	'Meta/ProcedureMetaRegistration.php',
 	'Meta/ApplicationMetaRegistration.php',

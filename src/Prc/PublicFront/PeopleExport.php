@@ -34,6 +34,15 @@ final class PeopleExport {
 	);
 
 	/**
+	 * Columns whose values go to the file as they are, without the quote
+	 * that stops a spreadsheet formula, when they look as they must: a
+	 * phone, digits and spaces with an optional `+` in front, is not a formula.
+	 *
+	 * @var array<string, string> Column => pattern a value has to match.
+	 */
+	public const VERBATIM = array( 'person_phone' => '/^\+?[0-9][0-9 ]*$/' );
+
+	/**
 	 * The field of a painted row each column takes.
 	 *
 	 * @var array<string, string>
@@ -87,7 +96,8 @@ final class PeopleExport {
 		$filas = PeopleForm::rows( $spec, $rows );
 		$out   = array();
 		foreach ( self::FIELDS as $columna => $campo ) {
-			$out[ $columna ] = implode( ', ', array_column( $filas, $campo ) );
+			// « · » y no una coma: un nombre o un apellido puede llevarla.
+			$out[ $columna ] = implode( ' · ', array_column( $filas, $campo ) );
 		}
 		return $out;
 	}
@@ -99,11 +109,13 @@ final class PeopleExport {
 	 * @param array<string, mixed>|null $spec           Specification of the list; null without one.
 	 * @param array<string, mixed>      $row            The application row.
 	 * @param int                       $application_id Application post ID.
+	 * @param array<string, int>        $keys           The exported columns, as keys: without a people one, no rows.
 	 * @return array<int, array<string, mixed>>
 	 */
-	public static function rows( ?array $spec, array $row, int $application_id ): array {
-		$out = array();
-		foreach ( null === $spec ? array() : People::of( $application_id ) as $persona ) {
+	public static function rows( ?array $spec, array $row, int $application_id, array $keys ): array {
+		$out   = array();
+		$salen = null !== $spec && array() !== array_intersect_key( $keys, self::COLUMNS );
+		foreach ( $salen ? People::of( $application_id ) : array() as $persona ) {
 			$out[] = array_merge(
 				$row,
 				array_fill_keys( array( 'coordinator', 'coordinator_dni', 'coordinator_email' ), '' ),
@@ -150,7 +162,9 @@ final class PeopleExport {
 	 */
 	public static function users( int $application_id ): array {
 		$out = array();
-		foreach ( People::of( $application_id ) as $persona ) {
+		// Un procedimiento que tuvo lista y la apagó no la exporta.
+		$lista = People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : array();
+		foreach ( $lista as $persona ) {
 			$out[] = array(
 				'source'         => ApplicationExport::WHO_PEOPLE,
 				'application_id' => $application_id,

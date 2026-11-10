@@ -3229,7 +3229,7 @@ final class ApplicationPeople {
 			'surname' => array( '' !== $row['surname'], 'los apellidos' ),
 			'dni'     => array( ApplicationInput::is_dni( $row['dni'] ), 'el DNI o NIE, completo y con su letra' ),
 			'email'   => array( ProcedureInput::is_email( $row['email'] ), 'el correo electrónico' ),
-			'phone'   => array( '' === $row['phone'] || (bool) preg_match( '/^\+?[0-9][0-9 ()-]{5,19}$/', $row['phone'] ), 'el teléfono, solo con cifras' ),
+			'phone'   => array( '' === $row['phone'] || (bool) preg_match( '/^\+?[0-9][0-9 ]{5,19}$/', $row['phone'] ), 'el teléfono, solo con cifras, espacios y un «+» delante si hace falta' ),
 			'role'    => array( array() !== $papel, 'el papel' ),
 		);
 		if ( array() !== $papel ) {
@@ -9322,14 +9322,21 @@ final class Applications {
 
 
 
-	public static function csv_lines( array $columns, array $rows ): string {
+
+
+
+
+	public static function csv_lines( array $columns, array $rows, array $verbatim = array() ): string {
 		$lineas = array( self::csv_line( array_values( $columns ) ) );
 		foreach ( $rows as $fila ) {
 			$campos = array();
+			$tal    = array();
 			foreach ( array_keys( $columns ) as $clave ) {
-				$campos[] = (string) ( $fila[ $clave ] ?? '' );
+				$campo    = (string) ( $fila[ $clave ] ?? '' );
+				$campos[] = $campo;
+				$tal[]    = isset( $verbatim[ $clave ] ) && (bool) preg_match( $verbatim[ $clave ], $campo );
 			}
-			$lineas[] = self::csv_line( $campos );
+			$lineas[] = self::csv_line( $campos, $tal );
 		}
 
 
@@ -9353,10 +9360,11 @@ final class Applications {
 
 
 
-	private static function csv_line( array $campos ): string {
+
+	private static function csv_line( array $campos, array $tal = array() ): string {
 		$fuera = array();
-		foreach ( $campos as $campo ) {
-			$fuera[] = '"' . str_replace( '"', '""', ApplicationExport::neutralize( $campo ) ) . '"';
+		foreach ( $campos as $i => $campo ) {
+			$fuera[] = '"' . str_replace( '"', '""', empty( $tal[ $i ] ) ? ApplicationExport::neutralize( $campo ) : $campo ) . '"';
 		}
 		return implode( ';', $fuera );
 	}
@@ -10730,6 +10738,15 @@ final class PeopleExport {
 
 
 
+
+
+	public const VERBATIM = array( 'person_phone' => '/^\+?[0-9][0-9 ]*$/' );
+
+
+
+
+
+
 	private const FIELDS = array(
 		'person_name'    => 'name',
 		'person_surname' => 'surname',
@@ -10779,7 +10796,8 @@ final class PeopleExport {
 		$filas = PeopleForm::rows( $spec, $rows );
 		$out   = array();
 		foreach ( self::FIELDS as $columna => $campo ) {
-			$out[ $columna ] = implode( ', ', array_column( $filas, $campo ) );
+
+			$out[ $columna ] = implode( ' · ', array_column( $filas, $campo ) );
 		}
 		return $out;
 	}
@@ -10793,9 +10811,11 @@ final class PeopleExport {
 
 
 
-	public static function rows( ?array $spec, array $row, int $application_id ): array {
-		$out = array();
-		foreach ( null === $spec ? array() : People::of( $application_id ) as $persona ) {
+
+	public static function rows( ?array $spec, array $row, int $application_id, array $keys ): array {
+		$out   = array();
+		$salen = null !== $spec && array() !== array_intersect_key( $keys, self::COLUMNS );
+		foreach ( $salen ? People::of( $application_id ) : array() as $persona ) {
 			$out[] = array_merge(
 				$row,
 				array_fill_keys( array( 'coordinator', 'coordinator_dni', 'coordinator_email' ), '' ),
@@ -10842,7 +10862,9 @@ final class PeopleExport {
 
 	public static function users( int $application_id ): array {
 		$out = array();
-		foreach ( People::of( $application_id ) as $persona ) {
+
+		$lista = People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : array();
+		foreach ( $lista as $persona ) {
 			$out[] = array(
 				'source'         => ApplicationExport::WHO_PEOPLE,
 				'application_id' => $application_id,
@@ -11059,13 +11081,13 @@ final class ApplicationExport {
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
-				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas ) : array( $fila ) as $una ) {
+				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
 
 					$filas[] = array_intersect_key( $una, $claves );
 				}
 			}
 		}
-		return Applications::csv_lines( $columnas, $filas );
+		return Applications::csv_lines( $columnas, $filas, PeopleExport::VERBATIM );
 	}
 
 
@@ -11083,9 +11105,15 @@ final class ApplicationExport {
 
 
 
-	private static function per_person( \WP_Post $application, array $row, ?array $people = null ): array {
-		$out = array();
-		foreach ( self::coordinators( $application ) as $persona ) {
+
+
+
+	private static function per_person( \WP_Post $application, array $row, ?array $people, array $keys ): array {
+
+
+		$coordinacion = array() !== array_intersect_key( $keys, array_flip( self::GROUPS['coordination'] ) );
+		$out          = array();
+		foreach ( $coordinacion ? self::coordinators( $application ) : array() as $persona ) {
 			$out[] = array_merge(
 				$row,
 				PeopleExport::cells( $people, array() ),
@@ -11096,7 +11124,7 @@ final class ApplicationExport {
 				)
 			);
 		}
-		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID ) );
+		$out = array_merge( $out, PeopleExport::rows( $people, $row, (int) $application->ID, $keys ) );
 		return array() === $out ? array( $row ) : $out;
 	}
 
@@ -11484,7 +11512,7 @@ final class ApplicationExport {
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
 			'format'  => self::FORMAT_MOODLE === ( $raw['format'] ?? '' ) ? self::FORMAT_MOODLE : self::FORMAT_CSV,
-			'who'     => array_values( array_intersect( array_keys( self::who() ), $quienes ) ),
+			'who'     => array_values( array_intersect( array_keys( self::who( $procedure_id ) ), $quienes ) ),
 		);
 	}
 

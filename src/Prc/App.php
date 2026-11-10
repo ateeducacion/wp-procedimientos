@@ -18,6 +18,7 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\ApplicationHistory;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -77,6 +78,9 @@ final class App {
 		ApplicationExport::class,
 		ApplyForm::class,
 		PeopleForm::class,
+		// El historial de cada solicitud escucha las acciones que ya emiten
+		// las operaciones: ninguna pantalla anota por su cuenta (ADR-0044).
+		ApplicationHistory::class,
 		MyCentre::class,
 		// La consulta de solo lectura por zona (ADR-0043).
 		Observe::class,

@@ -12591,6 +12591,405 @@ final class ApplicationLog {
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\ApplicationPeople;
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationHistory', false ) ) {
+final class ApplicationHistory {
+
+	public const SUBMITTED     = 'submitted';
+	public const UPDATED       = 'updated';
+	public const REVIEWED      = 'review_changed';
+	public const DELIVERED     = 'delivery';
+	public const WITHDRAWN     = 'withdrawn';
+	public const RESTORED      = 'restored';
+	public const EXTENDED      = 'extended';
+	public const CREATED_FOR   = 'created_for_centre';
+	public const INTERNAL_NOTE = 'internal_note';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 3 );
+		add_action( 'prc_application_reviewed', array( self::class, 'on_reviewed' ), 5, 4 );
+		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery' ), 5, 3 );
+		add_action( 'prc_people_changed', array( self::class, 'on_people' ), 5, 5 );
+		add_action( 'prc_application_withdrawn', array( self::class, 'on_withdrawn' ), 5, 4 );
+		add_action( 'prc_application_restored', array( self::class, 'on_restored' ), 5, 2 );
+		add_action( 'prc_application_extended', array( self::class, 'on_extended' ), 5, 4 );
+		add_action( 'prc_application_created_for', array( self::class, 'on_created_for' ), 5, 3 );
+		add_action( 'prc_internal_note_changed', array( self::class, 'on_internal_note' ), 5, 2 );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_saved( $application_id, $created = false, $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, $created ? self::SUBMITTED : self::UPDATED, array(), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_reviewed( $application_id, $state = '', $previous = '', $previous_note = '' ): void {
+		$nota   = trim( (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true ) );
+		$antes  = '' !== (string) $previous ? (string) $previous : ApplicationMetaKeys::REVIEW_SUBMITTED;
+		$cambia = trim( (string) $previous_note ) !== $nota;
+		if ( (string) $state === $antes && ! $cambia ) {
+			return;
+		}
+		ApplicationLog::add(
+			(int) $application_id,
+			self::REVIEWED,
+			array(
+				'state'        => (string) $state,
+				'previous'     => $antes,
+				'note_changed' => $cambia,
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function on_delivery( $application_id, $question_key = '', $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::DELIVERED, array( 'question' => (string) $question_key ), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_people( $application_id, $change = '', $before = array(), $after = array(), $user_id = 0 ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			'person_' . sanitize_key( (string) $change ),
+			array(
+				'before' => (array) $before,
+				'after'  => (array) $after,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_withdrawn( $application_id, $user_id = 0, $by = '', $reason = '' ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			self::WITHDRAWN,
+			array(
+				'by'     => (string) $by,
+				'reason' => (string) $reason,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function on_restored( $application_id, $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::RESTORED, array(), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_extended( $application_id, $until = '', $previous = '', $user_id = 0 ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			self::EXTENDED,
+			array(
+				'until'    => (string) $until,
+				'previous' => (string) $previous,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function on_created_for( $application_id, $user_id = 0, $data = array() ): void {
+		$data = (array) $data;
+		ApplicationLog::add(
+			(int) $application_id,
+			self::CREATED_FOR,
+			array(
+				'until'      => (string) ( $data['until'] ?? '' ),
+				'ineligible' => (string) ( $data['ineligible'] ?? '' ),
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function on_internal_note( $application_id, $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::INTERNAL_NOTE, array(), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function entries( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$spec         = People::spec( $procedure_id );
+		$preguntas    = array_column( Applications::questions( $procedure_id ), null, 'key' );
+		$entradas     = array_reverse( ApplicationLog::all( $application_id ) );
+		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
+		$out = array();
+		foreach ( $entradas as $entrada ) {
+			$linea = self::line( $entrada, $spec, $preguntas );
+			if ( null === $linea ) {
+				continue;
+			}
+			$cuenta = $entrada['user'] > 0 ? get_userdata( $entrada['user'] ) : false;
+			$out[]  = $linea + array(
+				'when' => '' !== $entrada['at'] ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( $entrada['at'] ) ) : '',
+				'who'  => $entrada['user'] <= 0 ? '' : ( false !== $cuenta ? (string) $cuenta->display_name : '(cuenta que ya no existe)' ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function line( array $entrada, array $spec, array $preguntas ): ?array {
+		$data   = (array) $entrada['data'];
+		$fijos  = array(
+			self::SUBMITTED         => 'Solicitud presentada',
+			self::UPDATED           => 'Solicitud modificada',
+			self::RESTORED          => 'Solicitud restaurada desde «Retiradas»',
+			self::INTERNAL_NOTE     => 'Nota interna cambiada',
+			ApplicationLog::TRIMMED => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $data['dropped'] ?? 0 ) ),
+		);
+		$evento = (string) $entrada['event'];
+		if ( isset( $fijos[ $evento ] ) ) {
+			return self::words( $fijos[ $evento ] );
+		}
+		$personas = array(
+			'person_added'   => 'Alta en la lista de personas',
+			'person_changed' => 'Cambio en la lista de personas',
+			'person_removed' => 'Baja en la lista de personas',
+		);
+		if ( isset( $personas[ $evento ] ) ) {
+			return self::words( $personas[ $evento ], self::person( $spec, (array) ( $data['before'] ?? array() ) ), self::person( $spec, (array) ( $data['after'] ?? array() ) ) );
+		}
+		return self::described( $evento, $data, $preguntas );
+	}
+
+
+
+
+
+
+
+
+
+	private static function described( string $evento, array $data, array $preguntas ): ?array {
+		$como = array(
+			self::REVIEWED    => 'reviewed',
+			self::WITHDRAWN   => 'withdrawn',
+			self::EXTENDED    => 'extended',
+			self::CREATED_FOR => 'created_for',
+		);
+		if ( self::DELIVERED === $evento ) {
+			$clave = (string) ( $data['question'] ?? '' );
+			return self::words( 'Documento entregado' . ( isset( $preguntas[ $clave ] ) ? ': ' . (string) $preguntas[ $clave ]['label'] : '' ) );
+		}
+		return isset( $como[ $evento ] ) ? call_user_func( array( self::class, $como[ $evento ] ), $data ) : null;
+	}
+
+
+
+
+
+
+
+	private static function reviewed( array $data ): array {
+		$estados = ApplicationMetaKeys::review_states();
+		$estado  = (string) ( $estados[ (string) ( $data['state'] ?? '' ) ] ?? '' );
+		$antes   = (string) ( $estados[ (string) ( $data['previous'] ?? '' ) ] ?? '' );
+		if ( $antes === $estado ) {
+			return self::words( 'Revisión: nota cambiada' );
+		}
+		return self::words( 'Revisión: ' . $estado . ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' ), $antes, $estado );
+	}
+
+
+
+
+
+
+
+	private static function withdrawn( array $data ): array {
+		$quien  = array(
+			ApplicationOperations::BY_APPLICANT => 'Retirada por el centro',
+			ApplicationOperations::BY_REVIEWER  => 'Retirada por quien revisa',
+		);
+		$motivo = trim( (string) ( $data['reason'] ?? '' ) );
+		return self::words( ( $quien[ (string) ( $data['by'] ?? '' ) ] ?? 'Enviada a la papelera desde el escritorio' ) . ( '' !== $motivo ? '. Motivo: ' . $motivo : '' ) );
+	}
+
+
+
+
+
+
+
+	private static function extended( array $data ): array {
+		$hasta = (string) ( $data['until'] ?? '' );
+		return self::words( '' === $hasta ? 'Prórroga quitada' : 'Prórroga hasta el ' . self::day( $hasta ), self::day( (string) ( $data['previous'] ?? '' ) ), self::day( $hasta ) );
+	}
+
+
+
+
+
+
+
+	private static function created_for( array $data ): array {
+		$porque = trim( (string) ( $data['ineligible'] ?? '' ) );
+		return self::words( 'Presentada en nombre del centro, con plazo para completarla hasta el ' . self::day( (string) ( $data['until'] ?? '' ) ) . ( '' !== $porque ? '. Aunque no cumple los requisitos: ' . $porque : '' ) );
+	}
+
+
+
+
+
+
+
+
+
+	private static function words( string $what, string $before = '', string $after = '' ): array {
+		return array(
+			'what'   => $what,
+			'before' => $before,
+			'after'  => $after,
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function person( array $spec, array $row ): string {
+		if ( array() === $row ) {
+			return '';
+		}
+		$dni = ApplicationPeople::masked_dni( (string) ( $row['dni'] ?? '' ) );
+		return ApplicationPeople::describe( $spec, $row ) . ( '' !== $dni ? ' · DNI ' . $dni : '' );
+	}
+
+
+
+
+
+
+
+	private static function day( string $ymd ): string {
+		return '' === $ymd ? '' : implode( '-', array_reverse( explode( '-', $ymd ) ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\PeopleSpec;
@@ -12821,15 +13220,7 @@ final class People {
 
 
 	private static function written( int $application_id, int $user_id, string $change, array $before, array $after ): array {
-		ApplicationLog::add(
-			$application_id,
-			'person_' . $change,
-			array(
-				'before' => $before,
-				'after'  => $after,
-			),
-			$user_id
-		);
+
 
 
 
@@ -27662,6 +28053,7 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\ApplicationHistory;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -27722,6 +28114,9 @@ final class App {
 		ApplicationExport::class,
 		ApplyForm::class,
 		PeopleForm::class,
+
+
+		ApplicationHistory::class,
 		MyCentre::class,
 
 		Observe::class,

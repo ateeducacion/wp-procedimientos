@@ -230,6 +230,41 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El correo de contacto de un borrador no sale en ningún aviso: ni en el
+	 * de «no existe», con sesión, ni en el de entrar, sin ella. Si saliera,
+	 * probar identificadores daría el correo y distinguiría un borrador de un
+	 * procedimiento que no existe.
+	 */
+	public function test_a_draft_does_not_leak_its_contact_address() {
+		$borrador = $this->procedure(
+			$this->administrator(),
+			array( $this->area() ),
+			array(
+				ProcedureMetaKeys::OPENS_AT       => $this->dia( -1 ),
+				ProcedureMetaKeys::CLOSES_AT      => $this->dia( 1 ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'borrador@example.org' ),
+			),
+			array( 'post_status' => 'draft' )
+		);
+
+		foreach ( array( $this->school_head( 'C0001' ), 0 ) as $quien ) {
+			$this->acting_as( $quien );
+			$m = $this->modelo( $borrador );
+			$this->assertSame( '', $m['contact_email'], (string) $quien );
+			$html = ApplyFormView::html( $m );
+			$this->assertStringNotContainsString( 'borrador@example.org', $html, (string) $quien );
+			$this->assertStringNotContainsString( '¿Cree que es un error?', $html, (string) $quien );
+		}
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertStringContainsString( 'no existe o todavía no está publicado', $this->modelo( $borrador )['aviso'] );
+
+		// Publicado, el correo sí acompaña al aviso.
+		$publicado = $this->procedimiento( array( ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ) ) );
+		$this->acting_as( 0 );
+		$this->assertSame( 'contacto@example.org', $this->modelo( $publicado )['contact_email'] );
+	}
+
+	/**
 	 * Y un perfil que no presenta solicitudes tampoco la ve, aunque tenga sesión.
 	 */
 	public function test_the_screen_asks_for_the_capability() {

@@ -944,6 +944,98 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Why this person may not apply to this procedure, in words; empty when they may.
+	 *
+	 * Es la otra cara de {@see can_apply()}, y vive aquí para que la ficha y
+	 * la pantalla de solicitud digan lo mismo: la ficha ya no esconde el botón
+	 * sin una palabra. Quién, no cuándo: el plazo lo dice el estado. Cada
+	 * motivo dice qué hacer, y los que dependen del procedimiento terminan en
+	 * su correo de contacto.
+	 *
+	 * @param int    $user_id User ID (0 = nobody).
+	 * @param int    $post_id Procedure ID (0 = just the account).
+	 * @param string $code    Code asked for; empty for any of the person's.
+	 * @return string
+	 */
+	public static function why_not_apply( int $user_id, int $post_id, string $code = '' ): string {
+		if ( self::can_apply( $user_id, $post_id, $code ) ) {
+			return '';
+		}
+		if ( $user_id <= 0 ) {
+			return 'Debe iniciar sesión con su cuenta personal para presentar la solicitud.';
+		}
+		$porque = self::why_not_account( $user_id, $post_id );
+		if ( '' !== $porque || $post_id <= 0 ) {
+			return $porque;
+		}
+		return CentreEligibility::with_contact(
+			self::why_not_procedure( $user_id, $post_id, $code ),
+			(string) ( ProcedureInput::emails( get_post_meta( $post_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' )
+		);
+	}
+
+	/**
+	 * Why the account itself does not apply: the role, the audience, the school.
+	 *
+	 * La cuenta genérica del centro y el perfil sin cargo de dirección son el
+	 * primer motivo de consulta: por eso el texto dice con qué cuenta entrar.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID (0 = just the account).
+	 * @return string Empty when the account would do.
+	 */
+	private static function why_not_account( int $user_id, int $post_id ): string {
+		$docentes = $post_id > 0 && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
+		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
+			return $docentes
+				? 'Su perfil no presenta solicitudes. Este procedimiento lo solicita cada docente con su cuenta personal: si ha entrado con otra, salga y entre con la suya.'
+				: 'Su perfil no presenta solicitudes de centro. Si ha entrado con la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es su cuenta personal, pida a quien administra el aplicativo que le asigne el cargo de dirección.';
+		}
+		$docente = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		if ( $docentes ) {
+			return $docente
+				? 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.'
+				: 'Este procedimiento lo solicita cada docente a título personal, con su propia cuenta. La dirección no presenta solicitud en nombre del centro.';
+		}
+		if ( array() !== CentreScope::codes_for( $user_id ) ) {
+			return '';
+		}
+		return $docente && $post_id > 0
+			? 'Este procedimiento lo presenta la dirección del centro, no cada docente.'
+			: 'Su cuenta no tiene centro asignado. Si es la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es la personal, pida a quien administra el aplicativo que le asigne el código de centro.';
+	}
+
+	/**
+	 * Why none of the account's codes —or that one— applies to this procedure.
+	 *
+	 * @param int    $user_id User ID, with some school code.
+	 * @param int    $post_id Procedure ID.
+	 * @param string $code    Code asked for; empty for any of the person's.
+	 * @return string
+	 */
+	private static function why_not_procedure( int $user_id, int $post_id, string $code ): string {
+		$suyos = CentreScope::codes_for( $user_id );
+		if ( '' !== $code && ! isset( $suyos[ $code ] ) ) {
+			return 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.';
+		}
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
+			return 'Ese procedimiento no existe o todavía no está publicado.';
+		}
+		$admite = self::centre_kinds( $post_id );
+		if ( array() === array_intersect( $suyos, $admite ) ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
+			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
+		}
+		$porque = self::why_not_eligible( $user_id, $post_id, $code );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		$codigo = '' !== $code ? $code : (string) array_key_first( $suyos );
+		$centro = (string) ( CentreCatalog::find( $codigo )['name'] ?? '' );
+		return 'Su centro (' . ( '' !== $centro ? $centro . ', ' : '' ) . $codigo . ') no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha.';
+	}
+
+	/**
 	 * The centre kinds a procedure takes; every kind when it says none.
 	 *
 	 * @param int $post_id Procedure ID.

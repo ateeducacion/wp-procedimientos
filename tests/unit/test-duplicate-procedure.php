@@ -459,6 +459,8 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertFalse( ProcedureAccess::can_duplicate( $this->school_head( '99000001' ), $id ) );
 		$this->assertFalse( ProcedureAccess::can_duplicate( $uid, $this->application( $id, $this->school_head( '99000002' ), '99000002' ) ), 'una solicitud no es un procedimiento' );
 
+		$this->assertFalse( ProcedureAccess::can_duplicate( $this->observer( array( '99000099' ) ), $id ), 'quien consulta no duplica' );
+
 		$this->assertNull( $this->duplicar( $ajena, $id ) );
 		$this->assertNull( $this->duplicar( $nadie, $id ) );
 		$this->assertSame( array(), $this->otros( array( $id ) ), 'no se creó nada' );
@@ -466,6 +468,21 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->acting_as( $ajena );
 		$_GET = array( ProcedureEditor::ARG_PROCEDURE => (string) $id );
 		$this->assertStringContainsString( 'otro ámbito', ProcedureEditor::model()['aviso'] );
+	}
+
+	/**
+	 * Un procedimiento en la papelera no se duplica: primero se restaura.
+	 */
+	public function test_a_trashed_procedure_is_not_duplicated() {
+		$area = $this->area( 'Área de prueba' );
+		$uid  = $this->manager( array( $area ) );
+		$id   = $this->completo( $uid, array( $area ) );
+		wp_trash_post( $id );
+
+		$this->assertFalse( ProcedureAccess::can_duplicate( $uid, $id ) );
+		$this->assertFalse( ProcedureAccess::can_duplicate( $this->administrator(), $id ) );
+		$this->assertNull( $this->duplicar( $uid, $id ) );
+		$this->assertSame( array(), $this->otros( array( $id ) ) );
 	}
 
 	/**

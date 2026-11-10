@@ -6395,36 +6395,6 @@ final class ProcedureAccess {
 
 
 
-	public static function scope_diagnostics(): array {
-		$rows = array();
-		foreach ( get_users() as $user ) {
-			if ( ! ( $user instanceof \WP_User ) || self::can_edit_all_areas( $user->ID ) ) {
-				continue;
-			}
-			if ( ! user_can( $user, self::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
-				continue;
-			}
-			$rows[] = array_merge(
-				array(
-					'user_id' => $user->ID,
-					'login'   => $user->user_login,
-				),
-				self::scope_assignment_state( $user->ID ),
-				array( 'global_only' => self::has_only_global_areas( $user->ID ) )
-			);
-		}
-		return $rows;
-	}
-
-
-
-
-
-
-
-
-
-
 	public static function scope_areas( int $user_id = 0 ): array {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -6600,6 +6570,34 @@ final class ProcedureAccess {
 			return false;
 		}
 		return self::in_scope( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool {
+		$areas = null;
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
+			return false;
+		}
+		$suyos = self::post_areas( $post_id );
+		$areas = self::can_edit_all_areas( $user_id ) ? $suyos : array_values( array_intersect( $suyos, self::scope_areas( $user_id ) ) );
+		$areas = array() !== $areas ? $areas : self::user_areas( $user_id );
+		return true;
 	}
 
 
@@ -27142,6 +27140,39 @@ final class Settings {
 
 
 
+
+
+
+
+	public static function scope_diagnostics(): array {
+		$rows = array();
+		foreach ( get_users() as $user ) {
+			if ( ! ( $user instanceof \WP_User ) || ProcedureAccess::can_edit_all_areas( $user->ID ) ) {
+				continue;
+			}
+			if ( ! user_can( $user, ProcedureAccess::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
+				continue;
+			}
+			$rows[] = array_merge(
+				array(
+					'user_id' => $user->ID,
+					'login'   => $user->user_login,
+				),
+				ProcedureAccess::scope_assignment_state( $user->ID ),
+				array( 'global_only' => ProcedureAccess::has_only_global_areas( $user->ID ) )
+			);
+		}
+		return $rows;
+	}
+
+
+
+
+
+
+
+
+
 	private static function private_types_form(): void {
 		$tipos = get_option( CentreCatalog::OPTION_PRIVATE_TYPES, array() );
 		?>
@@ -27328,7 +27359,7 @@ final class Settings {
 			<table class="widefat striped" style="max-width:46rem">
 				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th><th>Solo global</th></tr></thead>
 				<tbody>
-				<?php foreach ( ProcedureAccess::scope_diagnostics() as $row ) : ?>
+				<?php foreach ( self::scope_diagnostics() as $row ) : ?>
 					<tr>
 						<td><a href="<?php echo esc_url( get_edit_user_link( $row['user_id'] ) ); ?>"><?php echo esc_html( $row['login'] ); ?></a></td>
 						<td><?php echo esc_html( $row['state'] ); ?></td>

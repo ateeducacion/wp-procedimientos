@@ -45,6 +45,19 @@ final class PanelParts {
 	);
 
 	/**
+	 * The discreet «¿Dudas?» line that takes a screen to its section of the help.
+	 *
+	 * @param string $url Help URL with its anchor, from Help::url().
+	 * @return string Empty when there is no help page.
+	 */
+	public static function help_link( string $url ): string {
+		if ( '' === $url ) {
+			return '';
+		}
+		return '<p class="prc-ayuda-enlace">¿Dudas? <a href="' . esc_url( $url ) . '">Consulte la ayuda</a></p>';
+	}
+
+	/**
 	 * An icon link, with the same shape as the icon buttons.
 	 *
 	 * @param string $url    Where it goes.

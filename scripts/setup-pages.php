@@ -45,6 +45,7 @@ if ( ! function_exists( 'prc_page_titles' ) ) {
 			'apply'     => 'Solicitud',
 			'mine'      => 'Mi centro',
 			'observe'   => 'Consulta de solicitudes',
+			'help'      => 'Ayuda',
 		);
 	}
 }

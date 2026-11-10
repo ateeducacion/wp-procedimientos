@@ -171,6 +171,7 @@ final class ApplyFormView {
 		<?php if ( '' !== $subsanacion ) : ?>
 			<p class="prc-sub"><?php echo esc_html( 'Plazo de subsanación: ' . lcfirst( $subsanacion ) ); ?></p>
 		<?php endif; ?>
+		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		<?php
 		return (string) ob_get_clean();
 	}

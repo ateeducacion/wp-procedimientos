@@ -407,6 +407,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
+					<?php echo self::centre_warning( $m, 'ownership' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -725,7 +726,10 @@ final class ProcedureEditorView {
 		ob_start();
 		?>
 		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
-			<div class="prc-campo prc-campo--completo"><p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con cualquier límite, solo los centros del catálogo que lo cumplan; las solicitudes ya presentadas no se tocan.</p></div>
+			<div class="prc-campo prc-campo--completo">
+				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<?php echo self::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			</div>
 			<?php foreach ( $listas as $nombre => $lista ) : ?>
 				<div class="prc-campo prc-campo--medio">
 					<fieldset>
@@ -756,6 +760,18 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * One warning about the centre rules, when the model has it.
+	 *
+	 * @param array<string, mixed> $m   Model.
+	 * @param string               $key `ownership` or `catalogue`.
+	 * @return string
+	 */
+	private static function centre_warning( array $m, string $key ): string {
+		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
+		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
 
 	/**

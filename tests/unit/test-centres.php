@@ -529,6 +529,8 @@ class Test_Centres extends WP_UnitTestCase {
 	 * 13. Settings::render renderiza correctamente para administrador.
 	 */
 	public function test_settings_centres_render_page_admin(): void {
+		// Sin el catálogo inventado del entorno: el estado es el que sirve el dominio.
+		remove_all_filters( 'prc_centres' );
 		$admin = $this->administrator();
 		$this->acting_as( $admin );
 
@@ -1142,5 +1144,54 @@ class Test_Centres extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . CentreCatalog::OPTION_PRIVATE_TYPES . '"', $html );
 		$this->assertStringContainsString( "Tipo Privado A\nTipo B</textarea>", $html );
 		delete_option( CentreCatalog::OPTION_PRIVATE_TYPES );
+	}
+
+	/**
+	 * El diagnóstico mira lo que sirve el dominio y cuenta qué procedimientos
+	 * publicados dependen del catálogo y de los tipos privados.
+	 */
+	public function test_settings_count_what_depends_on_the_catalogue(): void {
+		remove_all_filters( 'prc_centres' );
+		remove_all_filters( 'prc_private_centre_types' );
+		$admin = $this->administrator();
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'public' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'public', 'private' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'private' ) ), array( 'post_status' => 'draft' ) );
+
+		$this->assertSame(
+			array(
+				'catalogue' => 2,
+				'private'   => 1,
+			),
+			Settings::dependents()
+		);
+
+		$this->acting_as( $admin );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Centros que sirve el aplicativo: 0.', $html );
+		$this->assertStringContainsString( '2 procedimientos publicados dependen del catálogo', $html );
+		$this->assertStringContainsString( '1 procedimientos publicados dependen de los tipos privados', $html );
+
+		// Un catálogo que solo contesta el filtro también cuenta como disponible.
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Escuela Inventada',
+					),
+				);
+			}
+		);
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Centros que sirve el aplicativo: 1.', $html );
+		$this->assertStringNotContainsString( 'dependen del catálogo', $html );
+		$this->assertStringContainsString( '> Disponible', $html );
 	}
 }

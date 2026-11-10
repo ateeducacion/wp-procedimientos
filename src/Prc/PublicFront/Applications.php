@@ -632,7 +632,7 @@ final class Applications {
 			'applicant'         => false !== $autor ? (string) $autor->display_name : '',
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator'       => ApplicationMetaRegistration::full_names( $coord ),
 			'coordinator_dni'   => implode( ', ', array_filter( array_column( $coord, 'dni' ) ) ),
 			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),

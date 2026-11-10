@@ -211,3 +211,13 @@ cambió qué— existe ya para las personas, en el historial de la solicitud
 (`ApplicationLog`); marcar y desmarcar siguen sin registrarse.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-10 (ADR-0044)
+
+El histórico cierra también las actuaciones de la
+[ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md): en un procedimiento marcado no se retira, no se restaura, no
+se concede ni se usa una prórroga y no se presenta en nombre de nadie,
+**tampoco administración**: son escrituras sobre las solicitudes, y no hay nada
+que rematar en ellas. Marcar y desmarcar siguen sin registrarse.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

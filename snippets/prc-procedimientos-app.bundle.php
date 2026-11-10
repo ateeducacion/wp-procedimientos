@@ -4322,6 +4322,8 @@ final class CentreCatalogueSync {
 
 			update_option( CentreCatalogue::OPTION_CATALOGUE, $indexed, false );
 
+			\Prc\Domain\CentreCatalog::flush();
+
 			$status = array(
 				'schema_version'       => 1,
 				'sha256'               => $remote_sha256,
@@ -4404,6 +4406,65 @@ final class CentreCatalog {
 
 
 
+	private const CACHE_GROUP = 'prc_centres';
+
+
+
+
+
+
+	private static $memo = array(
+		'key'   => null,
+		'all'   => array(),
+		'index' => null,
+	);
+
+
+
+
+
+
+	public static function register(): void {
+		foreach ( array( 'added_option', 'updated_option', 'deleted_option' ) as $accion ) {
+			add_action( $accion, array( self::class, 'on_option' ) );
+		}
+	}
+
+
+
+
+
+
+
+	public static function on_option( $option ): void {
+		if ( in_array( $option, array( \Prc\Centre\CentreCatalogue::OPTION_CATALOGUE, self::OPTION_PRIVATE_TYPES ), true ) ) {
+			self::flush();
+		}
+	}
+
+
+
+
+
+
+	public static function flush(): void {
+		self::$memo = array(
+			'key'   => null,
+			'all'   => array(),
+			'index' => null,
+		);
+		wp_cache_delete( 'last_changed', self::CACHE_GROUP );
+	}
+
+
+
+
+
+
+
+
+
+
 
 	public static function all(): array {
 
@@ -4414,14 +4475,16 @@ final class CentreCatalog {
 
 
 
+		$clave = self::memo_key();
+		if ( $clave === self::$memo['key'] ) {
+			return self::$memo['all'];
+		}
 		$default = class_exists( '\Prc\Centre\CentreCatalogue' ) ? \Prc\Centre\CentreCatalogue::for_domain() : array();
 		if ( empty( $default ) ) {
 			$default = self::from_uploads();
 		}
 		$raw = apply_filters( 'prc_centres', $default );
-		if ( ! is_array( $raw ) ) {
-			return array();
-		}
+		$raw = is_array( $raw ) ? $raw : array();
 
 		$privados = self::private_types();
 		$out      = array();
@@ -4438,6 +4501,11 @@ final class CentreCatalog {
 		foreach ( $out as $i => $centro ) {
 			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
 		}
+		self::$memo = array(
+			'key'   => $clave,
+			'all'   => $out,
+			'index' => null,
+		);
 		return $out;
 	}
 
@@ -4446,12 +4514,30 @@ final class CentreCatalog {
 
 
 
-	public static function index(): array {
-		$out = array();
-		foreach ( self::all() as $centro ) {
-			$out[ $centro['code'] ] = $centro;
+	private static function memo_key(): string {
+		global $wp_filter;
+		$clave = (string) wp_cache_get_last_changed( self::CACHE_GROUP );
+		foreach ( array( 'prc_centres', 'prc_private_centre_types' ) as $hook ) {
+			$clave  .= '|' . $hook;
+			$ganchos = isset( $wp_filter[ $hook ] ) && $wp_filter[ $hook ] instanceof \WP_Hook ? $wp_filter[ $hook ]->callbacks : array();
+			foreach ( $ganchos as $prioridad => $funciones ) {
+				$clave .= ':' . $prioridad . '=' . implode( ',', array_keys( $funciones ) );
+			}
 		}
-		return $out;
+		return $clave;
+	}
+
+
+
+
+
+
+	public static function index(): array {
+		$todos = self::all();
+		if ( null === self::$memo['index'] ) {
+			self::$memo['index'] = array_column( $todos, null, 'code' );
+		}
+		return self::$memo['index'];
 	}
 
 
@@ -4465,12 +4551,7 @@ final class CentreCatalog {
 		if ( '' === $code ) {
 			return array();
 		}
-		foreach ( self::all() as $centro ) {
-			if ( $centro['code'] === $code ) {
-				return $centro;
-			}
-		}
-		return array();
+		return self::index()[ $code ] ?? array();
 	}
 
 
@@ -9368,8 +9449,9 @@ final class CentreColumns {
 
 
 
-	public static function index_for( array $applications ): array {
-		return array() === $applications ? array() : CentreCatalog::index();
+
+	public static function index_for( array $applications, bool $wanted = true ): array {
+		return $wanted && array() !== $applications ? CentreCatalog::index() : array();
 	}
 
 
@@ -10079,14 +10161,15 @@ final class Applications {
 
 
 
-	public static function rows( int $procedure_id, ?array $applications = null ): array {
+
+	public static function rows( int $procedure_id, ?array $applications = null, bool $centre = false ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
 		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 
-		$catalogo = CentreColumns::index_for( $solicitudes );
+		$catalogo = CentreColumns::index_for( $solicitudes, $centre );
 		foreach ( $solicitudes as $solicitud ) {
 			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}
@@ -23743,6 +23826,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
@@ -23835,6 +23919,7 @@ final class App {
 		ProcedureMetaRegistration::register();
 		ApplicationMetaRegistration::register();
 		ProcedureAccess::register();
+		CentreCatalog::register();
 
 
 

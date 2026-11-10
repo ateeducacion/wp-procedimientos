@@ -46,6 +46,7 @@ return array(
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
 	'PublicFront/ApplicationLog.php',
+	'PublicFront/People.php',
 	'PublicFront/ApplicationExport.php',
 	'PublicFront/View/HomeView.php',
 	'PublicFront/Home.php',

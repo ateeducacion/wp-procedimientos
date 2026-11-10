@@ -4241,6 +4241,7 @@ final class CentreScope {
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
@@ -4297,6 +4298,13 @@ final class ProcedureAccess {
 
 
 	public const CAP_MANAGE = 'prc_manage_app';
+
+
+
+
+
+
+	public const CAP_EDIT_PEOPLE = 'prc_edit_people';
 
 
 
@@ -5048,6 +5056,56 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
+	public static function can_edit_people( int $user_id, int $application_id ): bool {
+		return '' === self::why_not_people( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+	public static function why_not_people( int $user_id, int $application_id ): string {
+		$ajena = 'Solo gestiona las personas de una solicitud el equipo directivo de su centro.';
+		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) || 'publish' !== get_post_status( $application_id ) ) {
+			return $ajena;
+		}
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		if ( ! $docente && ! isset( CentreScope::codes_for( $user_id )[ (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ) ] ) ) {
+			return $ajena;
+		}
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
+			return 'Ese procedimiento no existe o no está publicado.';
+		}
+		return PeopleSpec::why_closed(
+			get_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, true ),
+			array(
+				'today'    => ProcedureState::today(),
+				'archived' => self::is_archived( $procedure_id ),
+				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
+				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
+				'state'    => ProcedureState::of_post( $procedure_id ),
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
 	public static function why_not_editable( int $user_id, int $post_id, string $group = '' ): string {
 		if ( self::can_edit( $user_id, $post_id ) ) {
 
@@ -5087,6 +5145,9 @@ final class ProcedureAccess {
 			return self::may_use_area( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 )
 				? $caps
 				: array( 'do_not_allow' );
+		}
+		if ( self::CAP_EDIT_PEOPLE === $cap ) {
+			return self::can_edit_people( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
 		}
 		if ( ! in_array( $cap, array( 'edit_post', 'delete_post', 'publish_post', 'read_post' ), true ) ) {
 			return $caps;
@@ -9928,7 +9989,8 @@ final class ApplicationLog {
 
 
 
-	public static function add( int $application_id, string $event, array $data ): void {
+
+	public static function add( int $application_id, string $event, array $data, int $user_id = 0 ): void {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return;
 		}
@@ -9936,7 +9998,7 @@ final class ApplicationLog {
 		$todo   = self::all( $application_id );
 		$todo[] = array(
 			'at'    => gmdate( 'Y-m-d\TH:i:s\Z' ),
-			'user'  => get_current_user_id(),
+			'user'  => $user_id > 0 ? $user_id : get_current_user_id(),
 			'event' => $event,
 			'data'  => $data,
 		);
@@ -9999,6 +10061,299 @@ final class ApplicationLog {
 			}
 		}
 		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\People', false ) ) {
+final class People {
+
+	public const ADDED   = 'added';
+	public const CHANGED = 'changed';
+	public const REMOVED = 'removed';
+
+
+
+
+
+
+
+	public static function spec( int $procedure_id ): array {
+		return PeopleSpec::sanitize( $procedure_id > 0 ? get_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, true ) : array() );
+	}
+
+
+
+
+
+
+
+
+
+	public static function enabled( int $procedure_id ): bool {
+		return true === self::spec( $procedure_id )['enabled']
+			&& ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+	}
+
+
+
+
+
+
+
+	public static function of( int $application_id ): array {
+		return ApplicationPeople::rows( get_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, true ) );
+	}
+
+
+
+
+
+
+
+
+
+	public static function add( int $application_id, int $user_id, array $raw ): array {
+		$raw['id'] = '';
+		return self::apply( $application_id, $user_id, self::ADDED, '', '', $raw );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function change( int $application_id, int $user_id, string $id, string $huella, array $raw ): array {
+		return self::apply( $application_id, $user_id, self::CHANGED, $id, $huella, $raw );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function remove( int $application_id, int $user_id, string $id, string $huella ): array {
+		return self::apply( $application_id, $user_id, self::REMOVED, $id, $huella, array() );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function apply( int $application_id, int $user_id, string $change, string $id, string $huella, array $raw ): array {
+		if ( ! user_can( $user_id, ProcedureAccess::CAP_EDIT_PEOPLE, $application_id ) ) {
+			return self::refused( ProcedureAccess::why_not_people( $user_id, $application_id ) );
+		}
+
+		wp_cache_delete( $application_id, 'post_meta' );
+		$lista = self::of( $application_id );
+		$sitio = self::position( $lista, $id );
+		if ( self::ADDED !== $change ) {
+			$stale = self::stale( $lista, $sitio, $huella );
+			if ( '' !== $stale ) {
+				return self::refused( $stale );
+			}
+		}
+		$antes = null === $sitio ? array() : $lista[ $sitio ];
+		if ( self::REMOVED === $change ) {
+			array_splice( $lista, (int) $sitio, 1 );
+			return self::write( $application_id, $user_id, $change, $antes, array(), $lista );
+		}
+
+		$fila       = ApplicationPeople::row( $raw );
+		$fila['id'] = self::ADDED === $change ? bin2hex( random_bytes( 6 ) ) : $id;
+		$errores    = ApplicationPeople::validate( self::spec( (int) wp_get_post_parent_id( $application_id ) ), $lista, self::ADDED === $change ? array( 'id' => '' ) + $fila : $fila );
+		if ( array() !== $errores ) {
+			return array(
+				'ok'     => false,
+				'error'  => self::why( $errores ),
+				'errors' => $errores,
+			);
+		}
+		if ( null === $sitio ) {
+			$lista[] = $fila;
+		} else {
+			$lista[ $sitio ] = $fila;
+		}
+		return self::write( $application_id, $user_id, $change, $antes, $fila, $lista );
+	}
+
+
+
+
+
+
+
+
+
+	private static function stale( array $rows, ?int $where, string $huella ): string {
+		if ( null === $where ) {
+			return 'Esa persona ya no está en la lista: otra cuenta de su centro la ha dado de baja mientras tanto. Revise la lista tal como está ahora.';
+		}
+		if ( ! hash_equals( ApplicationPeople::fingerprint( $rows[ $where ] ), $huella ) ) {
+			return 'Otra cuenta de su centro ha cambiado esta persona mientras usted la tenía abierta, y no se ha guardado nada para no pisar su cambio. Revise los datos actuales y vuelva a intentarlo.';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function write( int $application_id, int $user_id, string $change, array $before, array $after, array $rows ): array {
+		update_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, wp_slash( array_values( $rows ) ) );
+		ApplicationLog::add(
+			$application_id,
+			'person_' . $change,
+			array(
+				'before' => $before,
+				'after'  => $after,
+			),
+			$user_id
+		);
+
+
+
+
+
+
+
+
+
+
+		do_action( 'prc_people_changed', $application_id, $change, $before, $after, $user_id );
+
+		return array(
+			'ok'     => true,
+			'error'  => '',
+			'errors' => array(),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function position( array $rows, string $id ): ?int {
+		foreach ( $rows as $i => $fila ) {
+			if ( '' !== $id && $fila['id'] === $id ) {
+				return (int) $i;
+			}
+		}
+		return null;
+	}
+
+
+
+
+
+
+
+
+
+	public static function used_keys( int $procedure_id ): array {
+		$out = array(
+			'roles'  => array(),
+			'groups' => array(),
+		);
+		foreach ( Applications::for_procedure( $procedure_id ) as $solicitud ) {
+			foreach ( self::of( (int) $solicitud->ID ) as $fila ) {
+				$out['roles'][ $fila['role'] ] = true;
+				if ( '' !== $fila['group'] ) {
+					$out['groups'][ $fila['group'] ] = true;
+				}
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function why( array $errors ): string {
+		$campos = array_intersect_key( $errors, array_flip( array( 'name', 'surname', 'dni', 'email', 'phone', 'role', 'group' ) ) );
+		if ( array() === $campos ) {
+			return (string) reset( $errors );
+		}
+		$ultimo = array_pop( $campos );
+		return 'Revise ' . ( array() === $campos ? '' : implode( ', ', $campos ) . ' y ' ) . $ultimo . '.';
+	}
+
+
+
+
+
+
+
+	private static function refused( string $why ): array {
+		return array(
+			'ok'     => false,
+			'error'  => $why,
+			'errors' => array(),
+		);
 	}
 }
 
@@ -19132,6 +19487,8 @@ namespace Prc\Notifications;
 
 
 
+
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -19235,6 +19592,9 @@ final class Messages {
 
 			case Mailer::EVENT_PROCEDURE_CREATED:
 				return array( 'Procedimiento creado en borrador: ' . $titulo, self::created( $titulo, $ctx ) );
+
+			case Mailer::EVENT_PEOPLE_CHANGED:
+				return self::people( $titulo, $quien, $ctx );
 		}
 		return null;
 	}
@@ -19275,6 +19635,40 @@ final class Messages {
 			$lineas[] = $extra;
 		}
 		return $lineas;
+	}
+
+
+
+
+
+
+
+
+
+	private static function people( string $titulo, string $quien, array $ctx ): ?array {
+		$cambios = array(
+			'added'   => array( 'alta', 'Se ha dado de alta a una persona en' ),
+			'changed' => array( 'cambio', 'Se ha cambiado una persona de' ),
+			'removed' => array( 'baja', 'Se ha dado de baja a una persona de' ),
+		);
+		$cambio  = $cambios[ self::text( $ctx, 'change' ) ] ?? null;
+		if ( null === $cambio ) {
+			return null;
+		}
+		return array(
+			'Personas de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			array_merge(
+				array( $cambio[1] . ' la lista de personas de una solicitud del procedimiento «' . $titulo . '».', '' ),
+				self::field( 'Procedimiento', $titulo ),
+				self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+				self::field( 'Hecho por', self::text( $ctx, 'applicant' ) ),
+				self::field( 'Fecha', self::text( $ctx, 'date' ) ),
+				array( '' ),
+				self::field( 'Antes', self::text( $ctx, 'before' ) ),
+				self::field( 'Después', self::text( $ctx, 'after' ) ),
+				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+			),
+		);
 	}
 
 
@@ -19401,6 +19795,7 @@ namespace Prc\Notifications;
 
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -19410,6 +19805,7 @@ use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\People;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -19441,6 +19837,7 @@ final class Mailer {
 	public const EVENT_REVIEW_CHANGED        = 'review_changed';
 	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
 	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
+	public const EVENT_PEOPLE_CHANGED        = 'people_changed';
 
 
 
@@ -19477,6 +19874,7 @@ final class Mailer {
 		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 3 );
 		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
+		add_action( 'prc_people_changed', array( self::class, 'on_people_changed' ), 10, 5 );
 	}
 
 
@@ -19492,6 +19890,7 @@ final class Mailer {
 			self::EVENT_REVIEW_CHANGED,
 			self::EVENT_DELIVERY_RECEIVED,
 			self::EVENT_PROCEDURE_CREATED,
+			self::EVENT_PEOPLE_CHANGED,
 		);
 	}
 
@@ -19823,6 +20222,40 @@ final class Mailer {
 				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
 				$destinos[] = self::email_of( (int) $user_id );
 				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_people_changed( $application_id, $change = '', $before = array(), $after = array(), $user_id = 0 ): void {
+		self::safely(
+			static function () use ( $application_id, $change, $before, $after, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				$spec          = People::spec( (int) $ctx['procedure_id'] );
+				$ctx['change'] = (string) $change;
+				$ctx['before'] = array() !== (array) $before ? ApplicationPeople::describe( $spec, (array) $before ) : '';
+				$ctx['after']  = array() !== (array) $after ? ApplicationPeople::describe( $spec, (array) $after ) : '';
+				$ctx['date']   = (string) wp_date( 'd-m-Y H:i' );
+				$ctx['url']    = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				unset( $ctx['answers'] );
+				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);
 	}

@@ -9,6 +9,7 @@ namespace Prc\Notifications;
 
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -18,6 +19,7 @@ use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\People;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -48,6 +50,7 @@ final class Mailer {
 	public const EVENT_REVIEW_CHANGED        = 'review_changed';
 	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
 	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
+	public const EVENT_PEOPLE_CHANGED        = 'people_changed';
 
 	/**
 	 * Name the mails are sent as. Empty: WordPress decides.
@@ -84,6 +87,7 @@ final class Mailer {
 		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 3 );
 		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
+		add_action( 'prc_people_changed', array( self::class, 'on_people_changed' ), 10, 5 );
 	}
 
 	/**
@@ -99,6 +103,7 @@ final class Mailer {
 			self::EVENT_REVIEW_CHANGED,
 			self::EVENT_DELIVERY_RECEIVED,
 			self::EVENT_PROCEDURE_CREATED,
+			self::EVENT_PEOPLE_CHANGED,
 		);
 	}
 
@@ -430,6 +435,40 @@ final class Mailer {
 				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
 				$destinos[] = self::email_of( (int) $user_id );
 				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
+			}
+		);
+	}
+
+	/**
+	 * One person of the list of an application has been added, changed or removed.
+	 *
+	 * A los correos de contacto del procedimiento y a nadie más: ni la copia
+	 * de administración ni el centro, que es quien lo ha hecho (ADR-0041). El
+	 * antes y el después van legibles —papel y grupo por su rótulo— y **sin
+	 * el DNI**: un correo no es sitio para él.
+	 *
+	 * @param int                  $application_id Application ID.
+	 * @param string               $change         `added`, `changed` or `removed`.
+	 * @param array<string, mixed> $before         The row before; empty when added.
+	 * @param array<string, mixed> $after          The row after; empty when removed.
+	 * @param int                  $user_id        Account that did it.
+	 * @return void
+	 */
+	public static function on_people_changed( $application_id, $change = '', $before = array(), $after = array(), $user_id = 0 ): void {
+		self::safely(
+			static function () use ( $application_id, $change, $before, $after, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				$spec          = People::spec( (int) $ctx['procedure_id'] );
+				$ctx['change'] = (string) $change;
+				$ctx['before'] = array() !== (array) $before ? ApplicationPeople::describe( $spec, (array) $before ) : '';
+				$ctx['after']  = array() !== (array) $after ? ApplicationPeople::describe( $spec, (array) $after ) : '';
+				$ctx['date']   = (string) wp_date( 'd-m-Y H:i' );
+				$ctx['url']    = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				unset( $ctx['answers'] );
+				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);
 	}

@@ -444,7 +444,7 @@ final class HelpContent {
 				'id'    => 'exportar',
 				'level' => 2,
 				'title' => 'Exporte',
-				'html'  => '<p>Botón <strong>«Exportar…»</strong>: elija <strong>todas</strong> o <strong>las del filtro</strong>, las <strong>columnas</strong> y si quiere <strong>una fila por solicitud</strong> o <strong>una por persona coordinadora</strong>. También puede sacar el <strong>fichero de alta de usuarios</strong> para la plataforma de formación. Se descarga una hoja de cálculo (CSV).</p>',
+				'html'  => '<p>Botón <strong>«Exportar…»</strong>: elija <strong>todas</strong> o <strong>las del filtro</strong>, las <strong>columnas</strong> y si quiere <strong>una fila por solicitud</strong> o <strong>una por persona coordinadora</strong>. También puede sacar el <strong>fichero de alta de usuarios de Moodle</strong>, con el formato que admite su importación. Se descarga una hoja de cálculo (CSV).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'diálogo «Exportar las solicitudes» con las columnas',

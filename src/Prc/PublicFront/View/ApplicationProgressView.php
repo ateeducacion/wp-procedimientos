@@ -158,8 +158,8 @@ final class ApplicationProgressView {
 			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
-			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
-			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
+			. '<button class="' . esc_attr( Assets::button_class( 'final' ) ) . '" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios de la solicitud' ) . '</button></div>';
 	}
 
 	/**

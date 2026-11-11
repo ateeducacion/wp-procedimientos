@@ -919,6 +919,14 @@ body.prc-app .prc-hoja {
 .prc-btn-primary { color: #fff; background: var(--prc-c-azul); border-color: var(--prc-c-azul); }
 .prc-btn-primary:hover { color: #fff; background: var(--prc-c-azul-hover); border-color: var(--prc-c-azul-borde); filter: none; }
 
+/* La secundaria de `Assets::button_class()`: blanca con borde gris, que no
+   compite con la principal ni se confunde con un campo. */
+.prc-btn-sec { color: #495057; background: #fff; border-color: #6c757d; }
+.prc-btn-sec:hover { color: #fff; background: #6c757d; filter: none; }
+
+/* La acción final de una pantalla —presentar la solicitud—: la principal, más grande. */
+.prc-btn-final { padding: 10px 20px; font-size: 18px; font-weight: 600; }
+
 /* El secundario: el mismo botón en blanco. No está en el original —allí la
    acción secundaria era un enlace suelto— y se añade porque una pantalla con
    dos botones azules no dice cuál es la acción principal. */
@@ -961,6 +969,12 @@ body.prc-app .btn-primary {
   --bs-btn-hover-border-color: var(--prc-c-azul-borde);
   --bs-btn-active-bg: var(--prc-c-azul-hover);
   --bs-btn-active-border-color: var(--prc-c-azul-borde);
+}
+body.prc-app .btn-outline-secondary {
+  --bs-btn-color: #495057;
+  --bs-btn-border-color: #6c757d;
+  --bs-btn-hover-bg: #6c757d;
+  --bs-btn-hover-border-color: #6c757d;
 }
 body.prc-app .btn-light {
   --bs-btn-bg: var(--prc-c-fondo-accion);

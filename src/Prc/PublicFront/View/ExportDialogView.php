@@ -129,7 +129,7 @@ final class ExportDialogView {
 				</fieldset>
 
 				<div class="prc-acciones">
-					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar el fichero</button>
 				</div>
 			</form>
 		</details>

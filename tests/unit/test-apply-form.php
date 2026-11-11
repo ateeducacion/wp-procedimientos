@@ -11,6 +11,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\View\ApplyFormView;
 use Prc\PublicFront\View\ProcedureChrome;
@@ -551,7 +552,8 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-control prc-control--bloqueado', $html, 'el campo bloqueado' );
 		$this->assertStringContainsString( 'class="prc-campo__obligatorio" aria-hidden="true">*', $html, 'el asterisco es decorativo' );
 		$this->assertStringContainsString( 'placeholder="Escriba aquí"', $html, 'la caja de respuesta libre' );
-		$this->assertStringContainsString( 'class="prc-boton-enviar"', $html );
+		$this->assertStringContainsString( '<button class="' . Assets::button_class( 'final' ) . '" type="submit">', $html, 'el botón de siempre, en su variante final' );
+		$this->assertStringNotContainsString( 'prc-boton-enviar', $html );
 	}
 
 	/** A procedure requesting two coordinators shows two independently labelled rows. */
@@ -918,7 +920,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->acting_as( $direccion );
 		$html = $this->pintar( $procedimiento );
-		$this->assertStringContainsString( 'Guardar los cambios', $html, 'y el botón ya no dice presentar' );
+		$this->assertStringContainsString( 'Guardar los cambios de la solicitud', $html, 'y el botón ya no dice presentar' );
 		$this->assertStringContainsString( 'Su solicitud', $html );
 	}
 

@@ -256,18 +256,25 @@ final class Assets {
 	 * Tres variantes: la principal (`true`), la secundaria (por defecto) y la
 	 * de peligro (`'danger'`), para lo destructivo o difícil de deshacer
 	 * —retirar, devolver a borrador, cerrar, marcar como histórico—, que
-	 * siempre lleva su consecuencia escrita al lado.
+	 * siempre lleva su consecuencia escrita al lado. La principal tiene un
+	 * tamaño más (`'final'`) para la acción con la que se termina una
+	 * pantalla: presentar la solicitud. Ninguna pantalla lleva un botón con
+	 * estilo propio.
 	 *
-	 * @param bool|string $variant True for the primary action, 'danger' for a destructive one.
+	 * @param bool|string $variant True for the primary action, 'final' for the closing one, 'danger' for a destructive one.
 	 * @return string
 	 */
 	public static function button_class( $variant = false ): string {
-		if ( 'danger' === $variant ) {
-			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		$clases = array(
+			'danger' => 'prc-btn prc-btn-borrar btn btn-outline-danger',
+			'final'  => 'prc-btn prc-btn-primary prc-btn-final btn btn-primary btn-lg',
+		);
+		if ( is_string( $variant ) && isset( $clases[ $variant ] ) ) {
+			return $clases[ $variant ];
 		}
 		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
-			: 'prc-btn btn btn-light';
+			: 'prc-btn prc-btn-sec btn btn-outline-secondary';
 	}
 
 	/**

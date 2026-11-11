@@ -266,6 +266,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
 		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
 		$this->assertStringNotContainsString( 'JavaScript', $html );
+		$this->assertStringContainsString( '>Guardar el código</button>', $html, 'guardar y qué' );
 	}
 
 	/** Administrators see the executable editor and its yellow public-impact warning. */
@@ -1956,7 +1957,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNotNull( $redirect );
 		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
 		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
-		$this->assertStringContainsString( 'Guardar nuevos cierres', $html );
+		$this->assertStringContainsString( 'Guardar los nuevos cierres', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
 		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertSame( $new_close, $after[0]['closes_at'] );

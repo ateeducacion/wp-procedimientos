@@ -10164,13 +10164,20 @@ final class Assets {
 
 
 
+
+
+
 	public static function button_class( $variant = false ): string {
-		if ( 'danger' === $variant ) {
-			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		$clases = array(
+			'danger' => 'prc-btn prc-btn-borrar btn btn-outline-danger',
+			'final'  => 'prc-btn prc-btn-primary prc-btn-final btn btn-primary btn-lg',
+		);
+		if ( is_string( $variant ) && isset( $clases[ $variant ] ) ) {
+			return $clases[ $variant ];
 		}
 		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
-			: 'prc-btn btn btn-light';
+			: 'prc-btn prc-btn-sec btn btn-outline-secondary';
 	}
 
 
@@ -18727,7 +18734,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(
@@ -21825,7 +21832,7 @@ final class ExportDialogView {
 				</fieldset>
 
 				<div class="prc-acciones">
-					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar el fichero</button>
 				</div>
 			</form>
 		</details>
@@ -23000,7 +23007,7 @@ final class ProcedureEditorView {
 							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
 						</div>
 					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar nuevos cierres' );?>
+					<?php echo PanelParts::submit( 'Guardar los nuevos cierres' );?>
 				</form>
 			<?php endif; ?>
 		</section>
@@ -24216,7 +24223,7 @@ final class ProcedureEditorView {
 					</div>
 					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false );?>
 				<?php endif; ?>
-				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
+				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
 			</form>
 		</section>
 		<?php
@@ -26848,7 +26855,7 @@ final class PeopleView {
 				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
-				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
+				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de la persona' ); ?></button>
 			</div>
 		</form>
 		<?php
@@ -27211,8 +27218,8 @@ final class ApplicationProgressView {
 			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
-			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
-			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
+			. '<button class="' . esc_attr( Assets::button_class( 'final' ) ) . '" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios de la solicitud' ) . '</button></div>';
 	}
 
 
@@ -34751,6 +34758,14 @@ body.prc-app .prc-hoja {
 .prc-btn-primary { color: #fff; background: var(--prc-c-azul); border-color: var(--prc-c-azul); }
 .prc-btn-primary:hover { color: #fff; background: var(--prc-c-azul-hover); border-color: var(--prc-c-azul-borde); filter: none; }
 
+/* La secundaria de `Assets::button_class()`: blanca con borde gris, que no
+   compite con la principal ni se confunde con un campo. */
+.prc-btn-sec { color: #495057; background: #fff; border-color: #6c757d; }
+.prc-btn-sec:hover { color: #fff; background: #6c757d; filter: none; }
+
+/* La acción final de una pantalla —presentar la solicitud—: la principal, más grande. */
+.prc-btn-final { padding: 10px 20px; font-size: 18px; font-weight: 600; }
+
 /* El secundario: el mismo botón en blanco. No está en el original —allí la
    acción secundaria era un enlace suelto— y se añade porque una pantalla con
    dos botones azules no dice cuál es la acción principal. */
@@ -34793,6 +34808,12 @@ body.prc-app .btn-primary {
   --bs-btn-hover-border-color: var(--prc-c-azul-borde);
   --bs-btn-active-bg: var(--prc-c-azul-hover);
   --bs-btn-active-border-color: var(--prc-c-azul-borde);
+}
+body.prc-app .btn-outline-secondary {
+  --bs-btn-color: #495057;
+  --bs-btn-border-color: #6c757d;
+  --bs-btn-hover-bg: #6c757d;
+  --bs-btn-hover-border-color: #6c757d;
 }
 body.prc-app .btn-light {
   --bs-btn-bg: var(--prc-c-fondo-accion);
@@ -35791,42 +35812,9 @@ body.prc-app .prc-btn-borrar {
 .prc-form--solicitud .prc-nota p:last-child { padding-bottom: 0; }
 
 /* --- botón de envío -----------------------------------------------------
-   El color medido es el del despliegue que se sustituye y queda como variable
-   (`--prc-envio-fondo`), no como token del sistema: blanco sobre `#5f9ea0` da
-   3,05:1, que llega para texto grande y no para texto normal. Quien despliegue
-   lo sube sin tocar esta hoja. */
-.prc-form--solicitud .prc-boton-enviar {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  width: auto;
-  height: auto;
-  padding: 12px 20px;
-  margin: 30px 0;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: normal;
-  color: #fff;
-  text-align: center;
-  text-shadow: none;
-  vertical-align: middle;
-  cursor: pointer;
-  background: var(--prc-envio-fondo, #5f9ea0);
-  border: 1px solid var(--prc-envio-fondo, #5f9ea0);
-  border-radius: var(--prc-radio-caja);
-  box-shadow: var(--prc-sombra-boton);
-}
-
-.prc-form--solicitud .prc-boton-enviar:hover,
-.prc-form--solicitud .prc-boton-enviar:active {
-  color: #fff;
-  background: var(--prc-envio-hover, #099);
-  border-color: var(--prc-envio-hover, #099);
-}
-
-.prc-form--solicitud .prc-boton-enviar:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
-.prc-form--solicitud .prc-boton-enviar[disabled] { cursor: not-allowed; opacity: .5; }
+   Es el botón de siempre (`Assets::button_class( \'final\' )`), con aire
+   arriba y abajo: la acción con la que termina la pantalla. */
+.prc-form--solicitud .prc-form__envio .prc-btn-final { margin: 30px 0; }
 
 /* --- aviso de protección de datos ---------------------------------------
    La plantilla pinta la caja; **el texto es del despliegue** y llega por el
@@ -36674,7 +36662,7 @@ body.prc-app .prc-btn-borrar {
 			buttonsStyling: false,
 			customClass: {
 				confirmButton: \'prc-btn prc-btn-borrar btn\',
-				cancelButton: \'prc-btn btn btn-light\'
+				cancelButton: \'prc-btn prc-btn-sec btn btn-outline-secondary\'
 			}
 		} ).then( function ( respuesta ) {
 			if ( ! respuesta.isConfirmed ) {
@@ -36952,7 +36940,7 @@ body.prc-app .prc-btn-borrar {
 		}
 		var cancelar = document.createElement( \'button\' );
 		cancelar.type = \'button\';
-		cancelar.className = \'prc-btn btn btn-light\';
+		cancelar.className = \'prc-btn prc-btn-sec btn btn-outline-secondary\';
 		cancelar.textContent = \'Cancelar\';
 		cancelar.setAttribute( \'data-prc-export-close\', \'\' );
 		var acciones = form.querySelector( \'.prc-acciones\' ) || form;

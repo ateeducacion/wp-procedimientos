@@ -162,6 +162,14 @@ final class ProcedureMetaKeys {
 
 	public const APPLICATIONS_CLOSED = 'prc_applications_closed';
 
+
+
+
+
+
+
+	public const NOTIFY = 'prc_notify';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -216,6 +224,26 @@ final class ProcedureMetaKeys {
 			self::COMMITMENTS,
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
+			self::NOTIFY,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function notify_events(): array {
+		return array(
+			'application_submitted' => 'Acuse a quien presenta una solicitud nueva',
+			'application_updated'   => 'Aviso a quien modifica su solicitud',
+			'application_received'  => 'Aviso a los correos de contacto de cada solicitud recibida o modificada',
+			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
+			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
 		);
 	}
 
@@ -3131,6 +3159,46 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
+	public static function area_managers( int $procedure_id ): array {
+		$theirs = $procedure_id > 0 ? self::post_areas( $procedure_id ) : array();
+		if ( array() === $theirs ) {
+			return array();
+		}
+
+
+
+		$candidatos = get_users(
+			array(
+				'capability'   => self::CAP_MANAGE_PROCEDURES,
+				'fields'       => 'all_with_meta',
+				'meta_key'     => self::USER_AREA_META,
+				'meta_compare' => 'EXISTS',
+			)
+		);
+		$out        = array();
+		foreach ( (array) $candidatos as $user ) {
+			if ( ! $user instanceof \WP_User || self::can_edit_all_areas( (int) $user->ID ) ) {
+				continue;
+			}
+			if ( array() !== array_intersect( self::scope_areas( (int) $user->ID ), $theirs ) ) {
+				$out[] = (int) $user->ID;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
 	public static function post_areas( int $post_id ): array {
 		$terms = get_the_terms( self::root_id( $post_id ), ProcedureTaxonomies::AREA );
 		if ( ! is_array( $terms ) ) {
@@ -3735,6 +3803,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
+			ProcedureMetaKeys::NOTIFY               => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_notify' ),
+			),
 		);
 	}
 
@@ -3947,6 +4019,23 @@ final class ProcedureMetaRegistration {
 	public static function sanitize_coordinator_count( $value ): int {
 		$count = is_scalar( $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT ) ? (int) $value : 0;
 		return min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, max( 0, $count ) );
+	}
+
+
+
+
+
+
+
+	public static function sanitize_notify( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array( $value ) as $evento ) {
+			$evento = ProcedureMetaKeys::in_list( $evento, ProcedureMetaKeys::notify_events() );
+			if ( '' !== $evento && ! in_array( $evento, $out, true ) ) {
+				$out[] = $evento;
+			}
+		}
+		return $out;
 	}
 
 
@@ -6901,7 +6990,8 @@ final class Applications {
 			return 0;
 		}
 
-		$id = self::save_post( $procedure_id, $user_id, $centro, $files );
+		$created = null === self::find( $procedure_id, $centro['code'] );
+		$id      = self::save_post( $procedure_id, $user_id, $centro, $files );
 		if ( 0 === $id ) {
 			return 0;
 		}
@@ -6925,6 +7015,7 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
+		self::saved( $id, $created, $user_id );
 		return $id;
 	}
 
@@ -6942,7 +7033,8 @@ final class Applications {
 		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 0;
 		}
-		$id = self::save_post(
+		$created = null === self::find_for_teacher( $procedure_id, $user_id );
+		$id      = self::save_post(
 			$procedure_id,
 			$user_id,
 			array(
@@ -6971,7 +7063,35 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
+		self::saved( $id, $created, $user_id );
 		return $id;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function saved( int $id, bool $created, int $user_id ): void {
+
+
+
+
+
+
+
+		do_action( 'prc_application_saved', $id, $created, $user_id );
 	}
 
 
@@ -7050,8 +7170,25 @@ final class Applications {
 			return self::refused( 'note' );
 		}
 
+		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		do_action( 'prc_application_reviewed', $application_id, $state, $previous, $previous_note );
 
 		return array(
 			'ok'    => true,
@@ -7621,6 +7758,35 @@ final class ApplicationFiles {
 				self::erase( $antes[ $key ] );
 			}
 		}
+		return true;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function deliver( int $application_id, string $question_key, array $files, int $user_id ): bool {
+		if ( ! isset( $files[ $question_key ] ) || ! self::store_all( $application_id, array( $question_key => $files[ $question_key ] ) ) ) {
+			return false;
+		}
+
+
+
+
+
+
+
+
+		do_action( 'prc_delivery_saved', $application_id, $question_key, $user_id );
 		return true;
 	}
 
@@ -11033,6 +11199,8 @@ final class ProcedureEditorView {
 			echo self::deliveries_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
 			echo self::publish_panel( $m );
+		} elseif ( ProcedureEditor::PANEL_NOTICES === $panel ) {
+			echo self::notices_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 
 			echo self::custom_code_panel( $m );
@@ -12175,6 +12343,44 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+	private static function notices_panel( array $m ): string {
+		$op       = ProcedureEditor::OP_NOTIFY;
+		$apagados = (array) ( $m['values'][ ProcedureMetaKeys::NOTIFY ] ?? array() );
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Avisos por correo</legend>
+				<p class="prc-intro">Los correos que manda el aplicativo para este procedimiento. Desmarque los que no quiera enviar; el resto sale solo, en texto plano y desde el remitente que configure administración.</p>
+				<div class="prc-opciones prc-opciones--vertical">
+					<?php foreach ( (array) $m['notify_events'] as $evento => $rotulo ) : ?>
+						<div class="prc-opcion">
+							<input type="checkbox" id="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"
+								name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTIFY ); ?>[]" value="<?php echo esc_attr( (string) $evento ); ?>"
+								<?php checked( ! in_array( (string) $evento, $apagados, true ) ); ?> />
+							<label for="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			</fieldset>
+			<?php echo PanelParts::submit( 'Guardar los avisos' );?>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
 	private static function custom_code_panel( array $m ): string {
 		$op = ProcedureEditor::OP_CUSTOM_CODE;
 		ob_start();
@@ -12387,6 +12593,7 @@ final class ProcedureEditor {
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
+	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
 
 	public const OP_REVIEW              = 'review';
@@ -12398,6 +12605,7 @@ final class ProcedureEditor {
 	public const OP_UNARCHIVE           = 'unarchive';
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
+	public const OP_NOTIFY              = 'notify';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -12447,11 +12655,20 @@ final class ProcedureEditor {
 
 
 
+
+	public const FIELD_NOTIFY = 'prc_notify_on';
+
+
+
+
+
+
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
+		self::OP_NOTIFY,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
@@ -12474,6 +12691,7 @@ final class ProcedureEditor {
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
+		'avisos'       => 'Avisos por correo guardados.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -12579,6 +12797,7 @@ final class ProcedureEditor {
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PUBLISH      => 'Publicación',
+			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -12683,6 +12902,15 @@ final class ProcedureEditor {
 				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
 			}
 			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
+			return;
+		}
+		if ( self::OP_NOTIFY === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+			self::save_notify( $procedure_id );
 			return;
 		}
 		if ( self::OP_DELIVERY_DATES === $op ) {
@@ -12824,6 +13052,17 @@ final class ProcedureEditor {
 			return;
 		}
 		self::write_data( (int) $id, $revisado['data'] );
+
+
+
+
+
+
+
+
+
+
+		do_action( 'prc_procedure_created', (int) $id );
 		Shell::leave( self::url( (int) $id, self::PANEL_DATA, array( self::ARG_NOTICE => 'creado' ) ) );
 	}
 
@@ -13163,6 +13402,22 @@ final class ProcedureEditor {
 
 
 
+
+	private static function save_notify( int $procedure_id ): void {
+
+		$encendidos = (array) wp_unslash( $_POST[ self::FIELD_NOTIFY ] ?? array() );
+		$encendidos = array_map( 'sanitize_key', array_filter( $encendidos, 'is_string' ) );
+		$apagados   = array_values( array_diff( array_keys( ProcedureMetaKeys::notify_events() ), $encendidos ) );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, $apagados );
+		Shell::leave( self::url( $procedure_id, self::PANEL_NOTICES, array( self::ARG_NOTICE => 'avisos' ) ) );
+	}
+
+
+
+
+
+
+
 	private static function save_links( int $procedure_id ): void {
 		$claves = array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL );
 		$urls   = array();
@@ -13455,6 +13710,7 @@ final class ProcedureEditor {
 			'applications'            => array(),
 			'app_cols'                => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
+			'notify_events'           => ProcedureMetaKeys::notify_events(),
 		);
 	}
 
@@ -13629,6 +13885,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
+			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		if ( '' === self::$rejected ) {
@@ -15113,7 +15370,7 @@ final class ApplyForm {
 				self::$rejected = ApplicationFiles::why( $files['errors'] );
 				return;
 			}
-			if ( ! ApplicationFiles::store_all( (int) $id, $files['files'] ) ) {
+			if ( ! ApplicationFiles::deliver( (int) $id, $key, $files['files'], $user_id ) ) {
 				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
 				return;
 			}
@@ -15778,6 +16035,873 @@ final class MyCentre {
 
 
 
+namespace Prc\Notifications;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
+final class Messages {
+
+
+
+
+
+
+
+
+	public static function render( string $event, array $ctx ): array {
+		$partes = self::parts( $event, $ctx );
+		if ( null === $partes ) {
+			return array(
+				'subject' => '',
+				'message' => '',
+			);
+		}
+		return array(
+			'subject' => self::subject( $partes[0] ),
+			'message' => self::join( $partes[1] ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function parts( string $event, array $ctx ): ?array {
+		$titulo = self::text( $ctx, 'procedure' );
+		$quien  = '' !== self::text( $ctx, 'centre' ) ? self::text( $ctx, 'centre' ) : self::text( $ctx, 'applicant' );
+
+		switch ( $event ) {
+			case Mailer::EVENT_APPLICATION_SUBMITTED:
+				return array(
+					'Solicitud presentada: ' . $titulo,
+					array_merge(
+						array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.', '' ),
+						self::summary( $ctx ),
+						self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
+						array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+					),
+				);
+
+			case Mailer::EVENT_APPLICATION_UPDATED:
+				return array(
+					'Solicitud modificada: ' . $titulo,
+					array_merge(
+						array( 'Se han guardado cambios en la solicitud al procedimiento «' . $titulo . '». Así queda.', '' ),
+						self::summary( $ctx ),
+						self::link( 'Puede consultarla en:', $ctx, 'url' ),
+						array( '', 'Este correo es un aviso automático: no hace falta responderlo.' )
+					),
+				);
+
+			case Mailer::EVENT_APPLICATION_RECEIVED:
+				$nueva = ! empty( $ctx['created'] );
+				return array(
+					( $nueva ? 'Nueva solicitud' : 'Solicitud modificada' ) . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+					array_merge(
+						array(
+							$nueva
+								? 'Ha llegado una solicitud nueva al procedimiento «' . $titulo . '».'
+								: 'Se ha modificado una solicitud del procedimiento «' . $titulo . '». Vuelve a estar «presentada».',
+							'',
+						),
+						self::summary( $ctx ),
+						self::link( 'Se revisa en el taller del procedimiento:', $ctx, 'url' )
+					),
+				);
+
+			case Mailer::EVENT_REVIEW_CHANGED:
+				$nota = self::text( $ctx, 'note' );
+				return array(
+					'Revisión de su solicitud: ' . $titulo,
+					array_merge(
+						array( 'La solicitud al procedimiento «' . $titulo . '» ha pasado a «' . self::text( $ctx, 'state' ) . '».' ),
+						'' !== $quien ? array( 'Solicitud de: ' . $quien ) : array(),
+						'' !== $nota ? array( '', 'Nota de quien revisa:', $nota ) : array(),
+						self::link( 'Puede consultarla en:', $ctx, 'url' ),
+						array( '', 'Este correo es un aviso automático: no hace falta responderlo.' )
+					),
+				);
+
+			case Mailer::EVENT_DELIVERY_RECEIVED:
+				return array(
+					'Documento entregado: ' . self::text( $ctx, 'document' ) . ' — ' . $titulo,
+					array_merge(
+						array( 'Se ha entregado un documento del procedimiento «' . $titulo . '».', '' ),
+						self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+						self::field( 'Presentada por', self::text( $ctx, 'applicant' ) ),
+						self::field( 'Documento', self::text( $ctx, 'document' ) ),
+						self::field( 'Fichero', self::text( $ctx, 'file' ) ),
+						self::field( 'Fecha', self::text( $ctx, 'date' ) ),
+						self::link( 'Puede consultarla en:', $ctx, 'url' )
+					),
+				);
+
+			case Mailer::EVENT_PROCEDURE_CREATED:
+				return array( 'Procedimiento creado en borrador: ' . $titulo, self::created( $titulo, $ctx ) );
+		}
+		return null;
+	}
+
+
+
+
+
+
+
+
+	private static function created( string $titulo, array $ctx ): array {
+		$lineas = array(
+			'Se ha creado el procedimiento «' . $titulo . '». Está en borrador: no se ve fuera ni admite solicitudes hasta que se publique.',
+		);
+		$falta  = self::lines( $ctx, 'missing' );
+		if ( array() !== $falta ) {
+			$lineas[] = '';
+			$lineas[] = 'Qué falta por completar:';
+			foreach ( $falta as $cosa ) {
+				$lineas[] = '- ' . $cosa;
+			}
+		}
+		$lineas = array_merge(
+			$lineas,
+			array(
+				'',
+				'Los pasos:',
+				'1. Complete los datos del procedimiento: la descripción, los plazos, las preguntas y los correos de contacto.',
+				'2. El día de la publicación, ponga las fechas definitivas, enlace la resolución y publíquelo.',
+			),
+			self::link( 'Taller del procedimiento:', $ctx, 'editor_url' ),
+			self::link( 'Gestión de procedimientos:', $ctx, 'workspace_url' )
+		);
+		$extra  = trim( self::text( $ctx, 'extra' ) );
+		if ( '' !== $extra ) {
+			$lineas[] = '';
+			$lineas[] = $extra;
+		}
+		return $lineas;
+	}
+
+
+
+
+
+
+
+	private static function summary( array $ctx ): array {
+		$lineas     = array_merge(
+			self::field( 'Procedimiento', self::text( $ctx, 'procedure' ) ),
+			self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+			self::field( 'Presentada por', self::text( $ctx, 'applicant' ) ),
+			self::field( 'Cargo', self::text( $ctx, 'position' ) ),
+			self::field( 'Coordinación', self::text( $ctx, 'coordinator' ) ),
+			self::field( 'Fecha', self::text( $ctx, 'date' ) )
+		);
+		$respuestas = isset( $ctx['answers'] ) && is_array( $ctx['answers'] ) ? $ctx['answers'] : array();
+		if ( array() !== $respuestas ) {
+			$lineas[] = '';
+			$lineas[] = 'Respuestas:';
+			foreach ( $respuestas as $respuesta ) {
+				$texto    = trim( (string) ( $respuesta['text'] ?? '' ) );
+				$lineas[] = '- ' . self::one_line( (string) ( $respuesta['label'] ?? '' ) ) . ': ' . ( '' !== $texto ? $texto : '(sin respuesta)' );
+			}
+		}
+		return $lineas;
+	}
+
+
+
+
+
+
+
+
+	private static function field( string $rotulo, string $valor ): array {
+		return '' === $valor ? array() : array( $rotulo . ': ' . $valor );
+	}
+
+
+
+
+
+
+
+
+
+	private static function link( string $frase, array $ctx, string $clave ): array {
+		$url = self::text( $ctx, $clave );
+		return '' === $url ? array() : array( '', $frase, $url );
+	}
+
+
+
+
+
+
+
+	private static function subject( string $asunto ): string {
+
+
+
+
+
+		$prefijo = trim( (string) apply_filters( 'prc_mail_subject_prefix', '[Procedimientos]' ) );
+		return self::one_line( ( '' !== $prefijo ? $prefijo . ' ' : '' ) . $asunto );
+	}
+
+
+
+
+
+
+
+	private static function one_line( string $texto ): string {
+		return trim( (string) preg_replace( '/\s+/u', ' ', $texto ) );
+	}
+
+
+
+
+
+
+
+
+	private static function text( array $ctx, string $clave ): string {
+		return isset( $ctx[ $clave ] ) && is_scalar( $ctx[ $clave ] ) ? trim( (string) $ctx[ $clave ] ) : '';
+	}
+
+
+
+
+
+
+
+
+	private static function lines( array $ctx, string $clave ): array {
+		$lista = isset( $ctx[ $clave ] ) && is_array( $ctx[ $clave ] ) ? $ctx[ $clave ] : array();
+		return array_values( array_filter( array_map( 'strval', array_filter( $lista, 'is_scalar' ) ), 'strlen' ) );
+	}
+
+
+
+
+
+
+
+	private static function join( array $lineas ): string {
+		return implode( "\n", $lineas ) . "\n";
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Notifications;
+
+use Prc\Access\CentreScope;
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ProcedureQuestions;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\Applications;
+use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Notifications\Mailer', false ) ) {
+final class Mailer {
+
+	public const EVENT_APPLICATION_SUBMITTED = 'application_submitted';
+	public const EVENT_APPLICATION_UPDATED   = 'application_updated';
+	public const EVENT_APPLICATION_RECEIVED  = 'application_received';
+	public const EVENT_REVIEW_CHANGED        = 'review_changed';
+	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
+	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
+
+
+
+
+	public const OPTION_FROM_NAME = 'prc_mail_from_name';
+
+
+
+
+	public const OPTION_FROM = 'prc_mail_from';
+
+
+
+
+	public const OPTION_REPLY_TO = 'prc_mail_reply_to';
+
+
+
+
+	public const OPTION_COPY = 'prc_mail_copy';
+
+
+
+
+	public const OPTION_CREATED_EXTRA = 'prc_mail_created_extra';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'prc_procedure_created', array( self::class, 'on_procedure_created' ) );
+		add_action( 'prc_application_saved', array( self::class, 'on_application_saved' ), 10, 3 );
+		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
+		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
+	}
+
+
+
+
+
+
+	public static function events(): array {
+		return array(
+			self::EVENT_APPLICATION_SUBMITTED,
+			self::EVENT_APPLICATION_UPDATED,
+			self::EVENT_APPLICATION_RECEIVED,
+			self::EVENT_REVIEW_CHANGED,
+			self::EVENT_DELIVERY_RECEIVED,
+			self::EVENT_PROCEDURE_CREATED,
+		);
+	}
+
+
+
+
+
+
+	public static function options(): array {
+		return array(
+			self::OPTION_FROM_NAME,
+			self::OPTION_FROM,
+			self::OPTION_REPLY_TO,
+			self::OPTION_COPY,
+			self::OPTION_CREATED_EXTRA,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function mail( string $event, string $to, string $subject, string $message, array $ctx = array() ): bool {
+		$to = self::sanitize_address( $to );
+		if ( '' === $to || '' === trim( $message ) ) {
+			return false;
+		}
+		$procedure_id = isset( $ctx['procedure_id'] ) ? (int) $ctx['procedure_id'] : 0;
+		if ( $procedure_id > 0 && ! self::enabled( $procedure_id, $event ) ) {
+			return false;
+		}
+
+		try {
+
+
+
+
+
+
+
+			$correo = apply_filters(
+				'prc_mail',
+				array(
+					'to'      => $to,
+					'subject' => $subject,
+					'message' => $message,
+					'headers' => self::headers(),
+				),
+				$event,
+				$ctx
+			);
+			if ( ! is_array( $correo ) ) {
+				return false;
+			}
+			return (bool) wp_mail(
+				(string) ( $correo['to'] ?? '' ),
+				(string) ( $correo['subject'] ?? '' ),
+				(string) ( $correo['message'] ?? '' ),
+				(array) ( $correo['headers'] ?? array() )
+			);
+		} catch ( \Throwable $e ) {
+
+
+			unset( $e );
+			return false;
+		}
+	}
+
+
+
+
+
+
+
+
+
+	public static function send( string $event, array $addresses, array $ctx ): int {
+		$correo = Messages::render( $event, $ctx );
+		if ( '' === $correo['message'] ) {
+			return 0;
+		}
+		$hechos = 0;
+		foreach ( self::unique( $addresses ) as $to ) {
+			if ( self::mail( $event, $to, $correo['subject'], $correo['message'], $ctx ) ) {
+				++$hechos;
+			}
+		}
+		return $hechos;
+	}
+
+
+
+
+
+
+
+
+	public static function enabled( int $procedure_id, string $event ): bool {
+		$apagados = get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true );
+		return ! is_array( $apagados ) || ! in_array( $event, $apagados, true );
+	}
+
+
+
+
+
+
+
+
+
+	public static function sanitize_address( $value ): string {
+		$email = is_scalar( $value ) ? strtolower( trim( (string) $value ) ) : '';
+		return is_email( $email ) ? $email : '';
+	}
+
+
+
+
+
+
+	private static function headers(): array {
+		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		$from    = self::sanitize_address( get_option( self::OPTION_FROM, '' ) );
+		if ( '' !== $from ) {
+
+
+			$nombre    = trim( (string) preg_replace( '/[\r\n"<>]+/', ' ', (string) get_option( self::OPTION_FROM_NAME, '' ) ) );
+			$headers[] = 'From: ' . ( '' !== $nombre ? $nombre . ' <' . $from . '>' : $from );
+		}
+		$reply = self::sanitize_address( get_option( self::OPTION_REPLY_TO, '' ) );
+		if ( '' !== $reply ) {
+			$headers[] = 'Reply-To: ' . $reply;
+		}
+		return $headers;
+	}
+
+
+
+
+
+
+
+	private static function unique( array $addresses ): array {
+		$out = array();
+		foreach ( $addresses as $address ) {
+			$email = self::sanitize_address( $address );
+			if ( '' !== $email ) {
+				$out[ $email ] = $email;
+			}
+		}
+		return array_values( $out );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_procedure_created( $procedure_id ): void {
+		self::safely(
+			static function () use ( $procedure_id ): void {
+				$procedure_id = (int) $procedure_id;
+				if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
+					return;
+				}
+				$destinos = self::contacts( $procedure_id );
+				foreach ( ProcedureAccess::area_managers( $procedure_id ) as $user_id ) {
+					$destinos[] = self::email_of( $user_id );
+				}
+				$destinos[] = (string) get_option( self::OPTION_COPY, '' );
+
+				self::send(
+					self::EVENT_PROCEDURE_CREATED,
+					$destinos,
+					array(
+						'procedure_id'  => $procedure_id,
+						'procedure'     => self::title( $procedure_id ),
+						'missing'       => self::missing( $procedure_id ),
+						'editor_url'    => ProcedureEditor::url( $procedure_id ),
+						'workspace_url' => Shell::url( 'workspace' ),
+						'extra'         => sanitize_textarea_field( (string) get_option( self::OPTION_CREATED_EXTRA, '' ) ),
+					)
+				);
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_saved( $application_id, $created = false, $user_id = 0 ): void {
+		self::safely(
+			static function () use ( $application_id, $created, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				$ctx['created'] = (bool) $created;
+
+				self::send(
+					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
+					array( self::email_of( (int) $user_id ) ),
+					$ctx
+				);
+
+				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
+				$destinos[] = (string) get_option( self::OPTION_COPY, '' );
+				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				self::send( self::EVENT_APPLICATION_RECEIVED, $destinos, $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_reviewed( $application_id, $state = '', $previous = '', $previous_note = '' ): void {
+		$nota = (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		if ( ! self::review_news( (string) $state, (string) $previous, $nota, (string) $previous_note ) ) {
+			return;
+		}
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id ) ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $state, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
+				if ( array() === $ctx ) {
+					return;
+				}
+				$ctx['state'] = (string) ( ApplicationMetaKeys::review_states()[ $state ] ?? '' );
+				$ctx['note']  = in_array( $state, ApplicationMetaKeys::states_needing_note(), true )
+					? (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true )
+					: '';
+				self::send( self::EVENT_REVIEW_CHANGED, array( self::email_of( $autor ) ), $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function review_news( string $state, string $previous, string $note, string $previous_note ): bool {
+		if ( '' === $previous ) {
+			$previous = ApplicationMetaKeys::REVIEW_SUBMITTED;
+		}
+		if ( $state !== $previous ) {
+			return true;
+		}
+		return in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) && trim( $note ) !== trim( $previous_note );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_delivery_saved( $application_id, $question_key = '', $user_id = 0 ): void {
+		self::safely(
+			static function () use ( $application_id, $question_key, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				foreach ( Applications::questions( (int) $ctx['procedure_id'] ) as $pregunta ) {
+					if ( (string) $question_key === (string) $pregunta['key'] ) {
+						$ctx['document'] = (string) $pregunta['label'];
+					}
+				}
+				$ctx['file'] = (string) ( ApplicationFiles::descriptors( (int) $application_id )[ (string) $question_key ]['name'] ?? '' );
+				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
+				unset( $ctx['answers'] );
+
+				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
+				$destinos[] = self::email_of( (int) $user_id );
+				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function application_context( int $application_id, int $user_id ): array {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
+			return array();
+		}
+		$procedure_id = (int) get_post_field( 'post_parent', $application_id );
+		$meta         = Applications::meta( $application_id );
+		$autor        = $user_id > 0 ? get_userdata( $user_id ) : false;
+		$docente      = ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] );
+		$codigo       = (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ];
+		$nombre       = (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ];
+		$coordinacion = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
+
+		$args = array();
+		if ( '' !== $codigo && false !== $autor && CentreScope::code_for( (int) $autor->ID ) !== $codigo ) {
+			$args[ ApplyForm::ARG_CENTRE ] = $codigo;
+		}
+
+		return array(
+			'procedure_id' => $procedure_id,
+			'procedure'    => self::title( $procedure_id ),
+			'centre'       => $docente || '' === $codigo ? '' : ( '' !== $nombre ? $nombre . ' (' . $codigo . ')' : $codigo ),
+			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
+			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
+			'coordinator'  => implode( ', ', array_filter( array_column( $coordinacion, 'name' ) ) ),
+			'date'         => (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $application_id, 'modified' ) ),
+			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
+			'url'          => ApplyForm::url( $procedure_id, $args ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	private static function answers( int $procedure_id, int $application_id, array $respuestas ): array {
+		$documentos = ApplicationFiles::descriptors( $application_id );
+		$out        = array();
+		foreach ( ProcedureQuestions::application_questions( Applications::questions( $procedure_id ) ) as $pregunta ) {
+			$key   = (string) $pregunta['key'];
+			$out[] = array(
+				'label' => (string) $pregunta['label'],
+				'text'  => ProcedureQuestions::TYPE_FILE === (string) ( $pregunta['type'] ?? '' )
+					? (string) ( $documentos[ $key ]['name'] ?? '' )
+					: ProcedureQuestions::as_text( $pregunta, $respuestas[ $key ] ?? null ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function missing( int $procedure_id ): array {
+		$falta = array();
+		if ( '' === trim( (string) get_post_field( 'post_content', $procedure_id ) ) ) {
+			$falta[] = 'Descripción';
+		}
+		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::OPENS_AT, true ) || '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ) ) {
+			$falta[] = 'Plazo de solicitud: fechas de apertura y cierre';
+		}
+		if ( array() === Applications::questions( $procedure_id ) ) {
+			$falta[] = 'Preguntas de la solicitud, si las necesita';
+		}
+		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
+			$falta[] = 'Enlace a la resolución';
+		}
+		return $falta;
+	}
+
+
+
+
+
+
+
+	private static function contacts( int $procedure_id ): array {
+		$correos = get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true );
+		return is_array( $correos ) ? array_map( 'strval', $correos ) : array();
+	}
+
+
+
+
+
+
+
+	private static function email_of( int $user_id ): string {
+		$user = $user_id > 0 ? get_userdata( $user_id ) : false;
+		return false !== $user ? (string) $user->user_email : '';
+	}
+
+
+
+
+
+
+
+	private static function title( int $post_id ): string {
+		return html_entity_decode( wp_strip_all_tags( (string) get_post_field( 'post_title', $post_id ) ), ENT_QUOTES, 'UTF-8' );
+	}
+
+
+
+
+
+
+
+	private static function safely( callable $listener ): void {
+		try {
+			$listener();
+		} catch ( \Throwable $e ) {
+
+			unset( $e );
+		}
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\Admin;
 
 use Prc\Access\ProcedureAccess;
@@ -15972,11 +17096,14 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
+
+
 
 
 
@@ -16000,11 +17127,56 @@ final class Settings {
 
 
 
+	public const MAIL_GROUP = 'prc_mail';
+
+
+
+
 
 
 	public static function register(): void {
 		add_action( 'admin_menu', array( self::class, 'menu' ) );
 		add_action( 'admin_init', array( self::class, 'handle_actions' ) );
+		add_action( 'admin_init', array( self::class, 'register_settings' ) );
+
+
+		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
+	}
+
+
+
+
+
+
+	public static function register_settings(): void {
+		$saneado = array(
+			Mailer::OPTION_FROM_NAME     => 'sanitize_text_field',
+			Mailer::OPTION_FROM          => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_REPLY_TO      => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_COPY          => array( Mailer::class, 'sanitize_address' ),
+			Mailer::OPTION_CREATED_EXTRA => 'sanitize_textarea_field',
+		);
+		foreach ( $saneado as $opcion => $callback ) {
+			register_setting(
+				self::MAIL_GROUP,
+				$opcion,
+				array(
+					'type'              => 'string',
+					'default'           => '',
+					'sanitize_callback' => $callback,
+					'show_in_rest'      => false,
+				)
+			);
+		}
+	}
+
+
+
+
+
+
+	public static function capability(): string {
+		return ProcedureAccess::CAP_MANAGE;
 	}
 
 
@@ -16099,11 +17271,59 @@ final class Settings {
 		?>
 		<div class="wrap">
 			<h1>Ajustes y diagnóstico de procedimientos</h1>
+			<?php
+
+
+			settings_errors();
+			?>
 			<p class="description" style="max-width:46rem">
-				Esta pantalla no guarda nada todavía: cuenta lo que el aplicativo tiene montado
-				en este sitio. Si algo sale «sin registrar», es que el snippet correspondiente
-				no está activo.
+				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
+				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
+				que guarda es la configuración del correo.
 			</p>
+
+			<h2>Correo</h2>
+			<p style="max-width:46rem">
+				Vacíos, los correos salen con el remitente de WordPress y sin copia. Cada
+				procedimiento decide, en su pestaña «Avisos», cuáles de sus correos se envían.
+			</p>
+			<form method="post" action="options.php">
+				<?php settings_fields( self::MAIL_GROUP ); ?>
+				<table class="form-table" role="presentation" style="max-width:46rem">
+					<tbody>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>">Nombre del remitente</label></th>
+							<td><input class="regular-text" type="text" id="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>" name="<?php echo esc_attr( Mailer::OPTION_FROM_NAME ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_FROM_NAME, '' ) ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>">Dirección del remitente</label></th>
+							<td>
+								<input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>" name="<?php echo esc_attr( Mailer::OPTION_FROM ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_FROM, '' ) ); ?>" />
+								<p class="description">Una dirección que el servidor de correo de este sitio pueda usar como remitente.</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>">Responder a</label></th>
+							<td><input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>" name="<?php echo esc_attr( Mailer::OPTION_REPLY_TO ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_REPLY_TO, '' ) ); ?>" /></td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>">Copia</label></th>
+							<td>
+								<input class="regular-text" type="email" id="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>" name="<?php echo esc_attr( Mailer::OPTION_COPY ); ?>" value="<?php echo esc_attr( (string) get_option( Mailer::OPTION_COPY, '' ) ); ?>" />
+								<p class="description">Recibe copia de cada procedimiento creado y de cada solicitud recibida.</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>">Texto del correo de alta</label></th>
+							<td>
+								<textarea class="large-text" rows="4" id="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>" name="<?php echo esc_attr( Mailer::OPTION_CREATED_EXTRA ); ?>"><?php echo esc_textarea( (string) get_option( Mailer::OPTION_CREATED_EXTRA, '' ) ); ?></textarea>
+								<p class="description">Se añade al final del correo que avisa de un procedimiento recién creado: las instrucciones propias de esta instalación.</p>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<?php submit_button( 'Guardar la configuración del correo' ); ?>
+			</form>
 
 			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) :?>
 				<div class="notice notice-success is-dismissible"><p><?php echo esc_html( sanitize_text_field( wp_unslash( (string) $_GET['msg'] ) ) );?></p></div>
@@ -16318,6 +17538,7 @@ use Prc\Admin\Settings;
 use Prc\Centre\CentreCatalogueSync;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\Applications;
@@ -16413,6 +17634,10 @@ final class App {
 				call_user_func( array( $modulo, 'register' ) );
 			}
 		}
+
+
+
+		Mailer::register();
 
 		ProcedureAdmin::register();
 		Settings::register();

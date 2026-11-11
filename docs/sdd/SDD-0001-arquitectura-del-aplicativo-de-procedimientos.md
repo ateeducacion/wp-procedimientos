@@ -451,8 +451,10 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
 
 ## Pendientes y trabajo futuro
 
-- [ ] Correos: al presentar (a quien solicita y al contacto del ámbito) y al
-      cambiar el estado de revisión (a quien solicita). Fase 1.
+- [x] Correos: al presentar (a quien solicita y al contacto del ámbito) y al
+      cambiar el estado de revisión (a quien solicita); también al entregar un
+      documento con plazo propio y al crear un procedimiento. Una sola salida,
+      en texto plano, que se apaga por procedimiento (ADR-0038).
 - [ ] Documentación adjunta del centro (aceptación firmada, proyecto,
       memoria) con ficheros privados fuera del alcance del servidor web. Fase 2.
 - [x] Audiencia `teachers`: solicitud individual, pantalla personal y control por capacidad (ADR-0037).

@@ -696,6 +696,56 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Quién gestiona los ámbitos de un procedimiento: su ámbito o uno que lo
+	 * cubre, con la capacidad; ni otro ámbito, ni quien trabaja sobre todos,
+	 * ni quien tiene la meta sin la capacidad.
+	 */
+	public function test_area_managers_are_the_ones_whose_scope_covers_the_procedure() {
+		$padre     = $this->area( 'Servicio de prueba' );
+		$hija      = $this->area( 'Área hija', $padre );
+		$otra      = $this->area( 'Otro ámbito' );
+		$suya      = $this->manager( array( $hija ) );
+		$arriba    = $this->manager( array( $padre ) );
+		$ajena     = $this->manager( array( $otra ) );
+		$admin     = $this->administrator();
+		$direccion = $this->school_head( 'C0001' );
+		update_user_meta( $direccion, ProcedureAccess::USER_AREA_META, array( $hija ) );
+
+		$procedimiento = $this->procedure( $admin, array( $hija, $otra ) );
+		$this->assertEqualsCanonicalizing( array( $suya, $arriba, $ajena ), ProcedureAccess::area_managers( $procedimiento ), 'con dos ámbitos, los de los dos' );
+
+		$solo_hija = $this->procedure( $admin, array( $hija ) );
+		$this->assertEqualsCanonicalizing( array( $suya, $arriba ), ProcedureAccess::area_managers( $solo_hija ) );
+
+		$this->assertSame( array(), ProcedureAccess::area_managers( $this->procedure( $admin ) ), 'sin ámbito, nadie' );
+		$this->assertSame( array(), ProcedureAccess::area_managers( 0 ) );
+	}
+
+	/**
+	 * Saber quién gestiona un ámbito no cuesta una consulta por cuenta.
+	 */
+	public function test_area_managers_does_not_query_once_per_account() {
+		global $wpdb;
+		$area = $this->area( 'Área de prueba' );
+		$this->manager( array( $area ) );
+		$this->manager( array( $area ) );
+		$procedimiento = $this->procedure( $this->administrator(), array( $area ) );
+
+		$contar  = function () use ( $wpdb, $procedimiento ): int {
+			wp_cache_flush();
+			$antes = $wpdb->num_queries;
+			ProcedureAccess::area_managers( $procedimiento );
+			return $wpdb->num_queries - $antes;
+		};
+		$con_dos = $contar();
+		for ( $i = 0; $i < 6; $i++ ) {
+			$this->manager( array( $area ) );
+		}
+		$this->assertCount( 8, ProcedureAccess::area_managers( $procedimiento ) );
+		$this->assertSame( $con_dos, $contar(), 'seis cuentas más, las mismas consultas' );
+	}
+
+	/**
 	 * Solicitar sigue siendo crear una solicitud en un procedimiento de cualquier ámbito.
 	 */
 	public function test_an_application_is_still_created_under_its_procedure() {

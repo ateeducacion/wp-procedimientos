@@ -145,7 +145,7 @@ Páginas de WordPress con un shortcode cada una, pintadas enteras por código
 | Página | Quién | Qué |
 |---|---|---|
 | `/procedimientos/` | Público | Listado por curso: abiertos, en subsanación, próximos, cerrados y resueltos; filtro por ámbito |
-| `/procedimiento/<slug>/` | Público | La ficha: descripción, fechas, estado, contacto, enlaces; botón «Solicitar», «Mi solicitud» o «Gestionar» según quién mira |
+| `/procedimiento/<slug>/` | Público | La ficha: descripción, fechas, estado, contacto, enlaces; botón «Solicitar», «Mi solicitud» o «Gestionar» según quién mira, y el motivo cuando quien ha entrado no puede solicitar |
 | `/gestion-de-procedimientos/` | `prc_manager` | Mis procedimientos por curso, con estado y número de solicitudes |
 | `/editar-procedimiento/` | `prc_manager` | El taller: paneles **Datos**, **Preguntas**, **Enlaces**, **Solicitudes** y **Publicación** |
 | `/solicitud/` | `prc_school_head` | El formulario de solicitud del centro, o la solicitud presentada con su estado y la nota de revisión |

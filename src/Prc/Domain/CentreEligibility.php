@@ -37,6 +37,11 @@ final class CentreEligibility {
 	public const MAX_VALUES = 200;
 
 	/**
+	 * What a reason without a known address says about whom to write to.
+	 */
+	public const CONTACT_HINT = ' Si cree que es un error, escriba a los correos de contacto del procedimiento.';
+
+	/**
 	 * Lower case, trimmed, with inner spaces collapsed: what is compared.
 	 *
 	 * @param string $value Raw value.
@@ -217,9 +222,58 @@ final class CentreEligibility {
 			return '';
 		}
 		if ( array() === $centre ) {
-			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos. Si cree que es un error, escriba a los correos de contacto del procedimiento.';
+			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos.' . self::CONTACT_HINT;
 		}
 		return self::why_not_attributes( $resto, $centre );
+	}
+
+	/**
+	 * A reason that ends with the address to write to when it looks wrong.
+	 *
+	 * Quien no puede solicitar tiene que saber a quién preguntar sin salir de
+	 * la pantalla. Un motivo que ya remitía a «los correos de contacto» en
+	 * general se queda con el correo de verdad, una sola vez.
+	 *
+	 * @param string $why     The reason, in Spanish.
+	 * @param string $contact Contact address of the procedure; empty for none.
+	 * @return string The reason unchanged when there is no reason or no address.
+	 */
+	public static function with_contact( string $why, string $contact ): string {
+		$contact = trim( $contact );
+		if ( '' === $why || '' === $contact ) {
+			return $why;
+		}
+		$why = str_replace( self::CONTACT_HINT, '', $why );
+		return $why . ' Si cree que es un error, escriba a ' . $contact . '.';
+	}
+
+	/**
+	 * Who may apply under those rules, written out for the public page.
+	 *
+	 * Es la fila «Pueden solicitar» del resumen de la ficha: lo que hoy solo
+	 * se sabe cuando el botón no aparece. Se lee de corrido: titularidad, tipo,
+	 * isla y, al final, si además hace falta estar en la lista cerrada.
+	 *
+	 * @param array<string, string[]> $rules What {@see rules()} returned.
+	 * @return string
+	 */
+	public static function describe( array $rules ): string {
+		$rules   = self::rules( $rules );
+		$titular = $rules['ownership'];
+		if ( ! self::restricted( $rules ) ) {
+			return 'Todos los centros';
+		}
+		$texto = 1 === count( $titular ) ? (string) ProcedureMetaKeys::ownerships()[ $titular[0] ] : 'Centros';
+		if ( array() !== $rules['types'] ) {
+			$texto .= ' de tipo ' . self::either( $rules['types'] );
+		}
+		if ( array() !== $rules['islands'] ) {
+			$texto .= ' de ' . self::either( $rules['islands'] );
+		}
+		if ( array() === $rules['codes'] ) {
+			return $texto;
+		}
+		return 'Centros' === $texto ? 'Solo los centros de una lista cerrada' : $texto . ', solo los de una lista cerrada';
 	}
 
 	/**

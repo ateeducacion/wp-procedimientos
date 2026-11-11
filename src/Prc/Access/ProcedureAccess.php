@@ -91,6 +91,29 @@ final class ProcedureAccess {
 	public const VIEW_DOCUMENT = 'document';
 
 	/**
+	 * Why someone may not apply, by case: what {@see why_not_apply()} says.
+	 *
+	 * La cuenta genérica del centro y el perfil sin cargo de dirección son el
+	 * primer motivo de consulta: por eso esos textos dicen con qué cuenta
+	 * entrar. `%s`, donde está, son las clases de código que admite.
+	 *
+	 * @var array<string, string>
+	 */
+	private const REASONS = array(
+		'session'        => 'Debe iniciar sesión con su cuenta personal para presentar la solicitud.',
+		'role_teachers'  => 'Su perfil no presenta solicitudes. Este procedimiento lo solicita cada docente con su cuenta personal: si ha entrado con otra, salga y entre con la suya.',
+		'role'           => 'Su perfil no presenta solicitudes de centro. Si ha entrado con la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es su cuenta personal, pida a quien administra el aplicativo que le asigne el cargo de dirección.',
+		'teacher_closed' => 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.',
+		'teachers_only'  => 'Este procedimiento lo solicita cada docente a título personal, con su propia cuenta. La dirección no presenta solicitud en nombre del centro.',
+		'heads_only'     => 'Este procedimiento lo presenta la dirección del centro, no cada docente.',
+		'no_code'        => 'Su cuenta no tiene centro asignado. Si es la cuenta genérica del centro, salga y entre con su cuenta personal; si ya es la personal, pida a quien administra el aplicativo que le asigne el código de centro.',
+		'foreign_code'   => 'Ese código de centro no es de su cuenta, así que no puede solicitar con él.',
+		'unpublished'    => 'Ese procedimiento no existe o todavía no está publicado.',
+		'kind'           => 'Este procedimiento solo admite solicitudes de %s, y su cuenta no tiene un código así.',
+		'fallback'       => 'Su centro (%s) no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha.',
+	);
+
+	/**
 	 * The procedure whose REST write already passed the publication check.
 	 *
 	 * La REST trae el curso en la petición y lo escribe después del post:
@@ -916,31 +939,61 @@ final class ProcedureAccess {
 	}
 
 	/**
-	 * Why none of the person's codes —or that one— may apply by the procedure's rules.
+	 * Why this person may not apply to this procedure, in words; empty when they may.
 	 *
-	 * Es lo que lee el centro en su pantalla: «este procedimiento es solo
-	 * para…». Con un código, el motivo de ese; sin él, el del primero. Un
-	 * código que ya tiene solicitud no tiene motivo: la sigue editando.
+	 * Es la otra cara de {@see can_apply()}, y vive aquí para que la ficha y
+	 * la pantalla de solicitud digan lo mismo: la ficha ya no esconde el botón
+	 * sin una palabra. Quién, no cuándo: el plazo lo dice el estado.
 	 *
-	 * @param int    $user_id User ID.
-	 * @param int    $post_id Procedure ID.
+	 * Cada caso es una entrada de {@see REASONS} y el primero que se cumple
+	 * da el motivo, en este orden: la sesión, el perfil, a quién se dirige, el
+	 * centro de la cuenta, el código pedido, la publicación y la clase de
+	 * código. Si no es ninguno, son los acotados del procedimiento
+	 * ({@see CentreEligibility}): con `can_apply()` en falso, ningún código de
+	 * la cuenta los pasa, así que el motivo es el del primero. Los que dependen
+	 * del procedimiento terminan en su correo de contacto.
+	 *
+	 * @param int    $user_id User ID (0 = nobody).
+	 * @param int    $post_id Procedure ID (0 = just the account).
 	 * @param string $code    Code asked for; empty for any of the person's.
-	 * @return string Empty when some code may, or when the reason is not the rules.
+	 * @return string
 	 */
-	public static function why_not_eligible( int $user_id, int $post_id, string $code = '' ): string {
-		$codes = self::kind_codes( $user_id, $post_id );
-		if ( '' !== $code ) {
-			$codes = array_intersect_key( $codes, array( $code => true ) );
+	public static function why_not_apply( int $user_id, int $post_id, string $code = '' ): string {
+		if ( self::can_apply( $user_id, $post_id, $code ) ) {
+			return '';
 		}
-		$primero = '';
-		foreach ( $codes as $uno => $kind ) {
-			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
-			if ( '' === $porque || self::has_application( $post_id, (string) $uno ) ) {
-				return '';
-			}
-			$primero = '' !== $primero ? $primero : $porque;
+		$aplica    = user_can( $user_id, self::CAP_APPLY );
+		$docente   = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		$docentes  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
+		$suyos     = CentreScope::codes_for( $user_id );
+		$admite    = self::centre_kinds( $post_id );
+		$publicado = ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'publish' === get_post_status( $post_id );
+		$casos     = array(
+			'session'        => $user_id <= 0,
+			'role_teachers'  => ! $aplica && $docentes,
+			'role'           => ! $aplica,
+			'teacher_closed' => $docentes && $docente,
+			'teachers_only'  => $docentes,
+			'heads_only'     => array() === $suyos && $docente && $post_id > 0,
+			'no_code'        => array() === $suyos || $post_id <= 0,
+			'foreign_code'   => '' !== $code && ! isset( $suyos[ $code ] ),
+			'unpublished'    => ! $publicado,
+			'kind'           => array() === array_intersect( $suyos, $admite ),
+		);
+		$caso      = (string) array_search( true, $casos, true );
+		if ( '' !== $caso ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
+			return sprintf( self::REASONS[ $caso ], implode( ' y de ', $rotulos ) );
 		}
-		return $primero;
+
+		$codes  = array_intersect( '' !== $code ? array_intersect_key( $suyos, array( $code => true ) ) : $suyos, $admite );
+		$codigo = (string) ( array_key_first( $codes ) ?? $code );
+		$porque = self::why_not_code( $post_id, $codigo, (string) ( $codes[ $codigo ] ?? ProcedureMetaKeys::KIND_SCHOOL ) );
+		$centro = (string) ( CentreCatalog::find( $codigo )['name'] ?? '' );
+		return CentreEligibility::with_contact(
+			'' !== $porque ? $porque : sprintf( self::REASONS['fallback'], trim( $centro . ', ' . $codigo, ', ' ) ),
+			(string) ( ProcedureInput::emails( get_post_meta( $post_id, ProcedureMetaKeys::CONTACT_EMAILS, true ) )[0] ?? '' )
+		);
 	}
 
 	/**

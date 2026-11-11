@@ -20,6 +20,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -809,7 +810,7 @@ final class ProcedureEditor {
 					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
 					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ),
+					'ownership'            => ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ),
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
@@ -1438,6 +1439,8 @@ final class ProcedureEditor {
 			'state_label'             => '',
 			'status'                  => '',
 			'status_label'            => '',
+			// A quién se dirige, en la pastilla de la cabecera junto al estado.
+			'audience_label'          => '',
 			'area_names'              => '',
 			'foreign_areas'           => array(),
 			'view_url'                => '',
@@ -1574,20 +1577,22 @@ final class ProcedureEditor {
 		foreach ( ProcedureState::groups() as $grupo ) {
 			$m['groups'][ $grupo ] = true === $m['can_edit'] && ProcedureAccess::can_edit_group( $user_id, $procedure_id, $grupo );
 		}
-		$m['state_notice']  = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
-		$m['status']        = (string) $procedimiento->post_status;
-		$m['status_label']  = self::status_label( (string) $procedimiento->post_status );
-		$m['area_names']    = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
-		$foreign_ids        = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
-		$all_labels         = ProcedureTaxonomies::area_options( 0, true );
-		$m['foreign_areas'] = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-		$m['view_url']      = (string) get_permalink( $procedimiento );
-		$m['values']        = self::values( $procedure_id );
-		$m['terms']         = self::term_lists( $user_id );
-		$m['questions']     = Applications::questions( $procedure_id );
-		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']       = ObserveSettings::model( $procedure_id );
+		$m['state_notice']   = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
+		$m['status']         = (string) $procedimiento->post_status;
+		$m['status_label']   = self::status_label( (string) $procedimiento->post_status );
+		$m['area_names']     = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
+		$audiencia           = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$m['audience_label'] = ProcedureChrome::audience_label( $audiencia, ProcedureView::who_can_apply( $procedure_id, $audiencia ) );
+		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
+		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
+		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
+		$m['view_url']       = (string) get_permalink( $procedimiento );
+		$m['values']         = self::values( $procedure_id );
+		$m['terms']          = self::term_lists( $user_id );
+		$m['questions']      = Applications::questions( $procedure_id );
+		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']        = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de
@@ -1653,9 +1658,11 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::AUDIENCE             => $procedure_id > 0
 				? ProcedureMetaKeys::in_list( self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS )
 				: ProcedureMetaKeys::AUDIENCE_SCHOOLS,
+			// Uno nuevo empieza sin titularidad: quien no la elige no abre el
+			// procedimiento a todos sin querer, y guardar sin elegir se rechaza.
 			ProcedureMetaKeys::OWNERSHIP            => $procedure_id > 0
-				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
-				: array_keys( ProcedureMetaKeys::ownerships() ),
+				? ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
+				: array(),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),

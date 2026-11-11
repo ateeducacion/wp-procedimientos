@@ -400,6 +400,9 @@ final class Workspace {
 			'color'            => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
+			// Qué centros, en una pastilla: lo mismo que «Pueden solicitar» en
+			// la ficha. El profesorado ya lo dice la columna.
+			'ownership_label'  => ProcedureMetaKeys::AUDIENCE_SCHOOLS === $publico ? ProcedureView::who_can_apply( $id, $publico ) : '',
 			'state'            => $state,
 			'state_label'      => ProcedureState::label(
 				$state,

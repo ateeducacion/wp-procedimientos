@@ -373,21 +373,15 @@
   padding: 12px 20px;
 }
 
-/* A quién se dirige, en grande y centrado: en el original es la línea que
-   distingue una tarjeta de acceso de la de al lado. */
-.prc-acceso__cifra {
-  font-family: var(--prc-fuente-cifras);
-  font-size: var(--prc-t-h2);
-  line-height: var(--prc-i-h2);
-  font-weight: var(--prc-p-fuerte);
-  color: var(--prc-c-azul);
-  text-align: center;
-  margin: 0;
-  padding: 0 0 10px;
-}
-
 .prc-acceso__texto { margin: 0; padding: 0 0 16px; }
 .prc-acceso__accion { margin: 0; padding: 0; }
+
+/* Por qué no hay botón, en su sitio: el motivo, la cuenta con la que se ha
+   entrado y las dos salidas. Texto a 14 px como mínimo: es lo que se lee. */
+.prc-acceso__motivo { margin: 0 0 16px; font-size: 14px; }
+.prc-acceso__motivo p { margin: 0 0 8px; }
+.prc-acceso__salidas { margin: 0; padding-left: 1.2em; }
+.prc-acceso__salidas li + li { margin-top: 4px; }
 
 /* El botón de consulta —«Ver mi solicitud», cuando el plazo ya cerró— va en
    blanco con el contorno azul: una pantalla con el botón principal relleno y
@@ -429,14 +423,6 @@
   flex-wrap: wrap;
 }
 
-.prc-ficha-meta {
-  font-size: var(--prc-t-meta);
-  line-height: normal;
-  text-align: right;
-  margin: 0;
-  padding: 0;
-}
-
 /* --- estrecho -------------------------------------------------------------- */
 
 @media (max-width: 640px) {
@@ -445,5 +431,4 @@
   .prc-tabs-ficha__barra a { width: auto; flex: 1 1 auto; padding: 0 12px; }
   .prc-tabs-ficha__panel { padding: 16px; }
   .prc-ficha-pie { justify-content: flex-start; }
-  .prc-ficha-meta { text-align: left; }
 }

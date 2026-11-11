@@ -472,6 +472,59 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un aviso se anuncia: el error y la advertencia interrumpen, lo hecho y
+	 * la nota esperan su turno. El del resultado lleva el ancla a la que
+	 * vuelve la redirección, y se le puede dar el foco.
+	 */
+	public function test_the_notices_are_announced() {
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'error', 'No se pudo.' ) );
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'aviso', 'Cuidado.' ) );
+		$this->assertStringContainsString( 'role="status"', Shell::notice( 'ok', 'Guardado.' ) );
+		$this->assertStringContainsString( 'role="status"', Shell::notice( 'info', 'Nota.' ) );
+
+		$this->assertStringNotContainsString( 'id="prc-aviso"', Shell::notice( 'ok', 'Guardado.' ), 'solo el aviso del resultado lleva el ancla' );
+		$resultado = Shell::notice( 'ok', 'Guardado.', true );
+		$this->assertStringContainsString( 'id="' . Shell::NOTICE_ANCHOR . '"', $resultado );
+		$this->assertStringContainsString( 'tabindex="-1"', $resultado );
+	}
+
+	/**
+	 * La vuelta de un POST con aviso lleva al aviso, salvo que ya lleve a otro sitio.
+	 */
+	public function test_leave_takes_you_to_the_notice() {
+		$con_aviso = home_url( '/gestion-de-procedimientos/?aviso=creado' );
+		$this->assertSame(
+			$con_aviso . '#' . Shell::NOTICE_ANCHOR,
+			$this->exit_url(
+				static function () use ( $con_aviso ): void {
+					Shell::leave( $con_aviso );
+				}
+			)
+		);
+
+		$con_ancla = home_url( '/solicitud/?aviso=persona-alta#prc-personas' );
+		$this->assertSame(
+			$con_ancla,
+			$this->exit_url(
+				static function () use ( $con_ancla ): void {
+					Shell::leave( $con_ancla );
+				}
+			),
+			'un ancla que ya lleva es la suya'
+		);
+
+		$sin_aviso = home_url( '/gestion-de-procedimientos/' );
+		$this->assertSame(
+			$sin_aviso,
+			$this->exit_url(
+				static function () use ( $sin_aviso ): void {
+					Shell::leave( $sin_aviso );
+				}
+			)
+		);
+	}
+
+	/**
 	 * El recuadro amarillo dice en palabras por qué solo lo ve una persona.
 	 */
 	public function test_the_admin_box_says_why_only_one_person_sees_it() {
@@ -501,7 +554,7 @@ class Test_Shell extends WP_UnitTestCase {
 	 * `leave()` es la costura de salida: bajo el filtro lanza ExitSignal con la URL.
 	 */
 	public function test_leave_throws_the_exit_signal() {
-		$destino = home_url( '/gestion-de-procedimientos/?aviso=creado' );
+		$destino = home_url( '/gestion-de-procedimientos/?vista=tabla' );
 
 		$this->assertSame(
 			$destino,

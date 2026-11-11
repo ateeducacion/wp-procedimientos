@@ -222,7 +222,7 @@ final class ProcedureEditorView {
 	 */
 	private static function flash( array $m ): string {
 		$flash = (array) $m['flash'];
-		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'], true );
 	}
 
 	/**

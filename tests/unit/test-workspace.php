@@ -7,6 +7,7 @@
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\View\WorkspaceView;
 use Prc\PublicFront\Workspace;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -375,6 +376,7 @@ class Test_Workspace extends WP_UnitTestCase {
 		$aviso                         = Workspace::model()['notice'];
 		$this->assertSame( 'ok', $aviso['type'] );
 		$this->assertStringContainsString( 'Procedimiento creado', $aviso['text'] );
+		$this->assertStringContainsString( 'id="' . Shell::NOTICE_ANCHOR . '"', WorkspaceView::html( Workspace::model() ), 'la vuelta llega al aviso' );
 
 		$_GET[ Workspace::VAR_NOTICE ] = 'permiso';
 		$this->assertSame( 'error', Workspace::model()['notice']['type'] );

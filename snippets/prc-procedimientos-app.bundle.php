@@ -10291,6 +10291,11 @@ final class Shell {
 
 
 
+	public const NOTICE_ANCHOR = 'prc-aviso';
+
+
+
+
 
 
 	private const CORE_ASSETS = array(
@@ -11134,17 +11139,37 @@ final class Shell {
 
 
 
-	public static function notice( string $type, string $text ): string {
+
+	public static function notice( string $type, string $text, bool $anchor = false ): string {
 		if ( '' === $text ) {
 			return '';
 		}
+		return self::notice_open( $type, $anchor ) . esc_html( $text ) . '</p>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function notice_open( string $type, bool $anchor = false ): string {
 		$tonos = array(
 			'ok'    => 'success',
 			'aviso' => 'warning',
 			'error' => 'danger',
 		);
 		$tono  = $tonos[ $type ] ?? 'info';
-		return '<p class="' . esc_attr( Assets::alert_class( $tono ) ) . '">' . esc_html( $text ) . '</p>';
+		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
+		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
+		return '<p class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}
 
 
@@ -11236,6 +11261,7 @@ final class Shell {
 
 
 	public static function leave( string $url = '' ): void {
+		$url = self::to_notice( $url );
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
 			throw new ExitSignal( $url );
 		}
@@ -11243,6 +11269,23 @@ final class Shell {
 			wp_safe_redirect( $url );
 		}
 		exit;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function to_notice( string $url ): string {
+		if ( '' === $url || false !== strpos( $url, '#' ) ) {
+			return $url;
+		}
+		$args = wp_parse_args( (string) wp_parse_url( $url, PHP_URL_QUERY ) );
+		return isset( $args['aviso'] ) ? $url . '#' . self::NOTICE_ANCHOR : $url;
 	}
 
 
@@ -20411,7 +20454,7 @@ final class WorkspaceView {
 		ob_start();
 		?>
 		<div class="prc-taller">
-			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'] );?>
+			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'], true );?>
 			<?php self::band( $m ); ?>
 			<?php self::courses( $m ); ?>
 			<?php self::count( $m ); ?>
@@ -22837,7 +22880,7 @@ final class ProcedureEditorView {
 
 	private static function flash( array $m ): string {
 		$flash = (array) $m['flash'];
-		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'], true );
 	}
 
 
@@ -26918,14 +26961,9 @@ final class ApplicationProgressView {
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {
-			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto, true );
 		}
-		$tonos = array(
-			'ok'    => 'success',
-			'aviso' => 'warning',
-			'error' => 'danger',
-		);
-		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+		return Shell::notice_open( (string) ( $flash['tipo'] ?? '' ), true )
 			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
 	}
 

@@ -33430,8 +33430,8 @@ final class App {
 .prc-form.prc-form--taller .prc-campo__ayuda {
   margin: 6px 0 0;
   padding: 0;
-  font: 400 12px/1.5 var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem/1.5 var(--prc-fuente);
+  color: var(--prc-c-medio);
   max-width: 60ch;
 }
 
@@ -33689,7 +33689,19 @@ final class App {
    42,5px de alto con 30px de aire arriba y abajo. Lo que no se copia es el
    `outline: none` del foco: allí el botón de crear no se ve al enfocarlo. */
 
-.prc-acciones--pie { margin: 0; padding: 0; }
+/* El pie con «Guardar …» se queda pegado abajo mientras se baja por el
+   panel: en «Datos» el botón queda a más de una pantalla del título. Solo
+   CSS; donde no hay `sticky`, el pie se queda en su sitio, como antes. */
+.prc-acciones--pie {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 12px 0;
+  background: var(--prc-c-fondo);
+  border-top: 1px solid var(--prc-c-linea);
+}
+.prc-acciones--pie .prc-btn.prc-envio { margin: 0; }
 
 .prc-btn.prc-envio {
   display: inline-block;
@@ -34747,6 +34759,10 @@ body.prc-app .prc-hoja {
 .prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
 .prc-aviso__campos a { color: inherit; text-decoration: underline; }
 
+/* La ayuda de un campo, en todas las pantallas: 14 px y gris oscuro (7:1),
+   que es la que evita los errores y tiene que leerse. */
+.prc-campo__ayuda { font-size: .875rem; color: var(--prc-c-medio); }
+
 /* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
 .prc-control.is-invalid,
 .prc-opciones.is-invalid,
@@ -35766,8 +35782,8 @@ body.prc-app .prc-btn-borrar {
   max-width: 100%;
   padding: 0;
   margin-top: 6px;
-  font: 300 var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
   text-align: left;
 }
 

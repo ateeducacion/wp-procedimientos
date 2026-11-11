@@ -171,8 +171,8 @@
   max-width: 100%;
   padding: 0;
   margin-top: 6px;
-  font: 300 var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
   text-align: left;
 }
 

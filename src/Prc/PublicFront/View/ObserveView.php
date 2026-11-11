@@ -251,7 +251,7 @@ final class ObserveView {
 		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
 	}
 
-	// ─── el panel «Acceso de consulta» del taller──────────────────────────────────
+	// ─── el panel «Acceso de consulta» del taller ──────────────────────────────────
 
 	/**
 	 * The «Acceso de consulta» panel: whether the procedure admits it, and what it shows.

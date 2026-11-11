@@ -882,6 +882,10 @@ body.prc-app .prc-hoja {
 .prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
 .prc-aviso__campos a { color: inherit; text-decoration: underline; }
 
+/* La ayuda de un campo, en todas las pantallas: 14 px y gris oscuro (7:1),
+   que es la que evita los errores y tiene que leerse. */
+.prc-campo__ayuda { font-size: .875rem; color: var(--prc-c-medio); }
+
 /* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
 .prc-control.is-invalid,
 .prc-opciones.is-invalid,

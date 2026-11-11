@@ -146,10 +146,10 @@ Páginas de WordPress con un shortcode cada una, pintadas enteras por código
 |---|---|---|
 | `/procedimientos/` | Público | Listado por curso: abiertos, en subsanación, próximos, cerrados y resueltos; filtro por ámbito |
 | `/procedimiento/<slug>/` | Público | La ficha: descripción, fechas, estado, contacto, enlaces; botón «Solicitar», «Mi solicitud» o «Gestionar» según quién mira, y el motivo cuando quien ha entrado no puede solicitar |
-| `/gestion-de-procedimientos/` | `prc_manager` | Mis procedimientos por curso, con estado y número de solicitudes |
+| `/gestion-de-procedimientos/` | `prc_manager` | «Gestión de procedimientos»: los del ámbito por curso, con estado y número de solicitudes |
 | `/editar-procedimiento/` | `prc_manager` | El taller: paneles **Datos**, **Preguntas**, **Enlaces**, **Solicitudes** y **Publicación** |
 | `/solicitud/` | `prc_school_head` | El formulario de solicitud del centro, o la solicitud presentada con su estado y la nota de revisión |
-| `/mi-centro/` | `prc_school_head` | Las solicitudes del centro |
+| `/mi-centro/` | `prc_school_head` | «Solicitudes de mi centro» (para el profesorado, «Mis solicitudes») |
 
 ## Requisitos
 
@@ -312,10 +312,10 @@ empiece a medir, y lo que hace se comprueba en `test-load-order.php`—.
 En «Preguntas», una pregunta de tipo «Archivo» puede marcarse como entrega con
 plazo propio, con apertura y cierre inclusivos. Se configura antes de cerrar la
 inscripción, mientras ese panel siga editable. El centro presenta primero su
-solicitud y después entrega cada documento desde «Mi centro», incluso si el
+solicitud y después entrega cada documento desde «Solicitudes de mi centro», incluso si el
 procedimiento ya está resuelto. La entrega conserva la solicitud y su revisión.
 
 No se permite entregar a solicitudes excluidas ni a procedimientos archivados.
 El documento sigue siendo privado; una nueva entrega sustituye al anterior.
 Para probarlo en local: entre como `direccion`, abra «Escuelas Promotoras de Salud»
-en «Mi centro» y entregue su «Memoria final». Véase ADR-0033.
+en «Solicitudes de mi centro» y entregue su «Memoria final». Véase ADR-0033.

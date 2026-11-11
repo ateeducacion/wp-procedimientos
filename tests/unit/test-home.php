@@ -6,6 +6,7 @@
  */
 
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\Assets;
 use Prc\Domain\ProcedureState;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\Shell;
@@ -250,6 +251,7 @@ class Test_Home extends WP_UnitTestCase {
 
 		$this->assertStringContainsString( 'Red de centros de prueba', $html );
 		$this->assertStringContainsString( 'Abierto', $html );
+		$this->assertStringContainsString( '<p class="prc-proc__estado"><span class="' . Assets::state_class( ProcedureMetaKeys::STATE_OPEN ) . '">Abierto</span></p>', $html, 'la misma pastilla de estado que en el resto' );
 		$this->assertStringContainsString( 'prc-grupo-' . ProcedureMetaKeys::STATE_OPEN, $html );
 		$this->assertStringContainsString( 'prc-hero', $html, 'la portada lleva el título grande, no el de pantalla interior' );
 		$this->assertStringContainsString( 'prc-proc__banda', $html, 'y cada tarjeta su banda de color' );

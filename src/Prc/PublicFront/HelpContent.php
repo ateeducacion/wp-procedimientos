@@ -416,7 +416,7 @@ final class HelpContent {
 				'id'    => 'publicar',
 				'level' => 2,
 				'title' => 'Publique',
-				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso o sin fecha de inicio del plazo no se puede publicar</strong>, porque nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
 					. '<p>Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>, que tiene el aspecto de las acciones delicadas y dice al lado lo que pasa: deja de verse en la portada.</p>'
 					. '<p>Antes de publicar, repase también a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
 				'shots' => array(

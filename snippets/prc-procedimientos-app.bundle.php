@@ -17599,6 +17599,7 @@ final class ApplicationActionsPanel {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
 
 
@@ -17714,6 +17715,7 @@ final class HomeView {
 
 
 
+
 	private static function card( array $row ): void {
 		?>
 		<li class="prc-proc">
@@ -17724,7 +17726,7 @@ final class HomeView {
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
-				<p class="prc-proc__estado"><?php echo esc_html( (string) $row['state_label'] ); ?></p>
+				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>
 			<?php if ( '' !== (string) $row['deadline'] ) : ?>
 				<p class="prc-proc__plazo<?php echo empty( $row['urgent'] ) ? '' : ' prc-proc__plazo--urgente'; ?>">
@@ -34008,7 +34010,6 @@ final class App {
   --prc-e-historica: #aaa;
   --prc-e-incoh-abierta: #f00;   /* abierta con el plazo vencido */
   --prc-e-incoh-cerrada: #fc0;   /* cerrada con el plazo vivo */
-  --prc-e-etiqueta: #1a1a8c;     /* la etiqueta bajo la tarjeta de la portada */
 
   /* --- el recuadro amarillo de «Solo administración» ---------------------
      Los contrastes están medidos, no supuestos (fórmula de luminancia
@@ -36196,13 +36197,9 @@ body.prc-app .prc-btn-borrar {
   color: var(--prc-c-titulo);
 }
 
-.prc-proc__estado {
-  font-size: var(--prc-t-menudo);
-  line-height: var(--prc-i-menudo);
-  font-variant: small-caps;
-  font-weight: 600;
-  color: var(--prc-e-etiqueta);
-}
+.prc-proc__estado { margin: 0; }
+/* La pastilla de estado de siempre, a 14 px: la de la tabla va más apretada. */
+.prc-proc__estado .prc-state { font-size: .875rem; }
 
 /* Los días que quedan y la marca del centro: esto el original no lo tiene, y
    es lo que ahorra el viaje «portada → ficha → ver si ya lo pedí». */

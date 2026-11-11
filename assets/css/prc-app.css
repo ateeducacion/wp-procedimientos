@@ -169,7 +169,6 @@
   --prc-e-historica: #aaa;
   --prc-e-incoh-abierta: #f00;   /* abierta con el plazo vencido */
   --prc-e-incoh-cerrada: #fc0;   /* cerrada con el plazo vivo */
-  --prc-e-etiqueta: #1a1a8c;     /* la etiqueta bajo la tarjeta de la portada */
 
   /* --- el recuadro amarillo de «Solo administración» ---------------------
      Los contrastes están medidos, no supuestos (fórmula de luminancia

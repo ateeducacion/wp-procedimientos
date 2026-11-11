@@ -956,9 +956,22 @@ body.prc-app .btn-light {
   --bs-btn-border-color: var(--prc-c-fondo-accion);
   --bs-btn-color: var(--prc-c-tabla);
 }
-/* La acción destructiva se distingue sin gritar: tonal, no roja rellena. */
-body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border-color: var(--prc-mal-cont); --bs-btn-color: var(--prc-mal); }
-.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); }
+/* La acción destructiva o difícil de deshacer (`Assets::button_class( 'danger' )`)
+   se distingue sin gritar: tonal, con el borde del mismo rojo, no roja rellena.
+   Al pasar por encima se rellena, para que se vea qué se va a pulsar. */
+body.prc-app .prc-btn-borrar {
+  --bs-btn-bg: var(--prc-mal-cont);
+  --bs-btn-border-color: var(--prc-mal);
+  --bs-btn-color: var(--prc-mal);
+  --bs-btn-hover-bg: var(--prc-mal);
+  --bs-btn-hover-border-color: var(--prc-mal);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--prc-mal);
+  --bs-btn-active-border-color: var(--prc-mal);
+  --bs-btn-active-color: #fff;
+}
+.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); border-color: var(--prc-mal); }
+.prc-sin-bootstrap .prc-btn-borrar:hover { background: var(--prc-mal); color: #fff; filter: none; }
 
 /* El diálogo de confirmación (SweetAlert2) se pinta al final del `body`, así
    que sus clases —`prc-app`, `prc-sin-bootstrap`— siguen valiendo y los

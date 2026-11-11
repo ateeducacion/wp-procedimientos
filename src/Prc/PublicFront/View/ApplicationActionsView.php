@@ -40,7 +40,7 @@ final class ApplicationActionsView {
 		ob_start();
 		?>
 		<section class="prc-seccion" id="<?php echo esc_attr( WithdrawForm::ANCHOR ); ?>">
-			<h3 class="prc-seccion__titulo">Retirar la solicitud</h3>
+			<h2 class="prc-seccion__titulo">Retirar la solicitud</h2>
 			<?php echo Shell::notice( 'error', (string) $w['rejected'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php if ( ! empty( $w['can'] ) ) : ?>
 				<p>Si ya no quiere participar en este procedimiento, puede retirar la solicitud mientras el plazo siga abierto. Dejará de contar y, mientras haya plazo, podrá presentar otra nueva.</p>

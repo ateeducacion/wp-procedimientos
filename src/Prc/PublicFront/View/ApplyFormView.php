@@ -28,7 +28,7 @@ use Prc\PublicFront\Shell;
  *
  * La pantalla es el calco de la que se sustituye: cabecera de contexto en vez
  * de los campos técnicos de la convocatoria, secciones con su rótulo en
- * mayúsculas y su filete, retícula de doce columnas y campos bloqueados que se
+ * mayúsculas —las pone el CSS: el texto va en caja normal— y su filete, retícula de doce columnas y campos bloqueados que se
  * distinguen por el color y no por un fondo gris. Lo que no se calca es el
  * texto del aviso de protección de datos: ese es de quien despliega
  * ({@see ProcedureChrome::chrome()}, clave `privacy_notice`) y sin configurar
@@ -106,7 +106,7 @@ final class ApplyFormView {
 			$dates = DateRange::of( (string) $question['opens_at'], (string) $question['closes_at'] );
 			?>
 			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h3>
+				<h2 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h2>
 				<p><?php echo esc_html( '' !== $dates ? 'Plazo de entrega: ' . lcfirst( $dates ) . '.' : 'Plazo de entrega pendiente de configurar.' ); ?></p>
 				<p>Documento presentado: <?php echo wp_kses_post( self::attached( (array) $m['application'], $key ) ); ?></p>
 				<?php if ( ! empty( $question['can_submit'] ) ) : ?>
@@ -221,7 +221,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<nav class="prc-seccion" aria-labelledby="prc-apply-centre">
-			<h3 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h3>
+			<h2 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h2>
 			<div class="prc-seccion__cuerpo">
 				<p class="prc-campo__ayuda">Su cuenta tiene más de un código y este procedimiento admite los dos. Cada uno tiene su propia solicitud: elija con cuál quiere verla o presentarla.</p>
 				<ul class="prc-opciones prc-opciones--vertical">
@@ -337,7 +337,7 @@ final class ApplyFormView {
 
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
+					<h2 class="prc-seccion__titulo">Datos del centro educativo</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php echo $del_centro; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					</div>
@@ -345,7 +345,7 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'DATOS DE LA PERSONA PARTICIPANTE' : 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO' ); ?></h3>
+				<h2 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'Datos de la persona participante' : 'Datos personales de la dirección del centro' ); ?></h2>
 				<div class="prc-seccion__cuerpo">
 					<?php echo $de_quien; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<?php if ( ! $docente ) : ?>
@@ -365,7 +365,7 @@ final class ApplyFormView {
 
 			<?php if ( '' !== trim( (string) $spec['commitments'] ) ) : ?>
 				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">SOLICITA</h3>
+					<h2 class="prc-seccion__titulo">Solicita</h2>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
 							<p><?php echo esc_html( $docente ? 'Su participación en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' : 'La participación de su centro en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' ); ?></p>
@@ -388,7 +388,7 @@ final class ApplyFormView {
 
 			<?php if ( array() !== (array) $spec['questions'] ) : ?>
 				<section class="prc-seccion prc-seccion--sin-titulo" aria-labelledby="prc-preguntas">
-					<h3 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h3>
+					<h2 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
 							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -430,7 +430,7 @@ final class ApplyFormView {
 		for ( $index = 0; $index < $cuantas; ++$index ) {
 			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ), (array) ( $m['invalid'] ?? array() ) );
 		}
-		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+		return '<section class="prc-seccion"><h2 class="prc-seccion__titulo">Datos de la coordinación</h2><div class="prc-seccion__cuerpo">'
 			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
 			. $campos . '</div></section>';
 	}
@@ -683,7 +683,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-solicitud-resumen" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>">
-			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
+			<h2 class="prc-seccion__titulo">Lo que presentó</h2>
 			<dl class="prc-respuestas">
 				<?php if ( '' !== (string) $s['position'] ) : ?>
 					<dt>Cargo</dt>

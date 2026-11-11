@@ -41,7 +41,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
-			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
+			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Personas que participan</h2>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>

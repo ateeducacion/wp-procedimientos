@@ -10384,6 +10384,7 @@ final class Shell {
 
 	public static function register(): void {
 		add_filter( 'body_class', array( self::class, 'body_class' ) );
+		add_filter( 'document_title_parts', array( self::class, 'document_title_parts' ) );
 		add_filter( 'show_admin_bar', array( self::class, 'show_admin_bar' ), 100 );
 
 
@@ -10769,6 +10770,24 @@ final class Shell {
 
 	public static function mine_label( bool $teacher ): string {
 		return self::MINE_LABELS[ $teacher ? 'teacher' : 'centre' ];
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function document_title_parts( array $parts ): array {
+		if ( 'mine' === self::current_section() ) {
+			$parts['title'] = self::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) );
+		}
+		return $parts;
 	}
 
 
@@ -11292,6 +11311,7 @@ final class Shell {
 		<?php
 		return (string) ob_get_clean();
 	}
+
 
 
 

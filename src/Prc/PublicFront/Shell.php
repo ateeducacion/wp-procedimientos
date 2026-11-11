@@ -120,6 +120,7 @@ final class Shell {
 	 */
 	public static function register(): void {
 		add_filter( 'body_class', array( self::class, 'body_class' ) );
+		add_filter( 'document_title_parts', array( self::class, 'document_title_parts' ) );
 		add_filter( 'show_admin_bar', array( self::class, 'show_admin_bar' ), 100 );
 		// Antes de pintar nada: en `template_redirect` aún se pueden mandar
 		// cabeceras, y dentro del shortcode ya no.
@@ -505,6 +506,24 @@ final class Shell {
 	 */
 	public static function mine_label( bool $teacher ): string {
 		return self::MINE_LABELS[ $teacher ? 'teacher' : 'centre' ];
+	}
+
+	/**
+	 * The document title of one's own section, named like its menu entry.
+	 *
+	 * La pestaña del navegador dice lo mismo que el menú y el H1: la sección
+	 * propia se llama según quién mira, y no como se llame la página de
+	 * WordPress —que en una instalación anterior puede seguir siendo otro
+	 * nombre—.
+	 *
+	 * @param array<string, string> $parts Title parts.
+	 * @return array<string, string>
+	 */
+	public static function document_title_parts( array $parts ): array {
+		if ( 'mine' === self::current_section() ) {
+			$parts['title'] = self::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) );
+		}
+		return $parts;
 	}
 
 	/**
@@ -1033,7 +1052,8 @@ final class Shell {
 	 * Where to go back to after saving something.
 	 *
 	 * `wp_get_referer()` devuelve `false` justo cuando el referer coincide con
-	 * la propia URL, que es siempre en un formulario con `action=""`. Se usa el
+	 * la propia URL, que es siempre en un formulario que se envía a sí mismo
+	 * (`action=""` o `action="#prc-aviso"`: el referer no lleva el fragmento). Se usa el
 	 * referer crudo y, si no hay, una página del aplicativo: nunca la portada
 	 * del sitio.
 	 *

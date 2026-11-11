@@ -37,6 +37,12 @@ final class PeopleSpecPanel {
 	public const FIELD_CLOSES   = 'prc_people_closes_at';
 	public const FIELD_ADMITTED = 'prc_people_admitted_only';
 
+	/** «Una persona puede tener varios papeles». */
+	public const FIELD_MULTI_ROLE = 'prc_people_multi_role';
+
+	/** «Exige indicar el grupo», one checkbox per role row. */
+	public const FIELD_ROLE_GROUP = 'prc_people_role_group';
+
 	/**
 	 * Query arg of the «Solicitudes» panel: the application whose history is open.
 	 */
@@ -54,6 +60,7 @@ final class PeopleSpecPanel {
 		'min'              => self::FIELD_MIN,
 		'max'              => self::FIELD_MAX,
 		'unique_per_group' => self::FIELD_UNIQUE,
+		'multi_role'       => self::FIELD_MULTI_ROLE,
 		'opens_at'         => self::FIELD_OPENS,
 		'closes_at'        => self::FIELD_CLOSES,
 		'admitted_only'    => self::FIELD_ADMITTED,
@@ -78,12 +85,21 @@ final class PeopleSpecPanel {
 		if ( '' !== $porque ) {
 			return $porque;
 		}
+		$coordina = Applications::coordinator_count( $procedure_id );
+		$porque   = PeopleSpec::coordination_clash( $antes, $res['spec'], $coordina, $coordina );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, wp_slash( $res['spec'] ) );
 		return '';
 	}
 
 	/**
 	 * What the panel sent, in the shape PeopleSpec::from_input() wants.
+	 *
+	 * Los papeles llegan en filas, cada uno con su casilla «Exige indicar el
+	 * grupo», y se vuelven el texto de siempre: uno por línea, «| grupo»
+	 * detrás del que lo exige.
 	 *
 	 * @return array<string, string>
 	 */
@@ -94,6 +110,18 @@ final class PeopleSpecPanel {
 			$valor         = isset( $_POST[ $campo ] ) && is_string( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : '';
 			$out[ $clave ] = in_array( $clave, array( 'roles', 'groups' ), true ) ? sanitize_textarea_field( $valor ) : sanitize_text_field( $valor );
 		}
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- el nonce lo comprobó ProcedureEditor::handle(); cada rótulo se sanea en el bucle.
+		if ( isset( $_POST[ self::FIELD_ROLES ] ) && is_array( $_POST[ self::FIELD_ROLES ] ) ) {
+			$filas  = wp_unslash( $_POST[ self::FIELD_ROLES ] );
+			$grupos = (array) wp_unslash( $_POST[ self::FIELD_ROLE_GROUP ] ?? array() );
+			$lineas = array();
+			foreach ( $filas as $i => $rotulo ) {
+				$rotulo   = is_string( $rotulo ) ? sanitize_text_field( $rotulo ) : '';
+				$lineas[] = '' !== $rotulo && ! empty( $grupos[ $i ] ) ? $rotulo . ' | ' . PeopleSpec::GROUP_MARK : $rotulo;
+			}
+			$out['roles'] = implode( "\n", $lineas );
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		return $out;
 	}
 
@@ -113,7 +141,10 @@ final class PeopleSpecPanel {
 			'groups'           => PeopleSpec::groups_text( $spec ),
 			'min'              => (string) $spec['min'],
 			'max'              => (string) $spec['max'],
-			'unique_per_group' => $spec['unique_per_group'] ? '1' : '',
+			// Una lista que nunca se guardó empieza con una persona por papel
+			// y grupo: es lo habitual, y quitarla es una decisión.
+			'unique_per_group' => $spec['unique_per_group'] || ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC ) ? '1' : '',
+			'multi_role'       => $spec['multi_role'] ? '1' : '',
 			'opens_at'         => (string) $spec['opens_at'],
 			'closes_at'        => (string) $spec['closes_at'],
 			'admitted_only'    => $spec['admitted_only'] ? '1' : '',
@@ -121,9 +152,11 @@ final class PeopleSpecPanel {
 		// Un envío rechazado repinta lo tecleado, solo si era de este panel.
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se mira si el envío era de este panel; no se guarda nada.
 		$de_aqui = $rejected && isset( $_POST[ self::FIELD_ROLES ] );
+		$valores = $de_aqui ? self::typed() : $valores;
 		return array(
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
-			'values'     => $de_aqui ? self::typed() : $valores,
+			'values'     => $valores,
+			'role_rows'  => PeopleSpec::role_lines( (string) $valores['roles'] ),
 			'max_people' => PeopleSpec::MAX_PEOPLE,
 			'max_roles'  => PeopleSpec::MAX_ROLES,
 			'max_groups' => PeopleSpec::MAX_GROUPS,

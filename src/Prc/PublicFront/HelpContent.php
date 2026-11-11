@@ -223,14 +223,14 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
 				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
-						'caption' => 'lista con dos personas, papel y grupo, y los botones «Cambiar o sustituir» y «Dar de baja»',
+						'caption' => 'lista con dos personas, papel y grupo, y los botones «Sustituir o corregir» y «Dar de baja»',
 						'image'   => '',
 					),
 				),
@@ -382,8 +382,8 @@ final class HelpContent {
 				'level' => 3,
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
+					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -535,21 +535,21 @@ final class HelpContent {
 				'id'    => 'coordino-un-eje',
 				'level' => 3,
 				'title' => 'Coordino un eje: ¿dónde digo cuál?',
-				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. Si el papel exige grupo, no se puede guardar sin él.</p>',
+				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. La etiqueta del grupo dice qué papeles lo exigen («Grupo (obligatorio para: …)»): con uno de ellos, no se puede guardar sin él.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'persona-dada-de-alta-dos-veces',
 				'level' => 3,
 				'title' => 'He dado de alta dos veces a la misma persona',
-				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja a …». Si el procedimiento solo admite una persona por papel y grupo, el aplicativo se lo indicará.</p>',
+				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja». El aplicativo ya no deja dar de alta a la misma persona dos veces, salvo que el procedimiento admita varios papeles por persona: si lo intenta, le dice con qué papel está y le lleva a su fila para cambiarla.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'sustituir-a-una-persona',
 				'level' => 3,
 				'title' => 'Tengo que sustituir a una persona',
-				'html'  => '<p>Pulse «Cambiar o sustituir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
+				'html'  => '<p>Pulse «Sustituir o corregir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
 				'shots' => array(),
 			),
 			array(

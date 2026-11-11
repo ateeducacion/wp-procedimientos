@@ -22,7 +22,7 @@ use Prc\Meta\ProcedureMetaKeys;
  *             { key: 'r2', label: 'Participante', needs_group: true } ],
  *   role_seq: 2,
  *   groups: [ { key: 'g1', label: 'Eje 1' } ], group_seq: 1,
- *   min: 1, max: 20, unique_per_group: false,
+ *   min: 1, max: 20, unique_per_group: false, multi_role: false,
  *   opens_at: '2026-11-01', closes_at: '2026-11-30', admitted_only: false }
  * ```
  *
@@ -50,7 +50,7 @@ final class PeopleSpec {
 	 * A stored or typed specification, normalised.
 	 *
 	 * @param mixed $raw Stored value.
-	 * @return array{enabled:bool, roles:array<int, array{key:string, label:string, needs_group:bool}>, role_seq:int, groups:array<int, array{key:string, label:string}>, group_seq:int, min:int, max:int, unique_per_group:bool, opens_at:string, closes_at:string, admitted_only:bool}
+	 * @return array{enabled:bool, roles:array<int, array{key:string, label:string, needs_group:bool}>, role_seq:int, groups:array<int, array{key:string, label:string}>, group_seq:int, min:int, max:int, unique_per_group:bool, multi_role:bool, opens_at:string, closes_at:string, admitted_only:bool}
 	 */
 	public static function sanitize( $raw ): array {
 		$raw    = is_array( $raw ) ? $raw : array();
@@ -84,6 +84,7 @@ final class PeopleSpec {
 			'min'              => null === $min ? 0 : max( 0, min( $min, self::MAX_PEOPLE ) ),
 			'max'              => null === $max || $max <= 0 ? self::MAX_PEOPLE : min( $max, self::MAX_PEOPLE ),
 			'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+			'multi_role'       => ! empty( $raw['multi_role'] ),
 			'opens_at'         => self::date( $raw['opens_at'] ?? '' ),
 			'closes_at'        => self::date( $raw['closes_at'] ?? '' ),
 			'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -141,7 +142,7 @@ final class PeopleSpec {
 	 * ({@see QuestionGrid::match_rows()}): una línea igual es esa; una
 	 * cambiada en su mismo sitio es la misma renombrada.
 	 *
-	 * @param array<string, mixed> $raw      `enabled`, `roles`, `groups`, `min`, `max`, `unique_per_group`, `opens_at`, `closes_at`, `admitted_only`.
+	 * @param array<string, mixed> $raw      `enabled`, `roles`, `groups`, `min`, `max`, `unique_per_group`, `multi_role`, `opens_at`, `closes_at`, `admitted_only`.
 	 * @param array<string, mixed> $previous The stored specification.
 	 * @return array{spec:array<string, mixed>, error:string} Error empty when it can be stored.
 	 */
@@ -161,6 +162,7 @@ final class PeopleSpec {
 				'min'              => $min,
 				'max'              => $max,
 				'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+				'multi_role'       => ! empty( $raw['multi_role'] ),
 				'opens_at'         => self::text( $raw, 'opens_at' ),
 				'closes_at'        => self::text( $raw, 'closes_at' ),
 				'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -186,15 +188,8 @@ final class PeopleSpec {
 		$marcas = array();
 		$lineas = array();
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
-			$partes = array_map( 'trim', explode( '|', (string) $linea ) );
-			$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
-			if ( $marca ) {
-				array_pop( $partes );
-			}
-			// Sin trozos vacíos: «Coordinación |» o «A ||» se quedan en su
-			// rótulo, y una línea que solo lleva barras no es un papel.
-			$rotulo   = trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) );
-			$lineas[] = $rotulo;
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			$lineas[]               = $rotulo;
 			if ( '' !== $rotulo ) {
 				$marcas[] = $marca;
 			}
@@ -206,6 +201,68 @@ final class PeopleSpec {
 			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
 		}
 		return $out;
+	}
+
+	/**
+	 * One line of the roles text: its label and whether it needs a group.
+	 *
+	 * @param string $linea One line, maybe ending in «| grupo».
+	 * @return array{0:string, 1:bool}
+	 */
+	private static function split_role( string $linea ): array {
+		$partes = array_map( 'trim', explode( '|', $linea ) );
+		$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
+		if ( $marca ) {
+			array_pop( $partes );
+		}
+		// Sin trozos vacíos: «Coordinación |» o «A ||» se quedan en su
+		// rótulo, y una línea que solo lleva barras no es un papel.
+		return array( trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) ), $marca );
+	}
+
+	/**
+	 * The roles text as the workshop paints it: one row per role, with its
+	 * «Exige grupo» checkbox.
+	 *
+	 * @param string $text One role per line, «| grupo» behind the ones that need a group.
+	 * @return array<int, array{label:string, needs_group:bool}>
+	 */
+	public static function role_lines( string $text ): array {
+		$out = array();
+		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			if ( '' !== $rotulo ) {
+				$out[] = array(
+					'label'       => $rotulo,
+					'needs_group' => $marca,
+				);
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Why the coordination would be asked twice: in «Datos» and in the list.
+	 *
+	 * Con la lista recogiendo la coordinación ({@see collects_coordination()}),
+	 * el formulario ya no la pide; pedirla también en «Datos» es configurarla
+	 * dos veces. Se rechaza lo que trae el choque nuevo: un procedimiento que
+	 * ya tenía las dos cosas se sigue guardando.
+	 *
+	 * @param array<string, mixed> $before       Specification stored.
+	 * @param array<string, mixed> $after        Specification to store.
+	 * @param int                  $count_before Coordinators «Datos» asks for now.
+	 * @param int                  $count_after  Coordinators «Datos» would ask for.
+	 * @return string Empty when there is no new clash.
+	 */
+	public static function coordination_clash( array $before, array $after, int $count_before, int $count_after ): string {
+		$ya_estaba = $count_before > 0 && self::collects_coordination( $before );
+		if ( $ya_estaba || $count_after <= 0 || ! self::collects_coordination( $after ) ) {
+			return '';
+		}
+		return $count_after !== $count_before
+			? 'La coordinación ya se da de alta en la lista de la pestaña «Personas»: deje aquí «No se piden». No se ha guardado nada.'
+			: 'En «Datos» se piden personas coordinadoras: para recogerlas en esta lista, deje antes «No se piden» en «Datos». No se ha guardado nada.';
 	}
 
 	/**

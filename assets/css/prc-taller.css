@@ -337,3 +337,9 @@
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
+
+/* --- «Personas» ----------------------------------------------------------- */
+
+/* Un papel por fila: el rótulo y, al lado, si exige indicar el grupo. */
+.prc-papel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }
+.prc-papel .prc-control { flex: 1 1 18rem; max-width: 32rem; }

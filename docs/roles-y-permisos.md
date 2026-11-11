@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0020, ADR-0023, ADR-0043]
+  adrs: [ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0020, ADR-0023, ADR-0043, ADR-0044]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -193,15 +193,28 @@ coincide con `prc_centre_code` de la solicitud.
 | Marcar como histórico | Los mismos | Con confirmación: no hay vuelta atrás sin administración |
 | Desarchivar | Solo `prc_manage_app` | — |
 | Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; para crear, el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno además de la lista, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa aunque el procedimiento se haya acotado después) |
-| Editar su solicitud | `prc_apply` de **ese** centro | Procedimiento `open`; o `amendment` **y** la solicitud en `amend` |
+| Editar su solicitud | `prc_apply` de **ese** centro | Procedimiento `open`; o `amendment` **y** la solicitud en `amend`; o con la **prórroga** de esa solicitud viva (`prc_late_until`), en cualquier estado salvo borrador e histórico |
+| Retirar su solicitud (papelera) | `prc_apply` de ese centro, o la persona docente que la presentó (meta capacidad `prc_withdraw_application`) | Procedimiento `open` o prórroga viva; nunca histórico. Puede volver a presentar mientras haya plazo |
 | Ver su solicitud y la nota de revisión | `prc_apply` de ese centro | Siempre |
 | Ver las solicitudes de un procedimiento | `prc_review_applications` en su ámbito, o `prc_manage_all_areas` | Que el procedimiento no esté archivado |
 | Admitir, excluir, pedir subsanar | Los mismos | Excluir y pedir subsanar exigen nota |
 | Exportar el CSV | Los mismos | — |
+| Retirar una solicitud por error | Los mismos (`delete_post`) | Con motivo obligatorio, que queda en el historial; nunca histórico, tampoco administración por el escritorio. La revisión en bloque no retira, y una retirada no se revisa |
+| Restaurar una retirada | Los mismos (`prc_restore_application`) | Si el centro no ha presentado otra; nunca histórico, tampoco por el escritorio |
+| Borrar para siempre una retirada | Solo `prc_manage_app` (`delete_post` en la papelera) | Nunca en histórico. La papelera no se vacía sola para las solicitudes |
+| Conceder, cambiar o quitar una prórroga | Los mismos (`prc_extend_application`) | Nunca en histórico, tampoco administración; en un procedimiento resuelto se permite, con aviso. Abre también la lista de personas que sigue el plazo de la solicitud |
+| Presentar en nombre de un centro | Los mismos (`prc_submit_for_centre`, sobre el procedimiento) | Un centro del catálogo y activo, sin solicitud —tampoco retirada—, en un procedimiento para centros; los acotados del procedimiento salvo «aunque no cumpla los requisitos» |
+| Ver el historial y la nota interna de una solicitud | Los mismos | Ni quien solicita ni quien consulta |
 | Ver una solicitud en el escritorio | Los mismos, más `prc_manage_app` | Solo diagnóstico: `prc_application` no es público |
 | Consultar las solicitudes de un procedimiento en solo lectura | `prc_view_applications` con zona, o quien gestiona su ámbito | El procedimiento publicado y con `prc_observable`; quien consulta, solo los centros de sus zonas |
 | Descargar los documentos desde la consulta | Los mismos | Además, `prc_observer_files` en el procedimiento |
 | Exportar la consulta a CSV | Los mismos | Además, `prc_observer_export`; nunca el DNI ni la nota |
+
+Las cuatro meta capacidades de la
+[ADR-0044](adr/ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md) no se
+marcan en ningún rol: las resuelve `ProcedureAccess::map_meta_cap()` con las
+reglas de `Access/ApplicationActions`. Una solicitud retirada ya no es de quien
+la presentó: solo la ve quien revisa.
 
 Lo que cada **estado** del procedimiento permite está en la tabla de
 [SDD-0001](sdd/SDD-0001-arquitectura-del-aplicativo-de-procedimientos.md):

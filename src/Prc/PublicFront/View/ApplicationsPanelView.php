@@ -39,13 +39,20 @@ final class ApplicationsPanelView {
 	public static function html( array $m ): string {
 		$t       = (array) ( $m['table'] ?? array() );
 		$docente = ! empty( $t['teachers'] );
+		// «Retiradas» y «Presentar en nombre de un centro» (PLAN-0003, PR 9),
+		// también cuando todavía no hay ninguna solicitud.
+		$arriba = ApplicationActionsView::bar( $m );
+		if ( ! empty( $m['actions']['withdrawn_open'] ) ) {
+			return $arriba . ApplicationActionsView::withdrawn( $m );
+		}
 		if ( 0 === (int) ( $t['all'] ?? 0 ) ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
+			return $arriba . '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
 				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
 		}
 		$cerrado = true !== $m['can_review'];
 
 		ob_start();
+		echo $arriba; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		?>
 		<div class="prc-banda-tabla">
 			<p class="prc-recuento"><?php echo esc_html( self::count_text( $t ) ); ?></p>
@@ -429,7 +436,7 @@ final class ApplicationsPanelView {
 
 		ob_start();
 		?>
-		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
+		<details class="prc-revision"<?php echo empty( $m['actions']['rows'][ $id ]['history']['open'] ) ? '' : ' open'; ?>>
 			<summary class="prc-revision__abrir">Revisar</summary>
 			<dl class="prc-respuestas">
 				<dt>Presentada por</dt>
@@ -448,7 +455,7 @@ final class ApplicationsPanelView {
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
@@ -467,8 +474,10 @@ final class ApplicationsPanelView {
 						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
 					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
 				</div>
+				<?php echo ApplicationActionsView::internal_note( $m, $id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo PanelParts::submit( 'Guardar la revisión' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</form>
+			<?php echo ApplicationActionsView::tools( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</details>
 		<?php
 		return (string) ob_get_clean();

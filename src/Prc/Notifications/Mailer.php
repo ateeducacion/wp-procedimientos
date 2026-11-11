@@ -19,6 +19,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
@@ -57,6 +58,8 @@ final class Mailer {
 	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
 	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
 	public const EVENT_PEOPLE_CHANGED        = 'people_changed';
+	public const EVENT_APPLICATION_WITHDRAWN = 'application_withdrawn';
+	public const EVENT_APPLICATION_EXTENDED  = 'application_extended';
 
 	/**
 	 * Name the mails are sent as. Empty: WordPress decides.
@@ -94,6 +97,8 @@ final class Mailer {
 		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
 		add_action( 'prc_people_changed', array( self::class, 'on_people_changed' ), 10, 5 );
+		add_action( 'prc_application_withdrawn', array( self::class, 'on_application_withdrawn' ), 10, 4 );
+		add_action( 'prc_application_extended', array( self::class, 'on_application_extended' ), 10, 4 );
 	}
 
 	/**
@@ -110,6 +115,8 @@ final class Mailer {
 			self::EVENT_DELIVERY_RECEIVED,
 			self::EVENT_PROCEDURE_CREATED,
 			self::EVENT_PEOPLE_CHANGED,
+			self::EVENT_APPLICATION_WITHDRAWN,
+			self::EVENT_APPLICATION_EXTENDED,
 		);
 	}
 
@@ -479,6 +486,77 @@ final class Mailer {
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 				self::send_to_zone( (int) $application_id, $ctx, (array) $before, (array) $after );
+			}
+		);
+	}
+
+	/**
+	 * An application has just been withdrawn.
+	 *
+	 * Solo cuando la retira quien solicita (PLAN-0003, PR 9): a los correos de
+	 * contacto, con el enlace al taller, y un acuse a la cuenta que la retira,
+	 * con el enlace para presentar otra mientras haya plazo. Cuando la retira
+	 * quien revisa, o el escritorio, no sale nada: el motivo es interno y
+	 * queda en el historial.
+	 *
+	 * @param int    $application_id Application ID.
+	 * @param int    $user_id        Account that withdrew it.
+	 * @param string $by             `applicant`, `reviewer` or `desk`.
+	 * @param string $reason         Why; never sent.
+	 * @return void
+	 */
+	public static function on_application_withdrawn( $application_id, $user_id = 0, $by = '', $reason = '' ): void {
+		unset( $reason );
+		if ( ApplicationOperations::BY_APPLICANT !== (string) $by ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
+				$propia      = (string) $ctx['url'];
+				$ctx['url']  = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
+				$ctx['ack'] = true;
+				$ctx['url'] = $propia;
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, array( self::email_of( (int) $user_id ) ), $ctx );
+			}
+		);
+	}
+
+	/**
+	 * An application has just been given an extension, or a new last day.
+	 *
+	 * A la cuenta que la presentó, mientras siga siendo suya, como el aviso de
+	 * revisión. Quitar la prórroga no avisa. Una presentada en nombre del
+	 * centro y todavía sin completar es de quien revisa: no sale nada, porque
+	 * el catálogo no trae la dirección del centro.
+	 *
+	 * @param int    $application_id Application ID.
+	 * @param string $until          Last day now, Y-m-d.
+	 * @param string $previous       Last day before.
+	 * @param int    $user_id        Account that gave it.
+	 * @return void
+	 */
+	public static function on_application_extended( $application_id, $until = '', $previous = '', $user_id = 0 ): void {
+		unset( $previous, $user_id );
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( '' === (string) $until || ! ProcedureAccess::can_view_application( $autor, (int) $application_id, ProcedureAccess::VIEW_OWN ) ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $until, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['until'] = implode( '-', array_reverse( explode( '-', (string) $until ) ) );
+				self::send( self::EVENT_APPLICATION_EXTENDED, array( self::email_of( $autor ) ), $ctx );
 			}
 		);
 	}

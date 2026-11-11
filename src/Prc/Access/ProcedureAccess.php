@@ -980,7 +980,9 @@ final class ProcedureAccess {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
-		$propia = self::is_own_application( $user_id, $application_id );
+		// Una solicitud retirada —en la papelera— ya no es de nadie: solo la ve
+		// quien revisa, que es quien puede restaurarla (PLAN-0003, PR 9).
+		$propia = 'publish' === get_post_status( $application_id ) && self::is_own_application( $user_id, $application_id );
 		if ( self::VIEW_OWN === $purpose ) {
 			return $propia;
 		}
@@ -1089,6 +1091,8 @@ final class ProcedureAccess {
 				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
 				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'state'    => ProcedureState::of_post( $procedure_id ),
+				// La prórroga de la solicitud abre la lista que sigue su plazo.
+				'late'     => ApplicationActions::is_late_open( $application_id ),
 			)
 		);
 	}
@@ -1240,6 +1244,12 @@ final class ProcedureAccess {
 		if ( self::CAP_EDIT_PEOPLE === $cap ) {
 			return self::can_edit_people( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
 		}
+		// Retirar, restaurar, la prórroga y presentar en nombre de un centro
+		// (PLAN-0003, PR 9): las reglas viven en ApplicationActions, y aquí se
+		// cierran para todas las puertas.
+		if ( isset( ApplicationActions::CAPS[ $cap ] ) ) {
+			return ApplicationActions::allows( $cap, $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
+		}
 		if ( ! in_array( $cap, array( 'edit_post', 'delete_post', 'publish_post', 'read_post' ), true ) ) {
 			return $caps;
 		}
@@ -1249,7 +1259,10 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo ) {
+		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
+			// Papelera y borrado definitivo tienen su propia regla (ADR-0044).
+			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
 				: self::can_review( $user_id, $post_id );

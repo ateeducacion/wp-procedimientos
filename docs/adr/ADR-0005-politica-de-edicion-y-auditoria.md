@@ -200,3 +200,17 @@ ya guarda.
   quien puede editar, puede editar. Es el taller quien cierra paneles.
 - La política de la solicitud —cuándo la edita el centro— no es de esta ADR:
   la fija la [ADR-0020](ADR-0020-la-subsanacion-es-un-plazo-y-un-estado.md).
+
+## Adenda — 2026-11-10 (ADR-0044)
+
+Lo que esta ADR dejaba «por escribir» de la auditoría está escrito para las
+solicitudes en la [ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md): el historial de cada solicitud
+(`prc_log`, tope de 500) anota quién, cuándo y qué de presentarla,
+modificarla, el cambio de revisión —el estado y si cambió la nota, sin la
+nota—, cada entrega, cada persona, retirarla, restaurarla, la prórroga,
+presentarla en nombre de un centro y que cambió la nota interna. Lo anota
+escuchando las acciones que emiten las operaciones, no desde cada pantalla, y
+solo lo ve quien revisa. La auditoría de los cambios del **procedimiento**
+sigue sin escribirse.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

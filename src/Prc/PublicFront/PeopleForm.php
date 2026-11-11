@@ -367,19 +367,20 @@ final class PeopleForm {
 	}
 
 	/**
-	 * What the workshop shows of one application: its people and its history,
-	 * read-only.
+	 * What the workshop shows of one application: its people, read-only.
 	 *
-	 * El historial enseña el DNI tapado salvo las cuatro últimas cifras: quien
-	 * revisa lo ve entero en la lista, y en el historial basta para saber de
-	 * quién se habla.
+	 * Su historial ya no va aquí: es el de la solicitud entera
+	 * ({@see ApplicationHistory}), que el panel lee solo para la que se abre.
+	 * Los dos argumentos de detrás se quedan por compatibilidad y no cambian
+	 * nada.
 	 *
 	 * @param int                   $application_id Application post ID.
-	 * @param bool                  $history        Whether to read its history too.
-	 * @param array<string, string> $args           Query args the history link keeps: the filter and page of the table.
+	 * @param bool                  $history        Unused.
+	 * @param array<string, string> $args           Unused.
 	 * @return array<string, mixed> `show` false when the procedure has no list.
 	 */
 	public static function review( int $application_id, bool $history = false, array $args = array() ): array {
+		unset( $history, $args );
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -391,71 +392,7 @@ final class PeopleForm {
 			'rows'     => $filas,
 			'min'      => (int) $spec['min'],
 			'complete' => ApplicationPeople::is_complete( $spec, $filas ),
-			// El historial se lee solo para la solicitud que se pide: con
-			// cientos de solicitudes en el panel, leerlos todos para pintar la
-			// tabla sería leer cientos de metas que nadie va a abrir.
-			'open'     => $history,
-			'log'      => $history ? self::history( $spec, $application_id ) : array(),
-			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) + $args ),
 		);
-	}
-
-	/**
-	 * The history of the list of an application, newest first, in words.
-	 *
-	 * @param array<string, mixed> $spec           Specification.
-	 * @param int                  $application_id Application post ID.
-	 * @return array<int, array{when:string, who:string, what:string, before:string, after:string}>
-	 */
-	private static function history( array $spec, int $application_id ): array {
-		$que      = array(
-			'person_added'   => 'Alta',
-			'person_changed' => 'Cambio',
-			'person_removed' => 'Baja',
-		);
-		$out      = array();
-		$entradas = array_reverse( ApplicationLog::all( $application_id ) );
-		// Quién hizo cada cosa: todas las cuentas en una consulta.
-		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
-		foreach ( $entradas as $entrada ) {
-			if ( ApplicationLog::TRIMMED === $entrada['event'] ) {
-				$out[] = array(
-					'when'   => '',
-					'who'    => '',
-					'what'   => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $entrada['data']['dropped'] ?? 0 ) ),
-					'before' => '',
-					'after'  => '',
-				);
-				continue;
-			}
-			if ( ! isset( $que[ $entrada['event'] ] ) ) {
-				continue;
-			}
-			$cuenta = $entrada['user'] > 0 ? get_userdata( $entrada['user'] ) : false;
-			$out[]  = array(
-				'when'   => '' !== $entrada['at'] ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( $entrada['at'] ) ) : '',
-				'who'    => false !== $cuenta ? (string) $cuenta->display_name : '(cuenta que ya no existe)',
-				'what'   => $que[ $entrada['event'] ],
-				'before' => self::line( $spec, (array) ( $entrada['data']['before'] ?? array() ) ),
-				'after'  => self::line( $spec, (array) ( $entrada['data']['after'] ?? array() ) ),
-			);
-		}
-		return $out;
-	}
-
-	/**
-	 * One person of the history in a line, with the DNI covered.
-	 *
-	 * @param array<string, mixed> $spec Specification.
-	 * @param array<string, mixed> $row  Row.
-	 * @return string Empty for no row.
-	 */
-	private static function line( array $spec, array $row ): string {
-		if ( array() === $row ) {
-			return '';
-		}
-		$dni = ApplicationPeople::masked_dni( (string) ( $row['dni'] ?? '' ) );
-		return ApplicationPeople::describe( $spec, $row ) . ( '' !== $dni ? ' · DNI ' . $dni : '' );
 	}
 
 	/**

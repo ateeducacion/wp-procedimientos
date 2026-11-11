@@ -314,6 +314,8 @@ final class ProcedureMetaKeys {
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
 			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
+			'application_withdrawn' => 'Aviso a los correos de contacto, y acuse a quien la retira, cuando un centro retira su solicitud',
+			'application_extended'  => 'Aviso a quien presentó la solicitud cuando se le concede una prórroga',
 		);
 	}
 
@@ -571,6 +573,25 @@ final class ApplicationMetaKeys {
 
 	public const LOG = 'prc_log';
 
+
+
+
+
+
+	public const LATE_UNTIL = 'prc_late_until';
+
+
+
+
+
+	public const INTERNAL_NOTE = 'prc_internal_note';
+
+
+
+
+
+	public const CREATED_BY = 'prc_created_by';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -600,6 +621,9 @@ final class ApplicationMetaKeys {
 			self::REVIEW_NOTE,
 			self::PEOPLE,
 			self::LOG,
+			self::LATE_UNTIL,
+			self::INTERNAL_NOTE,
+			self::CREATED_BY,
 		);
 	}
 
@@ -776,6 +800,7 @@ final class DateRange {
 
 namespace Prc\Domain;
 
+use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 
 
@@ -979,6 +1004,60 @@ final class ProcedureState {
 
 	public static function accepts_applications( string $state ): bool {
 		return ProcedureMetaKeys::STATE_OPEN === $state;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function application_window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		if ( $late || self::accepts_applications( $state ) ) {
+			return '';
+		}
+		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
+			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
+				? ''
+				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
+		}
+		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
+			return 'El plazo de solicitud todavía no está abierto.';
+		}
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function late_open( string $state, string $late_until, string $today ): bool {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_ARCHIVED, ProcedureMetaKeys::STATE_DRAFT ), true ) ) {
+			return false;
+		}
+		$late_until = trim( $late_until );
+		return 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $late_until ) && trim( $today ) <= $late_until;
 	}
 
 
@@ -3101,7 +3180,7 @@ final class PeopleSpec {
 				return $texto;
 			}
 		}
-		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review );
+		return self::window( $spec, (string) ( $ctx['today'] ?? '' ), (string) ( $ctx['state'] ?? '' ), $review, ! empty( $ctx['late'] ) );
 	}
 
 
@@ -3113,11 +3192,12 @@ final class PeopleSpec {
 
 
 
-	private static function window( array $spec, string $today, string $state, string $review ): string {
+
+	private static function window( array $spec, string $today, string $state, string $review, bool $late = false ): string {
 		$abre   = (string) $spec['opens_at'];
 		$cierra = (string) $spec['closes_at'];
 		if ( '' === $abre && '' === $cierra ) {
-			return self::application_editable( $state, $review )
+			return self::application_editable( $state, $review, $late )
 				? ''
 				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
 		}
@@ -3138,9 +3218,13 @@ final class PeopleSpec {
 
 
 
-	public static function application_editable( string $state, string $review ): bool {
-		return ProcedureState::accepts_applications( $state )
-			|| ( ProcedureMetaKeys::STATE_AMENDMENT === $state && ApplicationMetaKeys::REVIEW_AMEND === $review );
+
+
+
+
+
+	public static function application_editable( string $state, string $review, bool $late = false ): bool {
+		return '' === ProcedureState::application_window( $state, $review, false, $late );
 	}
 
 
@@ -4029,11 +4113,12 @@ final class ApplicationCompleteness {
 
 
 
-	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review ): array {
+
+	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review, bool $pending = false ): array {
 		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
 			return array();
 		}
-		$out  = array();
+		$out  = $pending ? array( 'Pendiente de que el centro la complete' ) : array();
 		$spec = PeopleSpec::sanitize( $spec );
 		$hay  = ApplicationPeople::rows( $people );
 		if ( ! ApplicationPeople::is_complete( $spec, $hay ) ) {
@@ -6829,7 +6914,9 @@ final class ProcedureAccess {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
-		$propia = self::is_own_application( $user_id, $application_id );
+
+
+		$propia = 'publish' === get_post_status( $application_id ) && self::is_own_application( $user_id, $application_id );
 		if ( self::VIEW_OWN === $purpose ) {
 			return $propia;
 		}
@@ -6938,6 +7025,8 @@ final class ProcedureAccess {
 				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
 				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 				'state'    => ProcedureState::of_post( $procedure_id ),
+
+				'late'     => ApplicationActions::is_late_open( $application_id ),
 			)
 		);
 	}
@@ -7089,6 +7178,12 @@ final class ProcedureAccess {
 		if ( self::CAP_EDIT_PEOPLE === $cap ) {
 			return self::can_edit_people( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
 		}
+
+
+
+		if ( isset( ApplicationActions::CAPS[ $cap ] ) ) {
+			return ApplicationActions::allows( $cap, $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
+		}
 		if ( ! in_array( $cap, array( 'edit_post', 'delete_post', 'publish_post', 'read_post' ), true ) ) {
 			return $caps;
 		}
@@ -7098,7 +7193,10 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo ) {
+		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
+
+			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
 				: self::can_review( $user_id, $post_id );
@@ -7210,6 +7308,585 @@ final class ProcedureAccess {
 			}
 		}
 		return array_values( array_unique( $out ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\Access;
+
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
+use Prc\Domain\ProcedureInput;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Access\ApplicationActions', false ) ) {
+final class ApplicationActions {
+
+
+
+
+	public const CAP_WITHDRAW = 'prc_withdraw_application';
+
+
+
+
+	public const CAP_RESTORE = 'prc_restore_application';
+
+
+
+
+	public const CAP_EXTEND = 'prc_extend_application';
+
+
+
+
+
+	public const CAP_SUBMIT_FOR = 'prc_submit_for_centre';
+
+
+
+
+
+
+	public const CAPS = array(
+		self::CAP_WITHDRAW   => 'why_not_withdraw',
+		self::CAP_RESTORE    => 'why_not_restore',
+		self::CAP_EXTEND     => 'why_not_extend',
+		self::CAP_SUBMIT_FOR => 'why_not_submit_for',
+	);
+
+
+
+
+
+
+	public static function register(): void {
+		add_filter( 'pre_untrash_post', array( self::class, 'guard_untrash' ), 10, 2 );
+		add_filter( 'pre_delete_post', array( self::class, 'guard_delete' ), 10, 2 );
+		add_filter( 'wp_untrash_post_status', array( self::class, 'untrash_status' ), 10, 3 );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function allows( string $cap, int $user_id, int $post_id ): bool {
+		$regla = self::CAPS[ $cap ] ?? '';
+		return '' !== $regla && '' === (string) call_user_func( array( self::class, $regla ), $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function can_withdraw( int $user_id, int $application_id ): bool {
+		return '' === self::why_not_withdraw( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_withdraw( int $user_id, int $application_id ): string {
+		if ( ! self::is_live( $application_id ) || ! ProcedureAccess::can_view_application( $user_id, $application_id, ProcedureAccess::VIEW_OWN ) ) {
+			return 'Solo retira una solicitud el equipo directivo de su centro, o la persona docente que la presentó.';
+		}
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) || ProcedureAccess::is_archived( $procedure_id ) ) {
+			return 'Este procedimiento está cerrado: la solicitud ya no se puede retirar.';
+		}
+		$estado = ProcedureState::of_post( $procedure_id );
+		if ( ProcedureState::accepts_applications( $estado ) || ProcedureState::late_open( $estado, self::late_until( $application_id ), ProcedureState::today() ) ) {
+			return '';
+		}
+		return 'El plazo de solicitud está cerrado, así que la solicitud ya no se puede retirar. Si tiene que retirarla, pídalo a quien gestiona el procedimiento.';
+	}
+
+
+
+
+
+
+
+
+
+	public static function late_until( int $application_id ): string {
+		if ( $application_id <= 0 ) {
+			return '';
+		}
+		$valor = get_post_meta( $application_id, ApplicationMetaKeys::LATE_UNTIL, true );
+		$valor = is_string( $valor ) ? trim( $valor ) : '';
+		return ProcedureInput::is_valid_date( $valor ) ? $valor : '';
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function is_late_open( int $application_id ): bool {
+		if ( ! self::is_live( $application_id ) ) {
+			return false;
+		}
+		$late = self::late_until( $application_id );
+		return '' !== $late && ProcedureState::late_open( ProcedureState::of_post( (int) wp_get_post_parent_id( $application_id ) ), $late, ProcedureState::today() );
+	}
+
+
+
+
+
+
+
+	public static function late_notice( int $application_id ): string {
+		if ( ! self::is_late_open( $application_id ) ) {
+			return '';
+		}
+		return 'Esta solicitud tiene de plazo hasta el ' . self::day( self::late_until( $application_id ) ) . ', incluido, para completarla o modificarla, aunque el plazo general esté cerrado.';
+	}
+
+
+
+
+
+
+
+
+	public static function why_not_late_date( string $until, string $today ): string {
+		if ( ! ProcedureInput::is_valid_date( $until ) ) {
+			return 'Escriba el último día de la prórroga como una fecha válida.';
+		}
+		return $until < $today ? 'La prórroga no puede terminar antes de hoy.' : '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_extend( int $user_id, int $application_id ): string {
+		if ( ! self::is_live( $application_id ) ) {
+			return 'Esa solicitud no existe o está retirada.';
+		}
+		return self::why_not_reviewer( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_retire( int $user_id, int $application_id ): string {
+		return self::why_not_extend( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_restore( int $user_id, int $application_id ): string {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || 'trash' !== get_post_status( $application_id ) ) {
+			return 'Esa solicitud no está retirada.';
+		}
+		$porque = self::why_not_reviewer( $user_id, $application_id );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		return null !== self::live_twin( $application_id )
+			? 'No se puede restaurar: el centro ya ha presentado otra solicitud a este procedimiento, y serían dos. Si hay que quedarse con esta, retire antes la otra.'
+			: '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function guard_untrash( $untrash, $post ) {
+		if ( null !== $untrash || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
+			return $untrash;
+		}
+
+
+		return null === self::live_twin( (int) $post->ID ) && ! ProcedureAccess::is_archived( (int) $post->ID ) ? null : false;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function may_delete( int $user_id, int $application_id ): bool {
+		if ( ProcedureAccess::is_archived( $application_id ) ) {
+			return false;
+		}
+		return 'trash' === get_post_status( $application_id )
+			? ProcedureAccess::is_manager( $user_id )
+			: ProcedureAccess::can_review( $user_id, $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function guard_delete( $delete, $post ) {
+		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
+			return $delete;
+		}
+		if ( 'trash' !== $post->post_status ) {
+
+
+
+			return self::trash_enabled() || ! self::inside_core_trash() ? $delete : false;
+		}
+		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function trash_enabled(): bool {
+		return (bool) apply_filters( 'prc_trash_enabled', (bool) EMPTY_TRASH_DAYS );
+	}
+
+
+
+
+
+
+
+
+
+	private static function inside_core_trash(): bool {
+		$pila = wp_debug_backtrace_summary( null, 0, false );
+		return is_array( $pila ) && in_array( 'wp_trash_post', $pila, true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function untrash_status( $status, $post_id = 0, $previous_status = '' ): string {
+		if ( ApplicationPostType::POST_TYPE === get_post_type( (int) $post_id ) && '' !== (string) $previous_status ) {
+			return (string) $previous_status;
+		}
+		return (string) $status;
+	}
+
+
+
+
+
+
+
+	public static function live_twin( int $application_id ): ?int {
+		$args = array(
+			'post_type'        => ApplicationPostType::POST_TYPE,
+			'post_parent'      => (int) wp_get_post_parent_id( $application_id ),
+			'post_status'      => 'publish',
+			'post__not_in'     => array( $application_id ),
+			'numberposts'      => 1,
+			'fields'           => 'ids',
+			'no_found_rows'    => true,
+			'suppress_filters' => true,
+		);
+		if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+			$args['author']     = (int) get_post_field( 'post_author', $application_id );
+			$args['meta_key']   = ApplicationMetaKeys::APPLICANT_TYPE;
+			$args['meta_value'] = ApplicationMetaKeys::TYPE_TEACHER;
+		} else {
+			$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+			if ( '' === $codigo ) {
+				return null;
+			}
+			$args['meta_key']   = ApplicationMetaKeys::CENTRE_CODE;
+			$args['meta_value'] = $codigo;
+		}
+		$ids = get_posts( $args );
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_submit_for( int $user_id, int $procedure_id, string $code = '', bool $override = false, ?string &$ineligible = null ): string {
+		$ineligible = '';
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
+			return 'Ese procedimiento no existe o no está publicado.';
+		}
+		$porque = self::why_not_reviewer( $user_id, $procedure_id );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 'Este procedimiento es para el profesorado: cada solicitud es de una persona, y no se presenta en nombre de nadie.';
+		}
+		return '' === trim( $code ) ? '' : self::why_not_centre( $procedure_id, $code, $override, $ineligible );
+	}
+
+
+
+
+
+
+
+	public static function catalogue_centre( string $code ): array {
+		$code   = trim( $code );
+		$centro = CentreCatalog::find( $code );
+		return array() !== $centro ? $centro : CentreCatalog::find( strtoupper( $code ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function why_not_centre( int $procedure_id, string $code, bool $override, ?string &$ineligible ): string {
+		$centro = self::catalogue_centre( $code );
+		if ( array() === $centro ) {
+			return 'Ese código no está en el catálogo de centros. Compruébelo: solo se presenta en nombre de un centro del catálogo.';
+		}
+		if ( isset( $centro['active'] ) && false === $centro['active'] ) {
+			return 'Ese centro figura como inactivo en el catálogo.';
+		}
+		$kind = (string) ( $centro['kind'] ?? '' );
+		$kind = isset( ProcedureMetaKeys::centre_kinds()[ $kind ] ) ? $kind : ProcedureMetaKeys::KIND_SCHOOL;
+		if ( ! in_array( $kind, ProcedureAccess::centre_kinds( $procedure_id ), true ) ) {
+			return ProcedureMetaKeys::KIND_RURAL_GROUP === $kind
+				? 'Este procedimiento no admite solicitudes de agrupaciones de escuelas rurales como colectivo.'
+				: 'Este procedimiento solo admite solicitudes de agrupaciones de escuelas rurales como colectivo, y ese código es de un centro.';
+		}
+		$codigo = (string) $centro['code'];
+		$antes  = self::existing( $procedure_id, $codigo );
+		if ( 'publish' === $antes ) {
+			return 'Ese centro ya tiene una solicitud en este procedimiento: ábrala desde la tabla.';
+		}
+		if ( 'trash' === $antes ) {
+			return 'Ese centro tiene una solicitud retirada en este procedimiento: restáurela desde «Retiradas» en vez de crear otra.';
+		}
+		$ineligible = self::why_not_eligible( $procedure_id, $codigo, $kind );
+		if ( '' !== $ineligible && ! $override ) {
+			return $ineligible . ' Si aun así hay que presentarla, marque «Aunque no cumpla los requisitos».';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+	private static function existing( int $procedure_id, string $code ): string {
+		$ids     = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => array( 'publish', 'trash' ),
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $code,
+				'suppress_filters' => true,
+			)
+		);
+		$estados = array_map( 'get_post_status', is_array( $ids ) ? $ids : array() );
+		if ( in_array( 'publish', $estados, true ) ) {
+			return 'publish';
+		}
+		return in_array( 'trash', $estados, true ) ? 'trash' : '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function why_not_eligible( int $procedure_id, string $code, string $kind ): string {
+		$rules = ProcedureAccess::eligibility( $procedure_id );
+		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
+			$rules['ownership'] = array();
+		}
+		return CentreEligibility::restricted( $rules )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ), array() !== CentreCatalog::all() )
+			: '';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function why_not_reviewer( int $user_id, int $post_id ): string {
+		if ( ! ProcedureAccess::can_review( $user_id, $post_id ) ) {
+			return 'Su perfil no gestiona las solicitudes de este procedimiento.';
+		}
+		return ProcedureAccess::is_archived( $post_id )
+			? 'Este procedimiento está marcado como histórico: sus solicitudes ya no se tocan.'
+			: '';
+	}
+
+
+
+
+
+
+
+	private static function is_live( int $application_id ): bool {
+		return $application_id > 0 && ApplicationPostType::POST_TYPE === get_post_type( $application_id ) && 'publish' === get_post_status( $application_id );
+	}
+
+
+
+
+
+
+
+	public static function day( string $ymd ): string {
+		return '' === $ymd ? '' : implode( '-', array_reverse( explode( '-', $ymd ) ) );
 	}
 }
 
@@ -7774,6 +8451,18 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::LOG                => array(
 				'type'     => 'array',
 				'sanitize' => array( ApplicationLog::class, 'sanitize' ),
+			),
+			ApplicationMetaKeys::LATE_UNTIL         => array(
+				'type'     => 'string',
+				'sanitize' => array( ProcedureMetaRegistration::class, 'sanitize_date' ),
+			),
+			ApplicationMetaKeys::INTERNAL_NOTE      => array(
+				'type'     => 'string',
+				'sanitize' => 'sanitize_textarea_field',
+			),
+			ApplicationMetaKeys::CREATED_BY         => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
 			),
 		);
 	}
@@ -10597,6 +11286,18 @@ final class CentreColumns {
 
 
 
+
+
+	public static function extras(): array {
+		return array_merge( self::KEYS, Applications::EXTRA_COLUMNS );
+	}
+
+
+
+
+
+
+
 	public static function columns( bool $wanted = true ): array {
 		if ( ! $wanted ) {
 			return array();
@@ -10718,7 +11419,7 @@ final class CentreColumns {
 
 
 	public static function all_plus( array $ticked, array $always ): array {
-		$extras = array_values( array_intersect( self::KEYS, $ticked ) );
+		$extras = array_values( array_intersect( self::extras(), $ticked ) );
 		return array() === $extras ? array() : array_merge( $always, $extras );
 	}
 }
@@ -10778,6 +11479,14 @@ final class Applications {
 
 
 	public const KEY_FILES = '_files';
+
+
+
+
+
+
+	public const EXTRA_COLUMNS = array( 'internal_note' );
+
 
 
 
@@ -11077,6 +11786,7 @@ final class Applications {
 			return 0;
 		}
 		$centro = self::centre_of( $user_id, $code );
+		ApplicationOperations::forget_refusal();
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}
@@ -11094,6 +11804,7 @@ final class Applications {
 			'coordinator' => array(),
 			'answers'     => array(),
 		);
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		$metas = array(
 			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
@@ -11106,7 +11817,15 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
-		self::saved( $id, $created, $user_id );
+
+
+		if ( $created && ApplicationOperations::lost_race( $id, $procedure_id, $centro['code'] ) ) {
+			return 0;
+		}
+
+
+		$created = ApplicationOperations::adopt( $id, $user_id ) || $created;
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -11141,6 +11860,7 @@ final class Applications {
 			return 0;
 		}
 		$data += array( 'answers' => array() );
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		foreach (
 			array(
 				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
@@ -11154,7 +11874,7 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created, $user_id );
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -11174,7 +11894,13 @@ final class Applications {
 
 
 
-	private static function saved( int $id, bool $created, int $user_id ): void {
+
+
+
+
+
+
+	private static function saved( int $id, bool $created, int $user_id, string $previous = '' ): void {
 
 
 
@@ -11182,7 +11908,8 @@ final class Applications {
 
 
 
-		do_action( 'prc_application_saved', $id, $created, $user_id );
+
+		do_action( 'prc_application_saved', $id, $created, $user_id, $previous );
 	}
 
 
@@ -11335,6 +12062,7 @@ final class Applications {
 
 
 
+
 	public static function columns( array $questions, bool $centre = false ): array {
 		$out  = array(
 			'centre' => 'Centro',
@@ -11353,6 +12081,9 @@ final class Applications {
 			'note'              => 'Nota',
 		);
 		$out += QuestionPoints::heading( $questions );
+
+
+		$out += $centre ? array( 'internal_note' => 'Nota interna' ) : array();
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -11416,6 +12147,7 @@ final class Applications {
 			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
+			'internal_note'     => (string) $meta[ ApplicationMetaKeys::INTERNAL_NOTE ],
 		);
 		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 
@@ -12500,6 +13232,938 @@ final class ApplicationLog {
 
 
 
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ApplicationActions;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationOperations', false ) ) {
+final class ApplicationOperations {
+
+
+	public const BY_APPLICANT = 'applicant';
+
+
+	public const BY_REVIEWER = 'reviewer';
+
+
+	public const BY_DESK = 'desk';
+
+
+
+
+
+
+
+
+
+	private static $context = null;
+
+
+
+
+	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
+
+
+
+
+
+
+	private static $refusal = '';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'trashed_post', array( self::class, 'on_trashed' ) );
+		add_action( 'untrashed_post', array( self::class, 'on_untrashed' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'orderby'          => 'ID',
+				'order'            => 'ASC',
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $code,
+				'suppress_filters' => true,
+			)
+		);
+		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
+			return false;
+		}
+		wp_delete_post( $id, true );
+		self::$refusal = self::DUPLICATE;
+		return true;
+	}
+
+
+
+
+
+
+
+	public static function why_not_saved( string $generic ): string {
+		return '' !== self::$refusal ? self::$refusal : $generic;
+	}
+
+
+
+
+
+
+	public static function forget_refusal(): void {
+		self::$refusal = '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function withdraw( int $application_id, int $user_id, string $by, string $reason = '' ): bool {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
+			return false;
+		}
+		self::$context = array(
+			'user'   => $user_id,
+			'by'     => $by,
+			'reason' => $reason,
+		);
+		try {
+			self::send_to_trash( $application_id );
+		} finally {
+			self::$context = null;
+		}
+		return 'trash' === get_post_status( $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function send_to_trash( int $application_id ): void {
+		if ( ApplicationActions::trash_enabled() ) {
+			wp_trash_post( $application_id );
+			return;
+		}
+		$post = get_post( $application_id );
+		if ( ! $post instanceof \WP_Post || 'trash' === $post->post_status ) {
+			return;
+		}
+		$previous_status = $post->post_status;
+
+		if ( null !== apply_filters( 'pre_trash_post', null, $post, $previous_status ) ) {
+			return;
+		}
+
+		do_action( 'wp_trash_post', $application_id, $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_status', $previous_status );
+		add_post_meta( $application_id, '_wp_trash_meta_time', time() );
+		$updated = wp_update_post(
+			array(
+				'ID'          => $application_id,
+				'post_status' => 'trash',
+			)
+		);
+		if ( ! $updated ) {
+			return;
+		}
+		wp_trash_post_comments( $application_id );
+
+		do_action( 'trashed_post', $application_id, $previous_status );
+	}
+
+
+
+
+
+
+
+	public static function on_trashed( $post_id ): void {
+		$post_id = (int) $post_id;
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
+			return;
+		}
+
+
+
+		delete_post_meta( $post_id, '_wp_trash_meta_time' );
+		$ctx = self::$context ?? array(
+			'user'   => get_current_user_id(),
+			'by'     => self::BY_DESK,
+			'reason' => '',
+		);
+
+
+
+
+
+
+
+
+
+		do_action( 'prc_application_withdrawn', $post_id, (int) $ctx['user'], (string) $ctx['by'], (string) $ctx['reason'] );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function restore( int $application_id ): bool {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
+			return false;
+		}
+		wp_untrash_post( $application_id );
+		return 'publish' === get_post_status( $application_id );
+	}
+
+
+
+
+
+
+
+	public static function on_untrashed( $post_id ): void {
+		$post_id = (int) $post_id;
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
+			return;
+		}
+
+
+
+
+
+
+
+		do_action( 'prc_application_restored', $post_id, get_current_user_id() );
+	}
+
+
+
+
+
+
+
+	public static function withdrawn( int $procedure_id ): array {
+		if ( $procedure_id <= 0 ) {
+			return array();
+		}
+		$posts = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => 'trash',
+				'numberposts'      => -1,
+				'orderby'          => 'modified',
+				'order'            => 'DESC',
+				'suppress_filters' => true,
+			)
+		);
+		return is_array( $posts ) ? $posts : array();
+	}
+
+
+
+
+
+
+
+	public static function withdrawn_count( int $procedure_id ): int {
+		if ( $procedure_id <= 0 ) {
+			return 0;
+		}
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $procedure_id,
+				'post_status'      => 'trash',
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'suppress_filters' => true,
+			)
+		);
+		return is_array( $ids ) ? count( $ids ) : 0;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function extend( int $application_id, int $user_id, string $until ): bool {
+		$antes = ApplicationActions::late_until( $application_id );
+		if ( $antes === $until ) {
+			return false;
+		}
+		if ( '' === $until ) {
+			delete_post_meta( $application_id, ApplicationMetaKeys::LATE_UNTIL );
+		} else {
+			update_post_meta( $application_id, ApplicationMetaKeys::LATE_UNTIL, $until );
+		}
+
+
+
+
+
+
+
+
+
+		do_action( 'prc_application_extended', $application_id, $until, $antes, $user_id );
+		return true;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function set_internal_note( int $application_id, int $user_id, string $note ): bool {
+		$note  = trim( $note );
+		$antes = trim( (string) get_post_meta( $application_id, ApplicationMetaKeys::INTERNAL_NOTE, true ) );
+		if ( $antes === $note ) {
+			return false;
+		}
+		update_post_meta( $application_id, ApplicationMetaKeys::INTERNAL_NOTE, wp_slash( $note ) );
+
+
+
+
+
+
+
+		do_action( 'prc_internal_note_changed', $application_id, $user_id );
+		return true;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function submit_for( int $procedure_id, int $user_id, string $code, string $until, string $ineligible = '' ): int {
+		$centro = ApplicationActions::catalogue_centre( $code );
+		if ( array() === $centro ) {
+			return 0;
+		}
+		$codigo = (string) $centro['code'];
+		$nombre = (string) ( $centro['name'] ?? '' );
+		$id     = wp_insert_post(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_parent' => $procedure_id,
+				'post_author' => $user_id,
+				'post_status' => 'publish',
+				'post_title'  => wp_slash( ( '' !== $nombre ? $nombre : $codigo ) . ' — ' . (string) get_post_field( 'post_title', $procedure_id ) ),
+			),
+			true
+		);
+		if ( is_wp_error( $id ) || ! $id ) {
+			return 0;
+		}
+		$id = (int) $id;
+		foreach ( array(
+			ApplicationMetaKeys::APPLICANT_TYPE => ApplicationMetaKeys::TYPE_CENTRE,
+			ApplicationMetaKeys::CENTRE_CODE    => $codigo,
+			ApplicationMetaKeys::CENTRE_NAME    => $nombre,
+			ApplicationMetaKeys::REVIEW_STATE   => ApplicationMetaKeys::REVIEW_SUBMITTED,
+			ApplicationMetaKeys::LATE_UNTIL     => $until,
+			ApplicationMetaKeys::CREATED_BY     => $user_id,
+		) as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+
+		if ( self::lost_race( $id, $procedure_id, $codigo ) ) {
+			return 0;
+		}
+
+
+
+
+
+
+
+
+		do_action(
+			'prc_application_created_for',
+			$id,
+			$user_id,
+			array(
+				'code'       => $codigo,
+				'until'      => $until,
+				'ineligible' => $ineligible,
+			)
+		);
+		return $id;
+	}
+
+
+
+
+
+
+
+	public static function pending_for_school( int $application_id ): bool {
+		$creada_por = (int) get_post_meta( $application_id, ApplicationMetaKeys::CREATED_BY, true );
+		return $creada_por > 0 && (int) get_post_field( 'post_author', $application_id ) === $creada_por;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function adopt( int $application_id, int $user_id ): bool {
+		if ( $user_id <= 0 || ! self::pending_for_school( $application_id ) ) {
+			return false;
+		}
+		$hecho = wp_update_post(
+			array(
+				'ID'          => $application_id,
+				'post_author' => $user_id,
+			),
+			true
+		);
+		return ! is_wp_error( $hecho ) && (int) $hecho > 0;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function accepted( array $application ): bool {
+		return array() !== $application && ! self::pending_for_school( (int) ( $application['id'] ?? 0 ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\ApplicationPeople;
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationHistory', false ) ) {
+final class ApplicationHistory {
+
+	public const SUBMITTED     = 'submitted';
+	public const UPDATED       = 'updated';
+	public const REVIEWED      = 'review_changed';
+	public const DELIVERED     = 'delivery';
+	public const WITHDRAWN     = 'withdrawn';
+	public const RESTORED      = 'restored';
+	public const EXTENDED      = 'extended';
+	public const CREATED_FOR   = 'created_for_centre';
+	public const INTERNAL_NOTE = 'internal_note';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'prc_application_saved', array( self::class, 'on_saved' ), 5, 4 );
+		add_action( 'prc_application_reviewed', array( self::class, 'on_reviewed' ), 5, 4 );
+		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery' ), 5, 3 );
+		add_action( 'prc_people_changed', array( self::class, 'on_people' ), 5, 5 );
+		add_action( 'prc_application_withdrawn', array( self::class, 'on_withdrawn' ), 5, 4 );
+		add_action( 'prc_application_restored', array( self::class, 'on_restored' ), 5, 2 );
+		add_action( 'prc_application_extended', array( self::class, 'on_extended' ), 5, 4 );
+		add_action( 'prc_application_created_for', array( self::class, 'on_created_for' ), 5, 3 );
+		add_action( 'prc_internal_note_changed', array( self::class, 'on_internal_note' ), 5, 2 );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_saved( $application_id, $created = false, $user_id = 0, $previous = '' ): void {
+		ApplicationLog::add( (int) $application_id, $created ? self::SUBMITTED : self::UPDATED, array(), (int) $user_id );
+		$previous = (string) $previous;
+		if ( $created || '' === $previous || ApplicationMetaKeys::REVIEW_SUBMITTED === $previous ) {
+			return;
+		}
+		ApplicationLog::add(
+			(int) $application_id,
+			self::REVIEWED,
+			array(
+				'state'        => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'previous'     => $previous,
+				'note_changed' => false,
+				'by'           => 'save',
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_reviewed( $application_id, $state = '', $previous = '', $previous_note = '' ): void {
+		$nota   = trim( (string) get_post_meta( (int) $application_id, ApplicationMetaKeys::REVIEW_NOTE, true ) );
+		$antes  = '' !== (string) $previous ? (string) $previous : ApplicationMetaKeys::REVIEW_SUBMITTED;
+		$cambia = trim( (string) $previous_note ) !== $nota;
+		if ( (string) $state === $antes && ! $cambia ) {
+			return;
+		}
+		ApplicationLog::add(
+			(int) $application_id,
+			self::REVIEWED,
+			array(
+				'state'        => (string) $state,
+				'previous'     => $antes,
+				'note_changed' => $cambia,
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function on_delivery( $application_id, $question_key = '', $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::DELIVERED, array( 'question' => (string) $question_key ), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_people( $application_id, $change = '', $before = array(), $after = array(), $user_id = 0 ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			'person_' . sanitize_key( (string) $change ),
+			array(
+				'before' => (array) $before,
+				'after'  => (array) $after,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_withdrawn( $application_id, $user_id = 0, $by = '', $reason = '' ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			self::WITHDRAWN,
+			array(
+				'by'     => (string) $by,
+				'reason' => (string) $reason,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function on_restored( $application_id, $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::RESTORED, array(), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_extended( $application_id, $until = '', $previous = '', $user_id = 0 ): void {
+		ApplicationLog::add(
+			(int) $application_id,
+			self::EXTENDED,
+			array(
+				'until'    => (string) $until,
+				'previous' => (string) $previous,
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function on_created_for( $application_id, $user_id = 0, $data = array() ): void {
+		$data = (array) $data;
+		ApplicationLog::add(
+			(int) $application_id,
+			self::CREATED_FOR,
+			array(
+				'until'      => (string) ( $data['until'] ?? '' ),
+				'ineligible' => (string) ( $data['ineligible'] ?? '' ),
+			),
+			(int) $user_id
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function on_internal_note( $application_id, $user_id = 0 ): void {
+		ApplicationLog::add( (int) $application_id, self::INTERNAL_NOTE, array(), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function entries( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$spec         = People::spec( $procedure_id );
+		$preguntas    = array_column( Applications::questions( $procedure_id ), null, 'key' );
+		$entradas     = array_reverse( ApplicationLog::all( $application_id ) );
+		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
+		$out = array();
+		foreach ( $entradas as $entrada ) {
+			$linea = self::line( $entrada, $spec, $preguntas );
+			if ( null === $linea ) {
+				continue;
+			}
+			$cuenta = $entrada['user'] > 0 ? get_userdata( $entrada['user'] ) : false;
+			$out[]  = $linea + array(
+				'when' => '' !== $entrada['at'] ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( $entrada['at'] ) ) : '',
+				'who'  => $entrada['user'] <= 0 ? '' : ( false !== $cuenta ? (string) $cuenta->display_name : '(cuenta que ya no existe)' ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function line( array $entrada, array $spec, array $preguntas ): ?array {
+		$data   = (array) $entrada['data'];
+		$fijos  = array(
+			self::SUBMITTED         => 'Solicitud presentada',
+			self::UPDATED           => 'Solicitud modificada',
+			self::RESTORED          => 'Solicitud restaurada desde «Retiradas»',
+			self::INTERNAL_NOTE     => 'Nota interna cambiada',
+			ApplicationLog::TRIMMED => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $data['dropped'] ?? 0 ) ),
+		);
+		$evento = (string) $entrada['event'];
+		if ( isset( $fijos[ $evento ] ) ) {
+			return self::words( $fijos[ $evento ] );
+		}
+		$personas = array(
+			'person_added'   => 'Alta en la lista de personas',
+			'person_changed' => 'Cambio en la lista de personas',
+			'person_removed' => 'Baja en la lista de personas',
+		);
+		if ( isset( $personas[ $evento ] ) ) {
+			return self::words( $personas[ $evento ], self::person( $spec, (array) ( $data['before'] ?? array() ) ), self::person( $spec, (array) ( $data['after'] ?? array() ) ) );
+		}
+		return self::described( $evento, $data, $preguntas );
+	}
+
+
+
+
+
+
+
+
+
+	private static function described( string $evento, array $data, array $preguntas ): ?array {
+		$como = array(
+			self::REVIEWED    => 'reviewed',
+			self::WITHDRAWN   => 'withdrawn',
+			self::EXTENDED    => 'extended',
+			self::CREATED_FOR => 'created_for',
+		);
+		if ( self::DELIVERED === $evento ) {
+			$clave = (string) ( $data['question'] ?? '' );
+			return self::words( 'Documento entregado' . ( isset( $preguntas[ $clave ] ) ? ': ' . (string) $preguntas[ $clave ]['label'] : '' ) );
+		}
+		return isset( $como[ $evento ] ) ? call_user_func( array( self::class, $como[ $evento ] ), $data ) : null;
+	}
+
+
+
+
+
+
+
+	private static function reviewed( array $data ): array {
+		$estados = ApplicationMetaKeys::review_states();
+		$estado  = (string) ( $estados[ (string) ( $data['state'] ?? '' ) ] ?? '' );
+		$antes   = (string) ( $estados[ (string) ( $data['previous'] ?? '' ) ] ?? '' );
+		if ( $antes === $estado ) {
+			return self::words( 'Revisión: nota cambiada' );
+		}
+		$porque = 'save' === ( $data['by'] ?? '' ) ? ', al modificarla quien la presentó' : ( empty( $data['note_changed'] ) ? '' : ', con nota nueva' );
+		return self::words( 'Revisión: ' . $estado . $porque, $antes, $estado );
+	}
+
+
+
+
+
+
+
+	private static function withdrawn( array $data ): array {
+		$quien  = array(
+			ApplicationOperations::BY_APPLICANT => 'Retirada por el centro',
+			ApplicationOperations::BY_REVIEWER  => 'Retirada por quien revisa',
+		);
+		$motivo = trim( (string) ( $data['reason'] ?? '' ) );
+		return self::words( ( $quien[ (string) ( $data['by'] ?? '' ) ] ?? 'Enviada a la papelera desde el escritorio' ) . ( '' !== $motivo ? '. Motivo: ' . $motivo : '' ) );
+	}
+
+
+
+
+
+
+
+	private static function extended( array $data ): array {
+		$hasta = (string) ( $data['until'] ?? '' );
+		return self::words( '' === $hasta ? 'Prórroga quitada' : 'Prórroga hasta el ' . self::day( $hasta ), self::day( (string) ( $data['previous'] ?? '' ) ), self::day( $hasta ) );
+	}
+
+
+
+
+
+
+
+	private static function created_for( array $data ): array {
+		$porque = trim( (string) ( $data['ineligible'] ?? '' ) );
+		return self::words( 'Presentada en nombre del centro, con plazo para completarla hasta el ' . self::day( (string) ( $data['until'] ?? '' ) ) . ( '' !== $porque ? '. Aunque no cumple los requisitos: ' . $porque : '' ) );
+	}
+
+
+
+
+
+
+
+
+
+	private static function words( string $what, string $before = '', string $after = '' ): array {
+		return array(
+			'what'   => $what,
+			'before' => $before,
+			'after'  => $after,
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function person( array $spec, array $row ): string {
+		if ( array() === $row ) {
+			return '';
+		}
+		$dni = ApplicationPeople::masked_dni( (string) ( $row['dni'] ?? '' ) );
+		return ApplicationPeople::describe( $spec, $row ) . ( '' !== $dni ? ' · DNI ' . $dni : '' );
+	}
+
+
+
+
+
+
+
+	private static function day( string $ymd ): string {
+		return '' === $ymd ? '' : implode( '-', array_reverse( explode( '-', $ymd ) ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
@@ -12732,15 +14396,7 @@ final class People {
 
 
 	private static function written( int $application_id, int $user_id, string $change, array $before, array $after ): array {
-		ApplicationLog::add(
-			$application_id,
-			'person_' . $change,
-			array(
-				'before' => $before,
-				'after'  => $after,
-			),
-			$user_id
-		);
+
 
 
 
@@ -13106,7 +14762,7 @@ final class ApplicationExport {
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
-		'review'       => array( 'state', 'note', 'score' ),
+		'review'       => array( 'state', 'note', 'score', 'internal_note' ),
 	);
 
 
@@ -13826,6 +15482,7 @@ final class ApplicationQuery {
 		ApplicationMetaKeys::CENTRE_NAME,
 		ApplicationMetaKeys::APPLICANT_TYPE,
 		ApplicationMetaKeys::COORDINATOR,
+		ApplicationMetaKeys::CREATED_BY,
 	);
 
 
@@ -13844,7 +15501,7 @@ final class ApplicationQuery {
 		$filter   = ApplicationFilter::against( $filter, $opciones );
 
 		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
-		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
 		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
 		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
@@ -13904,9 +15561,10 @@ final class ApplicationQuery {
 
 	private static function census( int $procedure_id, array $scope ): array {
 		$vacio = array(
-			'posts'  => array(),
-			'stored' => array(),
-			'check'  => false,
+			'posts'   => array(),
+			'stored'  => array(),
+			'check'   => false,
+			'pending' => array(),
 		);
 		if ( $procedure_id <= 0 ) {
 			return $vacio;
@@ -13953,11 +15611,33 @@ final class ApplicationQuery {
 				}
 			}
 		}
+		$pendientes = self::pending( $por_id, $stored );
 		return array(
-			'posts'  => $por_id,
-			'stored' => array_intersect_key( $stored, $por_id ),
-			'check'  => $mirar,
+			'posts'   => $por_id,
+			'stored'  => array_intersect_key( $stored, $por_id ),
+
+
+			'check'   => $mirar || array() !== $pendientes,
+			'pending' => $pendientes,
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function pending( array $posts, array $stored ): array {
+		$out = array();
+		foreach ( $posts as $id => $post ) {
+			$creada_por = (int) ( $stored[ $id ][ ApplicationMetaKeys::CREATED_BY ] ?? 0 );
+			if ( $creada_por > 0 && (int) $post->post_author === $creada_por ) {
+				$out[ $id ] = true;
+			}
+		}
+		return $out;
 	}
 
 
@@ -14063,13 +15743,14 @@ final class ApplicationQuery {
 
 
 
-	private static function reasons( int $procedure_id, array $stored ): array {
+
+	private static function reasons( int $procedure_id, array $stored, array $pending = array() ): array {
 		$spec      = self::people_spec( $procedure_id );
 		$preguntas = Applications::questions( $procedure_id );
 		$hoy       = ProcedureState::today();
 		$out       = array();
 		foreach ( $stored as $id => $meta ) {
-			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ], $preguntas, $meta[ ApplicationMetaKeys::FILES ], $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) );
+			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ] ?? '', $preguntas, $meta[ ApplicationMetaKeys::FILES ] ?? '', $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ), isset( $pending[ $id ] ) );
 			if ( array() !== $motivos ) {
 				$out[ $id ] = $motivos;
 			}
@@ -14413,13 +16094,16 @@ final class ApplicationsPanel {
 		foreach ( $filas as $i => $fila ) {
 			$filas[ $i ]['reasons'] = $res['reasons'][ (int) $fila['id'] ] ?? array();
 		}
-		$args = ApplicationFilter::query( $res['filter'] );
+		$args = array_map( 'rawurlencode', ApplicationFilter::query( $res['filter'] ) );
 		return array(
 			'app_cols'     => Applications::columns( $questions ),
 			'applications' => $filas,
 			'export'       => self::export_model( $procedure_id, $user_id, $res ),
-			'people'       => PeopleSpecPanel::reviews( $res['posts'], array_map( 'rawurlencode', $args ) ),
+			'people'       => PeopleSpecPanel::reviews( $res['posts'], $args ),
 			'table'        => self::table( $procedure_id, $res ),
+
+
+			'actions'      => ApplicationActionsPanel::model( $procedure_id, $user_id, $request, $res['posts'], $args ),
 		);
 	}
 
@@ -14681,6 +16365,422 @@ final class ApplicationsPanel {
 			'tipo'  => $fallos > 0 ? 'aviso' : 'ok',
 			'texto' => $texto,
 		);
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ApplicationActions;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationActionsPanel', false ) ) {
+final class ApplicationActionsPanel {
+
+	public const OP_RETIRE     = 'retire_application';
+	public const OP_RESTORE    = 'restore_application';
+	public const OP_EXTEND     = 'extend_application';
+	public const OP_SUBMIT_FOR = 'submit_for_centre';
+
+
+	public const OPS = array( self::OP_RETIRE, self::OP_RESTORE, self::OP_EXTEND, self::OP_SUBMIT_FOR );
+
+
+	public const ROW_OPS = array( self::OP_RETIRE, self::OP_RESTORE, self::OP_EXTEND );
+
+
+	public const FIELD_REASON = 'prc_retire_reason';
+
+
+	public const FIELD_LATE = 'prc_late_until';
+
+
+	public const FIELD_LATE_REMOVE = 'prc_late_remove';
+
+
+	public const FIELD_CODE = 'prc_submit_code';
+
+
+	public const FIELD_OVERRIDE = 'prc_submit_override';
+
+
+	public const FIELD_INTERNAL_NOTE = 'prc_internal_note';
+
+
+	public const ARG_WITHDRAWN = 'retiradas';
+
+
+	public const ARG_FIND = 'centro_buscar';
+
+
+	public const ARG_PICK = 'centro_elegido';
+
+
+	public const NOTICES = array(
+		'retirada'         => 'Solicitud retirada: está en «Retiradas» y se puede restaurar desde allí mientras el centro no presente otra.',
+		'restaurada'       => 'Solicitud restaurada: vuelve a la tabla como estaba.',
+		'prorroga'         => 'Prórroga guardada: el centro puede editar esa solicitud entera hasta ese día, incluido.',
+		'prorroga-quitada' => 'Prórroga quitada: la solicitud vuelve a seguir el plazo general.',
+		'en-nombre'        => 'Solicitud presentada en nombre del centro, vacía y en «Presentada». El centro la ve en «Mi centro» y la completa con su formulario hasta el último día de la prórroga. El aplicativo no le avisa por correo: el catálogo no trae su dirección.',
+	);
+
+
+
+
+	private const ORIGINS = array(
+		ApplicationOperations::BY_APPLICANT => 'Quien la presentó',
+		ApplicationOperations::BY_REVIEWER  => 'Quien revisa',
+		ApplicationOperations::BY_DESK      => 'Desde el escritorio',
+	);
+
+
+
+
+
+
+	private static $posted = array();
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function handle( string $op, int $procedure_id, int $user_id, int $row_id ): string {
+		if ( self::OP_SUBMIT_FOR === $op ) {
+			return self::submit_for( $procedure_id, $user_id );
+		}
+		if ( (int) wp_get_post_parent_id( $row_id ) !== $procedure_id ) {
+			return 'Esa solicitud no es de este procedimiento.';
+		}
+		$ops = array(
+			self::OP_RETIRE  => 'retire',
+			self::OP_RESTORE => 'restore',
+			self::OP_EXTEND  => 'extend',
+		);
+		return isset( $ops[ $op ] ) ? (string) call_user_func( array( self::class, $ops[ $op ] ), $procedure_id, $user_id, $row_id ) : '';
+	}
+
+
+
+
+
+
+
+
+
+	private static function retire( int $procedure_id, int $user_id, int $row_id ): string {
+		$porque = ApplicationActions::why_not_retire( $user_id, $row_id );
+		if ( '' !== $porque || ! current_user_can( 'delete_post', $row_id ) ) {
+			return '' !== $porque ? $porque : 'Su perfil no puede retirar esta solicitud.';
+		}
+		$motivo = self::textarea( self::FIELD_REASON );
+		if ( '' === $motivo ) {
+			return 'Para retirar una solicitud hay que escribir el motivo: queda en su historial.';
+		}
+		if ( ! ApplicationOperations::withdraw( $row_id, $user_id, ApplicationOperations::BY_REVIEWER, $motivo ) ) {
+			return 'No se ha podido retirar la solicitud. Vuelva a intentarlo.';
+		}
+		self::back( $procedure_id, 'retirada' );
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+	private static function restore( int $procedure_id, int $user_id, int $row_id ): string {
+		if ( ! current_user_can( ApplicationActions::CAP_RESTORE, $row_id ) ) {
+			return ApplicationActions::why_not_restore( $user_id, $row_id );
+		}
+		if ( ! ApplicationOperations::restore( $row_id ) ) {
+			$porque = ApplicationActions::why_not_restore( $user_id, $row_id );
+			return '' !== $porque ? $porque : 'No se ha podido restaurar la solicitud. Vuelva a intentarlo.';
+		}
+		self::back( $procedure_id, 'restaurada' );
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+	private static function extend( int $procedure_id, int $user_id, int $row_id ): string {
+		if ( ! current_user_can( ApplicationActions::CAP_EXTEND, $row_id ) ) {
+			return ApplicationActions::why_not_extend( $user_id, $row_id );
+		}
+		$quitar = '1' === self::field( self::FIELD_LATE_REMOVE );
+		$hasta  = $quitar ? '' : self::field( self::FIELD_LATE );
+		$porque = $quitar ? '' : ApplicationActions::why_not_late_date( $hasta, ProcedureState::today() );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		ApplicationOperations::extend( $row_id, $user_id, $hasta );
+		self::back( $procedure_id, $quitar ? 'prorroga-quitada' : 'prorroga' );
+		return '';
+	}
+
+
+
+
+
+
+
+
+	private static function submit_for( int $procedure_id, int $user_id ): string {
+		self::$posted = array(
+			'code'     => self::field( self::FIELD_CODE ),
+			'late'     => self::field( self::FIELD_LATE ),
+			'override' => self::field( self::FIELD_OVERRIDE ),
+		);
+		if ( ! current_user_can( ApplicationActions::CAP_SUBMIT_FOR, $procedure_id ) ) {
+			return ApplicationActions::why_not_submit_for( $user_id, $procedure_id );
+		}
+		if ( '' === self::$posted['code'] ) {
+			return 'Escriba el código del centro en cuyo nombre presenta la solicitud.';
+		}
+		$fuera  = '';
+		$porque = ApplicationActions::why_not_submit_for( $user_id, $procedure_id, self::$posted['code'], '1' === self::$posted['override'], $fuera );
+		if ( '' === $porque ) {
+			$porque = ApplicationActions::why_not_late_date( self::$posted['late'], ProcedureState::today() );
+		}
+		if ( '' !== $porque ) {
+			return $porque;
+		}
+		if ( ApplicationOperations::submit_for( $procedure_id, $user_id, self::$posted['code'], self::$posted['late'], $fuera ) <= 0 ) {
+			return ApplicationOperations::why_not_saved( 'No se ha podido crear la solicitud. Vuelva a intentarlo.' );
+		}
+		$codigo = (string) ( ApplicationActions::catalogue_centre( self::$posted['code'] )['code'] ?? '' );
+		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( array() ), array( ProcedureEditor::ARG_NOTICE => 'en-nombre' ), array( 'search' => $codigo ) ) );
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function save_internal_note( int $row_id, int $user_id ): void {
+
+		if ( isset( $_POST[ self::FIELD_INTERNAL_NOTE ] ) && is_string( $_POST[ self::FIELD_INTERNAL_NOTE ] ) ) {
+			ApplicationOperations::set_internal_note( $row_id, $user_id, self::textarea( self::FIELD_INTERNAL_NOTE ) );
+		}
+	}
+
+
+
+
+
+
+
+
+	private static function back( int $procedure_id, string $notice ): void {
+		$extra = array( ProcedureEditor::ARG_NOTICE => $notice );
+
+		if ( ! empty( $_POST[ self::ARG_WITHDRAWN ] ) ) {
+			$extra[ self::ARG_WITHDRAWN ] = 1;
+		}
+
+		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( $_POST ), $extra ) );
+	}
+
+
+
+
+
+
+
+	private static function field( string $nombre ): string {
+
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
+	}
+
+
+
+
+
+
+
+	private static function textarea( string $nombre ): string {
+
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] ) ? trim( sanitize_textarea_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function model( int $procedure_id, int $user_id, array $request, array $posts, array $args = array() ): array {
+		$abiertas = self::get( $request, PeopleSpecPanel::ARG_HISTORY );
+		$filas    = array();
+		foreach ( $posts as $post ) {
+			$id           = (int) $post->ID;
+			$hasta        = ApplicationActions::late_until( $id );
+			$filas[ $id ] = array(
+				'late_until'    => $hasta,
+				'late_label'    => ApplicationActions::day( $hasta ),
+				'late_open'     => ApplicationActions::is_late_open( $id ),
+				'can_extend'    => '' === ApplicationActions::why_not_extend( $user_id, $id ),
+				'internal_note' => (string) get_post_meta( $id, ApplicationMetaKeys::INTERNAL_NOTE, true ),
+				'pending'       => ApplicationOperations::pending_for_school( $id ),
+				'review'        => (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true ),
+				'history'       => array(
+					'open'    => (string) $id === $abiertas,
+					'url'     => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $id ) + $args ) . '#prc-historial-' . $id,
+					'entries' => (string) $id === $abiertas ? ApplicationHistory::entries( $id ) : array(),
+				),
+			);
+		}
+		$abrir = '1' === self::get( $request, self::ARG_WITHDRAWN );
+		return array(
+			'rows'            => $filas,
+			'today'           => ProcedureState::today(),
+			'resolved'        => ProcedureMetaKeys::STATE_RESOLVED === ProcedureState::of_post( $procedure_id ),
+			'withdrawn_count' => ApplicationOperations::withdrawn_count( $procedure_id ),
+			'withdrawn_open'  => $abrir,
+			'withdrawn_url'   => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( self::ARG_WITHDRAWN => 1 ) ),
+			'back_url'        => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS ),
+			'withdrawn'       => $abrir ? self::withdrawn( $procedure_id, $user_id ) : array(),
+			'submit_for'      => self::submit_for_model( $procedure_id, $user_id, $request ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function withdrawn( int $procedure_id, int $user_id ): array {
+		$out   = array();
+		$posts = ApplicationOperations::withdrawn( $procedure_id );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) ) ) );
+		foreach ( $posts as $post ) {
+			$id     = (int) $post->ID;
+			$ultima = array();
+			foreach ( ApplicationLog::all( $id ) as $entrada ) {
+				$ultima = ApplicationHistory::WITHDRAWN === $entrada['event'] ? $entrada : $ultima;
+			}
+			$autor  = get_userdata( (int) $post->post_author );
+			$nombre = (string) get_post_meta( $id, ApplicationMetaKeys::CENTRE_NAME, true );
+			$codigo = (string) get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true );
+			$porque = ApplicationActions::why_not_restore( $user_id, $id );
+			$out[]  = array(
+				'id'      => $id,
+				'who'     => '' !== $codigo ? trim( ( '' !== $nombre ? $nombre : '(centro fuera del catálogo)' ) . ' (' . $codigo . ')' ) : ( false !== $autor ? (string) $autor->display_name : '' ),
+				'when'    => '' !== (string) ( $ultima['at'] ?? '' ) ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( (string) $ultima['at'] ) ) : (string) get_the_modified_date( 'd-m-Y H:i', $post ),
+				'by'      => self::ORIGINS[ (string) ( $ultima['data']['by'] ?? '' ) ] ?? self::ORIGINS[ ApplicationOperations::BY_DESK ],
+				'reason'  => (string) ( $ultima['data']['reason'] ?? '' ),
+				'can'     => '' === $porque,
+				'why'     => $porque,
+				'history' => ApplicationHistory::entries( $id ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function submit_for_model( int $procedure_id, int $user_id, array $request ): array {
+		$porque = ApplicationActions::why_not_submit_for( $user_id, $procedure_id );
+		$buscar = '' === $porque ? self::get( $request, self::ARG_FIND ) : '';
+		return array(
+			'can'      => '' === $porque,
+			'open'     => array() !== self::$posted || '' !== $buscar || '' !== self::get( $request, self::ARG_PICK ),
+			'search'   => $buscar,
+			'results'  => '' !== $buscar ? CentreCatalog::search( $buscar ) : array(),
+			'code'     => (string) ( self::$posted['code'] ?? self::get( $request, self::ARG_PICK ) ),
+			'late'     => (string) ( self::$posted['late'] ?? '' ),
+			'override' => '1' === ( self::$posted['override'] ?? '' ),
+			'today'    => ProcedureState::today(),
+			'action'   => strtok( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS ), '?' ),
+			'hidden'   => wp_parse_args( (string) wp_parse_url( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS ), PHP_URL_QUERY ) ),
+			'pick_url' => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function get( array $request, string $clave ): string {
+		return isset( $request[ $clave ] ) && is_scalar( $request[ $clave ] ) ? trim( sanitize_text_field( wp_unslash( (string) $request[ $clave ] ) ) ) : '';
 	}
 }
 
@@ -17786,7 +19886,8 @@ final class ExportDialogView {
 									<?php
 
 
-									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
+
+									$extra = in_array( (string) $clave, CentreColumns::extras(), true );
 									?>
 									<label class="prc-casilla">
 										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
@@ -17946,6 +20047,390 @@ final class ExportDialogView {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PublicFront\ApplicationActionsPanel;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
+use Prc\PublicFront\WithdrawForm;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ApplicationActionsView', false ) ) {
+final class ApplicationActionsView {
+
+
+
+
+
+
+
+
+
+	public static function withdraw( array $w ): string {
+		if ( empty( $w['show'] ) || ( empty( $w['can'] ) && '' === (string) ( $w['rejected'] ?? '' ) ) ) {
+			return Shell::notice( 'error', (string) ( $w['rejected'] ?? '' ) );
+		}
+		ob_start();
+		?>
+		<section class="prc-seccion" id="<?php echo esc_attr( WithdrawForm::ANCHOR ); ?>">
+			<h3 class="prc-seccion__titulo">Retirar la solicitud</h3>
+			<?php echo Shell::notice( 'error', (string) $w['rejected'] );?>
+			<?php if ( ! empty( $w['can'] ) ) : ?>
+				<p>Si ya no quiere participar en este procedimiento, puede retirar la solicitud mientras el plazo siga abierto. Dejará de contar y, mientras haya plazo, podrá presentar otra nueva.</p>
+				<form class="prc-form prc-acciones" method="post" action="<?php echo esc_url( (string) $w['action'] ); ?>"
+					data-prc-confirm="¿Retirar su solicitud? Dejará de contar para este procedimiento. Mientras el plazo siga abierto podrá presentar otra, pero tendrá que rellenarla de nuevo."
+					data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
+					<?php wp_nonce_field( (string) $w['nonce_action'], WithdrawForm::NONCE_FIELD, false ); ?>
+					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_OP ); ?>" value="<?php echo esc_attr( WithdrawForm::OP_WITHDRAW ); ?>" />
+					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_APPLICATION ); ?>" value="<?php echo esc_attr( (string) (int) $w['application'] ); ?>" />
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button>
+				</form>
+			<?php else : ?>
+				<p><?php echo esc_html( (string) $w['why'] ); ?></p>
+			<?php endif; ?>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	public static function bar( array $m ): string {
+		$a = (array) ( $m['actions'] ?? array() );
+		if ( array() === $a || true !== ( $m['can_review'] ?? false ) ) {
+			return '';
+		}
+		$out  = '<p class="prc-retiradas-enlace">';
+		$out .= ! empty( $a['withdrawn_open'] )
+			? '<a href="' . esc_url( (string) $a['back_url'] ) . '">Volver a las solicitudes</a>'
+			: '<a href="' . esc_url( (string) $a['withdrawn_url'] ) . '">' . esc_html( sprintf( 'Retiradas (%d)', (int) $a['withdrawn_count'] ) ) . '</a>';
+		return $out . '</p>' . self::submit_for( (int) $m['procedure_id'], (array) $a['submit_for'] );
+	}
+
+
+
+
+
+
+
+
+	private static function submit_for( int $procedure_id, array $s ): string {
+		if ( empty( $s['can'] ) ) {
+			return '';
+		}
+		$op = ApplicationActionsPanel::OP_SUBMIT_FOR;
+		ob_start();
+		?>
+		<details class="prc-en-nombre"<?php echo empty( $s['open'] ) ? '' : ' open'; ?>>
+			<summary class="prc-revision__abrir">Presentar en nombre de un centro</summary>
+			<p class="prc-campo__ayuda">Para un centro que no pudo entrar a tiempo: se crea su solicitud vacía, en «Presentada», y el centro la completa con su formulario de siempre hasta el día que ponga aquí. El centro no recibe ningún correo: avísele por su cuenta.</p>
+			<form class="prc-filtros" method="get" action="<?php echo esc_url( (string) $s['action'] ); ?>" role="search" aria-label="Buscar un centro en el catálogo">
+				<?php echo ApplicationsPanelView::carry( (array) $s['hidden'] );?>
+				<div class="prc-filtros__campo">
+					<label class="prc-campo__etiqueta" for="prc-buscar-centro">Buscar un centro por código o nombre</label>
+					<input class="prc-control" type="search" id="prc-buscar-centro" name="<?php echo esc_attr( ApplicationActionsPanel::ARG_FIND ); ?>" value="<?php echo esc_attr( (string) $s['search'] ); ?>" maxlength="100" />
+				</div>
+				<div class="prc-filtros__acciones"><button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Buscar</button></div>
+			</form>
+			<?php if ( '' !== (string) $s['search'] ) : ?>
+				<?php if ( array() === (array) $s['results'] ) : ?>
+					<p class="prc-vacio">Ningún centro del catálogo tiene ese código o ese nombre.</p>
+				<?php else : ?>
+					<ul class="prc-centros-encontrados">
+						<?php foreach ( (array) $s['results'] as $centro ) : ?>
+							<li><a href="<?php echo esc_url( add_query_arg( ApplicationActionsPanel::ARG_PICK, rawurlencode( (string) $centro['code'] ), (string) $s['pick_url'] ) ); ?>"><?php echo esc_html( (string) $centro['name'] . ' (' . (string) $centro['code'] . ')' ); ?></a></li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
+			<?php endif; ?>
+			<form class="prc-form prc-form--taller" method="post" action="" data-prc-once>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $procedure_id ); ?>" />
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-en-nombre-codigo">Código del centro</label>
+					<input class="prc-control" type="text" id="prc-en-nombre-codigo" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_CODE ); ?>" value="<?php echo esc_attr( (string) $s['code'] ); ?>" required maxlength="20" autocomplete="off" />
+				</div>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-en-nombre-hasta">Puede completarla hasta el</label>
+					<input class="prc-control" type="date" id="prc-en-nombre-hasta" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_LATE ); ?>" value="<?php echo esc_attr( (string) $s['late'] ); ?>" min="<?php echo esc_attr( (string) $s['today'] ); ?>" required />
+				</div>
+				<label class="prc-casilla">
+					<input type="checkbox" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_OVERRIDE ); ?>" value="1" <?php checked( ! empty( $s['override'] ) ); ?> />
+					Aunque no cumpla los requisitos del procedimiento (queda anotado en su historial)
+				</label>
+				<?php echo PanelParts::submit( 'Presentar en su nombre' );?>
+			</form>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	public static function withdrawn( array $m ): string {
+		$a     = (array) ( $m['actions'] ?? array() );
+		$filas = (array) ( $a['withdrawn'] ?? array() );
+		if ( array() === $filas ) {
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Retiradas</h2><p class="prc-vacio">No hay solicitudes retiradas en este procedimiento.</p></section>';
+		}
+		$op = ApplicationActionsPanel::OP_RESTORE;
+		ob_start();
+		?>
+		<section class="prc-seccion-campos">
+			<h2 class="prc-seccion__titulo">Retiradas</h2>
+			<p class="prc-campo__ayuda">Solicitudes en la papelera: ya no cuentan, no salen en la consulta ni en las exportaciones. Se restauran como estaban, salvo que el centro haya presentado otra entretanto.</p>
+			<div class="prc-tabla-caja">
+				<table class="prc-tabla prc-tabla--densa table">
+					<caption class="screen-reader-text">Solicitudes retiradas de este procedimiento</caption>
+					<thead><tr><th class="prc-th" scope="col">Solicitud</th><th class="prc-th" scope="col">Retirada</th><th class="prc-th" scope="col">Por</th><th class="prc-th" scope="col">Motivo</th><th class="prc-th" scope="col">Acciones</th></tr></thead>
+					<tbody>
+						<?php foreach ( $filas as $fila ) : ?>
+							<tr>
+								<td class="prc-celda" data-rotulo="Solicitud"><?php echo esc_html( (string) $fila['who'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Retirada"><?php echo esc_html( (string) $fila['when'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Por"><?php echo esc_html( (string) $fila['by'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Motivo"><?php echo esc_html( '' !== (string) $fila['reason'] ? (string) $fila['reason'] : '—' ); ?></td>
+								<td class="prc-celda" data-rotulo="Acciones">
+									<?php if ( ! empty( $fila['can'] ) ) : ?>
+										<form class="prc-acciones" method="post" action="">
+											<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, (int) $fila['id'] ), ProcedureEditor::nonce_name( $op, (int) $fila['id'] ), false ); ?>
+											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) (int) $fila['id'] ); ?>" />
+											<input type="hidden" name="<?php echo esc_attr( ApplicationActionsPanel::ARG_WITHDRAWN ); ?>" value="1" />
+											<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Restaurar</button>
+										</form>
+									<?php else : ?>
+										<span class="prc-campo__ayuda"><?php echo esc_html( (string) $fila['why'] ); ?></span>
+									<?php endif; ?>
+									<?php echo self::entries( (array) $fila['history'], (int) $fila['id'] );?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function internal_note( array $m, int $id ): string {
+		$fila = (array) ( $m['actions']['rows'][ $id ] ?? array() );
+		return '<div class="prc-campo">'
+			. '<label class="prc-campo__etiqueta" for="prc-nota-interna-' . esc_attr( (string) $id ) . '">Nota interna</label>'
+			. '<textarea class="prc-control" id="prc-nota-interna-' . esc_attr( (string) $id ) . '" name="' . esc_attr( ApplicationActionsPanel::FIELD_INTERNAL_NOTE ) . '" rows="2" aria-describedby="prc-nota-interna-ayuda-' . esc_attr( (string) $id ) . '">'
+			. esc_textarea( (string) ( $fila['internal_note'] ?? '' ) ) . '</textarea>'
+			. '<p class="prc-campo__ayuda" id="prc-nota-interna-ayuda-' . esc_attr( (string) $id ) . '">Solo la ven quienes revisan: ni el centro, ni quien consulta, ni ningún correo. No sale en la exportación salvo que se elija su columna.</p>'
+			. '</div>';
+	}
+
+
+
+
+
+
+
+
+	public static function tools( array $m, array $fila ): string {
+		$id = (int) $fila['id'];
+		$a  = (array) ( $m['actions']['rows'][ $id ] ?? array() );
+		if ( array() === $a ) {
+			return '';
+		}
+		$quien = '' !== (string) ( $fila['centre'] ?? '' ) ? (string) $fila['centre'] : (string) ( $fila['applicant'] ?? '' );
+		$out   = ! empty( $a['pending'] ) ? '<p class="prc-campo__ayuda">Presentada en nombre del centro: todavía no la ha completado.</p>' : '';
+		if ( ! empty( $a['can_extend'] ) ) {
+			$out .= self::extend_form( $m, $id, $a ) . self::retire_form( $m, $id, $quien );
+		}
+		return $out . self::history( (array) $a['history'], $id );
+	}
+
+
+
+
+
+
+
+
+
+	private static function extend_form( array $m, int $id, array $a ): string {
+		$op    = ApplicationActionsPanel::OP_EXTEND;
+		$hasta = (string) $a['late_until'];
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller prc-prorroga" method="post" action="">
+			<?php echo self::hidden( $m, $op, $id );?>
+			<p class="prc-campo__ayuda">
+				<?php
+				echo esc_html(
+					'' === $hasta
+						? 'Prórroga: deja a este centro editar su solicitud entera hasta el día que ponga, incluido, aunque el plazo general haya cerrado. No afecta a las demás.'
+						: ( ! empty( $a['late_open'] ) ? 'Tiene prórroga hasta el ' . (string) $a['late_label'] . ', incluido.' : 'Su prórroga venció el ' . (string) $a['late_label'] . '.' )
+				);
+				?>
+			</p>
+			<?php foreach ( self::extend_warnings( $m, $a ) as $aviso ) : ?>
+				<p class="prc-campo__ayuda prc-aviso-prorroga"><?php echo esc_html( $aviso ); ?></p>
+			<?php endforeach; ?>
+			<div class="prc-campo">
+				<label class="prc-campo__etiqueta" for="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>">Puede editarla hasta el</label>
+				<input class="prc-control" type="date" id="prc-prorroga-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_LATE ); ?>" value="<?php echo esc_attr( $hasta ); ?>" min="<?php echo esc_attr( (string) ( $m['actions']['today'] ?? '' ) ); ?>" required />
+			</div>
+			<p class="prc-acciones">
+				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Guardar la prórroga</button>
+				<?php if ( '' !== $hasta ) : ?>
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_LATE_REMOVE ); ?>" value="1" formnovalidate>Quitar la prórroga</button>
+				<?php endif; ?>
+			</p>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function extend_warnings( array $m, array $a ): array {
+		$out = array();
+		if ( in_array( (string) ( $a['review'] ?? '' ), array( ApplicationMetaKeys::REVIEW_ADMITTED, ApplicationMetaKeys::REVIEW_EXCLUDED ), true ) ) {
+			$out[] = 'Esta solicitud ya está revisada: si el centro la modifica con la prórroga, volverá a «Presentada» y habrá que revisarla de nuevo.';
+		}
+		if ( ! empty( $m['actions']['resolved'] ) ) {
+			$out[] = 'Este procedimiento ya está resuelto: una prórroga deja cambiar una solicitud después de la resolución.';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function retire_form( array $m, int $id, string $quien ): string {
+		$op       = ApplicationActionsPanel::OP_RETIRE;
+		$pregunta = '¿Retirar la solicitud de ' . $quien . '? Pasará a «Retiradas»: dejará de contar, de salir en la consulta y en las exportaciones. Se puede restaurar mientras el centro no presente otra.';
+		ob_start();
+		?>
+		<details class="prc-retirar">
+			<summary class="prc-revision__abrir">Retirar esta solicitud</summary>
+			<form class="prc-form prc-form--taller" method="post" action=""
+				data-prc-confirm="<?php echo esc_attr( $pregunta ); ?>" data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
+				<?php echo self::hidden( $m, $op, $id );?>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-motivo-<?php echo esc_attr( (string) $id ); ?>">Motivo</label>
+					<textarea class="prc-control" id="prc-motivo-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_REASON ); ?>" rows="2" required></textarea>
+					<p class="prc-campo__ayuda">Obligatorio: queda en el historial de la solicitud. Úselo para lo que se presentó por error; para decir que no se admite, está «Excluida».</p>
+				</div>
+				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button></p>
+			</form>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function hidden( array $m, string $op, int $id ): string {
+		return wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false, false )
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_DO ) . '" value="' . esc_attr( $op ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_PROCEDURE ) . '" value="' . esc_attr( (string) (int) $m['procedure_id'] ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_ROW ) . '" value="' . esc_attr( (string) $id ) . '" />'
+			. ApplicationsPanelView::carry( (array) ( $m['table']['args'] ?? array() ) );
+	}
+
+
+
+
+
+
+
+
+	public static function history( array $h, int $id ): string {
+		if ( empty( $h['open'] ) ) {
+			return '<p class="prc-historial-enlace"><a href="' . esc_url( (string) ( $h['url'] ?? '' ) ) . '">Ver el historial</a></p>';
+		}
+		return self::entries( (array) ( $h['entries'] ?? array() ), $id );
+	}
+
+
+
+
+
+
+
+
+	private static function entries( array $entries, int $id ): string {
+		$out = '<details class="prc-historial-caja" id="prc-historial-' . esc_attr( (string) $id ) . '" open><summary class="prc-revision__abrir">Historial</summary>';
+		if ( array() === $entries ) {
+			return $out . '<p class="prc-vacio">Esta solicitud todavía no tiene historial.</p></details>';
+		}
+		$out .= '<ol class="prc-historial">';
+		foreach ( $entries as $entrada ) {
+			$out .= '<li>' . esc_html( implode( ' · ', array_filter( array( $entrada['when'], $entrada['who'], $entrada['what'] ), 'strlen' ) ) );
+			$out .= '' !== $entrada['before'] ? '<br />' . esc_html( 'Antes: ' . $entrada['before'] ) : '';
+			$out .= '' !== $entrada['after'] ? '<br />' . esc_html( 'Después: ' . $entrada['after'] ) : '';
+			$out .= '</li>';
+		}
+		return $out . '</ol></details>';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\ApplicationFilter;
 use Prc\Domain\ProcedureQuestions;
 use Prc\PublicFront\ApplicationFiles;
@@ -17978,13 +20463,20 @@ final class ApplicationsPanelView {
 	public static function html( array $m ): string {
 		$t       = (array) ( $m['table'] ?? array() );
 		$docente = ! empty( $t['teachers'] );
+
+
+		$arriba = ApplicationActionsView::bar( $m );
+		if ( ! empty( $m['actions']['withdrawn_open'] ) ) {
+			return $arriba . ApplicationActionsView::withdrawn( $m );
+		}
 		if ( 0 === (int) ( $t['all'] ?? 0 ) ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
+			return $arriba . '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
 				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
 		}
 		$cerrado = true !== $m['can_review'];
 
 		ob_start();
+		echo $arriba;
 		?>
 		<div class="prc-banda-tabla">
 			<p class="prc-recuento"><?php echo esc_html( self::count_text( $t ) ); ?></p>
@@ -18368,7 +20860,7 @@ final class ApplicationsPanelView {
 
 		ob_start();
 		?>
-		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
+		<details class="prc-revision"<?php echo empty( $m['actions']['rows'][ $id ]['history']['open'] ) ? '' : ' open'; ?>>
 			<summary class="prc-revision__abrir">Revisar</summary>
 			<dl class="prc-respuestas">
 				<dt>Presentada por</dt>
@@ -18387,7 +20879,7 @@ final class ApplicationsPanelView {
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
@@ -18406,8 +20898,10 @@ final class ApplicationsPanelView {
 						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
 					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
 				</div>
+				<?php echo ApplicationActionsView::internal_note( $m, $id );?>
 				<?php echo PanelParts::submit( 'Guardar la revisión' );?>
 			</form>
+			<?php echo ApplicationActionsView::tools( $m, $fila );?>
 		</details>
 		<?php
 		return (string) ob_get_clean();
@@ -20029,6 +22523,22 @@ final class ProcedureEditor {
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 		self::OP_DUPLICATE,
+		ApplicationActionsPanel::OP_RETIRE,
+		ApplicationActionsPanel::OP_RESTORE,
+		ApplicationActionsPanel::OP_EXTEND,
+		ApplicationActionsPanel::OP_SUBMIT_FOR,
+	);
+
+
+
+
+
+
+	private const ROW_OPS = array(
+		self::OP_REVIEW,
+		ApplicationActionsPanel::OP_RETIRE,
+		ApplicationActionsPanel::OP_RESTORE,
+		ApplicationActionsPanel::OP_EXTEND,
 	);
 
 
@@ -20194,8 +22704,13 @@ final class ProcedureEditor {
 
 
 
-	public static function nonce_action( string $op ): string {
-		return 'prc_ed_' . $op;
+
+
+
+
+
+	public static function nonce_action( string $op, int $row = 0 ): string {
+		return 'prc_ed_' . $op . ( $row > 0 ? '_' . $row : '' );
 	}
 
 
@@ -20221,7 +22736,7 @@ final class ProcedureEditor {
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
-		if ( ! self::verify( $op, self::OP_REVIEW === $op ? $row_id : 0 ) ) {
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : 0 ) ) {
 			return;
 		}
 
@@ -20241,6 +22756,12 @@ final class ProcedureEditor {
 
 		if ( self::OP_DUPLICATE === $op ) {
 			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
+			return;
+		}
+
+
+		if ( in_array( $op, ApplicationActionsPanel::OPS, true ) ) {
+			self::$rejected = ApplicationActionsPanel::handle( $op, $procedure_id, $user_id, $row_id );
 			return;
 		}
 		if ( self::OP_CUSTOM_CODE === $op ) {
@@ -20378,7 +22899,7 @@ final class ProcedureEditor {
 	private static function verify( string $op, int $row ): bool {
 
 		$valor = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::nonce_name( $op, $row ) ] ?? '' ) ) );
-		return false !== wp_verify_nonce( $valor, self::nonce_action( $op ) );
+		return false !== wp_verify_nonce( $valor, self::nonce_action( $op, $row ) );
 	}
 
 
@@ -21020,6 +23541,11 @@ final class ProcedureEditor {
 			self::$rejected = 'Esa solicitud no es de este procedimiento.';
 			return;
 		}
+
+		if ( 'publish' !== get_post_status( $row_id ) ) {
+			self::$rejected = 'Esa solicitud está retirada: restáurela antes de revisarla.';
+			return;
+		}
 		$res = Applications::review( $row_id, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );
 		if ( ! $res['ok'] ) {
 			$textos         = array(
@@ -21029,6 +23555,8 @@ final class ProcedureEditor {
 			self::$rejected = $textos[ $res['error'] ] ?? 'No se ha podido revisar la solicitud.';
 			return;
 		}
+
+		ApplicationActionsPanel::save_internal_note( $row_id, get_current_user_id() );
 
 
 		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( $_POST ), array( self::ARG_NOTICE => 'revisada' ) ) );
@@ -21286,6 +23814,7 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
+			'actions'                 => array(),
 		);
 	}
 
@@ -21429,6 +23958,12 @@ final class ProcedureEditor {
 		if ( ProcedureDuplicate::NOTICE === $hecho ) {
 
 			return ProcedureDuplicate::notice( $_GET );
+		}
+		if ( isset( ApplicationActionsPanel::NOTICES[ $hecho ] ) ) {
+			return array(
+				'tipo'  => 'ok',
+				'texto' => ApplicationActionsPanel::NOTICES[ $hecho ],
+			);
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 
@@ -22276,6 +24811,9 @@ final class PeopleView {
 
 
 
+
+
+
 	public static function review( array $r ): string {
 		if ( empty( $r['show'] ) ) {
 			return '';
@@ -22291,28 +24829,6 @@ final class PeopleView {
 				<?php endif; ?>
 			</p>
 			<?php echo self::table( array(), $filas, false );?>
-			<?php if ( empty( $r['open'] ) ) : ?>
-				<p><a href="<?php echo esc_url( (string) ( $r['log_url'] ?? '' ) ); ?>">Ver el historial de la lista</a></p>
-			<?php elseif ( array() === (array) $r['log'] ) : ?>
-				<p class="prc-vacio">La lista todavía no tiene historial.</p>
-			<?php else : ?>
-				<div class="prc-personas__historial">
-					<p><strong>Historial de la lista</strong></p>
-					<ol class="prc-historial">
-						<?php foreach ( (array) $r['log'] as $entrada ) : ?>
-							<li>
-								<?php echo esc_html( implode( ' · ', array_filter( array( $entrada['when'], $entrada['who'], $entrada['what'] ), 'strlen' ) ) ); ?>
-								<?php if ( '' !== $entrada['before'] ) : ?>
-									<br /><?php echo esc_html( 'Antes: ' . $entrada['before'] ); ?>
-								<?php endif; ?>
-								<?php if ( '' !== $entrada['after'] ) : ?>
-									<br /><?php echo esc_html( 'Después: ' . $entrada['after'] ); ?>
-								<?php endif; ?>
-							</li>
-						<?php endforeach; ?>
-					</ol>
-				</div>
-			<?php endif; ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -22511,6 +25027,8 @@ final class ApplyFormView {
 		echo self::choices( $m );
 		echo self::status_card( $m );
 
+		echo Shell::notice( 'info', (string) ( $m['withdraw']['late'] ?? '' ) );
+
 		if ( true === $m['can_submit'] ) {
 			echo self::form( $m );
 		} else {
@@ -22521,6 +25039,8 @@ final class ApplyFormView {
 
 
 		echo PeopleView::section( (array) ( $m['people'] ?? array() ) );
+
+		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 
@@ -23148,6 +25668,7 @@ final class ApplyFormView {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
@@ -23230,6 +25751,7 @@ final class ApplyForm {
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
 		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
+		'retirada'   => 'Solicitud retirada: ya no cuenta para este procedimiento. Mientras el plazo siga abierto, puede volver a presentar una nueva.',
 	);
 
 
@@ -23316,22 +25838,9 @@ final class ApplyForm {
 
 
 
-	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
-		if ( ProcedureState::accepts_applications( $state ) ) {
-			return '';
-		}
-		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
-			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
-				? ''
-				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
-		}
-		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
-			return 'El plazo de solicitud todavía no está abierto.';
-		}
-		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
-			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
-		}
-		return 'Las solicitudes están cerradas.';
+
+	public static function window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		return ProcedureState::application_window( $state, $review_state, $manually_closed, $late );
 	}
 
 
@@ -23374,7 +25883,9 @@ final class ApplyForm {
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
-			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+
+			ApplicationActions::is_late_open( (int) $existente )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -23404,7 +25915,7 @@ final class ApplyForm {
 			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
 			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
+			self::$rejected = ApplicationOperations::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
 			return;
 		}
 
@@ -23665,7 +26176,8 @@ final class ApplyForm {
 			$m['why'] = self::window(
 				(string) $m['state'],
 				(string) ( $m['application']['state'] ?? '' ),
-				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+				ApplicationActions::is_late_open( (int) ( $m['application']['id'] ?? 0 ) )
 			);
 		}
 		$m['can_submit'] = '' === $m['why'];
@@ -23769,7 +26281,8 @@ final class ApplyForm {
 			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
 			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 
-			'accept'            => array() !== $application,
+
+			'accept'            => ApplicationOperations::accepted( $application ),
 			'answers'           => (array) ( $application['answers'] ?? array() ),
 		);
 	}
@@ -23786,7 +26299,160 @@ final class ApplyForm {
 		$m = self::model();
 
 		$m['people'] = PeopleForm::model( $m );
+
+		$m['withdraw'] = WithdrawForm::model( $m );
 		return ApplyFormView::html( $m );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ApplicationActions;
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\WithdrawForm', false ) ) {
+final class WithdrawForm {
+
+
+	public const FIELD_OP = 'prc_withdraw_op';
+
+	public const OP_WITHDRAW = 'withdraw';
+
+
+	public const FIELD_APPLICATION = 'prc_withdraw_application';
+
+
+	public const NONCE_FIELD = '_prc_withdraw_nonce';
+
+
+	public const ANCHOR = 'prc-retirar';
+
+
+	public const NOTICE = 'retirada';
+
+
+
+
+
+
+	private static $rejected = '';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'init', array( self::class, 'handle' ), 20 );
+	}
+
+
+
+
+
+
+
+	public static function nonce_action( int $application_id ): string {
+		return 'prc_withdraw_' . $application_id;
+	}
+
+
+
+
+
+
+	public static function handle(): void {
+
+		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+		$id    = isset( $_POST[ self::FIELD_APPLICATION ] ) && is_string( $_POST[ self::FIELD_APPLICATION ] ) ? absint( wp_unslash( $_POST[ self::FIELD_APPLICATION ] ) ) : 0;
+		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
+
+		if ( self::OP_WITHDRAW !== $op || ! is_user_logged_in() ) {
+			return;
+		}
+		if ( false === wp_verify_nonce( $nonce, self::nonce_action( $id ) ) ) {
+			self::$rejected = 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a intentarlo.';
+			return;
+		}
+		$user_id = get_current_user_id();
+
+		if ( ! current_user_can( ApplicationActions::CAP_WITHDRAW, $id ) ) {
+			self::$rejected = ApplicationActions::why_not_withdraw( $user_id, $id );
+			return;
+		}
+		$procedure_id = (int) wp_get_post_parent_id( $id );
+		$codigo       = (string) get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( ! ApplicationOperations::withdraw( $id, $user_id, ApplicationOperations::BY_APPLICANT ) ) {
+			self::$rejected = 'No se ha podido retirar la solicitud. Vuelva a intentarlo.';
+			return;
+		}
+		Shell::leave( ApplyForm::url_for_code( $procedure_id, $codigo, array( ApplyForm::ARG_NOTICE => self::NOTICE ) ) );
+	}
+
+
+
+
+
+
+
+	public static function model( array $m ): array {
+		$id = (int) ( $m['application']['id'] ?? 0 );
+		if ( $id <= 0 ) {
+			return array(
+				'show'         => false,
+				'can'          => false,
+				'why'          => '',
+				'late'         => '',
+				'rejected'     => self::$rejected,
+				'application'  => 0,
+				'action'       => '',
+				'nonce_action' => '',
+			);
+		}
+		$user_id = get_current_user_id();
+		$porque  = ApplicationActions::why_not_withdraw( $user_id, $id );
+		return array(
+			'show'         => true,
+			'can'          => '' === $porque,
+			'why'          => $porque,
+			'late'         => ApplicationActions::late_notice( $id ),
+			'rejected'     => self::$rejected,
+			'application'  => $id,
+			'action'       => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ),
+			'nonce_action' => self::nonce_action( $id ),
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function link( int $application_id, string $url ): string {
+		return '' !== $url && ApplicationActions::can_withdraw( get_current_user_id(), $application_id ) ? $url . '#' . self::ANCHOR : '';
 	}
 }
 
@@ -24175,6 +26841,7 @@ final class PeopleForm {
 
 
 	public static function review( int $application_id, bool $history = false, array $args = array() ): array {
+		unset( $history, $args );
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -24186,71 +26853,7 @@ final class PeopleForm {
 			'rows'     => $filas,
 			'min'      => (int) $spec['min'],
 			'complete' => ApplicationPeople::is_complete( $spec, $filas ),
-
-
-
-			'open'     => $history,
-			'log'      => $history ? self::history( $spec, $application_id ) : array(),
-			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) + $args ),
 		);
-	}
-
-
-
-
-
-
-
-
-	private static function history( array $spec, int $application_id ): array {
-		$que      = array(
-			'person_added'   => 'Alta',
-			'person_changed' => 'Cambio',
-			'person_removed' => 'Baja',
-		);
-		$out      = array();
-		$entradas = array_reverse( ApplicationLog::all( $application_id ) );
-
-		cache_users( array_values( array_unique( array_filter( array_column( $entradas, 'user' ) ) ) ) );
-		foreach ( $entradas as $entrada ) {
-			if ( ApplicationLog::TRIMMED === $entrada['event'] ) {
-				$out[] = array(
-					'when'   => '',
-					'who'    => '',
-					'what'   => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $entrada['data']['dropped'] ?? 0 ) ),
-					'before' => '',
-					'after'  => '',
-				);
-				continue;
-			}
-			if ( ! isset( $que[ $entrada['event'] ] ) ) {
-				continue;
-			}
-			$cuenta = $entrada['user'] > 0 ? get_userdata( $entrada['user'] ) : false;
-			$out[]  = array(
-				'when'   => '' !== $entrada['at'] ? (string) wp_date( 'd-m-Y H:i', (int) strtotime( $entrada['at'] ) ) : '',
-				'who'    => false !== $cuenta ? (string) $cuenta->display_name : '(cuenta que ya no existe)',
-				'what'   => $que[ $entrada['event'] ],
-				'before' => self::line( $spec, (array) ( $entrada['data']['before'] ?? array() ) ),
-				'after'  => self::line( $spec, (array) ( $entrada['data']['after'] ?? array() ) ),
-			);
-		}
-		return $out;
-	}
-
-
-
-
-
-
-
-
-	private static function line( array $spec, array $row ): string {
-		if ( array() === $row ) {
-			return '';
-		}
-		$dni = ApplicationPeople::masked_dni( (string) ( $row['dni'] ?? '' ) );
-		return ApplicationPeople::describe( $spec, $row ) . ( '' !== $dni ? ' · DNI ' . $dni : '' );
 	}
 
 
@@ -24459,6 +27062,12 @@ final class MyCentreView {
 				<?php if ( '' !== (string) ( $fila['people_url'] ?? '' ) ) : ?>
 					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['people_url'] ); ?>"><?php echo esc_html( sprintf( 'Personas (%d)', (int) $fila['people_count'] ) ); ?></a>
 				<?php endif; ?>
+				<?php if ( '' !== (string) ( $fila['late'] ?? '' ) ) : ?>
+					<span class="prc-nota-revision"><?php echo esc_html( (string) $fila['late'] ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) ( $fila['withdraw_url'] ?? '' ) ) : ?>
+					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['withdraw_url'] ); ?>">Retirar la solicitud</a>
+				<?php endif; ?>
 			</td>
 		</tr>
 		<?php
@@ -24491,6 +27100,7 @@ final class MyCentreView {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
@@ -24690,12 +27300,14 @@ final class MyCentre {
 		$subsanar = ApplicationMetaKeys::REVIEW_AMEND === $revision
 			&& ( '' === $cierre || ProcedureState::today() <= $cierre );
 
+		$url = ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+			? ApplyForm::url( $procedure_id )
+			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
+
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
-				? ApplyForm::url( $procedure_id )
-				: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
+			'url'          => $url,
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
@@ -24717,6 +27329,9 @@ final class MyCentre {
 
 			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
 			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
+
+			'late'         => ApplicationActions::late_notice( (int) $application->ID ),
+			'withdraw_url' => WithdrawForm::link( (int) $application->ID, $url ),
 		);
 	}
 
@@ -25816,6 +28431,8 @@ namespace Prc\Notifications;
 
 
 
+
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -25922,6 +28539,20 @@ final class Messages {
 
 			case Mailer::EVENT_PEOPLE_CHANGED:
 				return self::people( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_WITHDRAWN:
+				return self::withdrawn( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_EXTENDED:
+				return array(
+					'Prórroga de su solicitud: ' . $titulo,
+					array_merge(
+						array( 'Se ha concedido una prórroga a la solicitud al procedimiento «' . $titulo . '»: puede completarla o modificarla hasta el ' . self::text( $ctx, 'until' ) . ', incluido, aunque el plazo general esté cerrado.' ),
+						'' !== $quien ? array( 'Solicitud de: ' . $quien ) : array(),
+						self::link( 'Puede hacerlo en:', $ctx, 'url' ),
+						array( '', 'Este correo es un aviso automático: no hace falta responderlo.' )
+					),
+				);
 		}
 		return null;
 	}
@@ -25994,6 +28625,42 @@ final class Messages {
 				self::field( 'Antes', self::text( $ctx, 'before' ) ),
 				self::field( 'Después', self::text( $ctx, 'after' ) ),
 				self::link( '' !== self::text( $ctx, 'url_label' ) ? self::text( $ctx, 'url_label' ) : 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+			),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	private static function withdrawn( string $titulo, string $quien, array $ctx ): array {
+		$datos = array_merge(
+			self::field( 'Procedimiento', $titulo ),
+			self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+			self::field( 'Retirada por', self::text( $ctx, 'applicant' ) ),
+			self::field( 'Fecha', self::text( $ctx, 'date' ) )
+		);
+		if ( ! empty( $ctx['ack'] ) ) {
+			return array(
+				'Solicitud retirada: ' . $titulo,
+				array_merge(
+					array( 'Se ha retirado la solicitud al procedimiento «' . $titulo . '». Ya no cuenta.', '' ),
+					$datos,
+					self::link( 'Mientras el plazo siga abierto, puede presentar una nueva en:', $ctx, 'url' ),
+					array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+				),
+			);
+		}
+		return array(
+			'Solicitud retirada — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			array_merge(
+				array( 'Se ha retirado una solicitud del procedimiento «' . $titulo . '». Está en «Retiradas» del panel de solicitudes, y se puede restaurar mientras el centro no presente otra.', '' ),
+				$datos,
+				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
 			),
 		);
 	}
@@ -26132,6 +28799,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
@@ -26171,6 +28839,8 @@ final class Mailer {
 	public const EVENT_DELIVERY_RECEIVED     = 'delivery_received';
 	public const EVENT_PROCEDURE_CREATED     = 'procedure_created';
 	public const EVENT_PEOPLE_CHANGED        = 'people_changed';
+	public const EVENT_APPLICATION_WITHDRAWN = 'application_withdrawn';
+	public const EVENT_APPLICATION_EXTENDED  = 'application_extended';
 
 
 
@@ -26208,6 +28878,8 @@ final class Mailer {
 		add_action( 'prc_application_reviewed', array( self::class, 'on_application_reviewed' ), 10, 4 );
 		add_action( 'prc_delivery_saved', array( self::class, 'on_delivery_saved' ), 10, 3 );
 		add_action( 'prc_people_changed', array( self::class, 'on_people_changed' ), 10, 5 );
+		add_action( 'prc_application_withdrawn', array( self::class, 'on_application_withdrawn' ), 10, 4 );
+		add_action( 'prc_application_extended', array( self::class, 'on_application_extended' ), 10, 4 );
 	}
 
 
@@ -26224,6 +28896,8 @@ final class Mailer {
 			self::EVENT_DELIVERY_RECEIVED,
 			self::EVENT_PROCEDURE_CREATED,
 			self::EVENT_PEOPLE_CHANGED,
+			self::EVENT_APPLICATION_WITHDRAWN,
+			self::EVENT_APPLICATION_EXTENDED,
 		);
 	}
 
@@ -26593,6 +29267,77 @@ final class Mailer {
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 				self::send_to_zone( (int) $application_id, $ctx, (array) $before, (array) $after );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_withdrawn( $application_id, $user_id = 0, $by = '', $reason = '' ): void {
+		unset( $reason );
+		if ( ApplicationOperations::BY_APPLICANT !== (string) $by ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $user_id ): void {
+				$ctx = self::application_context( (int) $application_id, (int) $user_id );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
+				$propia      = (string) $ctx['url'];
+				$ctx['url']  = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
+				$ctx['ack'] = true;
+				$ctx['url'] = $propia;
+				self::send( self::EVENT_APPLICATION_WITHDRAWN, array( self::email_of( (int) $user_id ) ), $ctx );
+			}
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function on_application_extended( $application_id, $until = '', $previous = '', $user_id = 0 ): void {
+		unset( $previous, $user_id );
+		$autor = (int) get_post_field( 'post_author', (int) $application_id );
+		if ( '' === (string) $until || ! ProcedureAccess::can_view_application( $autor, (int) $application_id, ProcedureAccess::VIEW_OWN ) ) {
+			return;
+		}
+		self::safely(
+			static function () use ( $application_id, $until, $autor ): void {
+				$ctx = self::application_context( (int) $application_id, $autor );
+				if ( array() === $ctx ) {
+					return;
+				}
+				unset( $ctx['answers'] );
+				$ctx['until'] = implode( '-', array_reverse( explode( '-', (string) $until ) ) );
+				self::send( self::EVENT_APPLICATION_EXTENDED, array( self::email_of( $autor ) ), $ctx );
 			}
 		);
 	}
@@ -27575,6 +30320,7 @@ final class Settings {
 
 namespace Prc;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\ProcedureAccess;
 use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
@@ -27586,6 +30332,8 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\ApplicationHistory;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -27598,6 +30346,7 @@ use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\WithdrawForm;
 use Prc\PublicFront\Workspace;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -27646,6 +30395,11 @@ final class App {
 		ApplicationExport::class,
 		ApplyForm::class,
 		PeopleForm::class,
+
+
+		ApplicationOperations::class,
+		ApplicationHistory::class,
+		WithdrawForm::class,
 		MyCentre::class,
 
 		Observe::class,
@@ -27675,6 +30429,7 @@ final class App {
 		ProcedureMetaRegistration::register();
 		ApplicationMetaRegistration::register();
 		ProcedureAccess::register();
+		ApplicationActions::register();
 		CentreCatalog::register();
 
 
@@ -28141,6 +30896,21 @@ final class App {
 }
 .prc-th--marca,
 .prc-celda--marca { width: 1%; text-align: center; }
+
+/* Actuar sobre una solicitud (PLAN-0003, PR 9). */
+.prc-retiradas-enlace { margin: 0 0 8px; font-size: var(--prc-t-menudo); }
+.prc-en-nombre { margin: 0 0 10px; }
+.prc-en-nombre[open] {
+  padding: 12px;
+  max-width: 40rem;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-centros-encontrados { margin: 0 0 10px; padding-left: 1.2em; }
+.prc-prorroga,
+.prc-retirar,
+.prc-historial-caja { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--prc-c-linea); }
+.prc-historial-enlace { margin: 8px 0 0; font-size: var(--prc-t-menudo); }
 
 .prc-incompleta { margin: 4px 0 0; font-size: var(--prc-t-menudo); color: var(--prc-c-tabla); }
 .prc-incompleta__titulo { font-weight: 700; }

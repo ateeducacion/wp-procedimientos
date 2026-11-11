@@ -97,7 +97,7 @@ final class ApplicationsPanel {
 	 * @param int                              $user_id      Who is looking.
 	 * @param array<int, array<string, mixed>> $questions    Normalised questions.
 	 * @param array<string, mixed>             $request      `$_GET`.
-	 * @return array{app_cols:array, applications:array, export:array, people:array, table:array}
+	 * @return array{app_cols:array, applications:array, export:array, people:array, table:array, actions:array}
 	 */
 	public static function model( int $procedure_id, int $user_id, array $questions, array $request ): array {
 		$res   = ApplicationQuery::run( $procedure_id, self::filter( $request ) );
@@ -105,13 +105,16 @@ final class ApplicationsPanel {
 		foreach ( $filas as $i => $fila ) {
 			$filas[ $i ]['reasons'] = $res['reasons'][ (int) $fila['id'] ] ?? array();
 		}
-		$args = ApplicationFilter::query( $res['filter'] );
+		$args = array_map( 'rawurlencode', ApplicationFilter::query( $res['filter'] ) );
 		return array(
 			'app_cols'     => Applications::columns( $questions ),
 			'applications' => $filas,
 			'export'       => self::export_model( $procedure_id, $user_id, $res ),
-			'people'       => PeopleSpecPanel::reviews( $res['posts'], array_map( 'rawurlencode', $args ) ),
+			'people'       => PeopleSpecPanel::reviews( $res['posts'], $args ),
 			'table'        => self::table( $procedure_id, $res ),
+			// Retirar, restaurar, la prórroga, en nombre de un centro, la nota
+			// interna y el historial (PLAN-0003, PR 9).
+			'actions'      => ApplicationActionsPanel::model( $procedure_id, $user_id, $request, $res['posts'], $args ),
 		);
 	}
 

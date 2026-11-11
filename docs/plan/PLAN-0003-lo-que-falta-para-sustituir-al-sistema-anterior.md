@@ -6,7 +6,7 @@ date: 2026-11-10
 related:
   issues: []
   prs: []
-  adrs: [ADR-0005, ADR-0007, ADR-0018, ADR-0019, ADR-0021, ADR-0023, ADR-0029]
+  adrs: [ADR-0005, ADR-0007, ADR-0018, ADR-0019, ADR-0021, ADR-0023, ADR-0029, ADR-0044]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -786,14 +786,158 @@ acotada para la consulta de solo lectura):
 
 ### PR 9 — Actuar sobre una solicitud (`feature/application-actions`)
 
-- [ ] Quien solicita puede retirar su solicitud mientras el plazo esté
+**Ficheros:**
+- Crear `Access/ApplicationActions.php` (las reglas: fuera de
+  `ProcedureAccess`, que estaba en el tope de métodos públicos de PHPMD),
+  `PublicFront/ApplicationOperations.php` (lo que escriben),
+  `PublicFront/ApplicationHistory.php` (el historial, que escucha acciones),
+  `PublicFront/WithdrawForm.php` (retirar desde la pantalla de la solicitud,
+  fuera de `ApplyForm`), `PublicFront/ApplicationActionsPanel.php` (lo de
+  quien revisa, fuera de `ProcedureEditor` y `ApplicationsPanel`) y
+  `PublicFront/View/ApplicationActionsView.php`.
+- Modificar `Meta/ApplicationMetaKeys.php` y registro, `Domain/ProcedureState.php`,
+  `Access/ProcedureAccess.php`, `Applications.php`, `ApplyForm.php` y su vista,
+  `MyCentre.php` y su vista, `ApplicationsPanel.php` y su vista,
+  `ProcedureEditor.php`, `People.php`, `PeopleForm.php`, `View/PeopleView.php`,
+  `ApplicationExport.php`, `CentreColumns.php`, `View/ExportDialogView.php`,
+  `Notifications/Mailer.php` y `Messages.php`, `Meta/ProcedureMetaKeys.php`,
+  `App.php`, `load-order.php` y `assets/css/prc-alta.css`.
+- Pruebas: `test-application-actions.php`; ampliar `test-procedure-state.php`,
+  `test-messages.php`, `tests/browser/confirmacion.js`, y ajustar
+  `test-people-list.php`, `test-people-panel.php`, `test-applications-table.php`,
+  `test-application-files.php` y `test-application-export.php`.
+
+**Interfaces que produce:**
+- Metas de la solicitud (`ApplicationMetaKeys`, sin REST, `auth_callback`
+  falso): `LATE_UNTIL` (`prc_late_until`, `Y-m-d` inclusive), `INTERNAL_NOTE`
+  (`prc_internal_note`) y `CREATED_BY` (`prc_created_by`, entero). Ninguna meta
+  nueva del procedimiento: `ProcedureCopy` no cambia.
+- `ProcedureState::late_open( string $state, string $late_until, string $today ): bool`
+  y `ProcedureState::application_window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string`;
+  `ApplyForm::window()` gana `bool $late` y delega en ella.
+- `Access/ApplicationActions`: meta capacidades `CAP_WITHDRAW`
+  (`prc_withdraw_application`), `CAP_RESTORE` (`prc_restore_application`),
+  `CAP_EXTEND` (`prc_extend_application`) y `CAP_SUBMIT_FOR`
+  (`prc_submit_for_centre`, sobre el procedimiento), en `CAPS`;
+  `::allows( string $cap, int $user_id, int $post_id ): bool` (lo llama
+  `ProcedureAccess::map_meta_cap()`), `::can_withdraw()`, `::why_not_withdraw()`,
+  `::why_not_restore()`, `::why_not_extend()`, `::why_not_retire()`,
+  `::why_not_submit_for( int $user_id, int $procedure_id, string $code = '', bool $override = false, ?string &$ineligible = null ): string`,
+  `::late_until( int $application_id ): string`, `::is_late_open( int $application_id ): bool`,
+  `::late_notice( int $application_id ): string`, `::why_not_late_date( string $until, string $today ): string`,
+  `::live_twin( int $application_id ): ?int`, `::catalogue_centre( string $code ): array`,
+  `::may_delete( int $user_id, int $application_id ): bool` (lo que
+  `map_meta_cap()` contesta a `delete_post` sobre una solicitud: nadie en
+  histórico, solo `prc_manage_app` en la papelera, quien revisa si está
+  publicada), `::day()`; filtros `pre_untrash_post` (`guard_untrash()`: ni la
+  que haría dos ni en histórico), `pre_delete_post` (`guard_delete()`: una
+  retirada solo la borra administración, tampoco el vaciado automático) y
+  `wp_untrash_post_status` (`untrash_status()`).
+- `PeopleSpec::application_editable( string $state, string $review, bool $late = false )`
+  y el contexto `late` de `PeopleSpec::why_closed()`: la prórroga abre la
+  lista de personas que sigue el plazo de la solicitud.
+- `ApplicationOperations::lost_race( int $id, int $procedure_id, string $code ): bool`,
+  `::why_not_saved( string $generic ): string` y `ApplicationOperations::DUPLICATE`:
+  una por centro también con dos altas a la vez.
+- `ApplicationCompleteness::reasons( …, bool $pending = false )`: «Pendiente de
+  que el centro la complete»; `ApplicationQuery` lee `prc_created_by` en el
+  censo.
+- `prc_application_saved( int $id, bool $created, int $user_id, string $previous )`:
+  el cuarto argumento es el estado de revisión de antes, y el historial anota
+  la vuelta a «presentada» como revisión hecha por el guardado.
+- `ProcedureEditor::nonce_action( string $op, int $row = 0 )`: las operaciones
+  de fila llevan nonce de su operación y de su solicitud.
+- `ProcedureAccess::can_view_application()` solo da por propia una solicitud
+  **publicada**: una retirada solo la ve quien revisa.
+- Al retirar, `ApplicationOperations::on_trashed()` quita
+  `_wp_trash_meta_time`: el vaciado automático de la papelera no la ve.
+- `PublicFront/ApplicationOperations`: `withdraw( int $id, int $user_id, string $by, string $reason = '' ): bool`
+  (`BY_APPLICANT`, `BY_REVIEWER`, `BY_DESK`), `restore( int $id ): bool`,
+  `extend( int $id, int $user_id, string $until ): bool`,
+  `set_internal_note( int $id, int $user_id, string $note ): bool`,
+  `submit_for( int $procedure_id, int $user_id, string $code, string $until, string $ineligible = '' ): int`,
+  `withdrawn( int $procedure_id ): \WP_Post[]`, `withdrawn_count()`,
+  `pending_for_school()`, `adopt()` (lo llama `Applications::save()`: el
+  centro pasa a ser `post_author` la primera vez que la guarda) y `accepted()`.
+- Acciones nuevas: `prc_application_withdrawn( int $id, int $user_id, string $by, string $reason )`
+  (sale de `trashed_post`, también desde el escritorio),
+  `prc_application_restored( int $id, int $user_id )` (de `untrashed_post`),
+  `prc_application_extended( int $id, string $until, string $previous, int $user_id )`,
+  `prc_application_created_for( int $id, int $user_id, array{code, until, ineligible} $data )` y
+  `prc_internal_note_changed( int $id, int $user_id )`.
+- `PublicFront/ApplicationHistory`: escucha esas y `prc_application_saved`,
+  `prc_application_reviewed`, `prc_delivery_saved` y `prc_people_changed`;
+  eventos `submitted`, `updated`, `review_changed` (`state`, `previous`,
+  `note_changed`; solo si cambia algo), `delivery` (`question`),
+  `person_added|changed|removed`, `withdrawn` (`by`, `reason`), `restored`,
+  `extended` (`until`, `previous`), `created_for_centre` (`until`,
+  `ineligible`) e `internal_note`; `::entries( int $application_id ): array`
+  (en palabras, lo más nuevo primero). `People` deja de llamar a
+  `ApplicationLog::add()`; `PeopleForm::review()` ya no devuelve historial.
+- Retirar desde la solicitud: `WithdrawForm::FIELD_OP` (`prc_withdraw_op`) =
+  `OP_WITHDRAW` (`withdraw`), `FIELD_APPLICATION` (`prc_withdraw_application`),
+  nonce `NONCE_FIELD` (`_prc_withdraw_nonce`) con `nonce_action( $id )`
+  (`prc_withdraw_{id}`); ancla `ANCHOR` (`prc-retirar`); aviso `retirada` de
+  `ApplyForm`; `::model( array $m )`, `::link( int $id, string $url )`.
+- Operaciones del taller (`ProcedureEditor`, nonce de operación y de
+  solicitud salvo la última): `ApplicationActionsPanel::OP_RETIRE` (`retire_application`,
+  `FIELD_REASON` = `prc_retire_reason`), `OP_RESTORE` (`restore_application`),
+  `OP_EXTEND` (`extend_application`, `FIELD_LATE` = `prc_late_until`,
+  `FIELD_LATE_REMOVE` = `prc_late_remove`) y `OP_SUBMIT_FOR`
+  (`submit_for_centre`, `FIELD_CODE` = `prc_submit_code`, `FIELD_LATE`,
+  `FIELD_OVERRIDE` = `prc_submit_override`); la nota interna viaja con
+  `OP_REVIEW` en `FIELD_INTERNAL_NOTE` (`prc_internal_note`). GET:
+  `ARG_WITHDRAWN` (`retiradas=1`), `ARG_FIND` (`centro_buscar`), `ARG_PICK`
+  (`centro_elegido`) y, como antes, `PeopleSpecPanel::ARG_HISTORY`
+  (`historial`). Avisos `NOTICES`: `retirada`, `restaurada`, `prorroga`,
+  `prorroga-quitada`, `en-nombre`. `ApplicationsPanel::model()` gana
+  `actions` (`ApplicationActionsPanel::model()`).
+- Correo: `Mailer::EVENT_APPLICATION_WITHDRAWN` (`application_withdrawn`, a
+  los contactos y acuse a quien retira, solo si retira el centro) y
+  `EVENT_APPLICATION_EXTENDED` (`application_extended`, a quien presentó
+  mientras sea suya; quitarla no avisa); los dos en `notify_events()`.
+- Exportación: columna `internal_note` en el grupo `review`, fuera de «Todas»
+  (`Applications::EXTRA_COLUMNS`, `CentreColumns::extras()`); nunca en
+  `ObserverScope::ALLOWED_COLUMNS`.
+
+**Decisiones** (ADR-0044):
+- Retirar es la papelera: el centro, en plazo o en su prórroga; quien revisa,
+  por error y con motivo. Se restaura si el centro no tiene otra; ningún
+  borrado definitivo desde el aplicativo; la revisión en bloque no retira.
+- La prórroga abre esa solicitud entera —y su lista de personas, si sigue su
+  plazo— hasta su último día; nunca en histórico, tampoco para
+  administración; en un procedimiento resuelto, con aviso. Guardar con
+  prórroga la devuelve a «presentada», con aviso en el formulario.
+- Las retiradas no caducan en la papelera y solo las borra administración.
+- En nombre de un centro: vacía, con prórroga obligatoria, sin correo al
+  centro (el catálogo no trae su dirección); el buscador es de servidor —no
+  había un patrón de sugerencias con guion que reutilizar—.
+- El historial escucha acciones y solo lo ve quien revisa.
+
+- [x] Quien solicita puede retirar su solicitud mientras el plazo esté
       abierto: va a la papelera y se avisa a los contactos.
-- [ ] Quien revisa puede presentar en nombre de un centro del catálogo, y
+- [x] Quien revisa puede presentar en nombre de un centro del catálogo, y
       conceder a una solicitud una prórroga con fecha (`prc_late_until`).
-- [ ] Nota interna, que quien solicita no ve (`prc_internal_note`).
-- [ ] Todo queda en `ApplicationLog`, con pestaña «Historial» en la revisión.
-- [ ] Prueba: retirar fuera de plazo se rechaza; la prórroga vencida no deja editar.
-- [ ] ADR-0044, que desarrolla lo que la ADR-0005 dejó por escribir.
+- [x] Nota interna, que quien solicita no ve (`prc_internal_note`).
+- [x] Todo queda en `ApplicationLog`, con pestaña «Historial» en la revisión.
+- [x] Prueba: retirar fuera de plazo se rechaza; la prórroga vencida no deja editar.
+- [x] ADR-0044, que desarrolla lo que la ADR-0005 dejó por escribir.
+
+### Estado de la pila (2026-11-10)
+
+| # | Rama | Estado |
+|---|------|--------|
+| 1 | `feature/app-mailer` | Hecho; PR #54 abierto, pendiente de revisión humana |
+| 2 | `feature/export-columns-moodle` | Hecho; PR #55 abierto, pendiente de revisión humana |
+| 3 | `feature/question-types` | Hecho; PR #56 abierto, pendiente de revisión humana |
+| 4 | `feature/application-people` | Hecho; PR #57 abierto, pendiente de revisión humana |
+| 5 | `feature/centre-attributes` | Hecho; PR #58 abierto, pendiente de revisión humana |
+| 6 | `feature/applications-table` | Hecho; PR #59 abierto, pendiente de revisión humana |
+| 7 | `feature/observers` | Hecho; PR #60 abierto, pendiente de revisión humana |
+| 8 | `feature/duplicate-procedure` | Hecho; PR #61 abierto, pendiente de revisión humana |
+| 9 | `feature/application-actions` | Hecho en local; sin publicar ni PR |
+
+Ninguno está fusionado en `main`: los revisa otra persona (§1).
 
 ## 3. Cómo se reparte
 

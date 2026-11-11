@@ -26,7 +26,9 @@ namespace Prc\Notifications;
  * - `document`, `file`: rótulo de la entrega y nombre del documento;
  * - `missing`, `editor_url`, `workspace_url`, `extra`: el correo del alta;
  * - `change`, `before`, `after`: el cambio en la lista de personas y la
- *   persona antes y después, ya escrita en una línea y sin DNI.
+ *   persona antes y después, ya escrita en una línea y sin DNI;
+ * - `ack`: en una retirada, si es el acuse a quien la retira;
+ * - `until`: el último día de una prórroga, ya escrito como se lee.
  */
 final class Messages {
 
@@ -133,6 +135,20 @@ final class Messages {
 
 			case Mailer::EVENT_PEOPLE_CHANGED:
 				return self::people( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_WITHDRAWN:
+				return self::withdrawn( $titulo, $quien, $ctx );
+
+			case Mailer::EVENT_APPLICATION_EXTENDED:
+				return array(
+					'Prórroga de su solicitud: ' . $titulo,
+					array_merge(
+						array( 'Se ha concedido una prórroga a la solicitud al procedimiento «' . $titulo . '»: puede completarla o modificarla hasta el ' . self::text( $ctx, 'until' ) . ', incluido, aunque el plazo general esté cerrado.' ),
+						'' !== $quien ? array( 'Solicitud de: ' . $quien ) : array(),
+						self::link( 'Puede hacerlo en:', $ctx, 'url' ),
+						array( '', 'Este correo es un aviso automático: no hace falta responderlo.' )
+					),
+				);
 		}
 		return null;
 	}
@@ -205,6 +221,42 @@ final class Messages {
 				self::field( 'Antes', self::text( $ctx, 'before' ) ),
 				self::field( 'Después', self::text( $ctx, 'after' ) ),
 				self::link( '' !== self::text( $ctx, 'url_label' ) ? self::text( $ctx, 'url_label' ) : 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+			),
+		);
+	}
+
+	/**
+	 * Subject and body of a withdrawn application: the acknowledgement or the notice to the contacts.
+	 *
+	 * @param string               $titulo Procedure title.
+	 * @param string               $quien  The school, or who applied.
+	 * @param array<string, mixed> $ctx    Context; `ack` for the acknowledgement.
+	 * @return array{0:string, 1:array<int, string>}
+	 */
+	private static function withdrawn( string $titulo, string $quien, array $ctx ): array {
+		$datos = array_merge(
+			self::field( 'Procedimiento', $titulo ),
+			self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+			self::field( 'Retirada por', self::text( $ctx, 'applicant' ) ),
+			self::field( 'Fecha', self::text( $ctx, 'date' ) )
+		);
+		if ( ! empty( $ctx['ack'] ) ) {
+			return array(
+				'Solicitud retirada: ' . $titulo,
+				array_merge(
+					array( 'Se ha retirado la solicitud al procedimiento «' . $titulo . '». Ya no cuenta.', '' ),
+					$datos,
+					self::link( 'Mientras el plazo siga abierto, puede presentar una nueva en:', $ctx, 'url' ),
+					array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+				),
+			);
+		}
+		return array(
+			'Solicitud retirada — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			array_merge(
+				array( 'Se ha retirado una solicitud del procedimiento «' . $titulo . '». Está en «Retiradas» del panel de solicitudes, y se puede restaurar mientras el centro no presente otra.', '' ),
+				$datos,
+				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
 			),
 		);
 	}

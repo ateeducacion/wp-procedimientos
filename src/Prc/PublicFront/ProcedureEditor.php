@@ -177,6 +177,22 @@ final class ProcedureEditor {
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 		self::OP_DUPLICATE,
+		ApplicationActionsPanel::OP_RETIRE,
+		ApplicationActionsPanel::OP_RESTORE,
+		ApplicationActionsPanel::OP_EXTEND,
+		ApplicationActionsPanel::OP_SUBMIT_FOR,
+	);
+
+	/**
+	 * The operations on one application: their nonce is per application.
+	 *
+	 * @var string[]
+	 */
+	private const ROW_OPS = array(
+		self::OP_REVIEW,
+		ApplicationActionsPanel::OP_RETIRE,
+		ApplicationActionsPanel::OP_RESTORE,
+		ApplicationActionsPanel::OP_EXTEND,
 	);
 
 	/**
@@ -337,13 +353,18 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Nonce action of one operation.
+	 * Nonce action of one operation; on one application, of that one too.
 	 *
-	 * @param string $op Operation.
+	 * La revisión y las actuaciones sobre una solicitud (retirar, restaurar,
+	 * la prórroga) llevan un nonce de su operación **y** de su solicitud: el
+	 * de una fila no vale para otra.
+	 *
+	 * @param string $op  Operation.
+	 * @param int    $row Application, 0 for an operation on the procedure.
 	 * @return string
 	 */
-	public static function nonce_action( string $op ): string {
-		return 'prc_ed_' . $op;
+	public static function nonce_action( string $op, int $row = 0 ): string {
+		return 'prc_ed_' . $op . ( $row > 0 ? '_' . $row : '' );
 	}
 
 	/*
@@ -369,7 +390,7 @@ final class ProcedureEditor {
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
-		if ( ! self::verify( $op, self::OP_REVIEW === $op ? $row_id : 0 ) ) {
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : 0 ) ) {
 			return;
 		}
 
@@ -389,6 +410,12 @@ final class ProcedureEditor {
 		// cuentan, y un histórico se duplica igual (PR 8 del PLAN-0003).
 		if ( self::OP_DUPLICATE === $op ) {
 			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
+			return;
+		}
+		// Retirar, restaurar, la prórroga y presentar en nombre de un centro
+		// (PLAN-0003, PR 9): cada una pregunta a su meta capacidad.
+		if ( in_array( $op, ApplicationActionsPanel::OPS, true ) ) {
+			self::$rejected = ApplicationActionsPanel::handle( $op, $procedure_id, $user_id, $row_id );
 			return;
 		}
 		if ( self::OP_CUSTOM_CODE === $op ) {
@@ -526,7 +553,7 @@ final class ProcedureEditor {
 	private static function verify( string $op, int $row ): bool {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- esto es la comprobación del nonce.
 		$valor = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::nonce_name( $op, $row ) ] ?? '' ) ) );
-		return false !== wp_verify_nonce( $valor, self::nonce_action( $op ) );
+		return false !== wp_verify_nonce( $valor, self::nonce_action( $op, $row ) );
 	}
 
 	/**
@@ -1168,6 +1195,11 @@ final class ProcedureEditor {
 			self::$rejected = 'Esa solicitud no es de este procedimiento.';
 			return;
 		}
+		// Una retirada no se revisa: primero se restaura (PLAN-0003, PR 9).
+		if ( 'publish' !== get_post_status( $row_id ) ) {
+			self::$rejected = 'Esa solicitud está retirada: restáurela antes de revisarla.';
+			return;
+		}
 		$res = Applications::review( $row_id, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );
 		if ( ! $res['ok'] ) {
 			$textos         = array(
@@ -1177,6 +1209,8 @@ final class ProcedureEditor {
 			self::$rejected = $textos[ $res['error'] ] ?? 'No se ha podido revisar la solicitud.';
 			return;
 		}
+		// La nota interna viaja con la revisión de una en una (PLAN-0003, PR 9).
+		ApplicationActionsPanel::save_internal_note( $row_id, get_current_user_id() );
 		// Vuelve a la misma vista: el filtro y la página viajan en el formulario.
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle(); solo se lee el filtro de vuelta.
 		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( $_POST ), array( self::ARG_NOTICE => 'revisada' ) ) );
@@ -1434,6 +1468,7 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
+			'actions'                 => array(),
 		);
 	}
 
@@ -1577,6 +1612,12 @@ final class ProcedureEditor {
 		if ( ProcedureDuplicate::NOTICE === $hecho ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se lee qué se duplicó para el aviso.
 			return ProcedureDuplicate::notice( $_GET );
+		}
+		if ( isset( ApplicationActionsPanel::NOTICES[ $hecho ] ) ) {
+			return array(
+				'tipo'  => 'ok',
+				'texto' => ApplicationActionsPanel::NOTICES[ $hecho ],
+			);
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se leen dos cifras para el aviso.

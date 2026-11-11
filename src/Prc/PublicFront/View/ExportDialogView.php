@@ -102,9 +102,10 @@ final class ExportDialogView {
 								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
 								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
 									<?php
-									// Las del catálogo del centro no son de «Todas»: el guion no
-									// las marca con ella, y sin elegirlas no salen (ADR-0042).
-									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
+									// Las del catálogo del centro y la nota interna no son de
+									// «Todas»: el guion no las marca con ella, y sin elegirlas no
+									// salen (ADR-0042; PLAN-0003, PR 9).
+									$extra = in_array( (string) $clave, CentreColumns::extras(), true );
 									?>
 									<label class="prc-casilla">
 										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />

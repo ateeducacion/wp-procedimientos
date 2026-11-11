@@ -7,6 +7,7 @@
 
 namespace Prc;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\ProcedureAccess;
 use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
@@ -18,6 +19,8 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\ApplicationHistory;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -30,6 +33,7 @@ use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\WithdrawForm;
 use Prc\PublicFront\Workspace;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -77,6 +81,11 @@ final class App {
 		ApplicationExport::class,
 		ApplyForm::class,
 		PeopleForm::class,
+		// Retirar, restaurar, la prórroga y en nombre de un centro: lo que
+		// escriben y su historial, que escucha las acciones (PLAN-0003, PR 9).
+		ApplicationOperations::class,
+		ApplicationHistory::class,
+		WithdrawForm::class,
 		MyCentre::class,
 		// La consulta de solo lectura por zona (ADR-0043).
 		Observe::class,
@@ -106,6 +115,7 @@ final class App {
 		ProcedureMetaRegistration::register();
 		ApplicationMetaRegistration::register();
 		ProcedureAccess::register();
+		ApplicationActions::register();
 		CentreCatalog::register();
 
 		// Las páginas cuelgan de una madre si quien despliega lo pidió, y los

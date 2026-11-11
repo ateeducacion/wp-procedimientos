@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
@@ -205,12 +206,14 @@ final class MyCentre {
 		$subsanar = ApplicationMetaKeys::REVIEW_AMEND === $revision
 			&& ( '' === $cierre || ProcedureState::today() <= $cierre );
 
+		$url = ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+			? ApplyForm::url( $procedure_id )
+			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
+
 		return array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
-			'url'          => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
-				? ApplyForm::url( $procedure_id )
-				: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ),
+			'url'          => $url,
 			'sheet'        => (string) get_permalink( $procedure_id ),
 			'date'         => (string) get_the_date( 'Y-m-d H:i', $application ),
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
@@ -232,6 +235,9 @@ final class MyCentre {
 			// La lista de personas se gestiona en la solicitud (ADR-0041).
 			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
 			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
+			// La prórroga de esta solicitud y retirarla (PLAN-0003, PR 9).
+			'late'         => ApplicationActions::late_notice( (int) $application->ID ),
+			'withdraw_url' => WithdrawForm::link( (int) $application->ID, $url ),
 		);
 	}
 

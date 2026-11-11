@@ -222,13 +222,13 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$_GET[ ProcedureEditor::ARG_PROCEDURE ] = (string) $procedimiento;
 		$_GET[ ProcedureEditor::ARG_PANEL ]     = ProcedureEditor::PANEL_APPLICATIONS;
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringContainsString( 'Ver el historial de la lista', $html, 'el historial no se lee al pintar la tabla' );
+		$this->assertStringContainsString( 'Ver el historial', $html, 'el historial no se lee al pintar la tabla' );
 		$this->assertStringNotContainsString( 'DNI •', $html );
 		$this->assertStringContainsString( 'Incompleta: pide al menos 2', $html );
 
 		$_GET[ PeopleSpecPanel::ARG_HISTORY ] = (string) $solicitud;
 		$html                                 = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringContainsString( 'Historial de la lista', $html );
+		$this->assertStringContainsString( 'Alta en la lista de personas', $html, 'un solo historial, el de la solicitud' );
 		$this->assertStringContainsString( '<details class="prc-revision" open>', $html, 'la revisión de esa solicitud, abierta' );
 		$this->assertStringContainsString( '12345678Z', $html, 'en la lista, entero' );
 		$this->assertStringContainsString( 'DNI •••••678Z', $html, 'en el historial, tapado' );
@@ -239,7 +239,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$this->acting_as( $otro_uid );
 		$_GET[ ProcedureEditor::ARG_PROCEDURE ] = (string) $sin;
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringNotContainsString( 'historial de la lista', $html );
+		$this->assertStringNotContainsString( 'Alta en la lista de personas', $html );
 		$this->assertStringNotContainsString( 'prc-personas-revision', $html );
 		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
 	}

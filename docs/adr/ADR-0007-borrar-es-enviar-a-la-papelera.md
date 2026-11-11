@@ -198,3 +198,27 @@ confirmación lo dice con el número de solicitudes delante.
   constante de `wp-config.php` del sitio, no código del aplicativo.
 - Cuando la fase 2 traiga documentos adjuntos, su borrado —ficheros en disco,
   no filas— se decide en su propia ADR y no se hereda de esta.
+
+## Adenda — 2026-11-10 (ADR-0044)
+
+El punto 3, «una solicitud no se borra: se excluye», se matiza con la
+[ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md): el aplicativo envía una solicitud a la papelera —nunca la
+borra para siempre— en dos casos. **Quien solicita la retira** mientras el
+plazo esté abierto o dure su prórroga, y puede volver a presentar otra;
+**quien revisa la retira por error**, con motivo obligatorio que queda en su
+historial. Excluir sigue siendo lo que se hace con una solicitud que no se
+admite. La papelera de la solicitud **deja de ser invisible**: «Retiradas (N)»
+del panel «Solicitudes» las lista, y quien revisa las restaura si el centro no
+ha presentado otra —ni desde el escritorio se restaura una que haría dos—. Una
+solicitud restaurada vuelve publicada, no en borrador. Lo demás no cambia:
+`Applications::find()` sigue sin mirar la papelera, y el borrado definitivo
+sigue siendo del escritorio.
+
+Dos excepciones para la solicitud a lo que dicen las «Consecuencias»: **la
+papelera no se vacía sola para ella** —al retirarla se le quita
+`_wp_trash_meta_time`, y `pre_delete_post` para el borrado sin administración
+delante, así que `EMPTY_TRASH_DAYS` no se la lleva con sus documentos y su
+historial—, y **borrarla para siempre exige `prc_manage_app`**: quien revisa la
+envía a la papelera y la restaura, pero no la borra.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

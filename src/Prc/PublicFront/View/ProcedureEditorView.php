@@ -1132,13 +1132,17 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia. Pegue la dirección completa, que empieza por https://.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php $guardado = (string) ( $v['saved_links'][ $clave ] ?? '' ); ?>
+						<?php if ( '' !== $guardado ) : ?>
+							<p class="prc-campo__ayuda"><a href="<?php echo esc_url( $guardado ); ?>" target="_blank" rel="noopener noreferrer">Abrir el enlace guardado ↗<span class="screen-reader-text"> (se abre en otra pestaña)</span></a></p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>

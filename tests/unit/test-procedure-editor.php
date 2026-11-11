@@ -1160,6 +1160,50 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'esto no es un enlace', $m['values'][ ProcedureMetaKeys::RESOLUTION_URL ], 'lo tecleado vuelve' );
 	}
 
+	/**
+	 * Un enlace nuevo tiene que empezar por https://; uno de antes que no
+	 * cambia se sigue guardando. Lo guardado se puede abrir desde el panel.
+	 */
+	public function test_new_links_need_https_and_saved_ones_can_be_opened() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::PROVISIONAL_LIST_URL => 'http://example.org/antiguo.pdf' ) );
+
+		$this->assertNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_LINKS,
+				$procedimiento,
+				0,
+				array(
+					ProcedureMetaKeys::RESOLUTION_URL => 'http://example.org/resolucion.pdf',
+					ProcedureMetaKeys::PROVISIONAL_LIST_URL => 'http://example.org/antiguo.pdf',
+				)
+			)
+		);
+		$this->assertSame( '', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ) );
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS );
+		$this->assertStringContainsString( 'Revise el enlace a la resolución. Pegue la dirección completa, que empieza por https://', $m['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		$this->assertNotNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_LINKS,
+				$procedimiento,
+				0,
+				array(
+					ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/resolucion.pdf',
+					ProcedureMetaKeys::PROVISIONAL_LIST_URL => 'http://example.org/antiguo.pdf',
+				)
+			),
+			'el enlace de antes, sin tocar, no impide guardar'
+		);
+		$this->assertSame( 'https://example.org/resolucion.pdf', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ) );
+
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS ) );
+		$this->assertStringContainsString( '<a href="https://example.org/resolucion.pdf" target="_blank" rel="noopener noreferrer">Abrir el enlace guardado ↗', $html );
+		$this->assertSame( 2, substr_count( $html, 'Abrir el enlace guardado' ), 'el definitivo, vacío, no tiene enlace' );
+	}
+
 	// ─── Publicación ───────────────────────────────────────────────────────
 
 	/**

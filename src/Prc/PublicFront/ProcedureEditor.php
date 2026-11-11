@@ -1071,8 +1071,8 @@ final class ProcedureEditor {
 		$urls   = array();
 		foreach ( $claves as $clave ) {
 			$url = self::field( $clave );
-			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
-				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
+			if ( ! ProcedureInput::is_acceptable_link( $url, self::meta( $procedure_id, $clave ) ) ) {
+				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) ) . ' Pegue la dirección completa, que empieza por https://: cópiela entera desde la barra del navegador.';
 				return;
 			}
 			$urls[ $clave ] = $url;
@@ -1702,6 +1702,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		// Lo guardado de verdad, aunque se repinte lo tecleado: es lo que
+		// «Abrir el enlace guardado» abre.
+		$guardado['saved_links']                        = array_intersect_key( $guardado, array_flip( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) ) );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];

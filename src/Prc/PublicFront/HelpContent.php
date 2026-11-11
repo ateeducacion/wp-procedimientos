@@ -369,7 +369,7 @@ final class HelpContent {
 				'id'    => 'taller-enlaces',
 				'level' => 3,
 				'title' => 'Enlaces',
-				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://; si no, no se guarda. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>. Debajo de cada enlace guardado, <strong>«Abrir el enlace guardado ↗»</strong> lo abre en otra pestaña para comprobar que llega entero.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Enlaces»',
@@ -633,7 +633,7 @@ final class HelpContent {
 				'id'    => 'enlaces-cortados',
 				'level' => 3,
 				'title' => 'Los enlaces de la resolución salen cortados o no abren',
-				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela con «Abrir el enlace guardado ↗», debajo del campo.</p>',
 				'shots' => array(),
 			),
 			array(

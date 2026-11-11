@@ -471,6 +471,30 @@ final class ProcedureInput {
 	}
 
 	/**
+	 * Whether a link of «Enlaces» may be stored.
+	 *
+	 * En blanco, sí. Uno nuevo o cambiado tiene que ser la dirección
+	 * completa, con `https://` y su servidor: los PDF llegaban cortados. Uno
+	 * guardado antes de la regla que no cambia se sigue guardando, para no
+	 * impedir guardar los demás. Sin consultar la red: decir si existe lo
+	 * hace «Abrir el enlace guardado».
+	 *
+	 * @param string $url    What was typed.
+	 * @param string $stored What is stored now.
+	 * @return bool
+	 */
+	public static function is_acceptable_link( string $url, string $stored ): bool {
+		if ( '' === $url ) {
+			return true;
+		}
+		if ( ! self::is_url( $url ) ) {
+			return false;
+		}
+		$partes = (array) parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- pura: sin WordPress.
+		return $url === $stored || ( 'https' === strtolower( (string) ( $partes['scheme'] ?? '' ) ) && false !== strpos( (string) ( $partes['host'] ?? '' ), '.' ) );
+	}
+
+	/**
 	 * Whether an address looks like an address.
 	 *
 	 * @param string $value Raw value.

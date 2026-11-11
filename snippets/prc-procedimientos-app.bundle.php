@@ -2743,6 +2743,30 @@ final class ProcedureInput {
 
 
 
+
+
+
+
+
+
+
+	public static function is_acceptable_link( string $url, string $stored ): bool {
+		if ( '' === $url ) {
+			return true;
+		}
+		if ( ! self::is_url( $url ) ) {
+			return false;
+		}
+		$partes = (array) parse_url( $url );
+		return $url === $stored || ( 'https' === strtolower( (string) ( $partes['scheme'] ?? '' ) ) && false !== strpos( (string) ( $partes['host'] ?? '' ), '.' ) );
+	}
+
+
+
+
+
+
+
 	public static function is_email( string $value ): bool {
 		return (bool) preg_match( '/^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$/', $value );
 	}
@@ -18370,7 +18394,7 @@ final class HelpContent {
 				'id'    => 'taller-enlaces',
 				'level' => 3,
 				'title' => 'Enlaces',
-				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://; si no, no se guarda. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>. Debajo de cada enlace guardado, <strong>«Abrir el enlace guardado ↗»</strong> lo abre en otra pestaña para comprobar que llega entero.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Enlaces»',
@@ -18634,7 +18658,7 @@ final class HelpContent {
 				'id'    => 'enlaces-cortados',
 				'level' => 3,
 				'title' => 'Los enlaces de la resolución salen cortados o no abren',
-				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela con «Abrir el enlace guardado ↗», debajo del campo.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -23691,13 +23715,17 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia. Pegue la dirección completa, que empieza por https://.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php $guardado = (string) ( $v['saved_links'][ $clave ] ?? '' ); ?>
+						<?php if ( '' !== $guardado ) : ?>
+							<p class="prc-campo__ayuda"><a href="<?php echo esc_url( $guardado ); ?>" target="_blank" rel="noopener noreferrer">Abrir el enlace guardado ↗<span class="screen-reader-text"> (se abre en otra pestaña)</span></a></p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>
@@ -25152,8 +25180,8 @@ final class ProcedureEditor {
 		$urls   = array();
 		foreach ( $claves as $clave ) {
 			$url = self::field( $clave );
-			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
-				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
+			if ( ! ProcedureInput::is_acceptable_link( $url, self::meta( $procedure_id, $clave ) ) ) {
+				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) ) . ' Pegue la dirección completa, que empieza por https://: cópiela entera desde la barra del navegador.';
 				return;
 			}
 			$urls[ $clave ] = $url;
@@ -25783,6 +25811,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+
+
+		$guardado['saved_links']                        = array_intersect_key( $guardado, array_flip( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) ) );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];

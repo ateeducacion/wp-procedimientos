@@ -182,24 +182,9 @@ final class ApplicationPeople {
 	 * @return array{error:string, row:array<string, string>}|null
 	 */
 	private static function conflict( array $spec, array $people, array $row ): ?array {
-		$antes = array();
-		foreach ( $people as $fila ) {
-			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
-				$antes = $fila;
-			}
-		}
-		$ya_era = array() !== $antes && $antes['dni'] === $row['dni'] && $antes['role'] === $row['role'] && $antes['group'] === $row['group'];
+		$ya_era = self::was_already( $people, $row );
 		foreach ( self::others( $people, $row ) as $otra ) {
-			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
-			$misma       = $otra['dni'] === $row['dni'];
-			$error       = '';
-			if ( $mismo_sitio && $misma ) {
-				$error = 'duplicate';
-			} elseif ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
-				$error = 'same_person';
-			} elseif ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
-				$error = 'unique_group';
-			}
+			$error = self::clash_kind( $spec, $otra, $row, $ya_era );
 			if ( '' !== $error ) {
 				return array(
 					'error' => $error,
@@ -208,6 +193,43 @@ final class ApplicationPeople {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Why the new row clashes with another one, if it does.
+	 *
+	 * @param array<string, mixed> $spec   Normalised specification.
+	 * @param array<string, mixed> $otra   Another row of the list.
+	 * @param array<string, mixed> $row    Normalised row.
+	 * @param bool                 $ya_era Whether the row was already stored like this.
+	 * @return string `duplicate`, `same_person`, `unique_group`, or empty.
+	 */
+	private static function clash_kind( array $spec, array $otra, array $row, bool $ya_era ): string {
+		$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+		$misma       = $otra['dni'] === $row['dni'];
+		if ( $mismo_sitio && $misma ) {
+			return 'duplicate';
+		}
+		if ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
+			return 'same_person';
+		}
+		return $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ? 'unique_group' : '';
+	}
+
+	/**
+	 * Whether the row is being edited without touching its person, role or group.
+	 *
+	 * @param array<int, array<string, mixed>> $people The whole list.
+	 * @param array<string, mixed>             $row    Normalised row.
+	 * @return bool
+	 */
+	private static function was_already( array $people, array $row ): bool {
+		foreach ( $people as $fila ) {
+			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
+				return $fila['dni'] === $row['dni'] && $fila['role'] === $row['role'] && $fila['group'] === $row['group'];
+			}
+		}
+		return false;
 	}
 
 	/**

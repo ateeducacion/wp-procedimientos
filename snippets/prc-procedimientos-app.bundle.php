@@ -3997,24 +3997,9 @@ final class ApplicationPeople {
 
 
 	private static function conflict( array $spec, array $people, array $row ): ?array {
-		$antes = array();
-		foreach ( $people as $fila ) {
-			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
-				$antes = $fila;
-			}
-		}
-		$ya_era = array() !== $antes && $antes['dni'] === $row['dni'] && $antes['role'] === $row['role'] && $antes['group'] === $row['group'];
+		$ya_era = self::was_already( $people, $row );
 		foreach ( self::others( $people, $row ) as $otra ) {
-			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
-			$misma       = $otra['dni'] === $row['dni'];
-			$error       = '';
-			if ( $mismo_sitio && $misma ) {
-				$error = 'duplicate';
-			} elseif ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
-				$error = 'same_person';
-			} elseif ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
-				$error = 'unique_group';
-			}
+			$error = self::clash_kind( $spec, $otra, $row, $ya_era );
 			if ( '' !== $error ) {
 				return array(
 					'error' => $error,
@@ -4023,6 +4008,43 @@ final class ApplicationPeople {
 			}
 		}
 		return null;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function clash_kind( array $spec, array $otra, array $row, bool $ya_era ): string {
+		$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+		$misma       = $otra['dni'] === $row['dni'];
+		if ( $mismo_sitio && $misma ) {
+			return 'duplicate';
+		}
+		if ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
+			return 'same_person';
+		}
+		return $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ? 'unique_group' : '';
+	}
+
+
+
+
+
+
+
+
+	private static function was_already( array $people, array $row ): bool {
+		foreach ( $people as $fila ) {
+			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
+				return $fila['dni'] === $row['dni'] && $fila['role'] === $row['role'] && $fila['group'] === $row['group'];
+			}
+		}
+		return false;
 	}
 
 
@@ -25010,6 +25032,8 @@ final class ProcedureEditor {
 		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 
 
+		$rotulos = array_replace( $rotulos, array_fill_keys( array_keys( array_filter( $quitadas ) ), '' ) );
+
 		$antes   = Applications::questions( $procedure_id );
 		$previas = array_column( $antes, null, 'key' );
 		$crudas  = array();
@@ -25017,8 +25041,7 @@ final class ProcedureEditor {
 			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
 				'key'       => $key,
-
-				'label'     => empty( $quitadas[ $i ] ) ? sanitize_text_field( (string) $rotulo ) : '',
+				'label'     => sanitize_text_field( (string) $rotulo ),
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
 				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
@@ -28829,11 +28852,8 @@ final class PeopleForm {
 		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
 
 
-		$abierta = $solicitud > 0 ? $puede : '' === $despues;
-
-
+		$abierta  = $solicitud > 0 ? $puede : '' === $despues;
 		$tecleado = '' !== self::$rejected && ! self::$stale ? self::person() : array();
-		$choque   = array() === $tecleado ? '' : ApplicationPeople::clash( $spec, $filas, array( 'id' => self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row ) + $tecleado );
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
@@ -28857,8 +28877,27 @@ final class PeopleForm {
 
 			'typed'          => $tecleado,
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
-			'clash_row'      => $choque,
+			'clash_row'      => self::clash_row( $spec, $filas, $tecleado ),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function clash_row( array $spec, array $filas, array $tecleado ): string {
+		if ( array() === $tecleado ) {
+			return '';
+		}
+		$id = self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row;
+		return ApplicationPeople::clash( $spec, $filas, array( 'id' => $id ) + $tecleado );
 	}
 
 

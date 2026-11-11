@@ -10,6 +10,7 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\Domain\QuestionPoints;
@@ -285,7 +286,8 @@ final class Applications {
 		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
 		// Con la lista de personas encendida, la coordinación está en un solo
 		// sitio: la lista, que se cambia con su propia ventana (ADR-0041).
-		$en_lista = $pide > 0 && People::enabled( $procedure_id );
+		// Siempre que la lista pueda recogerla; si no, sigue en el formulario.
+		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ) );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
 			'coordinator_count'    => $en_lista ? 0 : $pide,

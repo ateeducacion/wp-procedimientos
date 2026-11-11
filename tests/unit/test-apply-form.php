@@ -684,6 +684,62 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una lista que no puede recoger la coordinación —ningún papel de
+	 * coordinación, o sin mínimo— no se la lleva: el formulario la sigue
+	 * pidiendo y exigiendo, como antes de la lista.
+	 */
+	public function test_a_list_without_a_coordination_role_leaves_coordination_in_the_form() {
+		$sin_papel  = array(
+			'enabled' => true,
+			'roles'   => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Participante',
+				),
+			),
+			'min'     => 2,
+			'max'     => 4,
+		);
+		$sin_minimo = array( 'min' => 0 ) + $this->lista_de_personas();
+		foreach ( array( $sin_papel, $sin_minimo ) as $lista ) {
+			$procedure = $this->procedimiento(
+				array(
+					ProcedureMetaKeys::COORDINATOR_COUNT => 2,
+					ProcedureMetaKeys::PEOPLE_SPEC       => $lista,
+				)
+			);
+			$spec      = Applications::spec( $procedure );
+			$this->assertFalse( $spec['coordinators_in_list'] );
+			$this->assertSame( 2, $spec['coordinator_count'] );
+			$this->assertTrue( $spec['requires_coordinator'] );
+
+			$this->acting_as( $this->school_head( 'C0001' ) );
+			$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+			$html                             = ApplyForm::render();
+			$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+			$this->assertStringNotContainsString( 'se dan de alta en la lista de personas', $html );
+		}
+	}
+
+	/**
+	 * Con la lista que solo gestionan las admitidas, la nota de la
+	 * coordinación no promete un plazo que todavía no corre.
+	 */
+	public function test_coordination_in_a_list_for_admitted_ones_says_when() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 1,
+				ProcedureMetaKeys::PEOPLE_SPEC       => array( 'admitted_only' => true ) + $this->lista_de_personas(),
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+		$html                             = ApplyForm::render();
+		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. La lista de personas se gestiona cuando la solicitud esté admitida', $html );
+		$this->assertStringNotContainsString( 'Allí podrá cambiarlas hasta el', $html );
+	}
+
+	/**
 	 * Una solicitud de antes, con su coordinación guardada en el formulario,
 	 * no la pierde al volver a guardarse con la lista encendida, y se sigue
 	 * viendo en lo presentado.

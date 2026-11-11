@@ -3179,6 +3179,30 @@ final class PeopleSpec {
 
 
 
+	public static function collects_coordination( array $spec ): bool {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] || (int) $spec['min'] < 1 ) {
+			return false;
+		}
+		foreach ( (array) $spec['roles'] as $papel ) {
+			if ( false !== strpos( strtolower( (string) $papel['label'] ), 'coordina' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	public static function why_closed( array $spec, array $ctx ): string {
@@ -11618,6 +11642,7 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\Domain\QuestionPoints;
@@ -11894,7 +11919,8 @@ final class Applications {
 		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
 
 
-		$en_lista = $pide > 0 && People::enabled( $procedure_id );
+
+		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ) );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
 			'coordinator_count'    => $en_lista ? 0 : $pide,
@@ -17845,7 +17871,7 @@ final class HelpContent {
 				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
 					. '<p>Si el procedimiento pide una lista de personas o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Personas que participan», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
 					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
-					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong>, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
 					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -18044,7 +18070,7 @@ final class HelpContent {
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
 					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
+					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -26939,9 +26965,11 @@ final class ApplyFormView {
 	private static function coordination( array $m, array $coordinators ): string {
 		$spec = (array) $m['spec'];
 		if ( ! empty( $spec['coordinators_in_list'] ) ) {
-			$hasta = (string) ( $m['people']['until'] ?? '' );
+			$hasta   = (string) ( $m['people']['until'] ?? '' );
+			$despues = (string) ( $m['people']['after_submit'] ?? '' );
+			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
 			return '<div class="prc-nota prc-campo--completo"><p>'
-				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '' ) )
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
 				. '</p></div>';
 		}
 		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );

@@ -307,6 +307,30 @@ final class PeopleSpec {
 	}
 
 	/**
+	 * Whether the list can take over the coordination the form used to ask for.
+	 *
+	 * Los papeles son texto libre: la lista recoge la coordinación solo si
+	 * tiene un papel cuyo rótulo la nombra y un mínimo que obliga a dar de
+	 * alta a alguien. Si no, la coordinación se sigue pidiendo en el
+	 * formulario, y no se pierde un dato que era obligatorio.
+	 *
+	 * @param array<string, mixed> $spec Specification.
+	 * @return bool
+	 */
+	public static function collects_coordination( array $spec ): bool {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] || (int) $spec['min'] < 1 ) {
+			return false;
+		}
+		foreach ( (array) $spec['roles'] as $papel ) {
+			if ( false !== strpos( strtolower( (string) $papel['label'] ), 'coordina' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Why the list of an application cannot be written now, in words.
 	 *
 	 * Primero lo que la cierra siempre —apagada, profesorado, histórico,

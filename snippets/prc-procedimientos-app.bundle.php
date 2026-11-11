@@ -3396,6 +3396,370 @@ final class ApplicationPeople {
 
 namespace Prc\Domain;
 
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ApplicationFilter', false ) ) {
+final class ApplicationFilter {
+
+
+	public const ARG_REVIEW = 'revision';
+
+
+	public const ARG_ISLAND = 'isla';
+
+
+	public const ARG_ZONE = 'zona';
+
+
+	public const ARG_INCOMPLETE = 'incompletas';
+
+
+	public const ARG_SEARCH = 'buscar';
+
+
+	public const ARG_PAGE = 'pagina';
+
+
+	public const PER_PAGE = 50;
+
+
+	public const MAX_SEARCH = 100;
+
+
+
+
+
+
+	private const ARGS = array(
+		'review'     => self::ARG_REVIEW,
+		'island'     => self::ARG_ISLAND,
+		'zone'       => self::ARG_ZONE,
+		'incomplete' => self::ARG_INCOMPLETE,
+		'search'     => self::ARG_SEARCH,
+		'page'       => self::ARG_PAGE,
+	);
+
+
+
+
+
+
+
+
+
+	private const FOLD = array(
+		'á' => 'a',
+		'à' => 'a',
+		'â' => 'a',
+		'ä' => 'a',
+		'é' => 'e',
+		'è' => 'e',
+		'ê' => 'e',
+		'ë' => 'e',
+		'í' => 'i',
+		'ì' => 'i',
+		'î' => 'i',
+		'ï' => 'i',
+		'ó' => 'o',
+		'ò' => 'o',
+		'ô' => 'o',
+		'ö' => 'o',
+		'ú' => 'u',
+		'ù' => 'u',
+		'û' => 'u',
+		'ü' => 'u',
+		'ñ' => 'n',
+		'ç' => 'c',
+	);
+
+
+
+
+
+
+	public static function args(): array {
+		return self::ARGS;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( array $raw ): array {
+		$estado = self::text( $raw, self::ARG_REVIEW, 32 );
+		$pagina = self::text( $raw, self::ARG_PAGE, 9 );
+		return array(
+			'review'     => isset( ApplicationMetaKeys::review_states()[ $estado ] ) ? $estado : '',
+			'island'     => self::text( $raw, self::ARG_ISLAND, 100 ),
+			'zone'       => self::text( $raw, self::ARG_ZONE, 32 ),
+			'incomplete' => '1' === self::text( $raw, self::ARG_INCOMPLETE, 1 ),
+			'search'     => self::text( $raw, self::ARG_SEARCH, self::MAX_SEARCH ),
+			'page'       => ctype_digit( $pagina ) && (int) $pagina > 0 ? (int) $pagina : 1,
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function against( array $filter, array $options ): array {
+		foreach ( array(
+			'island' => 'islands',
+			'zone'   => 'zones',
+		) as $clave => $lista ) {
+			if ( '' !== $filter[ $clave ] && ! isset( $options[ $lista ][ $filter[ $clave ] ] ) ) {
+				$filter[ $clave ] = '';
+			}
+		}
+		return $filter;
+	}
+
+
+
+
+
+
+
+	public static function active( array $filter ): bool {
+		return '' !== $filter['review'] || '' !== $filter['island'] || '' !== $filter['zone']
+			|| true === $filter['incomplete'] || '' !== $filter['search'];
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function query( array $filter, array $changes = array() ): array {
+		if ( array() !== $changes && ! array_key_exists( 'page', $changes ) ) {
+			$changes['page'] = 1;
+		}
+		$f   = array_merge( $filter, $changes );
+		$out = array();
+		foreach ( self::ARGS as $clave => $arg ) {
+			$valor = $f[ $clave ] ?? '';
+			if ( 'incomplete' === $clave ) {
+				$valor = true === $valor ? '1' : '';
+			} elseif ( 'page' === $clave ) {
+				$valor = (int) $valor > 1 ? (string) (int) $valor : '';
+			}
+			if ( '' !== (string) $valor ) {
+				$out[ $arg ] = (string) $valor;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function window( int $total, int $page, int $per_page = self::PER_PAGE ): array {
+		$total  = max( 0, $total );
+		$pages  = max( 1, (int) ceil( $total / max( 1, $per_page ) ) );
+		$page   = min( max( 1, $page ), $pages );
+		$offset = ( $page - 1 ) * $per_page;
+		return array(
+			'page'   => $page,
+			'pages'  => $pages,
+			'offset' => $offset,
+			'from'   => 0 === $total ? 0 : $offset + 1,
+			'to'     => min( $total, $offset + $per_page ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function matches( string $term, array $texts ): bool {
+		$term = self::fold( $term );
+		if ( '' === $term ) {
+			return true;
+		}
+		foreach ( $texts as $texto ) {
+			if ( false !== strpos( self::fold( (string) $texto ), $term ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+	private static function fold( string $text ): string {
+		$text = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text, 'UTF-8' ) : strtolower( $text );
+		return strtr( trim( $text ), self::FOLD );
+	}
+
+
+
+
+
+
+
+
+
+	private static function text( array $raw, string $key, int $max ): string {
+		$valor = $raw[ $key ] ?? '';
+		if ( ! is_string( $valor ) && ! is_int( $valor ) ) {
+			return '';
+		}
+		$valor = trim( (string) preg_replace( '/[\s\x00-\x1f]+/u', ' ', (string) $valor ) );
+		return function_exists( 'mb_substr' ) ? mb_substr( $valor, 0, $max, 'UTF-8' ) : substr( $valor, 0, $max );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ApplicationCompleteness', false ) ) {
+final class ApplicationCompleteness {
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function reasons( array $spec, $people, array $questions, $files, string $today, string $review ): array {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
+			return array();
+		}
+		$out  = array();
+		$spec = PeopleSpec::sanitize( $spec );
+		$hay  = ApplicationPeople::rows( $people );
+		if ( ! ApplicationPeople::is_complete( $spec, $hay ) ) {
+			$faltan = (int) $spec['min'] - count( $hay );
+			$out[]  = 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan );
+		}
+		$files = is_array( $files ) ? $files : array();
+		foreach ( self::overdue( $questions, $today ) as $pregunta ) {
+			$doc = $files[ (string) $pregunta['key'] ] ?? null;
+			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+				$out[] = 'Falta: ' . (string) $pregunta['label'];
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function overdue( array $questions, string $today ): array {
+		$out = array();
+		foreach ( $questions as $pregunta ) {
+			if ( ! empty( $pregunta['required'] ) && ProcedureQuestions::valid_delivery( $pregunta )
+				&& ProcedureInput::is_valid_date( $today ) && (string) $pregunta['closes_at'] < $today ) {
+				$out[] = $pregunta;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function may_be_incomplete( array $spec, array $questions, string $today ): bool {
+		return true === PeopleSpec::sanitize( $spec )['enabled'] || array() !== self::overdue( $questions, $today );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
 use Prc\Meta\ProcedureMetaKeys;
 
 
@@ -9950,20 +10314,25 @@ final class Applications {
 
 
 
-	public static function review( int $application_id, string $state, string $note ): array {
+
+
+
+
+
+	public static function review( int $application_id, string $state, ?string $note ): array {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return self::refused( 'application' );
 		}
 		if ( ! isset( ApplicationMetaKeys::review_states()[ $state ] ) ) {
 			return self::refused( 'state' );
 		}
-		$note = trim( $note );
-		if ( '' === $note && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$note          = null === $note ? $previous_note : trim( $note );
+		if ( '' === trim( $note ) && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
 			return self::refused( 'note' );
 		}
 
-		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
-		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
 
@@ -11521,6 +11890,7 @@ final class People {
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\QuestionGrid;
 
 
@@ -11679,10 +12049,14 @@ final class PeopleExport {
 
 
 
-	public static function users( int $application_id ): array {
+
+	public static function users( int $application_id, $people = null ): array {
 		$out = array();
 
-		$lista = People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : array();
+		$lista = array();
+		if ( People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ) {
+			$lista = null === $people ? People::of( $application_id ) : ApplicationPeople::rows( $people );
+		}
 		foreach ( $lista as $persona ) {
 			$out[] = array(
 				'source'         => ApplicationExport::WHO_PEOPLE,
@@ -11885,7 +12259,11 @@ final class ApplicationExport {
 
 
 
-	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
+
+
+
+
+	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION, ?array $ids = null ): string {
 		$preguntas = Applications::questions( $procedure_id );
 		$columnas  = CentreColumns::ordered( self::valid_columns( $procedure_id, $columns ), PeopleExport::all_columns( $procedure_id ), PeopleExport::all_columns( $procedure_id, true ) );
 		$personas  = PeopleExport::spec( $procedure_id );
@@ -11893,7 +12271,7 @@ final class ApplicationExport {
 		$filas     = array();
 
 		$catalogo = array() !== array_intersect_key( $claves, array_flip( CentreColumns::KEYS ) ) ? CentreCatalog::index() : array();
-		foreach ( self::batches( $procedure_id ) as $tanda ) {
+		foreach ( self::batches( $procedure_id, $ids ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
 				$fila = Applications::row( $solicitud, $preguntas, $catalogo ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
@@ -11994,8 +12372,9 @@ final class ApplicationExport {
 
 
 
-	public static function people( int $procedure_id, array $who = array() ): array {
-		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
+
+	public static function people( int $procedure_id, array $who = array(), ?array $ids = null ): array {
+		$cuenta = self::tally( self::batches( $procedure_id, $ids ), array( 'all' => self::sources( $who ) ) )['all'];
 		return array(
 			'people'   => array_values( $cuenta['people'] ),
 			'left_out' => $cuenta['left_out'],
@@ -12014,13 +12393,16 @@ final class ApplicationExport {
 
 
 
-	public static function who_counts( array $applications, array $who = array() ): array {
+
+
+
+	public static function who_counts( array $applications, array $who = array(), array $stored = array() ): array {
 		$grupos = array();
 		foreach ( self::sources( $who ) as $fuente ) {
 			$grupos[ $fuente ] = array( $fuente );
 		}
 		$out = array();
-		foreach ( self::tally( array( $applications ), $grupos ) as $fuente => $cuenta ) {
+		foreach ( self::tally( array( $applications ), $grupos, $stored ) as $fuente => $cuenta ) {
 			$out[ $fuente ] = array( 'count' => count( $cuenta['people'] ) ) + $cuenta['left_out'];
 		}
 		return $out;
@@ -12044,7 +12426,8 @@ final class ApplicationExport {
 
 
 
-	private static function tally( iterable $batches, array $groups ): array {
+
+	private static function tally( iterable $batches, array $groups, array $stored = array() ): array {
 		$out = array();
 		foreach ( array_keys( $groups ) as $grupo ) {
 			$out[ $grupo ] = array(
@@ -12063,7 +12446,7 @@ final class ApplicationExport {
 				$de = array();
 				foreach ( $groups as $grupo => $fuentes ) {
 					foreach ( $fuentes as $fuente ) {
-						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud );
+						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud, (array) ( $stored[ (int) $solicitud->ID ] ?? array() ) );
 						foreach ( $de[ $fuente ] as $persona ) {
 							self::add( $out[ $grupo ], $persona );
 						}
@@ -12134,7 +12517,8 @@ final class ApplicationExport {
 
 	public static function moodle( int $procedure_id, array $options = array() ): string {
 		$who = is_array( $options['who'] ?? null ) ? $options['who'] : array();
-		return self::moodle_lines( self::people( $procedure_id, $who )['people'] );
+		$ids = is_array( $options['ids'] ?? null ) ? $options['ids'] : null;
+		return self::moodle_lines( self::people( $procedure_id, $who, $ids )['people'] );
 	}
 
 
@@ -12192,13 +12576,14 @@ final class ApplicationExport {
 
 
 
-	private static function from_source( string $source, \WP_Post $application ): array {
+
+	private static function from_source( string $source, \WP_Post $application, array $stored = array() ): array {
 		switch ( $source ) {
 			case self::WHO_APPLICANT:
 				return self::applicant( $application );
 			case self::WHO_COORDINATORS:
 				$out = array();
-				foreach ( self::coordinators( $application ) as $persona ) {
+				foreach ( self::coordinators( $application, $stored ) as $persona ) {
 
 					if ( '' === $persona['name'] . $persona['surname'] . $persona['email'] ) {
 						continue;
@@ -12210,7 +12595,7 @@ final class ApplicationExport {
 			case self::WHO_PEOPLE:
 
 
-				return PeopleExport::users( (int) $application->ID );
+				return PeopleExport::users( (int) $application->ID, array_key_exists( ApplicationMetaKeys::PEOPLE, $stored ) ? $stored[ ApplicationMetaKeys::PEOPLE ] : null );
 		}
 		return array();
 	}
@@ -12372,8 +12757,10 @@ final class ApplicationExport {
 
 
 
-	private static function coordinators( \WP_Post $application ): array {
-		return ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( (int) $application->ID, ApplicationMetaKeys::COORDINATOR, true ) );
+
+	private static function coordinators( \WP_Post $application, array $stored = array() ): array {
+		$valor = array_key_exists( ApplicationMetaKeys::COORDINATOR, $stored ) ? $stored[ ApplicationMetaKeys::COORDINATOR ] : get_post_meta( (int) $application->ID, ApplicationMetaKeys::COORDINATOR, true );
+		return ApplicationMetaRegistration::sanitize_coordinator( $valor );
 	}
 
 
@@ -12386,13 +12773,18 @@ final class ApplicationExport {
 
 
 
-	private static function batches( int $procedure_id ): \Generator {
-		if ( $procedure_id <= 0 ) {
+
+
+
+
+	private static function batches( int $procedure_id, ?array $ids = null ): \Generator {
+		if ( $procedure_id <= 0 || array() === $ids ) {
 			return;
 		}
+		$solo = null === $ids ? array() : array( 'post__in' => array_map( 'intval', $ids ) );
 		for ( $pagina = 1; ; ++$pagina ) {
 			$tanda = get_posts(
-				array(
+				$solo + array(
 					'post_type'        => ApplicationPostType::POST_TYPE,
 					'post_parent'      => $procedure_id,
 					'post_status'      => 'publish',
@@ -12418,6 +12810,383 @@ final class ApplicationExport {
 				return;
 			}
 		}
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\ApplicationFilter;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationQuery', false ) ) {
+final class ApplicationQuery {
+
+
+
+
+
+
+	private const CENSUS = array(
+		ApplicationMetaKeys::REVIEW_STATE,
+		ApplicationMetaKeys::CENTRE_CODE,
+		ApplicationMetaKeys::CENTRE_NAME,
+		ApplicationMetaKeys::APPLICANT_TYPE,
+		ApplicationMetaKeys::COORDINATOR,
+	);
+
+
+
+
+
+
+
+
+
+	public static function run( int $procedure_id, array $filter, array $scope = array() ): array {
+		$census = self::census( $procedure_id, $scope );
+
+		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
+		$opciones = self::options( $census['stored'], $catalogo );
+		$filter   = ApplicationFilter::against( $filter, $opciones );
+
+		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
+		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'] ) : null;
+		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
+		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+
+		$filter['page'] = $ventana['page'];
+		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );
+		return array(
+			'filter'            => $filter,
+			'active'            => ApplicationFilter::active( $filter ),
+			'ids'               => $ids,
+			'all'               => count( $census['posts'] ),
+			'total'             => count( $ids ),
+			'counts'            => self::counts( $census['stored'] ),
+			'incomplete'        => count( $motivos ?? array() ),
+			'may_be_incomplete' => null !== $motivos,
+			'options'           => $opciones,
+			'posts'             => self::page( $pagina ),
+			'reasons'           => array_intersect_key( $motivos ?? array(), array_flip( $pagina ) ),
+			'stored'            => $census['stored'],
+		) + $ventana;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function ids( int $procedure_id, array $filter, array $scope = array() ): array {
+		return self::run( $procedure_id, $filter, $scope )['ids'];
+	}
+
+
+
+
+
+
+
+
+	public static function state_of( $state ): string {
+		$state = is_string( $state ) ? $state : '';
+		return isset( ApplicationMetaKeys::review_states()[ $state ] ) ? $state : ApplicationMetaKeys::REVIEW_SUBMITTED;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function census( int $procedure_id, array $scope ): array {
+		$vacio = array(
+			'posts'  => array(),
+			'stored' => array(),
+			'check'  => false,
+		);
+		if ( $procedure_id <= 0 ) {
+			return $vacio;
+		}
+		$posts = get_posts(
+			array(
+				'post_type'              => ApplicationPostType::POST_TYPE,
+				'post_parent'            => $procedure_id,
+				'post_status'            => 'publish',
+				'numberposts'            => -1,
+
+				'orderby'                => array(
+					'date' => 'ASC',
+					'ID'   => 'ASC',
+				),
+
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'suppress_filters'       => false,
+			)
+		);
+		if ( ! is_array( $posts ) || array() === $posts ) {
+			return $vacio;
+		}
+		$por_id = array();
+		foreach ( $posts as $post ) {
+			$por_id[ (int) $post->ID ] = $post;
+		}
+		$claves = self::CENSUS;
+		$mirar  = self::can_be_incomplete( $procedure_id );
+		if ( $mirar ) {
+			$claves[] = ApplicationMetaKeys::PEOPLE;
+			$claves[] = ApplicationMetaKeys::FILES;
+		}
+		$stored = self::stored( $procedure_id, $claves );
+		foreach ( array_keys( $por_id ) as $id ) {
+			$stored[ $id ] = ( $stored[ $id ] ?? array() ) + array_fill_keys( $claves, '' );
+		}
+		if ( array_key_exists( 'codes', $scope ) ) {
+			$codigos = array_flip( array_map( 'strval', (array) $scope['codes'] ) );
+			foreach ( $stored as $id => $meta ) {
+				if ( ! isset( $codigos[ (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] ] ) ) {
+					unset( $stored[ $id ], $por_id[ $id ] );
+				}
+			}
+		}
+		return array(
+			'posts'  => $por_id,
+			'stored' => array_intersect_key( $stored, $por_id ),
+			'check'  => $mirar,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function stored( int $procedure_id, array $keys ): array {
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $keys ), '%s' ) );
+
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT m.post_id, m.meta_key, m.meta_value FROM {$wpdb->postmeta} m INNER JOIN {$wpdb->posts} p ON p.ID = m.post_id WHERE p.post_type = %s AND p.post_parent = %d AND p.post_status = 'publish' AND m.meta_key IN ({$huecos}) ORDER BY m.meta_id ASC",
+				array_merge( array( ApplicationPostType::POST_TYPE, $procedure_id ), $keys )
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			$id = (int) $fila->post_id;
+			if ( ! isset( $out[ $id ][ $fila->meta_key ] ) ) {
+				$out[ $id ][ (string) $fila->meta_key ] = maybe_unserialize( $fila->meta_value );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function can_be_incomplete( int $procedure_id ): bool {
+		return ApplicationCompleteness::may_be_incomplete( self::people_spec( $procedure_id ), Applications::questions( $procedure_id ), ProcedureState::today() );
+	}
+
+
+
+
+
+
+
+
+	private static function people_spec( int $procedure_id ): array {
+		return People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : array( 'enabled' => false );
+	}
+
+
+
+
+
+
+
+
+
+	private static function counts( array $stored ): array {
+		$out = array_fill_keys( array_keys( ApplicationMetaKeys::review_states() ), 0 );
+		foreach ( $stored as $meta ) {
+			++$out[ self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) ];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function options( array $stored, array $catalog ): array {
+		$islas = array();
+		$zonas = array();
+		foreach ( $stored as $meta ) {
+			$centro = CentreColumns::attributes( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalog );
+			if ( '' !== $centro['island'] ) {
+				$islas[ $centro['island'] ] = $centro['island'];
+			}
+			if ( '' !== $centro['zone'] ) {
+				$zonas[ $centro['zone'] ] = '' !== $centro['zone_name'] ? $centro['zone_name'] : $centro['zone'];
+			}
+		}
+		asort( $islas, SORT_NATURAL | SORT_FLAG_CASE );
+		asort( $zonas, SORT_NATURAL | SORT_FLAG_CASE );
+		return array(
+			'islands' => $islas,
+			'zones'   => $zonas,
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function reasons( int $procedure_id, array $stored ): array {
+		$spec      = self::people_spec( $procedure_id );
+		$preguntas = Applications::questions( $procedure_id );
+		$hoy       = ProcedureState::today();
+		$out       = array();
+		foreach ( $stored as $id => $meta ) {
+			$motivos = ApplicationCompleteness::reasons( $spec, $meta[ ApplicationMetaKeys::PEOPLE ], $preguntas, $meta[ ApplicationMetaKeys::FILES ], $hoy, self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) );
+			if ( array() !== $motivos ) {
+				$out[ $id ] = $motivos;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function narrow( array $census, array $filter, array $catalog, array $incomplete ): array {
+		if ( '' !== $filter['search'] ) {
+
+			cache_users( array_unique( array_map( 'intval', wp_list_pluck( $census['posts'], 'post_author' ) ) ) );
+		}
+		$out = array();
+		foreach ( $census['stored'] as $id => $meta ) {
+			$centro = CentreColumns::attributes( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalog );
+			if ( ( '' !== $filter['review'] && self::state_of( $meta[ ApplicationMetaKeys::REVIEW_STATE ] ) !== $filter['review'] )
+				|| ( '' !== $filter['island'] && $centro['island'] !== $filter['island'] )
+				|| ( '' !== $filter['zone'] && $centro['zone'] !== $filter['zone'] )
+				|| ( true === $filter['incomplete'] && ! isset( $incomplete[ $id ] ) )
+				|| ! ApplicationFilter::matches( (string) $filter['search'], self::searchable( $census['posts'][ $id ], $meta ) ) ) {
+				continue;
+			}
+			$out[] = (int) $id;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function searchable( \WP_Post $post, array $meta ): array {
+		$textos = array( (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ], (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
+		if ( ApplicationMetaKeys::TYPE_TEACHER === $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) {
+			$cuenta = get_userdata( (int) $post->post_author );
+			if ( false !== $cuenta ) {
+				$textos[] = (string) $cuenta->display_name;
+			}
+		}
+		return $textos;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function page( array $ids ): array {
+		if ( array() === $ids ) {
+			return array();
+		}
+		update_meta_cache( 'post', $ids );
+		$posts = array_values( array_filter( array_map( 'get_post', $ids ) ) );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) ) ) );
+		return $posts;
 	}
 }
 
@@ -12563,14 +13332,389 @@ final class PeopleSpecPanel {
 
 
 
-	public static function reviews( array $applications ): array {
+
+
+
+	public static function reviews( array $applications, array $args = array() ): array {
 
 		$pedido = absint( wp_unslash( $_GET[ self::ARG_HISTORY ] ?? 0 ) );
 		$out    = array();
 		foreach ( $applications as $solicitud ) {
-			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido );
+			$out[ (int) $solicitud->ID ] = PeopleForm::review( (int) $solicitud->ID, (int) $solicitud->ID === $pedido, $args );
 		}
 		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\ApplicationFilter;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationsPanel', false ) ) {
+final class ApplicationsPanel {
+
+
+	public const FIELD_ROWS = 'prc_rows';
+
+
+	public const FIELD_PAGE = 'prc_rows_page';
+
+
+	public const FIELD_PAGE_ROWS = 'prc_page_rows';
+
+
+	public const FIELD_EXPORT_SCOPE = 'prc_export_scope';
+
+	public const SCOPE_FILTER = 'filter';
+	public const SCOPE_ALL    = 'all';
+
+
+
+
+
+
+
+	public const BULK_MAX = 50;
+
+
+	public const NOTICE_BULK = 'bloque';
+	public const ARG_DONE    = 'revisadas';
+	public const ARG_FAILED  = 'sin_cambiar';
+
+
+
+
+
+
+
+	public static function filter( array $source ): array {
+		$raw = array();
+		foreach ( ApplicationFilter::args() as $arg ) {
+			if ( isset( $source[ $arg ] ) && is_string( $source[ $arg ] ) ) {
+				$raw[ $arg ] = sanitize_text_field( wp_unslash( $source[ $arg ] ) );
+			}
+		}
+		return ApplicationFilter::sanitize( $raw );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function url( int $procedure_id, array $filter, array $extra = array(), array $changes = array() ): string {
+		$args = array_map( 'rawurlencode', ApplicationFilter::query( $filter, $changes ) );
+		return ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, $args + $extra );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function model( int $procedure_id, int $user_id, array $questions, array $request ): array {
+		$res   = ApplicationQuery::run( $procedure_id, self::filter( $request ) );
+		$filas = Applications::rows( $procedure_id, $res['posts'] );
+		foreach ( $filas as $i => $fila ) {
+			$filas[ $i ]['reasons'] = $res['reasons'][ (int) $fila['id'] ] ?? array();
+		}
+		$args = ApplicationFilter::query( $res['filter'] );
+		return array(
+			'app_cols'     => Applications::columns( $questions ),
+			'applications' => $filas,
+			'export'       => self::export_model( $procedure_id, $user_id, $res ),
+			'people'       => PeopleSpecPanel::reviews( $res['posts'], array_map( 'rawurlencode', $args ) ),
+			'table'        => self::table( $procedure_id, $res ),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function table( int $procedure_id, array $res ): array {
+		$filtro  = $res['filter'];
+		$estados = array(
+			array(
+				'key'     => '',
+				'label'   => 'Todas',
+				'count'   => (int) $res['all'],
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ) ),
+				'current' => '' === $filtro['review'],
+			),
+		);
+		foreach ( ApplicationMetaKeys::review_states() as $clave => $rotulo ) {
+			$estados[] = array(
+				'key'     => $clave,
+				'label'   => $rotulo,
+				'count'   => (int) ( $res['counts'][ $clave ] ?? 0 ),
+
+				'url'     => self::url( $procedure_id, ApplicationFilter::sanitize( array() ), array(), array( 'review' => $clave ) ),
+				'current' => $clave === $filtro['review'],
+			);
+		}
+		$base = ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS );
+		return array(
+			'filter'     => $filtro,
+			'active'     => $res['active'],
+			'args'       => ApplicationFilter::query( $filtro ),
+			'all'        => (int) $res['all'],
+			'total'      => (int) $res['total'],
+			'page'       => (int) $res['page'],
+			'pages'      => (int) $res['pages'],
+			'from'       => (int) $res['from'],
+			'to'         => (int) $res['to'],
+			'states'     => $estados,
+			'incomplete' => array(
+				'possible' => (bool) $res['may_be_incomplete'],
+				'count'    => (int) $res['incomplete'],
+			),
+			'options'    => $res['options'],
+			'zone_label' => CentreColumns::zone_label(),
+			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
+			'pager'      => self::pager( $procedure_id, $filtro, (int) $res['pages'] ),
+			'action'     => strtok( $base, '?' ),
+			'hidden'     => wp_parse_args( (string) wp_parse_url( $base, PHP_URL_QUERY ) ),
+			'reset_url'  => $res['active'] ? $base : '',
+			'page_ids'   => array_map( 'intval', wp_list_pluck( $res['posts'], 'ID' ) ),
+			'bulk_max'   => self::BULK_MAX,
+		);
+	}
+
+
+
+
+
+
+
+
+
+	private static function pager( int $procedure_id, array $filter, int $pages ): array {
+		$actual = (int) $filter['page'];
+		$out    = array(
+			'prev'  => $actual > 1 ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual - 1 ) ) : '',
+			'next'  => $actual < $pages ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual + 1 ) ) : '',
+			'pages' => array(),
+		);
+		$antes  = 0;
+		for ( $n = 1; $n <= $pages; $n++ ) {
+			if ( 1 !== $n && $pages !== $n && abs( $n - $actual ) > 2 ) {
+				continue;
+			}
+			if ( $n - $antes > 1 ) {
+				$out['pages'][] = array(
+					'n'   => 0,
+					'url' => '',
+				);
+			}
+			$out['pages'][] = array(
+				'n'   => $n,
+				'url' => self::url( $procedure_id, $filter, array(), array( 'page' => $n ) ),
+			);
+			$antes          = $n;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function export_model( int $procedure_id, int $user_id, array $res ): array {
+		$todas = array_values( array_filter( array_map( 'get_post', array_keys( $res['stored'] ) ) ) );
+		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $todas, 'post_author' ) ) ) );
+		$fuentes = ApplicationExport::who( $procedure_id );
+		$quienes = array();
+		foreach ( ApplicationExport::who_counts( $todas, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
+		}
+		if ( $res['active'] ) {
+			$del_filtro = array_values( array_filter( array_map( 'get_post', $res['ids'] ) ) );
+			foreach ( ApplicationExport::who_counts( $del_filtro, array_keys( $fuentes ), $res['stored'] ) as $clave => $cuenta ) {
+				$quienes[ $clave ]['filter'] = $cuenta;
+			}
+		}
+		return array(
+			'groups'       => ApplicationExport::groups( $procedure_id ),
+			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
+			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
+			'who'          => $quienes,
+			'filtered'     => $res['active'],
+			'count'        => $res['active'] ? count( $res['ids'] ) : (int) $res['all'],
+			'all'          => (int) $res['all'],
+			'args'         => ApplicationFilter::query( array( 'page' => 1 ) + $res['filter'] ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function export_ids( int $procedure_id, array $post ): ?array {
+		$filtro = self::filter( $post );
+		$ambito = isset( $post[ self::FIELD_EXPORT_SCOPE ] ) && is_string( $post[ self::FIELD_EXPORT_SCOPE ] ) ? sanitize_key( wp_unslash( $post[ self::FIELD_EXPORT_SCOPE ] ) ) : self::SCOPE_FILTER;
+		if ( self::SCOPE_ALL === $ambito || ! ApplicationFilter::active( $filtro ) ) {
+			return null;
+		}
+		return ApplicationQuery::ids( $procedure_id, $filtro );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function posted_ids( array $post ): array {
+		$marcadas = isset( $post[ self::FIELD_ROWS ] ) && is_array( $post[ self::FIELD_ROWS ] ) ? $post[ self::FIELD_ROWS ] : array();
+		if ( ! empty( $post[ self::FIELD_PAGE ] ) && isset( $post[ self::FIELD_PAGE_ROWS ] ) && is_string( $post[ self::FIELD_PAGE_ROWS ] ) ) {
+			$marcadas = array_merge( $marcadas, explode( ',', wp_unslash( $post[ self::FIELD_PAGE_ROWS ] ) ) );
+		}
+		$ids = array();
+		foreach ( $marcadas as $id ) {
+
+			$id = is_scalar( $id ) && ctype_digit( trim( (string) $id ) ) ? (int) $id : 0;
+			if ( $id > 0 ) {
+				$ids[ $id ] = $id;
+			}
+		}
+		return array_values( $ids );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function bulk( int $procedure_id, array $ids, string $state, string $note ): array {
+		$out = array(
+			'error'  => '',
+			'done'   => 0,
+			'failed' => 0,
+		);
+		if ( array() === $ids ) {
+			$out['error'] = 'Marque al menos una solicitud para cambiar su revisión.';
+			return $out;
+		}
+		if ( count( $ids ) > self::BULK_MAX ) {
+			$out['error'] = sprintf( 'Como mucho se cambian %1$d solicitudes a la vez, y ha marcado %2$d. No se ha cambiado ninguna.', self::BULK_MAX, count( $ids ) );
+			return $out;
+		}
+		if ( ! isset( ApplicationMetaKeys::review_states()[ $state ] ) ) {
+			$out['error'] = 'Ese estado de revisión no existe. No se ha cambiado ninguna solicitud.';
+			return $out;
+		}
+		if ( '' === trim( $note ) && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
+			$out['error'] = 'Para pedir subsanar o para excluir hay que escribir una nota: cada centro tiene que leer qué se le pide o por qué. No se ha cambiado ninguna solicitud.';
+			return $out;
+		}
+
+		$nota = '' === trim( $note ) ? null : $note;
+		foreach ( $ids as $id ) {
+			$suya = ApplicationPostType::POST_TYPE === get_post_type( $id ) && 'publish' === get_post_status( $id ) && (int) wp_get_post_parent_id( $id ) === $procedure_id;
+			if ( $suya && Applications::review( $id, $state, $nota )['ok'] ) {
+				++$out['done'];
+				continue;
+			}
+			++$out['failed'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function bulk_notice( array $request ): array {
+		$hechas = isset( $request[ self::ARG_DONE ] ) && is_string( $request[ self::ARG_DONE ] ) ? absint( $request[ self::ARG_DONE ] ) : 0;
+		$fallos = isset( $request[ self::ARG_FAILED ] ) && is_string( $request[ self::ARG_FAILED ] ) ? absint( $request[ self::ARG_FAILED ] ) : 0;
+		$texto  = 1 === $hechas ? 'Se ha cambiado la revisión de 1 solicitud.' : sprintf( 'Se ha cambiado la revisión de %d solicitudes.', $hechas );
+		if ( $fallos > 0 ) {
+			$texto .= ' ' . ( 1 === $fallos
+				? '1 no se ha podido cambiar (no es de este procedimiento o ya no está publicada).'
+				: sprintf( '%d no se han podido cambiar (no son de este procedimiento o ya no están publicadas).', $fallos ) );
+		}
+		return array(
+			'tipo'  => $fallos > 0 ? 'aviso' : 'ok',
+			'texto' => $texto,
+		);
 	}
 }
 
@@ -15538,17 +16682,750 @@ final class Workspace {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\ApplicationsPanel;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\CentreColumns;
+use Prc\PublicFront\ProcedureEditor;
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ExportDialogView', false ) ) {
+final class ExportDialogView {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function html( array $m ): string {
+		$op       = ProcedureEditor::OP_EXPORT;
+		$export   = (array) ( $m['export'] ?? array() );
+		$eleccion = (array) ( $export['choice'] ?? array() );
+		$columnas = (array) ( $eleccion['columns'] ?? array() );
+		$quienes  = (array) ( $eleccion['who'] ?? array() );
+		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
+		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
+
+		$radios_formato = self::radios(
+			ProcedureEditor::FIELD_EXPORT_FORMAT,
+			array(
+				ApplicationExport::FORMAT_CSV    => 'Hoja de cálculo (CSV)',
+				ApplicationExport::FORMAT_MOODLE => 'Fichero de alta de usuarios de Moodle',
+			),
+			$formato,
+			'data-prc-export-format'
+		);
+		$radios_forma   = self::radios(
+			ProcedureEditor::FIELD_EXPORT_SHAPE,
+			array(
+				ApplicationExport::SHAPE_APPLICATION => 'Solicitud',
+				ApplicationExport::SHAPE_PERSON      => 'Persona coordinadora: la solicitud se repite en cada una',
+			),
+			$forma
+		);
+
+		ob_start();
+		?>
+		<details class="prc-exportar" data-prc-export>
+			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
+			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
+				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<?php echo self::scope( $export );?>
+
+				<fieldset class="prc-exportar__grupo">
+					<legend>Formato</legend>
+					<?php echo $radios_formato;?>
+				</fieldset>
+
+				<div class="prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_CSV ); ?>">
+					<fieldset class="prc-exportar__grupo">
+						<legend>Una fila por</legend>
+						<?php echo $radios_forma;?>
+					</fieldset>
+					<fieldset class="prc-exportar__grupo">
+						<legend>Columnas</legend>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
+							Todas las columnas
+						</label>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
+						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
+							<?php
+							if ( array() === $de_grupo ) {
+								continue;
+							}
+							?>
+							<fieldset class="prc-exportar__columnas">
+								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
+								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<?php
+
+
+									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
+									?>
+									<label class="prc-casilla">
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<?php echo esc_html( (string) $rotulo ); ?>
+									</label>
+								<?php endforeach; ?>
+							</fieldset>
+						<?php endforeach; ?>
+					</fieldset>
+				</div>
+
+				<fieldset class="prc-exportar__grupo prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_MOODLE ); ?>">
+					<legend>Quiénes salen en el fichero de usuarios</legend>
+					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
+							<?php echo self::who_counts( (array) $quien, ! empty( $export['filtered'] ) );?>
+						</label>
+					<?php endforeach; ?>
+					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
+				</fieldset>
+
+				<div class="prc-acciones">
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+				</div>
+			</form>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function scope( array $export ): string {
+		if ( empty( $export['filtered'] ) ) {
+			return '';
+		}
+		$cuenta = (int) ( $export['count'] ?? 0 );
+		$todas  = (int) ( $export['all'] ?? 0 );
+		return ApplicationsPanelView::carry( (array) ( $export['args'] ?? array() ) )
+			. '<fieldset class="prc-exportar__grupo prc-exportar__cuales">'
+			. '<legend>Qué solicitudes</legend>'
+			. '<p class="prc-campo__ayuda">' . esc_html( sprintf( 1 === $cuenta ? 'Se exportará %d solicitud (filtro activo).' : 'Se exportarán %d solicitudes (filtro activo).', $cuenta ) ) . ' Los recuentos de quién sale en el fichero de usuarios se dan para las dos opciones.</p>'
+			. self::radios(
+				ApplicationsPanel::FIELD_EXPORT_SCOPE,
+				array(
+					ApplicationsPanel::SCOPE_FILTER => sprintf( 'Las del filtro (%d)', $cuenta ),
+					ApplicationsPanel::SCOPE_ALL    => sprintf( 'Todas (%d)', $todas ),
+				),
+				ApplicationsPanel::SCOPE_FILTER,
+				'data-prc-export-scope'
+			)
+			. '</fieldset>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function radios( string $name, array $options, string $selected, string $marca = '' ): string {
+		$out = '';
+		foreach ( $options as $valor => $rotulo ) {
+			$out .= sprintf(
+				'<label class="prc-casilla"><input type="radio" name="%1$s" value="%2$s"%3$s%4$s /> %5$s</label>',
+				esc_attr( $name ),
+				esc_attr( (string) $valor ),
+				'' !== $marca ? ' ' . esc_attr( $marca ) : '',
+				checked( (string) $valor, $selected, false ),
+				esc_html( $rotulo )
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function who_counts( array $quien, bool $filtered ): string {
+		if ( ! $filtered ) {
+			return esc_html( self::who_label( $quien ) );
+		}
+		$out = esc_html( (string) ( $quien['label'] ?? '' ) );
+		foreach ( array(
+			ApplicationsPanel::SCOPE_FILTER => array( 'las del filtro', (array) ( $quien['filter'] ?? array() ) ),
+			ApplicationsPanel::SCOPE_ALL    => array( 'todas', $quien ),
+		) as $ambito => list( $rotulo, $cuenta ) ) {
+			$out .= ' <span data-prc-export-scope-count="' . esc_attr( $ambito ) . '">'
+				. esc_html( self::who_label( array( 'label' => $rotulo . ':' ) + $cuenta ) ) . '</span>';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function who_label( array $quien ): string {
+		$cuenta  = (int) ( $quien['count'] ?? 0 );
+		$motivos = array(
+			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
+			'incomplete' => array( '%d incompleta', '%d incompletas' ),
+			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
+		);
+		$fuera   = array();
+		foreach ( $motivos as $clave => list( $una, $varias ) ) {
+			$n = (int) ( $quien[ $clave ] ?? 0 );
+			if ( $n > 0 ) {
+				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
+			}
+		}
+		$texto = sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		if ( array() !== $fuera ) {
+			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
+		}
+		$rotulo = (string) ( $quien['label'] ?? '' );
+
+		return ':' === substr( $rotulo, -1 ) ? '(' . $rotulo . ' ' . $texto . ')' : $rotulo . ' (' . $texto . ')';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
+use Prc\Domain\ApplicationFilter;
+use Prc\Domain\ProcedureQuestions;
+use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\Applications;
+use Prc\PublicFront\ApplicationsPanel;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ApplicationsPanelView', false ) ) {
+final class ApplicationsPanelView {
+
+
+	public const BULK_FORM = 'prc-bloque';
+
+
+
+
+
+
+
+	public static function html( array $m ): string {
+		$t       = (array) ( $m['table'] ?? array() );
+		$docente = ! empty( $t['teachers'] );
+		if ( 0 === (int) ( $t['all'] ?? 0 ) ) {
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
+				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
+		}
+		$cerrado = true !== $m['can_review'];
+
+		ob_start();
+		?>
+		<div class="prc-banda-tabla">
+			<p class="prc-recuento"><?php echo esc_html( self::count_text( $t ) ); ?></p>
+			<?php echo $cerrado ? '<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Solo lectura</legend>' : ''; ?>
+			<?php echo ExportDialogView::html( $m );?>
+			<?php echo $cerrado ? '</fieldset>' : ''; ?>
+		</div>
+		<?php
+		echo self::states( $t );
+		echo self::filters( $m, $t );
+		if ( 0 === (int) $t['total'] ) {
+			echo '<p class="prc-vacio">Ninguna solicitud cumple el filtro.';
+			echo '' !== (string) $t['reset_url'] ? ' <a href="' . esc_url( (string) $t['reset_url'] ) . '">Quitar los filtros</a>' : '';
+			echo '</p>';
+			return (string) ob_get_clean();
+		}
+		echo $cerrado ? '<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Solo lectura</legend>' : '';
+		echo self::bulk_form( $m, $t );
+		echo self::table( $m, $docente );
+		echo $cerrado ? '</fieldset>' : '';
+		echo self::pager( $t );
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	public static function carry( array $args ): string {
+		$out = '';
+		foreach ( $args as $nombre => $valor ) {
+			$out .= '<input type="hidden" name="' . esc_attr( (string) $nombre ) . '" value="' . esc_attr( (string) $valor ) . '" />';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function count_text( array $t ): string {
+		$total = (int) $t['total'];
+		if ( empty( $t['active'] ) && 1 === (int) $t['pages'] ) {
+			return sprintf( 1 === $total ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $total )
+				. ' Cada una se revisa desde su fila, o varias a la vez marcándolas; al exportar se eligen las columnas, una fila por solicitud o por persona, o el fichero de alta de usuarios.';
+		}
+		if ( 0 === $total ) {
+			return sprintf( 'Ninguna de las %d solicitudes cumple el filtro.', (int) $t['all'] );
+		}
+		$texto = sprintf( 'Mostrando %1$d–%2$d de %3$d solicitudes', (int) $t['from'], (int) $t['to'], $total );
+		return $texto . ( empty( $t['active'] ) ? '.' : sprintf( ' que cumplen el filtro, de %d en total.', (int) $t['all'] ) );
+	}
+
+
+
+
+
+
+
+
+
+	private static function states( array $t ): string {
+		$out = '<ul class="prc-contadores" aria-label="Solicitudes por estado de revisión">';
+		foreach ( (array) $t['states'] as $estado ) {
+			$out .= sprintf(
+				'<li><a class="prc-contadores__enlace" href="%1$s"%2$s>%3$s <span class="prc-contadores__cifra">%4$d</span></a></li>',
+				esc_url( (string) $estado['url'] ),
+				$estado['current'] ? ' aria-current="true"' : '',
+				esc_html( (string) $estado['label'] ),
+				(int) $estado['count']
+			);
+		}
+		return $out . '</ul>';
+	}
+
+
+
+
+
+
+
+
+	private static function filters( array $m, array $t ): string {
+		$f        = (array) $t['filter'];
+		$opciones = (array) $t['options'];
+		$estados  = array( '' => 'Todos los estados' ) + (array) $m['review_states'];
+		ob_start();
+		?>
+		<form class="prc-filtros" method="get" action="<?php echo esc_url( (string) $t['action'] ); ?>" role="search" aria-label="Filtrar las solicitudes">
+			<?php echo self::carry( (array) $t['hidden'] );?>
+			<div class="prc-filtros__campo">
+				<label class="prc-campo__etiqueta" for="prc-filtro-buscar"><?php echo esc_html( empty( $t['teachers'] ) ? 'Centro o código' : 'Nombre de la persona' ); ?></label>
+				<input class="prc-control" type="search" id="prc-filtro-buscar" name="<?php echo esc_attr( ApplicationFilter::ARG_SEARCH ); ?>" value="<?php echo esc_attr( (string) $f['search'] ); ?>" maxlength="<?php echo esc_attr( (string) ApplicationFilter::MAX_SEARCH ); ?>" />
+			</div>
+			<?php echo self::select( 'prc-filtro-estado', ApplicationFilter::ARG_REVIEW, 'Estado de revisión', $estados, (string) $f['review'] );?>
+			<?php
+			if ( array() !== (array) $opciones['islands'] ) {
+				echo self::select( 'prc-filtro-isla', ApplicationFilter::ARG_ISLAND, 'Isla', array( '' => 'Todas las islas' ) + (array) $opciones['islands'], (string) $f['island'] );
+			}
+			if ( array() !== (array) $opciones['zones'] ) {
+				echo self::select( 'prc-filtro-zona', ApplicationFilter::ARG_ZONE, (string) $t['zone_label'], array( '' => 'Todas' ) + (array) $opciones['zones'], (string) $f['zone'] );
+			}
+			?>
+			<?php if ( ! empty( $t['incomplete']['possible'] ) ) : ?>
+				<label class="prc-casilla prc-filtros__casilla">
+					<input type="checkbox" name="<?php echo esc_attr( ApplicationFilter::ARG_INCOMPLETE ); ?>" value="1" <?php checked( true === $f['incomplete'] ); ?> />
+					<?php echo esc_html( sprintf( 'Solo las incompletas (%d)', (int) $t['incomplete']['count'] ) ); ?>
+				</label>
+			<?php endif; ?>
+			<div class="prc-filtros__acciones">
+				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Filtrar</button>
+				<?php if ( '' !== (string) $t['reset_url'] ) : ?>
+					<a class="prc-filtros__quitar" href="<?php echo esc_url( (string) $t['reset_url'] ); ?>">Quitar los filtros</a>
+				<?php endif; ?>
+			</div>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function select( string $id, string $name, string $label, array $options, string $selected ): string {
+		$out = '<div class="prc-filtros__campo"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label>'
+			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
+		foreach ( $options as $valor => $rotulo ) {
+			$out .= '<option value="' . esc_attr( (string) $valor ) . '"' . selected( (string) $valor, $selected, false ) . '>' . esc_html( (string) $rotulo ) . '</option>';
+		}
+		return $out . '</select></div>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function bulk_form( array $m, array $t ): string {
+		$op     = ProcedureEditor::OP_BULK_REVIEW;
+		$pagina = array_map( 'intval', (array) $t['page_ids'] );
+		ob_start();
+		?>
+		<details class="prc-bloque">
+			<summary class="prc-revision__abrir">Revisar varias a la vez</summary>
+			<form class="prc-form prc-form--taller prc-bloque__form" id="<?php echo esc_attr( self::BULK_FORM ); ?>" method="post" action=""
+				data-prc-confirm="¿Cambiar la revisión de las solicitudes marcadas? Cada una recibe el mismo estado y la misma nota, y a cada centro le llega su aviso por correo."
+				data-prc-confirm-ok="Cambiar la revisión">
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE_ROWS ); ?>" value="<?php echo esc_attr( implode( ',', $pagina ) ); ?>" />
+				<?php echo self::carry( (array) $t['args'] );?>
+				<p class="prc-campo__ayuda">Marque las solicitudes en la primera columna de la tabla, o todas las de esta página. Como mucho <?php echo esc_html( (string) (int) $t['bulk_max'] ); ?> a la vez: a cada centro le sale su correo en el mismo envío, así que con muchas tarda un poco.</p>
+				<label class="prc-casilla">
+					<input type="checkbox" name="<?php echo esc_attr( ApplicationsPanel::FIELD_PAGE ); ?>" value="1" data-prc-bulk-page />
+					<?php echo esc_html( sprintf( 'Marcar las de esta página (%d)', count( $pagina ) ) ); ?>
+				</label>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-bloque-estado">Estado</label>
+					<select class="prc-control" id="prc-bloque-estado" name="<?php echo esc_attr( ProcedureEditor::FIELD_STATE ); ?>">
+						<?php foreach ( (array) $m['review_states'] as $clave => $rotulo ) : ?>
+							<option value="<?php echo esc_attr( (string) $clave ); ?>"><?php echo esc_html( (string) $rotulo ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-bloque-nota">Nota para los centros</label>
+					<textarea class="prc-control" id="prc-bloque-nota" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3" aria-describedby="prc-bloque-nota-ayuda"></textarea>
+					<p class="prc-campo__ayuda" id="prc-bloque-nota-ayuda">La nota se aplica a todas las marcadas y sustituye la que tuvieran. En blanco, cada una conserva la suya; al pedir subsanar y al excluir es obligatoria. Cada centro la lee en su solicitud.</p>
+				</div>
+				<?php echo PanelParts::submit( 'Cambiar la revisión de las marcadas' );?>
+			</form>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function table( array $m, bool $docente ): string {
+		ob_start();
+		?>
+		<div class="prc-tabla-caja prc-panel-solicitudes">
+			<table class="prc-tabla prc-tabla--densa table">
+				<caption class="screen-reader-text">Solicitudes presentadas a este procedimiento</caption>
+				<thead>
+					<tr>
+						<th class="prc-th prc-th--marca" scope="col"><span class="screen-reader-text">Marcar para revisar en bloque</span></th>
+						<?php if ( $docente ) : ?>
+							<th class="prc-th" scope="col">Docente</th>
+							<th class="prc-th" scope="col">Correo</th>
+						<?php else : ?>
+							<th class="prc-th" scope="col">Centro</th>
+							<th class="prc-th" scope="col">Código</th>
+						<?php endif; ?>
+						<th class="prc-th" scope="col">Fecha</th>
+						<?php if ( ! $docente ) : ?>
+							<th class="prc-th" scope="col">Cargo</th>
+							<th class="prc-th" scope="col">Coordinación</th>
+						<?php endif; ?>
+						<?php echo self::score_cell( $m );?>
+						<th class="prc-th" scope="col">Revisión</th>
+						<th class="prc-th" scope="col">Acciones</th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( (array) $m['applications'] as $fila ) : ?>
+						<?php $quien = $docente ? (string) $fila['applicant'] : ( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : (string) $fila['code'] ); ?>
+						<tr data-estado="<?php echo esc_attr( (string) $fila['state_key'] ); ?>"<?php echo array() !== (array) ( $fila['reasons'] ?? array() ) ? ' data-incompleta' : ''; ?>>
+							<td class="prc-celda prc-celda--marca" data-rotulo="Marcar">
+								<input type="checkbox" form="<?php echo esc_attr( self::BULK_FORM ); ?>" name="<?php echo esc_attr( ApplicationsPanel::FIELD_ROWS ); ?>[]" value="<?php echo esc_attr( (string) (int) $fila['id'] ); ?>" data-prc-bulk-row
+									aria-label="<?php echo esc_attr( 'Marcar la solicitud de ' . $quien ); ?>" />
+							</td>
+							<?php if ( $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Docente"><?php echo esc_html( (string) $fila['applicant'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Correo"><?php echo esc_html( (string) $fila['email'] ); ?></td>
+							<?php else : ?>
+								<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
+								<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
+							<?php endif; ?>
+							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
+							<?php if ( ! $docente ) : ?>
+								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
+								<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) );?></td>
+							<?php endif; ?>
+							<?php echo self::score_cell( $m, $fila );?>
+							<td class="prc-celda" data-rotulo="Revisión">
+								<?php echo ProcedureEditorView::badge( (string) $fila['state_key'], (string) $fila['state'] );?>
+								<?php echo self::reasons( (array) ( $fila['reasons'] ?? array() ) );?>
+							</td>
+							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function reasons( array $reasons ): string {
+		if ( array() === $reasons ) {
+			return '';
+		}
+		$out = '<div class="prc-incompleta"><span class="prc-incompleta__titulo">Incompleta</span><ul class="prc-incompleta__motivos">';
+		foreach ( $reasons as $motivo ) {
+			$out .= '<li>' . esc_html( (string) $motivo ) . '</li>';
+		}
+		return $out . '</ul></div>';
+	}
+
+
+
+
+
+
+
+	private static function pager( array $t ): string {
+		if ( (int) $t['pages'] <= 1 ) {
+			return '';
+		}
+		$p   = (array) $t['pager'];
+		$out = '<nav class="prc-paginacion" aria-label="Páginas de solicitudes"><ul class="prc-paginacion__lista">';
+		if ( '' !== (string) $p['prev'] ) {
+			$out .= '<li><a class="prc-paginacion__enlace" href="' . esc_url( (string) $p['prev'] ) . '" rel="prev">Anterior</a></li>';
+		}
+		foreach ( (array) $p['pages'] as $una ) {
+			if ( 0 === (int) $una['n'] ) {
+				$out .= '<li class="prc-paginacion__hueco" aria-hidden="true">…</li>';
+			} elseif ( (int) $una['n'] === (int) $t['page'] ) {
+				$out .= '<li><span class="prc-paginacion__actual" aria-current="page">' . (int) $una['n'] . '</span></li>';
+			} else {
+				$out .= '<li><a class="prc-paginacion__enlace" href="' . esc_url( (string) $una['url'] ) . '">' . (int) $una['n'] . '</a></li>';
+			}
+		}
+		if ( '' !== (string) $p['next'] ) {
+			$out .= '<li><a class="prc-paginacion__enlace" href="' . esc_url( (string) $p['next'] ) . '" rel="next">Siguiente</a></li>';
+		}
+		return $out . '</ul></nav>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function score_cell( array $m, ?array $fila = null ): string {
+		if ( ! isset( $m['app_cols']['score'] ) ) {
+			return '';
+		}
+		if ( null === $fila ) {
+			return '<th class="prc-th" scope="col">Puntos</th>';
+		}
+		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
+	}
+
+
+
+
+
+
+
+	private static function dash( string $texto ): string {
+		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function download( array $fila, string $key ): string {
+		$adjuntos = isset( $fila[ Applications::KEY_FILES ] ) && is_array( $fila[ Applications::KEY_FILES ] )
+			? $fila[ Applications::KEY_FILES ]
+			: array();
+		$doc      = isset( $adjuntos[ $key ] ) && is_array( $adjuntos[ $key ] ) ? $adjuntos[ $key ] : array();
+		if ( array() === $doc || '' === (string) ( $doc['id'] ?? '' ) ) {
+			return '<span class="prc-sindato" title="Sin documento">&mdash;</span>';
+		}
+
+		return sprintf(
+			'<a class="prc-descarga" href="%1$s" download>%2$s</a>',
+			esc_url( ApplicationFiles::url( (int) ( $doc['application'] ?? 0 ), (string) $doc['id'] ) ),
+			esc_html( '' !== (string) ( $doc['name'] ?? '' ) ? (string) $doc['name'] : 'Descargar' )
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function review_form( array $m, array $fila ): string {
+		$op = ProcedureEditor::OP_REVIEW;
+		$id = (int) $fila['id'];
+
+		ob_start();
+		?>
+		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
+			<summary class="prc-revision__abrir">Revisar</summary>
+			<dl class="prc-respuestas">
+				<dt>Presentada por</dt>
+				<dd><?php echo esc_html( trim( (string) $fila['applicant'] . ' ' . (string) $fila['email'] ) ); ?></dd>
+				<?php foreach ( (array) $m['questions'] as $pregunta ) : ?>
+					<dt><?php echo esc_html( (string) $pregunta['label'] ); ?></dt>
+					<?php
+
+
+					$respuesta = ProcedureQuestions::TYPE_FILE === (string) ( $pregunta['type'] ?? '' )
+						? self::download( $fila, (string) $pregunta['key'] )
+						: esc_html( '' !== (string) ( $fila[ $pregunta['key'] ] ?? '' ) ? (string) $fila[ $pregunta['key'] ] : '—' );
+					?>
+					<dd><?php echo $respuesta;?></dd>
+				<?php endforeach; ?>
+			</dl>
+			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
+			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
+				<?php echo self::carry( (array) ( $m['table']['args'] ?? array() ) );?>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-state-<?php echo esc_attr( (string) $id ); ?>">Estado</label>
+					<select class="prc-control" id="prc-state-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_STATE ); ?>">
+						<?php foreach ( (array) $m['review_states'] as $clave => $rotulo ) : ?>
+							<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $fila['state_key'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-note-<?php echo esc_attr( (string) $id ); ?>">Nota para el centro</label>
+					<textarea class="prc-control" id="prc-note-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3"
+						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
+					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
+				</div>
+				<?php echo PanelParts::submit( 'Guardar la revisión' );?>
+			</form>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
-use Prc\PublicFront\ApplicationExport;
-use Prc\PublicFront\ApplicationFiles;
-use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
-use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -15608,7 +17485,7 @@ final class ProcedureEditorView {
 		} elseif ( ProcedureEditor::PANEL_LINKS === $panel ) {
 			echo self::links_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			echo self::applications_panel( $m );
+			echo ApplicationsPanelView::html( $m );
 		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
 
 			echo self::deliveries_panel( $m );
@@ -15645,7 +17522,9 @@ final class ProcedureEditorView {
 
 	private static function read_only( array $m, string $panel ): bool {
 		if ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			return true !== $m['can_review'];
+
+
+			return false;
 		}
 		if ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
 			return true !== $m['can_edit'];
@@ -16595,361 +18474,6 @@ final class ProcedureEditorView {
 
 
 
-	private static function applications_panel( array $m ): string {
-		$filas   = (array) $m['applications'];
-		$docente = ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) ( $m['values'][ ProcedureMetaKeys::AUDIENCE ] ?? '' );
-		if ( array() === $filas ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Todavía no hay solicitudes</h2>'
-				. '<p class="prc-vacio">Cuando ' . ( $docente ? 'un docente' : 'un centro' ) . ' solicite saldrá en esta tabla, y desde ella podrá revisar la solicitud y exportar la lista a CSV.</p></section>';
-		}
-		$cuenta = count( $filas );
-
-		ob_start();
-		?>
-		<div class="prc-banda-tabla">
-			<p class="prc-recuento">
-				<?php echo esc_html( sprintf( 1 === $cuenta ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $cuenta ) ); ?>
-				Cada una se revisa desde su fila; al exportar se eligen las columnas, una fila por solicitud o por persona, o el fichero de alta de usuarios.
-			</p>
-			<?php echo self::export_form( $m );?>
-		</div>
-		<div class="prc-tabla-caja prc-panel-solicitudes">
-			<table class="prc-tabla prc-tabla--densa table">
-				<caption class="screen-reader-text">Solicitudes presentadas a este procedimiento</caption>
-				<thead>
-					<tr>
-						<?php if ( $docente ) : ?>
-							<th class="prc-th" scope="col">Docente</th>
-							<th class="prc-th" scope="col">Correo</th>
-						<?php else : ?>
-							<th class="prc-th" scope="col">Centro</th>
-							<th class="prc-th" scope="col">Código</th>
-						<?php endif; ?>
-						<th class="prc-th" scope="col">Fecha</th>
-						<?php if ( ! $docente ) : ?>
-							<th class="prc-th" scope="col">Cargo</th>
-							<th class="prc-th" scope="col">Coordinación</th>
-						<?php endif; ?>
-						<?php echo self::score_cell( $m );?>
-						<th class="prc-th" scope="col">Revisión</th>
-						<th class="prc-th" scope="col">Acciones</th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php foreach ( $filas as $fila ) : ?>
-						<tr data-estado="<?php echo esc_attr( (string) $fila['state_key'] ); ?>">
-							<?php if ( $docente ) : ?>
-								<td class="prc-celda" data-rotulo="Docente"><?php echo esc_html( (string) $fila['applicant'] ); ?></td>
-								<td class="prc-celda" data-rotulo="Correo"><?php echo esc_html( (string) $fila['email'] ); ?></td>
-							<?php else : ?>
-								<td class="prc-celda" data-rotulo="Centro"><?php echo esc_html( '' !== (string) $fila['centre'] ? (string) $fila['centre'] : '(centro fuera del catálogo)' ); ?></td>
-								<td class="prc-celda" data-rotulo="Código"><?php echo esc_html( (string) $fila['code'] ); ?></td>
-							<?php endif; ?>
-							<td class="prc-celda" data-rotulo="Fecha"><?php echo esc_html( (string) $fila['date_label'] ); ?></td>
-							<?php if ( ! $docente ) : ?>
-								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
-					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) );?></td>
-							<?php endif; ?>
-							<?php echo self::score_cell( $m, $fila );?>
-							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] );?></td>
-							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
-		</div>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-
-
-
-	private static function score_cell( array $m, ?array $fila = null ): string {
-		if ( ! isset( $m['app_cols']['score'] ) ) {
-			return '';
-		}
-		if ( null === $fila ) {
-			return '<th class="prc-th" scope="col">Puntos</th>';
-		}
-		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
-	}
-
-
-
-
-
-
-
-	private static function dash( string $texto ): string {
-		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function download( array $fila, string $key ): string {
-		$adjuntos = isset( $fila[ Applications::KEY_FILES ] ) && is_array( $fila[ Applications::KEY_FILES ] )
-			? $fila[ Applications::KEY_FILES ]
-			: array();
-		$doc      = isset( $adjuntos[ $key ] ) && is_array( $adjuntos[ $key ] ) ? $adjuntos[ $key ] : array();
-		if ( array() === $doc || '' === (string) ( $doc['id'] ?? '' ) ) {
-			return '<span class="prc-sindato" title="Sin documento">&mdash;</span>';
-		}
-
-		return sprintf(
-			'<a class="prc-descarga" href="%1$s" download>%2$s</a>',
-			esc_url( ApplicationFiles::url( (int) ( $doc['application'] ?? 0 ), (string) $doc['id'] ) ),
-			esc_html( '' !== (string) ( $doc['name'] ?? '' ) ? (string) $doc['name'] : 'Descargar' )
-		);
-	}
-
-
-
-
-
-
-
-
-	private static function review_form( array $m, array $fila ): string {
-		$op = ProcedureEditor::OP_REVIEW;
-		$id = (int) $fila['id'];
-
-		ob_start();
-		?>
-		<details class="prc-revision"<?php echo empty( $m['people'][ $id ]['open'] ) ? '' : ' open'; ?>>
-			<summary class="prc-revision__abrir">Revisar</summary>
-			<dl class="prc-respuestas">
-				<dt>Presentada por</dt>
-				<dd><?php echo esc_html( trim( (string) $fila['applicant'] . ' ' . (string) $fila['email'] ) ); ?></dd>
-				<?php foreach ( (array) $m['questions'] as $pregunta ) : ?>
-					<dt><?php echo esc_html( (string) $pregunta['label'] ); ?></dt>
-					<?php
-
-
-					$respuesta = ProcedureQuestions::TYPE_FILE === (string) ( $pregunta['type'] ?? '' )
-						? self::download( $fila, (string) $pregunta['key'] )
-						: esc_html( '' !== (string) ( $fila[ $pregunta['key'] ] ?? '' ) ? (string) $fila[ $pregunta['key'] ] : '—' );
-					?>
-					<dd><?php echo $respuesta;?></dd>
-				<?php endforeach; ?>
-			</dl>
-			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
-			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_ROW ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="prc-state-<?php echo esc_attr( (string) $id ); ?>">Estado</label>
-					<select class="prc-control" id="prc-state-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_STATE ); ?>">
-						<?php foreach ( (array) $m['review_states'] as $clave => $rotulo ) : ?>
-							<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $fila['state_key'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
-						<?php endforeach; ?>
-					</select>
-				</div>
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="prc-note-<?php echo esc_attr( (string) $id ); ?>">Nota para el centro</label>
-					<textarea class="prc-control" id="prc-note-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTE ); ?>" rows="3"
-						aria-describedby="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>"><?php echo esc_textarea( (string) $fila['note'] ); ?></textarea>
-					<p class="prc-campo__ayuda" id="prc-note-ayuda-<?php echo esc_attr( (string) $id ); ?>">Obligatoria al pedir subsanar y al excluir: el centro la lee en su solicitud.</p>
-				</div>
-				<?php echo PanelParts::submit( 'Guardar la revisión' );?>
-			</form>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function export_form( array $m ): string {
-		$op       = ProcedureEditor::OP_EXPORT;
-		$export   = (array) ( $m['export'] ?? array() );
-		$eleccion = (array) ( $export['choice'] ?? array() );
-		$columnas = (array) ( $eleccion['columns'] ?? array() );
-		$quienes  = (array) ( $eleccion['who'] ?? array() );
-		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
-		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
-
-		$radios_formato = self::export_radio(
-			ProcedureEditor::FIELD_EXPORT_FORMAT,
-			array(
-				ApplicationExport::FORMAT_CSV    => 'Hoja de cálculo (CSV)',
-				ApplicationExport::FORMAT_MOODLE => 'Fichero de alta de usuarios de Moodle',
-			),
-			$formato,
-			'data-prc-export-format'
-		);
-		$radios_forma   = self::export_radio(
-			ProcedureEditor::FIELD_EXPORT_SHAPE,
-			array(
-				ApplicationExport::SHAPE_APPLICATION => 'Solicitud',
-				ApplicationExport::SHAPE_PERSON      => 'Persona coordinadora: la solicitud se repite en cada una',
-			),
-			$forma
-		);
-
-		ob_start();
-		?>
-		<details class="prc-exportar" data-prc-export>
-			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
-			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
-				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-
-				<fieldset class="prc-exportar__grupo">
-					<legend>Formato</legend>
-					<?php echo $radios_formato;?>
-				</fieldset>
-
-				<div class="prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_CSV ); ?>">
-					<fieldset class="prc-exportar__grupo">
-						<legend>Una fila por</legend>
-						<?php echo $radios_forma;?>
-					</fieldset>
-					<fieldset class="prc-exportar__grupo">
-						<legend>Columnas</legend>
-						<label class="prc-casilla">
-							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
-							Todas las columnas
-						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
-						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
-							<?php
-							if ( array() === $de_grupo ) {
-								continue;
-							}
-							?>
-							<fieldset class="prc-exportar__columnas">
-								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
-								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
-									<?php
-
-
-									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
-									?>
-									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
-										<?php echo esc_html( (string) $rotulo ); ?>
-									</label>
-								<?php endforeach; ?>
-							</fieldset>
-						<?php endforeach; ?>
-					</fieldset>
-				</div>
-
-				<fieldset class="prc-exportar__grupo prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_MOODLE ); ?>">
-					<legend>Quiénes salen en el fichero de usuarios</legend>
-					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
-						<label class="prc-casilla">
-							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
-							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
-						</label>
-					<?php endforeach; ?>
-					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
-				</fieldset>
-
-				<div class="prc-acciones">
-					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
-				</div>
-			</form>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-
-
-	private static function export_radio( string $name, array $options, string $selected, string $marca = '' ): string {
-		$out = '';
-		foreach ( $options as $valor => $rotulo ) {
-			$out .= sprintf(
-				'<label class="prc-casilla"><input type="radio" name="%1$s" value="%2$s"%3$s%4$s /> %5$s</label>',
-				esc_attr( $name ),
-				esc_attr( (string) $valor ),
-				'' !== $marca ? ' ' . esc_attr( $marca ) : '',
-				checked( (string) $valor, $selected, false ),
-				esc_html( $rotulo )
-			);
-		}
-		return $out;
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function who_label( array $quien ): string {
-		$cuenta  = (int) ( $quien['count'] ?? 0 );
-		$motivos = array(
-			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
-			'incomplete' => array( '%d incompleta', '%d incompletas' ),
-			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
-			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
-		);
-		$fuera   = array();
-		foreach ( $motivos as $clave => list( $una, $varias ) ) {
-			$n = (int) ( $quien[ $clave ] ?? 0 );
-			if ( $n > 0 ) {
-				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
-			}
-		}
-		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
-		if ( array() !== $fuera ) {
-			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
-		}
-		return $texto . ')';
-	}
-
-
-
-
-
-
-
 
 
 	private static function publish_panel( array $m ): string {
@@ -17249,7 +18773,7 @@ final class ProcedureEditorView {
 
 
 
-	private static function badge( string $slug, string $label ): string {
+	public static function badge( string $slug, string $label ): string {
 		if ( '' === $label ) {
 			return '';
 		}
@@ -17344,6 +18868,7 @@ final class ProcedureEditor {
 	public const PANEL_PEOPLE       = 'personas';
 
 	public const OP_REVIEW              = 'review';
+	public const OP_BULK_REVIEW         = 'bulk_review';
 	public const OP_EXPORT              = 'export';
 	public const OP_PUBLISH             = 'publish';
 	public const OP_UNPUBLISH           = 'unpublish';
@@ -17440,6 +18965,7 @@ final class ProcedureEditor {
 		self::OP_PEOPLE_SPEC,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
+		self::OP_BULK_REVIEW,
 		self::OP_EXPORT,
 		self::OP_PUBLISH,
 		self::OP_UNPUBLISH,
@@ -17694,18 +19220,19 @@ final class ProcedureEditor {
 			return;
 		}
 
-		if ( self::OP_EXPORT === $op || self::OP_REVIEW === $op ) {
+		if ( in_array( $op, array( self::OP_EXPORT, self::OP_REVIEW, self::OP_BULK_REVIEW ), true ) ) {
 
 
 			if ( ! ProcedureAccess::can_review( $user_id, $procedure_id ) ) {
 				self::$rejected = 'Su perfil no gestiona las solicitudes de este procedimiento.';
 				return;
 			}
-			if ( self::OP_EXPORT === $op ) {
-				self::export( $procedure_id, $user_id );
-				return;
-			}
-			self::review( $procedure_id, $row_id );
+			$solicitudes = array(
+				self::OP_EXPORT      => 'export',
+				self::OP_REVIEW      => 'review',
+				self::OP_BULK_REVIEW => 'bulk_review',
+			);
+			call_user_func( array( self::class, $solicitudes[ $op ] ), $procedure_id, self::OP_REVIEW === $op ? $row_id : $user_id );
 			return;
 		}
 
@@ -18428,7 +19955,42 @@ final class ProcedureEditor {
 			self::$rejected = $textos[ $res['error'] ] ?? 'No se ha podido revisar la solicitud.';
 			return;
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'revisada' ) ) );
+
+
+		Shell::leave( ApplicationsPanel::url( $procedure_id, ApplicationsPanel::filter( $_POST ), array( self::ARG_NOTICE => 'revisada' ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function bulk_review( int $procedure_id ): void {
+
+		$ids    = ApplicationsPanel::posted_ids( $_POST );
+		$filtro = ApplicationsPanel::filter( $_POST );
+
+		$res = ApplicationsPanel::bulk( $procedure_id, $ids, self::field( self::FIELD_STATE ), self::textarea( self::FIELD_NOTE ) );
+		if ( '' !== $res['error'] ) {
+			self::$rejected = $res['error'];
+			return;
+		}
+		Shell::leave(
+			ApplicationsPanel::url(
+				$procedure_id,
+				$filtro,
+				array(
+					self::ARG_NOTICE              => ApplicationsPanel::NOTICE_BULK,
+					ApplicationsPanel::ARG_DONE   => $res['done'],
+					ApplicationsPanel::ARG_FAILED => $res['failed'],
+				)
+			)
+		);
 	}
 
 
@@ -18451,9 +20013,18 @@ final class ProcedureEditor {
 		$eleccion = ApplicationExport::sanitize_choice( $procedure_id, self::export_request() );
 		ApplicationExport::remember( $user_id, $procedure_id, $eleccion );
 
+
+		$ids = ApplicationsPanel::export_ids( $procedure_id, $_POST );
+
 		$cuerpo = ApplicationExport::FORMAT_MOODLE === $eleccion['format']
-			? ApplicationExport::moodle( $procedure_id, array( 'who' => $eleccion['who'] ) )
-			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'] );
+			? ApplicationExport::moodle(
+				$procedure_id,
+				array(
+					'who' => $eleccion['who'],
+					'ids' => $ids,
+				)
+			)
+			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'], $ids );
 		$nombre = ApplicationExport::filename( (string) get_post_field( 'post_title', $procedure_id ), $eleccion['format'] );
 
 		Shell::send_header( 'Content-Type: text/csv; charset=utf-8' );
@@ -18490,33 +20061,6 @@ final class ProcedureEditor {
 			'shape'   => sanitize_key( self::field( self::FIELD_EXPORT_SHAPE ) ),
 			'format'  => sanitize_key( self::field( self::FIELD_EXPORT_FORMAT ) ),
 			'who'     => $listas[ self::FIELD_EXPORT_WHO ],
-		);
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
-		$quienes = array();
-		$fuentes = ApplicationExport::who( $procedure_id );
-		foreach ( ApplicationExport::who_counts( $applications, array_keys( $fuentes ) ) as $clave => $cuenta ) {
-			$quienes[ $clave ] = array( 'label' => $fuentes[ $clave ] ) + $cuenta;
-		}
-		return array(
-			'groups'       => ApplicationExport::groups( $procedure_id ),
-			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
-			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
-			'who'          => $quienes,
 		);
 	}
 
@@ -18655,6 +20199,7 @@ final class ProcedureEditor {
 			'applications'            => array(),
 			'app_cols'                => array(),
 			'export'                  => array(),
+			'table'                   => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 			'people_spec'             => array(),
@@ -18778,11 +20323,8 @@ final class ProcedureEditor {
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
 
-			$solicitudes       = Applications::for_procedure( $procedure_id );
-			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
-			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
-			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
-			$m['people']       = PeopleSpecPanel::reviews( $solicitudes );
+
+			$m = array_merge( $m, ApplicationsPanel::model( $procedure_id, $user_id, (array) $m['questions'], $_GET ) );
 		}
 		return $m;
 	}
@@ -18800,6 +20342,10 @@ final class ProcedureEditor {
 				'tipo'  => 'error',
 				'texto' => self::$rejected,
 			);
+		}
+		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
+
+			return ApplicationsPanel::bulk_notice( $_GET );
 		}
 		return array(
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
@@ -21350,7 +22896,8 @@ final class PeopleForm {
 
 
 
-	public static function review( int $application_id, bool $history = false ): array {
+
+	public static function review( int $application_id, bool $history = false, array $args = array() ): array {
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -21367,7 +22914,7 @@ final class PeopleForm {
 
 			'open'     => $history,
 			'log'      => $history ? self::history( $spec, $application_id ) : array(),
-			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) ),
+			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) + $args ),
 		);
 	}
 
@@ -24245,6 +25792,61 @@ final class App {
 .prc-revision[open] .prc-revision__abrir { margin-bottom: 8px; }
 
 .prc-revision__form { min-width: 16rem; }
+
+/* La barra de la tabla de solicitudes: contadores por estado, que son atajos
+   de filtro; el filtro, un formulario GET; las páginas, enlaces (PLAN-0003,
+   PR 6). Todo funciona sin guion. */
+.prc-contadores { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.prc-contadores__enlace {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: var(--prc-t-tabla);
+  color: var(--prc-c-tabla);
+  background: var(--prc-c-fondo-accion);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.prc-contadores__enlace[aria-current] { font-weight: 700; border-color: var(--prc-c-azul); }
+.prc-contadores__cifra { font-weight: 700; }
+
+.prc-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--prc-c-fondo-barra);
+  border-radius: var(--prc-radio);
+}
+.prc-filtros__campo { display: flex; flex-direction: column; min-width: 10rem; max-width: 100%; }
+.prc-filtros__campo .prc-control { width: auto; }
+.prc-filtros__casilla { align-self: center; }
+.prc-filtros__acciones { display: flex; align-items: center; gap: 10px; }
+.prc-filtros__quitar { font-size: var(--prc-t-menudo); }
+
+.prc-bloque { margin: 0 0 10px; }
+.prc-bloque[open] > .prc-bloque__form {
+  margin-top: 8px;
+  padding: 12px;
+  max-width: 40rem;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-th--marca,
+.prc-celda--marca { width: 1%; text-align: center; }
+
+.prc-incompleta { margin: 4px 0 0; font-size: var(--prc-t-menudo); color: var(--prc-c-tabla); }
+.prc-incompleta__titulo { font-weight: 700; }
+.prc-incompleta__motivos { margin: 0; padding-left: 1.1em; }
+
+.prc-paginacion__lista { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
+.prc-paginacion__enlace,
+.prc-paginacion__actual,
+.prc-paginacion__hueco { display: inline-block; min-width: 2em; padding: 2px 8px; text-align: center; }
+.prc-paginacion__enlace { border: 1px solid var(--prc-c-linea); border-radius: var(--prc-radio); }
+.prc-paginacion__actual { font-weight: 700; border: 1px solid var(--prc-c-azul); border-radius: var(--prc-radio); }
 
 /* El diálogo de exportar (ADR-0039). Sin guion es un desplegable con el
    formulario dentro; con guion, `prc-app.js` mete el formulario en un
@@ -27128,6 +28730,18 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 		} );
 	}
 
+	/*
+	 * Con un filtro en la tabla, el diálogo cuenta quién sale en el fichero
+	 * de usuarios para «las del filtro» y para «todas»; sin guion se leen las
+	 * dos, con su rótulo. Con guion, solo la de la opción elegida.
+	 */
+	function ambitoElegido( form ) {
+		var marcado = form.querySelector( \'[data-prc-export-scope]:checked\' );
+		Array.prototype.forEach.call( form.querySelectorAll( \'[data-prc-export-scope-count]\' ), function ( cifra ) {
+			cifra.hidden = !! marcado && cifra.getAttribute( \'data-prc-export-scope-count\' ) !== marcado.value;
+		} );
+	}
+
 	function prepararExportar( caja ) {
 		var form = caja.querySelector( \'form\' );
 		var resumen = caja.querySelector( \'summary\' );
@@ -27164,6 +28778,7 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 		caja.hidden = true;
 		caja.dataset.prcDialog = dialogo.id;
 		formatoElegido( form );
+		ambitoElegido( form );
 	}
 
 	document.addEventListener( \'DOMContentLoaded\', function () {
@@ -27200,6 +28815,8 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 			} );
 		} else if ( e.target.hasAttribute( \'data-prc-export-format\' ) ) {
 			formatoElegido( form );
+		} else if ( e.target.hasAttribute( \'data-prc-export-scope\' ) ) {
+			ambitoElegido( form );
 		}
 	} );
 
@@ -27211,6 +28828,36 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 			window.setTimeout( function () {
 				cerrarDialogo( dialogo );
 			}, 0 );
+		}
+	} );
+
+	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
+
+	/*
+	 * `data-prc-bulk-page` es la casilla «Marcar las de esta página» y
+	 * `data-prc-bulk-row`, la de cada fila, que apunta al formulario del bloque
+	 * con el atributo `form`. Sin guion, la casilla de la página es un campo que
+	 * lee el servidor y revisa la página entera. Con guion, además, marca y
+	 * desmarca las de las filas, y se desmarca sola en cuanto falta alguna: así
+	 * lo que se ve marcado es lo que se envía.
+	 */
+	document.addEventListener( \'change\', function ( e ) {
+		var casilla = e.target;
+		if ( ! casilla || ! casilla.hasAttribute ) {
+			return;
+		}
+		var filas = document.querySelectorAll( \'[data-prc-bulk-row]\' );
+		if ( casilla.hasAttribute( \'data-prc-bulk-page\' ) ) {
+			Array.prototype.forEach.call( filas, function ( fila ) {
+				fila.checked = casilla.checked;
+			} );
+		} else if ( casilla.hasAttribute( \'data-prc-bulk-row\' ) ) {
+			var pagina = document.querySelector( \'[data-prc-bulk-page]\' );
+			if ( pagina ) {
+				pagina.checked = filas.length > 0 && Array.prototype.every.call( filas, function ( fila ) {
+					return fila.checked;
+				} );
+			}
 		}
 	} );
 }() );

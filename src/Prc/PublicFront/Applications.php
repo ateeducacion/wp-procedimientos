@@ -516,25 +516,30 @@ final class Applications {
 	 * La nota es obligatoria al pedir subsanar y al excluir: un centro al que
 	 * se le pide algo tiene que leer qué.
 	 *
-	 * @param int    $application_id Application post ID.
-	 * @param string $state          One of ApplicationMetaKeys::review_states().
-	 * @param string $note           Why, in words.
+	 * `null` es «sin nota nueva»: se conserva la que tenga, y es la que cuenta
+	 * para la obligatoria. La revisión en bloque lo usa cuando la nota común
+	 * llega vacía. Una cadena vacía, en cambio, **vacía** la nota: es lo que
+	 * hace la revisión de una en una al borrar el texto.
+	 *
+	 * @param int         $application_id Application post ID.
+	 * @param string      $state          One of ApplicationMetaKeys::review_states().
+	 * @param string|null $note           Why, in words; null to keep the one it has.
 	 * @return array{ok:bool, error:string} Error: `application`, `state` or `note`.
 	 */
-	public static function review( int $application_id, string $state, string $note ): array {
+	public static function review( int $application_id, string $state, ?string $note ): array {
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return self::refused( 'application' );
 		}
 		if ( ! isset( ApplicationMetaKeys::review_states()[ $state ] ) ) {
 			return self::refused( 'state' );
 		}
-		$note = trim( $note );
-		if ( '' === $note && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
+		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$note          = null === $note ? $previous_note : trim( $note );
+		if ( '' === trim( $note ) && in_array( $state, ApplicationMetaKeys::states_needing_note(), true ) ) {
 			return self::refused( 'note' );
 		}
 
-		$previous      = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
-		$previous_note = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, true );
+		$previous = (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, $state );
 		update_post_meta( $application_id, ApplicationMetaKeys::REVIEW_NOTE, wp_slash( $note ) );
 

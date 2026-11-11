@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\QuestionGrid;
 
 /**
@@ -161,13 +162,17 @@ final class PeopleExport {
 	 * Con la forma de {@see ApplicationExport::people()}, todavía sin
 	 * usuario: lo pone la exportación con la parte local del correo.
 	 *
-	 * @param int $application_id Application post ID.
+	 * @param int        $application_id Application post ID.
+	 * @param mixed|null $people         Its stored list, when already read; null to read it.
 	 * @return array<int, array<string, mixed>>
 	 */
-	public static function users( int $application_id ): array {
+	public static function users( int $application_id, $people = null ): array {
 		$out = array();
 		// Un procedimiento que tuvo lista y la apagó no la exporta.
-		$lista = People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : array();
+		$lista = array();
+		if ( People::enabled( (int) wp_get_post_parent_id( $application_id ) ) ) {
+			$lista = null === $people ? People::of( $application_id ) : ApplicationPeople::rows( $people );
+		}
 		foreach ( $lista as $persona ) {
 			$out[] = array(
 				'source'         => ApplicationExport::WHO_PEOPLE,

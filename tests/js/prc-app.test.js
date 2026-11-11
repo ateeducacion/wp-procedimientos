@@ -618,3 +618,88 @@ describe( 'the export dialog', () => {
 		document.getElementById( 'x' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
 	} );
 } );
+
+describe( 'bulk review: tick the rows of the page', () => {
+	const MARKUP = `
+		<form id="prc-bloque">
+			<input type="checkbox" id="pagina" name="prc_rows_page" value="1" data-prc-bulk-page />
+		</form>
+		<table><tbody>
+			<tr><td><input type="checkbox" id="a" form="prc-bloque" name="prc_rows[]" value="1" data-prc-bulk-row /></td></tr>
+			<tr><td><input type="checkbox" id="b" form="prc-bloque" name="prc_rows[]" value="2" data-prc-bulk-row /></td></tr>
+		</tbody></table>
+		<input type="checkbox" id="otra" />`;
+
+	function change( id ) {
+		const casilla = document.getElementById( id );
+		casilla.checked = ! casilla.checked;
+		casilla.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	}
+
+	it( 'ticks and unticks every row with the page box', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		change( 'pagina' );
+		expect( document.getElementById( 'a' ).checked ).toBe( true );
+		expect( document.getElementById( 'b' ).checked ).toBe( true );
+		change( 'pagina' );
+		expect( document.getElementById( 'a' ).checked ).toBe( false );
+		expect( document.getElementById( 'b' ).checked ).toBe( false );
+	} );
+
+	it( 'unticks the page box as soon as one row is left out, and ticks it when all are in', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		change( 'pagina' );
+		change( 'a' );
+		expect( document.getElementById( 'pagina' ).checked ).toBe( false );
+		change( 'a' );
+		expect( document.getElementById( 'pagina' ).checked ).toBe( true );
+	} );
+
+	it( 'leaves other checkboxes and a page without the box alone', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		change( 'otra' );
+		expect( document.getElementById( 'a' ).checked ).toBe( false );
+		document.getElementById( 'pagina' ).remove();
+		expect( () => change( 'a' ) ).not.toThrow();
+	} );
+} );
+
+describe( 'export dialog with a filter: the counts of the chosen scope', () => {
+	const MARKUP = `
+		<details class="prc-exportar" data-prc-export>
+			<summary class="prc-btn">Exportar…</summary>
+			<form class="prc-exportar__form" aria-labelledby="t">
+				<h2 id="t">Exportar</h2>
+				<label><input type="radio" id="filtro" name="prc_export_scope" value="filter" data-prc-export-scope checked /> Las del filtro</label>
+				<label><input type="radio" id="todas" name="prc_export_scope" value="all" data-prc-export-scope /> Todas</label>
+				<label><input type="checkbox" name="prc_export_who[]" value="coordinators" />
+					Coordinación
+					<span id="cf" data-prc-export-scope-count="filter">(las del filtro: 1 persona)</span>
+					<span id="ct" data-prc-export-scope-count="all">(todas: 3 personas)</span>
+				</label>
+				<div class="prc-acciones"><button type="submit">Descargar</button></div>
+			</form>
+		</details>`;
+
+	it( 'shows only the counts of the scope chosen, and follows the choice', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		expect( document.getElementById( 'cf' ).hidden ).toBe( false );
+		expect( document.getElementById( 'ct' ).hidden ).toBe( true );
+		const todas = document.getElementById( 'todas' );
+		todas.checked = true;
+		todas.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( document.getElementById( 'cf' ).hidden ).toBe( true );
+		expect( document.getElementById( 'ct' ).hidden ).toBe( false );
+	} );
+
+	it( 'leaves every count visible without a scope to choose', async () => {
+		document.body.innerHTML = MARKUP.replace( /<label><input type="radio"[^]*?<\/label>/g, '' );
+		await load();
+		expect( document.getElementById( 'cf' ).hidden ).toBe( false );
+		expect( document.getElementById( 'ct' ).hidden ).toBe( false );
+	} );
+} );

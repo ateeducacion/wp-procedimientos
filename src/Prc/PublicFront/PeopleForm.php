@@ -374,11 +374,12 @@ final class PeopleForm {
 	 * revisa lo ve entero en la lista, y en el historial basta para saber de
 	 * quién se habla.
 	 *
-	 * @param int  $application_id Application post ID.
-	 * @param bool $history        Whether to read its history too.
+	 * @param int                   $application_id Application post ID.
+	 * @param bool                  $history        Whether to read its history too.
+	 * @param array<string, string> $args           Query args the history link keeps: the filter and page of the table.
 	 * @return array<string, mixed> `show` false when the procedure has no list.
 	 */
-	public static function review( int $application_id, bool $history = false ): array {
+	public static function review( int $application_id, bool $history = false, array $args = array() ): array {
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
 		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || ! People::enabled( $procedure_id ) ) {
 			return array( 'show' => false );
@@ -395,7 +396,7 @@ final class PeopleForm {
 			// tabla sería leer cientos de metas que nadie va a abrir.
 			'open'     => $history,
 			'log'      => $history ? self::history( $spec, $application_id ) : array(),
-			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) ),
+			'log_url'  => ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_APPLICATIONS, array( PeopleSpecPanel::ARG_HISTORY => $application_id ) + $args ),
 		);
 	}
 

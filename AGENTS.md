@@ -103,6 +103,8 @@ src/Prc/
 ├── Domain/ApplicationInput.php             Valida la solicitud. Puro
 ├── Domain/PeopleSpec.php                   Lo que pide el procedimiento de la lista de personas y su ventana. Puro
 ├── Domain/ApplicationPeople.php            Valida cada persona de la lista; huella de la fila. Puro
+├── Domain/ApplicationFilter.php            El filtro de la tabla de solicitudes por GET, su página y la búsqueda. Puro
+├── Domain/ApplicationCompleteness.php      Si a una solicitud le faltan personas o entregas vencidas, y por qué. Puro
 ├── Domain/CentreEligibility.php            Qué centros admite un procedimiento: titularidad, tipo, isla, lista. Puro
 ├── Domain/CentreCatalog.php                Filtro prc_centres, find/search; titularidad derivada del tipo y zona
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
@@ -125,13 +127,17 @@ src/Prc/
 ├── PublicFront/People.php                  La lista de personas: alta, cambio y baja de fila en fila, relee al escribir (ADR-0041)
 ├── PublicFront/PeopleExport.php            Las columnas y filas que la lista de personas añade a la exportación
 ├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
+├── PublicFront/ApplicationQuery.php        Las solicitudes de la tabla: censo, contadores, filtro y página, sin leer todas las metas
 ├── PublicFront/PeopleSpecPanel.php         El panel «Personas» del taller y la lista en la revisión
+├── PublicFront/ApplicationsPanel.php       El panel «Solicitudes»: modelo de la tabla, revisión en bloque y qué se exporta
 ├── PublicFront/View/HomeView.php           Pinta la portada
 ├── PublicFront/Home.php                    [prc_home]
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública
 ├── PublicFront/ProcedureView.php           El single de prc_procedure
 ├── PublicFront/View/WorkspaceView.php      Pinta «Mis procedimientos»
 ├── PublicFront/Workspace.php               [prc_workspace]
+├── PublicFront/View/ExportDialogView.php   Pinta el diálogo de exportar
+├── PublicFront/View/ApplicationsPanelView.php Pinta la tabla de solicitudes: contadores, filtros, páginas y bloque
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla

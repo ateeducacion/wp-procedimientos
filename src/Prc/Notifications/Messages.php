@@ -31,9 +31,10 @@ namespace Prc\Notifications;
  * - `ack`: en una retirada, si es el acuse a quien la retira;
  * - `until`: el último día de una prórroga, ya escrito como se lee;
  * - `number`, `submitted`, `missing`, `people_until`, `people_url`,
- *   `receipt_url`: el justificante del acuse —número, fecha y hora, lo que
- *   falta, hasta cuándo se cambian las personas y dónde, y el enlace al
- *   justificante imprimible—.
+ *   `people_why`, `receipt_url`: el justificante del acuse —número, fecha
+ *   y hora, lo que falta, hasta cuándo se cambian las personas y dónde, o
+ *   por qué todavía no se pueden cambiar, y el enlace al justificante
+ *   imprimible—.
  */
 final class Messages {
 
@@ -177,7 +178,10 @@ final class Messages {
 				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
 			);
 			$hasta  = self::text( $ctx, 'people_until' );
-			if ( '' !== $hasta ) {
+			$porque = self::text( $ctx, 'people_why' );
+			if ( '' !== $porque ) {
+				$cabeza[] = $porque;
+			} elseif ( '' !== $hasta ) {
 				$cabeza = array_merge( $cabeza, self::link( 'Puede dar de alta, cambiar o sustituir a las personas que participan hasta el ' . $hasta . ', incluido, en:', $ctx, 'people_url' ) );
 			}
 		}

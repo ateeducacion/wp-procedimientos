@@ -148,8 +148,12 @@ final class ApplicationProgressView {
 	 */
 	public static function submit( array $m, bool $nueva ): string {
 		$personas = (array) ( $m['people'] ?? array() );
+		$despues  = (string) ( $personas['after_submit'] ?? '' );
+		$texto    = '' === $despues
+			? sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) )
+			: sprintf( 'Después de presentar tendrá que dar de alta a las personas que participan (al menos %d), pero no enseguida: %s Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ), lcfirst( $despues ) );
 		$aviso    = $nueva && ! empty( $personas['show'] )
-			? '<p class="prc-form__siguiente">' . esc_html( sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) ) ) . '</p>'
+			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
 			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '

@@ -26427,8 +26427,12 @@ final class ApplicationProgressView {
 
 	public static function submit( array $m, bool $nueva ): string {
 		$personas = (array) ( $m['people'] ?? array() );
+		$despues  = (string) ( $personas['after_submit'] ?? '' );
+		$texto    = '' === $despues
+			? sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) )
+			: sprintf( 'Después de presentar tendrá que dar de alta a las personas que participan (al menos %d), pero no enseguida: %s Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ), lcfirst( $despues ) );
 		$aviso    = $nueva && ! empty( $personas['show'] )
-			? '<p class="prc-form__siguiente">' . esc_html( sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) ) ) . '</p>'
+			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
 			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
@@ -28294,6 +28298,10 @@ final class PeopleForm {
 		$user_id   = get_current_user_id();
 		$filas     = $solicitud > 0 ? self::rows( $spec, People::of( $solicitud ) ) : array();
 		$puede     = $solicitud > 0 && ProcedureAccess::can_edit_people( $user_id, $solicitud );
+		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
+
+
+		$abierta = $solicitud > 0 ? $puede : '' === $despues;
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
@@ -28303,11 +28311,12 @@ final class PeopleForm {
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
 
-			'until'          => self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ),
+			'until'          => $abierta ? self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ) : '',
+			'after_submit'   => $despues,
 			'rows'           => $filas,
 			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
 			'can_edit'       => $puede,
-			'why'            => self::why( $solicitud, $user_id, $puede ),
+			'why'            => '' !== $despues ? $despues : self::why( $solicitud, $user_id, $puede ),
 			'flash'          => self::flash(),
 
 
@@ -28353,6 +28362,30 @@ final class PeopleForm {
 		return '' !== (string) $spec['opens_at']
 			? 'La lista se puede gestionar desde el ' . self::day( (string) $spec['opens_at'] ) . '.'
 			: 'La lista se puede gestionar hasta el ' . self::day( (string) $spec['closes_at'] ) . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function after_submit( array $spec, int $procedure_id ): string {
+		return PeopleSpec::why_closed(
+			$spec,
+			array(
+				'today'    => ProcedureState::today(),
+				'archived' => ProcedureAccess::is_archived( $procedure_id ),
+				'review'   => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'state'    => ProcedureState::of_post( $procedure_id ),
+			)
+		);
 	}
 
 
@@ -28518,6 +28551,8 @@ final class ApplicationProgress {
 			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
 			'people_min'     => (int) ( $people['min'] ?? 0 ),
 			'people_until'   => (string) ( $people['until'] ?? '' ),
+			'people_open'    => ! empty( $people['can_edit'] ),
+			'people_why'     => (string) ( $people['why'] ?? '' ),
 			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
@@ -28628,8 +28663,16 @@ final class ApplicationProgress {
 		}
 		$out['tipo'] = 'aviso';
 		if ( $p['people_missing'] ) {
+			$falta = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . ').';
+
+
+
+			if ( ! $p['people_open'] ) {
+				$out['texto'] = $falta . ( '' !== (string) $p['people_why'] ? ' ' . (string) $p['people_why'] : '' );
+				return $out;
+			}
 			$hasta            = (string) $p['people_until'];
-			$out['texto']     = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . '). Hágalo abajo, en «Personas que participan»'
+			$out['texto']     = $falta . ' Hágalo abajo, en «Personas que participan»'
 				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
 			$out['link']      = '#' . PeopleForm::ANCHOR;
 			$out['link_text'] = 'Ir a la lista de personas';

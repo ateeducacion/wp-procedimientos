@@ -72,10 +72,11 @@ class Test_Application_Progress extends WP_UnitTestCase {
 	/**
 	 * Un procedimiento abierto, con lista de personas y una entrega obligatoria, o sin nada.
 	 *
-	 * @param bool $con_todo Whether it has the list and the delivery.
+	 * @param bool                 $con_todo Whether it has the list and the delivery.
+	 * @param array<string, mixed> $lista    What changes in the list.
 	 * @return int
 	 */
-	private function procedimiento( bool $con_todo = true ): int {
+	private function procedimiento( bool $con_todo = true, array $lista = array() ): int {
 		$meta = array(
 			ProcedureMetaKeys::OPENS_AT  => $this->dia( -1 ),
 			ProcedureMetaKeys::CLOSES_AT => $this->dia( 5 ),
@@ -91,7 +92,7 @@ class Test_Application_Progress extends WP_UnitTestCase {
 				),
 				'min'     => 2,
 				'max'     => 4,
-			);
+			) + $lista;
 			$meta[ ProcedureMetaKeys::QUESTIONS ]   = array(
 				array(
 					'label'     => 'Memoria final',
@@ -306,5 +307,53 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$solicitud     = $this->application( $procedimiento, $director );
 		$this->assertSame( array( 'Faltan 2 personas' ), ApplicationProgress::missing( $solicitud ) );
 		$this->assertSame( array(), ApplicationProgress::missing( $this->application( $this->procedimiento( false ), $director ) ) );
+	}
+
+	/**
+	 * Una lista que solo gestionan las admitidas: recién presentada no se
+	 * puede escribir, así que ni el anuncio de antes ni el aviso de después
+	 * mandan a darla de alta «en esta misma pantalla» ni «hasta el»; dicen
+	 * por qué todavía no.
+	 */
+	public function test_a_list_only_for_admitted_ones_is_not_promised_after_submitting() {
+		$procedimiento = $this->procedimiento( true, array( 'admitted_only' => true ) );
+		$director      = $this->school_head( 'C0001' );
+		$this->acting_as( $director );
+
+		$antes = $this->pintar( $procedimiento );
+		$this->assertStringNotContainsString( 'en esta misma pantalla', $antes );
+		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida', $antes );
+
+		$this->application( $procedimiento, $director );
+		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
+		$this->assertStringContainsString( 'Solicitud presentada, pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos 2). La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
+		$this->assertStringNotContainsString( 'Hágalo abajo', $html );
+		$this->assertStringNotContainsString( 'Puede dar de alta, cambiar o sustituir personas hasta el', $html );
+	}
+
+	/**
+	 * Una lista que se abre más adelante: lo mismo, con el día en que se abre.
+	 */
+	public function test_a_list_that_opens_later_is_not_promised_after_submitting() {
+		$abre          = $this->dia( 3 );
+		$dia           = implode( '-', array_reverse( explode( '-', $abre ) ) );
+		$procedimiento = $this->procedimiento(
+			true,
+			array(
+				'opens_at'  => $abre,
+				'closes_at' => $this->dia( 8 ),
+			)
+		);
+		$director      = $this->school_head( 'C0001' );
+		$this->acting_as( $director );
+
+		$antes = $this->pintar( $procedimiento );
+		$this->assertStringNotContainsString( 'en esta misma pantalla', $antes );
+		$this->assertStringContainsString( 'La lista de personas se abre el ' . $dia . '.', $antes );
+
+		$this->application( $procedimiento, $director );
+		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
+		$this->assertStringContainsString( '(el procedimiento pide al menos 2). La lista de personas se abre el ' . $dia . '.', $html );
+		$this->assertStringNotContainsString( 'Hágalo abajo', $html );
 	}
 }

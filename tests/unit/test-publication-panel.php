@@ -77,8 +77,9 @@ class Test_Publication_Panel extends WP_UnitTestCase {
 	 */
 	public function test_the_button_variants() {
 		$this->assertSame( 'prc-btn prc-btn-primary btn btn-primary', Assets::button_class( true ) );
-		$this->assertSame( 'prc-btn btn btn-light', Assets::button_class() );
-		$this->assertSame( 'prc-btn btn btn-light', Assets::button_class( false ) );
+		$this->assertSame( 'prc-btn prc-btn-sec btn btn-outline-secondary', Assets::button_class() );
+		$this->assertSame( 'prc-btn prc-btn-sec btn btn-outline-secondary', Assets::button_class( false ) );
+		$this->assertSame( 'prc-btn prc-btn-primary prc-btn-final btn btn-primary btn-lg', Assets::button_class( 'final' ), 'la acción final, más grande' );
 		$this->assertSame( 'prc-btn prc-btn-borrar btn btn-outline-danger', Assets::button_class( 'danger' ) );
 	}
 

@@ -259,42 +259,9 @@
 .prc-form--solicitud .prc-nota p:last-child { padding-bottom: 0; }
 
 /* --- botón de envío -----------------------------------------------------
-   El color medido es el del despliegue que se sustituye y queda como variable
-   (`--prc-envio-fondo`), no como token del sistema: blanco sobre `#5f9ea0` da
-   3,05:1, que llega para texto grande y no para texto normal. Quien despliegue
-   lo sube sin tocar esta hoja. */
-.prc-form--solicitud .prc-boton-enviar {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  width: auto;
-  height: auto;
-  padding: 12px 20px;
-  margin: 30px 0;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: normal;
-  color: #fff;
-  text-align: center;
-  text-shadow: none;
-  vertical-align: middle;
-  cursor: pointer;
-  background: var(--prc-envio-fondo, #5f9ea0);
-  border: 1px solid var(--prc-envio-fondo, #5f9ea0);
-  border-radius: var(--prc-radio-caja);
-  box-shadow: var(--prc-sombra-boton);
-}
-
-.prc-form--solicitud .prc-boton-enviar:hover,
-.prc-form--solicitud .prc-boton-enviar:active {
-  color: #fff;
-  background: var(--prc-envio-hover, #099);
-  border-color: var(--prc-envio-hover, #099);
-}
-
-.prc-form--solicitud .prc-boton-enviar:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
-.prc-form--solicitud .prc-boton-enviar[disabled] { cursor: not-allowed; opacity: .5; }
+   Es el botón de siempre (`Assets::button_class( 'final' )`), con aire
+   arriba y abajo: la acción con la que termina la pantalla. */
+.prc-form--solicitud .prc-form__envio .prc-btn-final { margin: 30px 0; }
 
 /* --- aviso de protección de datos ---------------------------------------
    La plantilla pinta la caja; **el texto es del despliegue** y llega por el

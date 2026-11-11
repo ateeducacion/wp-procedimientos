@@ -1,0 +1,127 @@
+/* La ayuda: dos guías y las preguntas frecuentes (ADR-0045).
+   ==========================================================================
+
+   Lo propio de esta pantalla y la línea «¿Dudas? Consulte la ayuda» que
+   llevan otras. Todo cuelga de `.prc-ayuda` salvo esa línea, para que
+   ninguna regla de aquí se escape a las demás pantallas. Sin diseño nuevo:
+   los tokens del armazón y nada más; la mejora visual irá aparte. */
+
+/* --- las tres guías ------------------------------------------------------ */
+
+/* Enlaces de verdad, uno por guía: cada uno es una dirección. */
+.prc-ayuda__guias ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  border-bottom: 1px solid var(--prc-c-sindato);
+}
+
+.prc-ayuda__guias a {
+  display: block;
+  padding: 8px 16px;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  text-decoration: none;
+}
+
+.prc-ayuda__guias a:hover { color: var(--prc-c-titulo); }
+
+.prc-ayuda__guias a.is-activo {
+  border-color: var(--prc-c-sindato) var(--prc-c-sindato) #fff;
+  background: #fff;
+  color: var(--prc-c-titulo);
+  font-weight: var(--prc-p-fuerte);
+}
+
+.prc-ayuda__guias a:focus-visible { outline: 2px solid var(--prc-c-azul-rotulo); outline-offset: -2px; }
+
+/* --- la guía -------------------------------------------------------------- */
+
+.prc-ayuda__titulo {
+  margin: 0 0 8px;
+  color: var(--prc-c-titulo);
+  font: var(--prc-p-h2) var(--prc-t-h2)/var(--prc-i-h2) var(--prc-fuente);
+}
+
+.prc-ayuda__indice {
+  margin: 16px 0 28px;
+  padding: 12px 18px;
+  background: var(--prc-info-fondo);
+  border: 1px solid var(--prc-info-borde);
+}
+
+.prc-ayuda__indice-titulo {
+  margin: 0 0 6px;
+  color: var(--prc-info-texto);
+  font: var(--prc-p-fuerte) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+.prc-ayuda__indice ol,
+.prc-ayuda__indice ul { margin: 0; padding-left: 22px; }
+
+.prc-ayuda__apartado {
+  margin: 0 0 24px;
+  scroll-margin-top: 16px;
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+.prc-ayuda__apartado-titulo {
+  margin: 0 0 8px;
+  color: var(--prc-c-titulo);
+  font: var(--prc-p-h3) var(--prc-t-h3)/var(--prc-i-h3) var(--prc-fuente);
+}
+
+.prc-ayuda__apartado--h4 .prc-ayuda__apartado-titulo {
+  font: var(--prc-p-h5) var(--prc-t-h5)/var(--prc-i-h5) var(--prc-fuente);
+  font-weight: var(--prc-p-fuerte);
+}
+
+.prc-ayuda__apartado table {
+  width: 100%;
+  margin: 8px 0 12px;
+  border-collapse: collapse;
+}
+
+.prc-ayuda__apartado th,
+.prc-ayuda__apartado td {
+  padding: 4px 8px;
+  border: 1px solid var(--prc-c-sindato);
+  text-align: left;
+  vertical-align: top;
+}
+
+/* El hueco de una captura que todavía no hay: se ve, se lee y no estorba.
+   Cuando llegue la imagen, el mismo sitio lleva una figura. */
+.prc-ayuda__captura { margin: 8px 0 16px; }
+.prc-ayuda__captura img { max-width: 100%; height: auto; border: 1px solid var(--prc-c-sindato); }
+
+.prc-ayuda__captura--pendiente {
+  padding: 10px 14px;
+  border: 1px dashed var(--prc-c-tenue);
+  color: var(--prc-c-medio);
+  font-size: var(--prc-t-menudo);
+  font-style: italic;
+}
+
+.prc-ayuda__soporte {
+  margin: 32px 0 0;
+  padding: 16px 18px;
+  border-top: 2px solid var(--prc-c-azul);
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+/* --- «¿Dudas? Consulte la ayuda», en las demás pantallas ----------------- */
+
+.prc-ayuda-enlace {
+  margin: 4px 0 12px;
+  color: var(--prc-c-texto);
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+}

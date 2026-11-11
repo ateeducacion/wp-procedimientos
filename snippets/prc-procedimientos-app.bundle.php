@@ -9759,6 +9759,7 @@ final class Shell {
 		'apply'     => 'solicitud',
 		'mine'      => 'mi-centro',
 		'observe'   => 'consulta-de-solicitudes',
+		'help'      => 'ayuda',
 	);
 
 
@@ -9778,6 +9779,7 @@ final class Shell {
 		'apply'     => 'prc_apply',
 		'mine'      => 'prc_mine',
 		'observe'   => 'prc_observe',
+		'help'      => 'prc_help',
 	);
 
 
@@ -9790,7 +9792,7 @@ final class Shell {
 
 
 
-	public const PUBLIC_SECTIONS = array( 'home', self::SECTION_PROCEDURE );
+	public const PUBLIC_SECTIONS = array( 'home', self::SECTION_PROCEDURE, 'help' );
 
 
 
@@ -10439,19 +10441,19 @@ final class Shell {
 
 
 
+
 	private static function menu( int $user_id = 0 ): array {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
 		}
 		$secciones = self::sections( $user_id );
-		if ( array() === $secciones ) {
-			return array();
-		}
-		$activa = self::current_section();
-		$menu   = array();
+		$activa    = self::current_section();
+		$menu      = array();
 
-		if ( isset( $secciones['home'] ) ) {
-			$menu[] = self::entry( 'Inicio', $secciones['home']['url'], 'home' === $activa );
+
+		$inicio = isset( $secciones['home'] ) ? $secciones['home']['url'] : self::url( 'home' );
+		if ( '' !== $inicio ) {
+			$menu[] = self::entry( 'Inicio', $inicio, 'home' === $activa );
 		}
 
 
@@ -10478,20 +10480,7 @@ final class Shell {
 			$menu[]           = $admin;
 		}
 
-		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ) );
-
-
-
-
-		$ayuda = self::entry( 'Ayuda' );
-		foreach ( (array) ProcedureChrome::chrome()['footer_links'] as $enlace ) {
-			if ( isset( $enlace['label'], $enlace['url'] ) ) {
-				$ayuda['items'][] = self::entry( (string) $enlace['label'], (string) $enlace['url'] );
-			}
-		}
-		if ( array() !== $ayuda['items'] ) {
-			$menu[] = $ayuda;
-		}
+		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ), self::help_entry( $activa ) );
 
 
 
@@ -10519,6 +10508,32 @@ final class Shell {
 			return array();
 		}
 		return array( self::entry( 'Consulta', $secciones['observe']['url'], 'observe' === $activa ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function help_entry( string $activa ): array {
+		$guia   = self::url( 'help' );
+		$dentro = 'help' === $activa;
+		$ayuda  = self::entry( 'Ayuda', $guia, $dentro );
+		foreach ( (array) ProcedureChrome::chrome()['footer_links'] as $enlace ) {
+			if ( isset( $enlace['label'], $enlace['url'] ) ) {
+				$ayuda['items'][] = self::entry( (string) $enlace['label'], (string) $enlace['url'] );
+			}
+		}
+		if ( array() !== $ayuda['items'] && '' !== $guia ) {
+			array_unshift( $ayuda['items'], self::entry( 'Guías y preguntas frecuentes', $guia, $dentro ) );
+		}
+		return '' === $guia && array() === $ayuda['items'] ? array() : array( $ayuda );
 	}
 
 
@@ -11167,6 +11182,19 @@ final class PanelParts {
 			'd'    => true,
 		),
 	);
+
+
+
+
+
+
+
+	public static function help_link( string $url ): string {
+		if ( '' === $url ) {
+			return '';
+		}
+		return '<p class="prc-ayuda-enlace">¿Dudas? <a href="' . esc_url( $url ) . '">Consulte la ayuda</a></p>';
+	}
 
 
 
@@ -17475,6 +17503,958 @@ final class Home {
 
 
 
+namespace Prc\PublicFront;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\HelpContent', false ) ) {
+final class HelpContent {
+
+
+
+
+	public const GUIDE_APPLY = 'solicitar';
+
+
+
+
+	public const GUIDE_MANAGE = 'gestionar';
+
+
+
+
+	public const GUIDE_FAQ = 'preguntas';
+
+
+
+
+
+
+	public const GUIDES = array(
+		self::GUIDE_APPLY  => array(
+			'label' => 'Cómo presentar una solicitud',
+			'intro' => 'Para la dirección de un centro educativo y para el profesorado. Lea primero «Antes de empezar»: la mayoría de los problemas empiezan ahí.',
+		),
+		self::GUIDE_MANAGE => array(
+			'label' => 'Cómo dar de alta un procedimiento',
+			'intro' => 'Para las personas que gestionan los procedimientos de un ámbito convocante.',
+		),
+		self::GUIDE_FAQ    => array(
+			'label' => 'Preguntas frecuentes',
+			'intro' => 'Las dudas que más se repiten. Lo que antes se llamaba «convocatoria» aquí se llama «procedimiento».',
+		),
+	);
+
+
+
+
+
+
+	public const ALLOWED = array(
+		'p'      => array(),
+		'ul'     => array(),
+		'ol'     => array(),
+		'li'     => array(),
+		'strong' => array(),
+		'em'     => array(),
+		'code'   => array(),
+		'a'      => array( 'href' => true ),
+		'table'  => array(),
+		'thead'  => array(),
+		'tbody'  => array(),
+		'tr'     => array(),
+		'th'     => array( 'scope' => true ),
+		'td'     => array(),
+	);
+
+
+
+
+
+
+
+	public static function sections( string $guide ): array {
+		$destinos = self::targets();
+		$out      = array();
+		foreach ( self::raw( $guide ) as $apartado ) {
+			$html             = (string) preg_replace_callback(
+				'/<a href="%([a-z]+)%(#[a-z0-9-]+)?">(.*?)<\/a>/u',
+				static function ( array $m ) use ( $destinos ): string {
+					$url = $destinos[ $m[1] ] ?? '';
+					if ( '' === $url ) {
+						return $m[3];
+					}
+					return '<a href="' . esc_url( $url . ( $m[2] ?? '' ) ) . '">' . $m[3] . '</a>';
+				},
+				$apartado['html']
+			);
+			$apartado['html'] = wp_kses( $html, self::ALLOWED );
+			$out[]            = $apartado;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function raw( string $guide ): array {
+		return self::SECTIONS[ $guide ] ?? self::SECTIONS[ self::GUIDE_APPLY ];
+	}
+
+
+
+
+
+
+	private static function targets(): array {
+		$out = array();
+		foreach ( array( 'home', 'mine', 'workspace', 'editor' ) as $seccion ) {
+			$out[ $seccion ] = Shell::url( $seccion );
+		}
+		foreach ( array_keys( self::GUIDES ) as $guia ) {
+			$out[ $guia ] = Help::url( $guia );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private const SECTIONS = array(
+		'solicitar' => array(
+			array(
+				'id'    => 'antes-de-empezar',
+				'level' => 2,
+				'title' => 'Antes de empezar: entre con su cuenta personal',
+				'html'  => '<ul><li>Pulse <strong>«Acceder»</strong>, arriba a la derecha. Hasta que no lo haga, la ficha de un procedimiento solo se puede leer: no hay botón para solicitar.</li><li>Use su <strong>cuenta personal</strong>, la suya y no la cuenta genérica del centro. La solicitud de un centro la presenta su equipo directivo con su propia cuenta.</li><li>Al entrar, arriba a la derecha verá su nombre, su perfil (por ejemplo, «Equipo directivo») y, debajo, <strong>el nombre y el código de su centro</strong>. Compruébelos antes de seguir.</li></ul>'
+					. '<p>Si en lugar del centro ve <strong>«Sin centro asignado»</strong>, o al abrir una solicitud le aparece «Su cuenta no tiene centro asignado» o «Su perfil no presenta solicitudes de centro», no podrá solicitar hasta que se corrija su cuenta. Eso lo hace quien administra el aplicativo: vea las <a href="%preguntas%#no-veo-el-boton-solicitar">preguntas frecuentes</a>.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'cabecera con la sesión iniciada: nombre, «Equipo directivo» y el centro con su código',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'encontrar-el-procedimiento',
+				'level' => 2,
+				'title' => 'Encuentre el procedimiento',
+				'html'  => '<ul><li>En <strong><a href="%home%">«Inicio»</a></strong> están los procedimientos publicados, cada uno con su estado: <strong>Próximo</strong> (aún no se puede solicitar), <strong>Abierto</strong>, <strong>En subsanación</strong>, <strong>Cerrado</strong> o <strong>Resuelto</strong>.</li><li>Pulse el título para abrir su <strong>ficha</strong>: arriba, el resumen (estado, curso, plazo y correo de contacto) y la cuenta atrás del cierre; debajo, las pestañas con la información («Objetivos», «Dirigido a», «Calendario»…) y los enlaces a la resolución y a los listados.</li></ul>'
+					. '<p>Fíjese en <strong>a quién se dirige</strong> (pestaña «Dirigido a» y resumen):</p>'
+					. '<ul><li><strong>Centros educativos</strong>: solicita el equipo directivo, una solicitud por centro.</li><li><strong>Profesorado</strong>: cada docente solicita con su propia cuenta.</li><li>Algunos son solo para <strong>centros públicos</strong> o solo para <strong>centros privados y concertados</strong>, o solo para ciertos tipos de centro, ciertas islas o una lista cerrada de centros. Si su centro no entra, no verá el botón o verá el aviso «Este procedimiento no se dirige a centros como el suyo».</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'portada con las tarjetas de procedimientos y sus estados',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'ficha de un procedimiento abierto, con el resumen, el bloque «Acceso con la cuenta del equipo directivo» y el botón para solicitar',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'rellenar-la-solicitud',
+				'level' => 2,
+				'title' => 'Rellene la solicitud',
+				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
+					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora.</li></ol>'
+					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pantalla de solicitud, parte superior: título, estado y plazo',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'bloque de preguntas, con una obligatoria y una de archivo',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'bloque «Solicita» con la casilla de los compromisos',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'comprobar-la-presentacion',
+				'level' => 2,
+				'title' => 'Compruebe que ha quedado presentada',
+				'html'  => '<ul><li>Verá el aviso <strong>«Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.»</strong> y, en la solicitud, <strong>«Presentada el …»</strong>.</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada: …»</strong>, en la dirección de su cuenta.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'aviso verde «Solicitud presentada»',
+						'image'   => '',
+					),
+					array(
+						'caption' => '«Mi centro» con la fila de la solicitud en estado «Presentada»',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'personas-participantes',
+				'level' => 2,
+				'title' => 'No olvide a las personas participantes',
+				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas de la solicitud»</strong>. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: pide al menos …»). No se rechaza, pero quien revisa lo verá.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>El plazo para gestionar la lista aparece encima («Plazo para gestionar la lista: …»). Puede ser distinto del plazo de solicitud.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'bloque «Personas de la solicitud» vacío, con «Dar de alta a una persona»',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'lista con dos personas, papel y grupo, y los botones «Cambiar o sustituir» y «Dar de baja»',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'modificar-la-solicitud',
+				'level' => 2,
+				'title' => 'Modifique la solicitud',
+				'html'  => '<p>Mientras el plazo esté abierto, entre en <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a> → «Ver la solicitud»</strong>, cambie lo que necesite y pulse <strong>«Guardar los cambios»</strong>. Recibirá un correo de que la solicitud se ha modificado. Cualquier persona del equipo directivo del mismo centro ve y edita la misma solicitud.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'subsanar',
+				'level' => 2,
+				'title' => 'Subsane si se lo piden',
+				'html'  => '<p>Si quien revisa le pide subsanar, la solicitud aparece como <strong>«A subsanar»</strong> con una nota que explica qué falta, y en «Mi centro» un aviso amarillo: «1 solicitud tiene la subsanación abierta hasta el …». Pulse <strong>«Ir a la solicitud»</strong>, corrija y guarde <strong>dentro del plazo de subsanación</strong>. Fuera de ese plazo ya no se puede editar.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'aviso de subsanación en «Mi centro» y la nota de revisión en la fila',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'entregas-con-plazo-propio',
+				'level' => 2,
+				'title' => 'Entregue los documentos con plazo propio',
+				'html'  => '<p>Algunos documentos (una memoria, un proyecto, un anexo firmado) se entregan <strong>después</strong>, en su propio plazo. Aparecen en la solicitud con su apertura y su cierre. Elija el fichero y pulse <strong>«Entregar documento»</strong>. Si ya había entregado uno, el nuevo lo sustituye; la solicitud y su revisión se conservan.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pregunta de entrega con plazo propio y el botón «Entregar documento»',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'retirar-la-solicitud',
+				'level' => 2,
+				'title' => 'Retire la solicitud si ya no quiere participar',
+				'html'  => '<p>Mientras el plazo siga abierto, pulse <strong>«Retirar la solicitud»</strong> (en «Mi centro» o al final de la solicitud) y confirme. Deja de contar y recibirá un correo de acuse. Mientras haya plazo, puede presentar otra nueva.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'despues-de-presentar',
+				'level' => 2,
+				'title' => 'Qué verá después',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'shots' => array(),
+			),
+		),
+		'gestionar' => array(
+			array(
+				'id'    => 'que-necesita',
+				'level' => 2,
+				'title' => 'Qué necesita',
+				'html'  => '<ul><li>Una cuenta con perfil de <strong>gestión de procedimientos</strong> y un <strong>ámbito</strong> asignado. Lo ve arriba a la derecha: «Gestión de procedimientos» y, debajo, su ámbito.</li><li><strong>No necesita pedir permiso para cada procedimiento</strong>: con ese perfil y ese ámbito puede crear los que quiera. Si ve «Su perfil no puede crear procedimientos» o «No tiene ningún ámbito asignado», pídalo a quien administra el aplicativo.</li><li>Solo verá y editará los procedimientos de su ámbito y de los ámbitos que cuelgan de él.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'cabecera con el perfil «Gestión de procedimientos» y el ámbito',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'su-lista',
+				'level' => 2,
+				'title' => 'Su lista: «Gestión de procedimientos»',
+				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento, a quién se dirige, su estado, la fecha límite de solicitud y tres columnas de acciones: <strong>Detalles</strong> (abre el taller), <strong>Solicitudes</strong> y <strong>Duplicar</strong>. Al lado, la leyenda de los iconos de estado; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
+				'shots' => array(
+					array(
+						'caption' => '«Gestión de procedimientos» con la tabla y la leyenda de estados',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'crear-o-duplicar',
+				'level' => 2,
+				'title' => 'Cree uno nuevo o duplique uno anterior',
+				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong> en su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El <strong>Formato Express</strong> pide solo lo mínimo:</p>'
+					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Un centro de otra titularidad no ve el botón de solicitar.</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha) y <strong>Color de cabecera</strong>.</li></ul>'
+					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
+					. '<p><strong>Duplicar</strong>: el icono «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pantalla «Crear un procedimiento», Formato Express',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'el-taller',
+				'level' => 2,
+				'title' => 'El taller, pestaña a pestaña',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'cabecera del taller con las pestañas',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'taller-datos',
+				'level' => 3,
+				'title' => 'Datos',
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio, el procedimiento queda como «Próximo» y nadie puede solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias) y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Datos», bloque de plazos',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'pestaña «Datos», bloques de la solicitud y de qué centros pueden solicitar',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'taller-preguntas',
+				'level' => 3,
+				'title' => 'Preguntas',
+				'html'  => '<p>Hasta 40 preguntas propias. Al final aparece siempre una <strong>«Pregunta nueva»</strong> vacía: rellénela y pulse <strong>«Guardar las preguntas»</strong>; aparecerá otra vacía para la siguiente. Se crean <strong>de una en una</strong>.</p>'
+					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
+					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, borre su rótulo y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar. El rótulo sí, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'taller-enlaces',
+				'level' => 3,
+				'title' => 'Enlaces',
+				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Enlaces»',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'taller-personas',
+				'level' => 3,
+				'title' => 'Personas',
+				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
+					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Personas» con papeles y grupos',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'taller-avisos',
+				'level' => 3,
+				'title' => 'Avisos',
+				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios de personas, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'taller-consulta',
+				'level' => 3,
+				'title' => 'Consulta',
+				'html'  => '<p>Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'taller-codigo',
+				'level' => 3,
+				'title' => 'Código',
+				'html'  => '<p>Estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'publicar',
+				'level' => 2,
+				'title' => 'Publique',
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>.</p>'
+					. '<p>Antes de publicar, repase las fechas del plazo, a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Publicación» con la línea de estados y la etapa actual',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'revisar-solicitudes',
+				'level' => 2,
+				'title' => 'Revise las solicitudes',
+				'html'  => '<p>Pestaña <strong>«Solicitudes»</strong>, o la columna «Solicitudes» de su lista.</p>'
+					. '<ul><li>Filtros por estado (Presentada, A subsanar, Admitida, Excluida), por nombre o código del centro, por isla o zona y <strong>«Solo las incompletas»</strong>.</li><li><strong>«Revisar»</strong> en cada fila: elija el estado y escriba la <strong>nota para el centro</strong>, obligatoria al pedir subsanar y al excluir. El centro la lee en su solicitud y recibe un correo.</li><li><strong>«Revisar varias a la vez»</strong>: marque las filas y aplique a todas el mismo estado y la misma nota.</li><li>En la revisión de cada solicitud están el <strong>historial</strong>, la <strong>nota interna</strong> (solo la ve quien revisa), la <strong>prórroga</strong> («Guardar la prórroga» y «Quitar la prórroga») y <strong>«Retirar esta solicitud»</strong>, si se presentó por error, con su motivo. Las retiradas se ven en <strong>«Retiradas»</strong> y se pueden restaurar.</li><li><strong>«Presentar en nombre de un centro»</strong>: para un centro que no pudo entrar a tiempo. Se crea su solicitud vacía y el centro la completa hasta la fecha que usted ponga. Avise al centro: no recibe correo.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Solicitudes» con filtros y la fila «Revisar»',
+						'image'   => '',
+					),
+					array(
+						'caption' => 'revisión de una solicitud con estado, nota y prórroga',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'exportar',
+				'level' => 2,
+				'title' => 'Exporte',
+				'html'  => '<p>Botón <strong>«Exportar…»</strong>: elija <strong>todas</strong> o <strong>las del filtro</strong>, las <strong>columnas</strong> y si quiere <strong>una fila por solicitud</strong> o <strong>una por persona coordinadora</strong>. También puede sacar el <strong>fichero de alta de usuarios de Moodle</strong>, con el formato que admite su importación. Se descarga una hoja de cálculo (CSV).</p>',
+				'shots' => array(
+					array(
+						'caption' => 'diálogo «Exportar las solicitudes» con las columnas',
+						'image'   => '',
+					),
+				),
+			),
+			array(
+				'id'    => 'entregas-y-prorrogas',
+				'level' => 2,
+				'title' => 'Entregas y prórrogas',
+				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'cerrar-y-archivar',
+				'level' => 2,
+				'title' => 'Cierre y archive',
+				'html'  => '<ul><li>El plazo se cierra solo en la fecha de fin. Si necesita cerrarlo antes, pulse <strong>«Cerrar solicitudes ahora»</strong> en la pestaña «Publicación»; <strong>«Volver al calendario automático»</strong> lo deshace.</li><li>Cuando ya no quede nada que tocar (resuelto, listados enlazados, solicitudes revisadas), pulse <strong>«Marcar como histórico»</strong>. Queda en solo lectura y se puede consultar y exportar. <strong>Para volver a abrirlo hay que pedírselo a quien administra el aplicativo.</strong></li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'bloque «Dar el procedimiento por terminado»',
+						'image'   => '',
+					),
+				),
+			),
+		),
+		'preguntas' => array(
+			array(
+				'id'    => 'para-quien-solicita',
+				'level' => 2,
+				'title' => 'Para quien solicita',
+				'html'  => '',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'no-veo-el-boton-solicitar',
+				'level' => 3,
+				'title' => 'No veo el botón «Solicitar». ¿Por qué?',
+				'html'  => '<p>Compruebe, por este orden:</p>'
+					. '<ol><li><strong>¿Ha pulsado «Acceder»?</strong> Sin iniciar sesión, la ficha solo se lee.</li><li><strong>¿Ha entrado con su cuenta personal?</strong> No con la cuenta genérica del centro. La solicitud de un centro la presenta el equipo directivo con su propia cuenta.</li><li><strong>¿Arriba a la derecha aparece su centro con su código?</strong> Si pone «Sin centro asignado», o la pantalla dice «Su perfil no presenta solicitudes de centro», su cuenta no tiene el perfil de equipo directivo o el centro. Pida que lo corrijan por el canal de ayuda técnica. Es frecuente con las direcciones recién nombradas.</li><li><strong>¿El procedimiento es para centros como el suyo?</strong> Mire «Dirigido a»: puede ser solo para públicos, solo para privados y concertados, solo para profesorado o solo para ciertos centros.</li><li><strong>¿Está abierto el plazo?</strong> Mire el estado y las fechas del resumen.</li></ol>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'mi-perfil-no-tiene-centro',
+				'level' => 3,
+				'title' => 'Soy de un centro concertado y no puedo entrar, o mi perfil no tiene centro',
+				'html'  => '<p>Su cuenta necesita tener asignado el código de su centro. No se puede cambiar desde la solicitud: pídalo por el canal de ayuda técnica indicando el nombre y el código del centro.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'centro-de-otra-titularidad',
+				'level' => 3,
+				'title' => 'Mi centro es público y el procedimiento es solo para concertados, o al revés',
+				'html'  => '<p>No podrá solicitar: el aplicativo lo impide para que no se presente una solicitud que luego se excluiría. Si cree que su centro debería entrar, escriba al correo de contacto del procedimiento.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'como-se-que-esta-presentada',
+				'level' => 3,
+				'title' => '¿Cómo sé que mi solicitud ha quedado presentada?',
+				'html'  => '<p>Tiene tres pruebas: el aviso «Solicitud presentada» y la línea «Presentada el …» en la propia solicitud; el correo «Solicitud presentada: …»; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'inscripcion-incompleta',
+				'level' => 3,
+				'title' => 'Me dicen que la inscripción no está completa, pero lo rellené todo',
+				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas de la solicitud», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: pide al menos …». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'no-he-dado-de-alta-a-nadie',
+				'level' => 3,
+				'title' => 'He presentado la solicitud y no he dado de alta a nadie',
+				'html'  => '<p>Es normal: la lista se rellena <strong>después</strong> de presentar. Vuelva a la solicitud («Sus solicitudes» → «Ver la solicitud») y use «Dar de alta a una persona».</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'cambiar-personas-coordinadoras',
+				'level' => 3,
+				'title' => '¿Dónde añado o cambio a las personas después de presentar? ¿Hasta cuándo?',
+				'html'  => '<p>En la misma solicitud, en el bloque «Personas de la solicitud». El plazo aparece encima («Plazo para gestionar la lista: …») y puede durar más que el plazo de solicitud. La persona coordinadora de los datos de la solicitud se cambia mientras se pueda modificar la solicitud.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'coordino-un-eje',
+				'level' => 3,
+				'title' => 'Coordino un eje: ¿dónde digo cuál?',
+				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. Si el papel exige grupo, no se puede guardar sin él.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'persona-dada-de-alta-dos-veces',
+				'level' => 3,
+				'title' => 'He dado de alta dos veces a la misma persona',
+				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja a …». Si el procedimiento solo admite una persona por papel y grupo, el aplicativo se lo indicará.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'sustituir-a-una-persona',
+				'level' => 3,
+				'title' => 'Tengo que sustituir a una persona',
+				'html'  => '<p>Pulse «Cambiar o sustituir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'cambiar-la-solicitud',
+				'level' => 3,
+				'title' => '¿Puedo cambiar la solicitud después de presentarla?',
+				'html'  => '<p>Sí, mientras el plazo esté abierto. Después, solo si le piden subsanar, dentro del plazo de subsanación, o si le conceden una prórroga.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'me-equivoque-de-procedimiento',
+				'level' => 3,
+				'title' => 'Me equivoqué de procedimiento. ¿Puedo deshacerlo?',
+				'html'  => '<p>Sí: pulse «Retirar la solicitud» mientras el plazo siga abierto.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'para-quien-gestiona',
+				'level' => 2,
+				'title' => 'Para quien gestiona',
+				'html'  => '',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'permiso-para-crear',
+				'level' => 3,
+				'title' => '¿Necesito permiso para crear un procedimiento?',
+				'html'  => '<p>No para cada uno. Basta con tener el perfil de gestión y un ámbito asignado. Si no lo tiene, pídalo a quien administra el aplicativo.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'nadie-lo-ve',
+				'level' => 3,
+				'title' => 'He creado el procedimiento y nadie lo ve',
+				'html'  => '<p>Nace en borrador. Pulse «Publicar el procedimiento» en la pestaña «Publicación».</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'sale-como-proximo',
+				'level' => 3,
+				'title' => 'Está publicado, pero sale como «Próximo» y nadie puede solicitar',
+				'html'  => '<p>Falta la fecha de inicio del plazo de solicitud, o todavía no ha llegado. El estado sale de las fechas: no hay que cambiarlo a mano. Revise los plazos en la pestaña «Datos».</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'varias-casillas',
+				'level' => 3,
+				'title' => '¿Cómo creo varias casillas o varias preguntas?',
+				'html'  => '<p>Se crean de una en una: rellene la «Pregunta nueva» y pulse «Guardar las preguntas»; aparecerá otra vacía. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'mismas-preguntas',
+				'level' => 3,
+				'title' => 'Quiero las mismas preguntas que el curso pasado',
+				'html'  => '<p>Abra el procedimiento del curso pasado y pulse «Duplicar». Después, ponga el curso nuevo y las fechas.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'campo-numerico',
+				'level' => 3,
+				'title' => 'Necesito un campo numérico',
+				'html'  => '<p>Use el tipo «Número», con mínimo y máximo si los hay. Para varias cantidades, por ejemplo el alumnado por nivel, use «Cantidades por fila».</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'documento-firmado',
+				'level' => 3,
+				'title' => 'Necesito que el centro suba un documento de compromiso firmado',
+				'html'  => '<p>Cree una pregunta de tipo «Archivo», obligatoria. Si se entrega más tarde, marque «Entrega con plazo propio» y ponga sus fechas. Si basta con que el centro acepte un texto, use «Compromisos del centro» en «Datos».</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'cambie-un-rotulo',
+				'level' => 3,
+				'title' => 'He cambiado el rótulo de una pregunta con solicitudes ya presentadas',
+				'html'  => '<p>Las respuestas ya dadas se quedan como estaban, ahora bajo el rótulo nuevo. Si la pregunta significa otra cosa, vuelva al rótulo anterior y cree una pregunta nueva.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'enlaces-cortados',
+				'level' => 3,
+				'title' => 'Los enlaces de la resolución salen cortados o no abren',
+				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'exportar-mas-columnas',
+				'level' => 3,
+				'title' => 'Quiero exportar con más columnas',
+				'html'  => '<p>En «Exportar…» elija las columnas. Además de las habituales hay otras, como los datos del catálogo del centro o la nota interna, que solo salen si se marcan.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'centro-fuera-de-plazo',
+				'level' => 3,
+				'title' => 'Un centro no pudo presentar a tiempo',
+				'html'  => '<p>En «Solicitudes», use «Presentar en nombre de un centro» si no tiene solicitud, o dele una prórroga desde su solicitud si ya la tiene. Avise al centro.</p>',
+				'shots' => array(),
+			),
+			array(
+				'id'    => 'historico-por-error',
+				'level' => 3,
+				'title' => 'He marcado el procedimiento como histórico por error',
+				'html'  => '<p>Pida a quien administra el aplicativo que lo vuelva a abrir.</p>',
+				'shots' => array(),
+			),
+		),
+	);
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
+use Prc\PublicFront\HelpContent;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\HelpView', false ) ) {
+final class HelpView {
+
+
+
+
+
+
+
+	public static function html( array $m ): string {
+		$secciones = (array) $m['sections'];
+
+		ob_start();
+		?>
+		<div class="prc-ayuda">
+			<nav class="prc-ayuda__guias" aria-label="Guías de ayuda">
+				<ul>
+					<?php foreach ( (array) $m['tabs'] as $pestana ) : ?>
+						<li><a href="<?php echo esc_url( (string) $pestana['url'] ); ?>"<?php echo empty( $pestana['active'] ) ? '' : ' class="is-activo" aria-current="page"'; ?>><?php echo esc_html( (string) $pestana['label'] ); ?></a></li>
+					<?php endforeach; ?>
+				</ul>
+			</nav>
+
+			<article class="prc-ayuda__guia" aria-labelledby="prc-ayuda-titulo">
+				<h2 class="prc-ayuda__titulo" id="prc-ayuda-titulo"><?php echo esc_html( (string) $m['label'] ); ?></h2>
+				<p class="prc-intro"><?php echo esc_html( (string) $m['intro'] ); ?></p>
+				<?php
+				echo self::index( $secciones );
+				foreach ( $secciones as $apartado ) {
+					echo self::section( (array) $apartado );
+				}
+				?>
+			</article>
+
+			<?php echo self::support( (string) $m['support'] );?>
+		</div>
+		<?php
+		return Shell::render( 'Ayuda', '', (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+	private static function index( array $secciones ): string {
+		$html    = '';
+		$abierta = false;
+		foreach ( $secciones as $apartado ) {
+			$enlace = '<a href="#' . esc_attr( (string) $apartado['id'] ) . '">' . esc_html( (string) $apartado['title'] ) . '</a>';
+			if ( 3 === (int) $apartado['level'] ) {
+				$html   .= ( $abierta ? '' : '<ul>' ) . '<li>' . $enlace . '</li>';
+				$abierta = true;
+				continue;
+			}
+			$html   .= ( $abierta ? '</ul>' : '' ) . ( '' === $html ? '' : '</li>' ) . '<li>' . $enlace;
+			$abierta = false;
+		}
+		if ( '' === $html ) {
+			return '';
+		}
+		$html .= ( $abierta ? '</ul>' : '' ) . '</li>';
+		return '<nav class="prc-ayuda__indice" aria-label="Índice de la guía"><h3 class="prc-ayuda__indice-titulo">En esta guía</h3><ol>' . $html . '</ol></nav>';
+	}
+
+
+
+
+
+
+
+	private static function section( array $apartado ): string {
+		$id     = (string) $apartado['id'];
+		$nivel  = 3 === (int) $apartado['level'] ? 'h4' : 'h3';
+		$titulo = '<' . $nivel . ' class="prc-ayuda__apartado-titulo" id="' . esc_attr( $id . '-titulo' ) . '">' . esc_html( (string) $apartado['title'] ) . '</' . $nivel . '>';
+
+		$capturas = '';
+		foreach ( (array) $apartado['shots'] as $captura ) {
+			$capturas .= self::shot( (array) $captura );
+		}
+
+		return '<section class="prc-ayuda__apartado prc-ayuda__apartado--' . esc_attr( $nivel ) . '" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $id . '-titulo' ) . '">'
+			. $titulo
+			. wp_kses( (string) $apartado['html'], HelpContent::ALLOWED )
+			. $capturas
+			. '</section>';
+	}
+
+
+
+
+
+
+
+	private static function shot( array $captura ): string {
+		$texto  = (string) ( $captura['caption'] ?? '' );
+		$imagen = (string) ( $captura['image'] ?? '' );
+		if ( '' !== $imagen ) {
+			return '<figure class="prc-ayuda__captura"><img src="' . esc_url( $imagen ) . '" alt="' . esc_attr( $texto ) . '" loading="lazy" />'
+				. '<figcaption>' . esc_html( $texto ) . '</figcaption></figure>';
+		}
+		return '<p class="prc-ayuda__captura prc-ayuda__captura--pendiente">' . esc_html( 'Captura pendiente: ' . $texto ) . '</p>';
+	}
+
+
+
+
+
+
+
+	private static function support( string $configurada ): string {
+		ob_start();
+		?>
+		<section class="prc-ayuda__soporte" aria-labelledby="prc-ayuda-soporte">
+			<h2 class="prc-ayuda__titulo" id="prc-ayuda-soporte">¿Necesita ayuda técnica?</h2>
+			<p>Para las dudas sobre un procedimiento —requisitos, plazos, quién puede participar—, escriba al área convocante, al <strong>correo de contacto</strong> que aparece en la ficha de ese procedimiento.</p>
+			<?php echo wp_kses( $configurada, HelpContent::ALLOWED ); ?>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\PublicFront\View\HelpView;
+use Prc\PublicFront\View\ProcedureChrome;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\Help', false ) ) {
+final class Help {
+
+	public const SHORTCODE = 'prc_help';
+
+
+
+
+	public const ARG_GUIDE = 'guia';
+
+
+
+
+
+
+	public static function register(): void {
+		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+	}
+
+
+
+
+
+
+	public static function guide(): string {
+
+		$crudo = isset( $_GET[ self::ARG_GUIDE ] ) && is_string( $_GET[ self::ARG_GUIDE ] ) ? sanitize_key( wp_unslash( $_GET[ self::ARG_GUIDE ] ) ) : '';
+		return self::known( $crudo );
+	}
+
+
+
+
+
+
+
+	private static function known( string $guide ): string {
+		return isset( HelpContent::GUIDES[ $guide ] ) ? $guide : HelpContent::GUIDE_APPLY;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function url( string $guide, string $anchor = '' ): string {
+		$url = Shell::url( 'help', array( self::ARG_GUIDE => self::known( $guide ) ) );
+		if ( '' === $url ) {
+			return '';
+		}
+		$anchor = sanitize_title( $anchor );
+		return '' === $anchor ? $url : $url . '#' . $anchor;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function support(): string {
+		$texto = ProcedureChrome::chrome()['help_contact'] ?? '';
+		return is_string( $texto ) ? trim( wp_kses( $texto, HelpContent::ALLOWED ) ) : '';
+	}
+
+
+
+
+
+
+	public static function model(): array {
+		$guia     = self::guide();
+		$pestanas = array();
+		foreach ( HelpContent::GUIDES as $clave => $datos ) {
+			$pestanas[ $clave ] = array(
+				'label'  => $datos['label'],
+				'url'    => self::url( $clave ),
+				'active' => $clave === $guia,
+			);
+		}
+
+		return array(
+			'guide'    => $guia,
+			'label'    => HelpContent::GUIDES[ $guia ]['label'],
+			'intro'    => HelpContent::GUIDES[ $guia ]['intro'],
+			'tabs'     => $pestanas,
+			'sections' => HelpContent::sections( $guia ),
+			'support'  => self::support(),
+		);
+	}
+
+
+
+
+
+
+
+	public static function render( $atts = array() ): string {
+		unset( $atts );
+		Assets::enqueue();
+		return HelpView::html( self::model() );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\DateRange;
@@ -17536,6 +18516,11 @@ final class ProcedureChrome {
 
 
 			'privacy_notice' => '',
+
+
+
+
+			'help_contact'   => '',
 
 			'consent_css'    => '',
 			'consent_js'     => '',
@@ -17932,6 +18917,7 @@ final class ProcedureChrome {
 				<?php endif; ?>
 				<p class="prc-acceso__texto">Solicita la dirección del centro, validándose con su
 					<strong>cuenta personal</strong> en el enlace de acceso de la cabecera.</p>
+				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) );?>
 				<?php if ( '' !== (string) $accion['url'] ) : ?>
 					<p class="prc-acceso__accion">
 						<a class="<?php echo esc_attr( $clases ); ?>" href="<?php echo esc_url( (string) $accion['url'] ); ?>">
@@ -18284,6 +19270,8 @@ final class ProcedureView {
 			'mine'                 => array(),
 			'action'               => self::no_action(),
 			'manage_url'           => '',
+
+			'help_url'             => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
 		);
 	}
 
@@ -21116,6 +22104,7 @@ final class ProcedureEditorView {
 			enlaces</strong>.
 		</p>
 		<?php
+		echo PanelParts::help_link( (string) ( $m['help_new_url'] ?? '' ) );
 		echo self::flash( $m );
 		echo self::data_panel( $m );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -21815,6 +22804,7 @@ final class ProcedureEditorView {
 				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
+			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) );?>
 
 			<?php foreach ( $filas as $i => $pregunta ) : ?>
 				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) );?>
@@ -23788,6 +24778,9 @@ final class ProcedureEditor {
 			'foreign_areas'           => array(),
 			'view_url'                => '',
 			'workspace_url'           => Shell::url( 'workspace' ),
+
+			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
+			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),
@@ -25108,6 +26101,7 @@ final class ApplyFormView {
 		<?php if ( '' !== $subsanacion ) : ?>
 			<p class="prc-sub"><?php echo esc_html( 'Plazo de subsanación: ' . lcfirst( $subsanacion ) ); ?></p>
 		<?php endif; ?>
+		<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) );?>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -26049,6 +27043,7 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			'help_url'        => Help::url( HelpContent::GUIDE_APPLY, 'rellenar-la-solicitud' ),
 			'applicant_type'  => '',
 			'state'           => '',
 			'state_label'     => '',
@@ -30339,6 +31334,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
+use Prc\PublicFront\Help;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
 use Prc\PublicFront\Observe;
@@ -30406,6 +31402,8 @@ final class App {
 		Workspace::class,
 		ProcedureEditor::class,
 		Home::class,
+
+		Help::class,
 		ProcedureView::class,
 	);
 
@@ -32065,6 +33063,134 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 /* Quien pide menos movimiento, menos movimiento. */
 @media (prefers-reduced-motion: reduce) {
   .prc-app * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+',
+  'css/prc-ayuda.css' => '/* La ayuda: dos guías y las preguntas frecuentes (ADR-0045).
+   ==========================================================================
+
+   Lo propio de esta pantalla y la línea «¿Dudas? Consulte la ayuda» que
+   llevan otras. Todo cuelga de `.prc-ayuda` salvo esa línea, para que
+   ninguna regla de aquí se escape a las demás pantallas. Sin diseño nuevo:
+   los tokens del armazón y nada más; la mejora visual irá aparte. */
+
+/* --- las tres guías ------------------------------------------------------ */
+
+/* Enlaces de verdad, uno por guía: cada uno es una dirección. */
+.prc-ayuda__guias ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  border-bottom: 1px solid var(--prc-c-sindato);
+}
+
+.prc-ayuda__guias a {
+  display: block;
+  padding: 8px 16px;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+  text-decoration: none;
+}
+
+.prc-ayuda__guias a:hover { color: var(--prc-c-titulo); }
+
+.prc-ayuda__guias a.is-activo {
+  border-color: var(--prc-c-sindato) var(--prc-c-sindato) #fff;
+  background: #fff;
+  color: var(--prc-c-titulo);
+  font-weight: var(--prc-p-fuerte);
+}
+
+.prc-ayuda__guias a:focus-visible { outline: 2px solid var(--prc-c-azul-rotulo); outline-offset: -2px; }
+
+/* --- la guía -------------------------------------------------------------- */
+
+.prc-ayuda__titulo {
+  margin: 0 0 8px;
+  color: var(--prc-c-titulo);
+  font: var(--prc-p-h2) var(--prc-t-h2)/var(--prc-i-h2) var(--prc-fuente);
+}
+
+.prc-ayuda__indice {
+  margin: 16px 0 28px;
+  padding: 12px 18px;
+  background: var(--prc-info-fondo);
+  border: 1px solid var(--prc-info-borde);
+}
+
+.prc-ayuda__indice-titulo {
+  margin: 0 0 6px;
+  color: var(--prc-info-texto);
+  font: var(--prc-p-fuerte) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+.prc-ayuda__indice ol,
+.prc-ayuda__indice ul { margin: 0; padding-left: 22px; }
+
+.prc-ayuda__apartado {
+  margin: 0 0 24px;
+  scroll-margin-top: 16px;
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+.prc-ayuda__apartado-titulo {
+  margin: 0 0 8px;
+  color: var(--prc-c-titulo);
+  font: var(--prc-p-h3) var(--prc-t-h3)/var(--prc-i-h3) var(--prc-fuente);
+}
+
+.prc-ayuda__apartado--h4 .prc-ayuda__apartado-titulo {
+  font: var(--prc-p-h5) var(--prc-t-h5)/var(--prc-i-h5) var(--prc-fuente);
+  font-weight: var(--prc-p-fuerte);
+}
+
+.prc-ayuda__apartado table {
+  width: 100%;
+  margin: 8px 0 12px;
+  border-collapse: collapse;
+}
+
+.prc-ayuda__apartado th,
+.prc-ayuda__apartado td {
+  padding: 4px 8px;
+  border: 1px solid var(--prc-c-sindato);
+  text-align: left;
+  vertical-align: top;
+}
+
+/* El hueco de una captura que todavía no hay: se ve, se lee y no estorba.
+   Cuando llegue la imagen, el mismo sitio lleva una figura. */
+.prc-ayuda__captura { margin: 8px 0 16px; }
+.prc-ayuda__captura img { max-width: 100%; height: auto; border: 1px solid var(--prc-c-sindato); }
+
+.prc-ayuda__captura--pendiente {
+  padding: 10px 14px;
+  border: 1px dashed var(--prc-c-tenue);
+  color: var(--prc-c-medio);
+  font-size: var(--prc-t-menudo);
+  font-style: italic;
+}
+
+.prc-ayuda__soporte {
+  margin: 32px 0 0;
+  padding: 16px 18px;
+  border-top: 2px solid var(--prc-c-azul);
+  color: var(--prc-c-texto);
+  font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
+}
+
+/* --- «¿Dudas? Consulte la ayuda», en las demás pantallas ----------------- */
+
+.prc-ayuda-enlace {
+  margin: 4px 0 12px;
+  color: var(--prc-c-texto);
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
 }
 ',
   'css/prc-ficha.css' => '/* La ficha de un procedimiento: **solo lo que aparece en esta pantalla**.

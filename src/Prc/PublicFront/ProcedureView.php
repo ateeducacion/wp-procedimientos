@@ -219,6 +219,8 @@ final class ProcedureView {
 			'mine'                 => array(),
 			'action'               => self::no_action(),
 			'manage_url'           => '',
+			// Junto al acceso, el apartado de la ayuda que explica cómo entrar.
+			'help_url'             => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
 		);
 	}
 

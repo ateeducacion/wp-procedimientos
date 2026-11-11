@@ -899,6 +899,8 @@ final class ProcedureEditor {
 		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
 		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// «Quitar esta pregunta» es lo mismo que dejar el rótulo en blanco.
+		$rotulos = array_replace( $rotulos, array_fill_keys( array_keys( array_filter( $quitadas ) ), '' ) );
 
 		$antes   = Applications::questions( $procedure_id );
 		$previas = array_column( $antes, null, 'key' );
@@ -907,8 +909,7 @@ final class ProcedureEditor {
 			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
 				'key'       => $key,
-				// «Quitar esta pregunta» es lo mismo que dejar el rótulo en blanco.
-				'label'     => empty( $quitadas[ $i ] ) ? sanitize_text_field( (string) $rotulo ) : '',
+				'label'     => sanitize_text_field( (string) $rotulo ),
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
 				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),

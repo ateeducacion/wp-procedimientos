@@ -270,11 +270,8 @@ final class PeopleForm {
 		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
 		// El último día solo se dice cuando la lista se puede escribir, o se
 		// podrá nada más presentar: con ella cerrada, lo que se dice es el motivo.
-		$abierta = $solicitud > 0 ? $puede : '' === $despues;
-		// Rechazado por la misma persona o por un papel ocupado, el aviso
-		// lleva a la fila con la que choca: sustituir es editar esa fila.
+		$abierta  = $solicitud > 0 ? $puede : '' === $despues;
 		$tecleado = '' !== self::$rejected && ! self::$stale ? self::person() : array();
-		$choque   = array() === $tecleado ? '' : ApplicationPeople::clash( $spec, $filas, array( 'id' => self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row ) + $tecleado );
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
@@ -298,8 +295,27 @@ final class PeopleForm {
 			// segundo envío no pisa a ciegas el cambio de la otra cuenta.
 			'typed'          => $tecleado,
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
-			'clash_row'      => $choque,
+			'clash_row'      => self::clash_row( $spec, $filas, $tecleado ),
 		);
+	}
+
+	/**
+	 * The row a refused person clashes with: the same person, or the taken role.
+	 *
+	 * Rechazado por la misma persona o por un papel ocupado, el aviso lleva a
+	 * la fila con la que choca: sustituir es editar esa fila.
+	 *
+	 * @param array<string, mixed>              $spec     Specification.
+	 * @param array<int, array<string, string>> $filas    The list.
+	 * @param array<string, string>             $tecleado What the refused form sent; empty for none.
+	 * @return string Row id; empty when there is none.
+	 */
+	private static function clash_row( array $spec, array $filas, array $tecleado ): string {
+		if ( array() === $tecleado ) {
+			return '';
+		}
+		$id = self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row;
+		return ApplicationPeople::clash( $spec, $filas, array( 'id' => $id ) + $tecleado );
 	}
 
 	/**

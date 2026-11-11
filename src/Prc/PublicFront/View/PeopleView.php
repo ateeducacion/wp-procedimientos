@@ -278,7 +278,7 @@ final class PeopleView {
 		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
 			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
 			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
-			. '<button type="submit" class="' . esc_attr( Assets::button_class() . ' prc-btn-borrar' ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
+			. '<button type="submit" class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
 			. '</form>';
 	}
 

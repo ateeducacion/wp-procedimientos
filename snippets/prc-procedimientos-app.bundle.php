@@ -9920,8 +9920,16 @@ final class Assets {
 
 
 
-	public static function button_class( bool $primary = false ): string {
-		return $primary
+
+
+
+
+
+	public static function button_class( $variant = false ): string {
+		if ( 'danger' === $variant ) {
+			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		}
+		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
 			: 'prc-btn btn btn-light';
 	}
@@ -21538,7 +21546,7 @@ final class ApplicationActionsView {
 					<?php wp_nonce_field( (string) $w['nonce_action'], WithdrawForm::NONCE_FIELD, false ); ?>
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_OP ); ?>" value="<?php echo esc_attr( WithdrawForm::OP_WITHDRAW ); ?>" />
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_APPLICATION ); ?>" value="<?php echo esc_attr( (string) (int) $w['application'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button>
+					<button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button>
 				</form>
 			<?php else : ?>
 				<p><?php echo esc_html( (string) $w['why'] ); ?></p>
@@ -21807,7 +21815,7 @@ final class ApplicationActionsView {
 					<textarea class="prc-control" id="prc-motivo-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_REASON ); ?>" rows="2" required></textarea>
 					<p class="prc-campo__ayuda">Obligatorio: queda en el historial de la solicitud. Úselo para lo que se presentó por error; para decir que no se admite, está «Excluida».</p>
 				</div>
-				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button></p>
+				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button></p>
 			</form>
 		</details>
 		<?php
@@ -22418,12 +22426,6 @@ final class ProcedureEditorView {
 
 
 
-		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::archive_switch( $m );
-		}
-
-
-
 
 		$cerrado = self::read_only( $m, $panel );
 		if ( $cerrado ) {
@@ -22456,6 +22458,12 @@ final class ProcedureEditorView {
 
 		if ( $cerrado ) {
 			echo '</fieldset>';
+		}
+
+
+
+		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
+			echo self::archive_switch( $m );
 		}
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
@@ -23476,131 +23484,168 @@ final class ProcedureEditorView {
 
 
 
-	private static function publish_panel( array $m ): string {
-		$op                 = ProcedureEditor::OP_PUBLISH;
-		$state              = (string) $m['state'];
-		$close_confirmation = sprintf(
-			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
-				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
-			(string) $m['title']
-		);
-		$draft_confirmation = sprintf(
-			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar '
-				. 'hasta que vuelva a publicarse.',
-			(string) $m['title']
-		);
-		$stage              = 1;
-		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
-			$stage = 0;
-		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
-			$stage = 4;
-		} elseif ( ProcedureMetaKeys::STATE_RESOLVED === $state ) {
-			$stage = 3;
-		} elseif ( ProcedureMetaKeys::STATE_CLOSED === $state ) {
-			$stage = $m['pending_documentation'] ? 2 : 3;
-		}
-		$steps = array(
-			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
-			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
-			array(
-				'Pendiente de documentación',
-				'Las solicitudes están cerradas y los centros ya inscritos aún pueden '
-					. 'entregar documentos dentro de su plazo.',
-			),
-			array(
-				'Cerrado',
-				'No se admiten solicitudes. Cuando ya no quede nada que gestionar, '
-					. 'puede marcar el procedimiento como histórico.',
-			),
-			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
-		);
 
+
+
+
+
+	private static function publish_panel( array $m ): string {
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
-			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
-				<?php foreach ( $steps as $index => $step ) : ?>
-					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
-						<h3><?php echo esc_html( $step[0] ); ?>
-						<?php
-						if ( $index === $stage ) :
-							?>
-							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
-						<p><?php echo esc_html( $step[1] ); ?></p>
-					</li>
-				<?php endforeach; ?>
-			</ol>
+			<?php echo self::publish_timeline( $m );?>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
 				El estado sale de las fechas y los enlaces; no hay que marcarlo a mano. Con el listado definitivo enlazado pasa a «Resuelto».
 				Si necesita cerrar las solicitudes antes, puede hacerlo aquí sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
+			<?php echo self::checklist( $m );?>
 			<?php if ( true === $m['can_publish'] ) : ?>
+				<?php $op = ProcedureEditor::OP_PUBLISH; ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
 					y los centros solicitan cuando abra el plazo.</p>
 				<form class="prc-acciones" method="post" action=""
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<?php echo self::op_fields( $m, $op );?>
 					<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit">Publicar el procedimiento</button>
 				</form>
 			<?php elseif ( 'publish' === (string) $m['status'] ) : ?>
 				<p class="prc-intro">Publicado: se ve en la portada y en su ficha. Si necesita retirarlo temporalmente,
 					puede devolverlo a borrador.</p>
 			<?php endif; ?>
-			<?php if ( true === $m['can_toggle_applications'] && 'publish' === (string) $m['status'] ) : ?>
-				<p class="prc-intro">
-					<?php if ( true === $m['applications_closed'] ) : ?>
-						La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega
-						de documentos ya solicitados.
-					<?php else : ?>
-						<?php if ( true === $m['pending_documentation'] ) : ?>
-							Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.
-						<?php else : ?>
-							Las solicitudes se abren y cierran según las fechas configuradas.
-						<?php endif; ?>
-					<?php endif; ?>
-				</p>
-				<?php $toggle = ProcedureEditor::OP_TOGGLE_APPLICATIONS; ?>
-				<form class="prc-acciones" method="post" action=""
-					<?php if ( false === $m['applications_closed'] ) : ?>
-						data-prc-confirm="<?php echo esc_attr( $close_confirmation ); ?>"
-						data-prc-confirm-ok="Cerrar solicitudes"
-					<?php endif; ?>
-				>
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $toggle ), ProcedureEditor::nonce_name( $toggle ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $toggle ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">
-						<?php echo true === $m['applications_closed'] ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora'; ?>
-					</button>
-				</form>
-			<?php endif; ?>
-			<?php if ( true === $m['can_unpublish'] ) : ?>
-				<?php $op_borrador = ProcedureEditor::OP_UNPUBLISH; ?>
-				<form class="prc-acciones" method="post" action=""
-					data-prc-confirm="<?php echo esc_attr( $draft_confirmation ); ?>"
-					data-prc-confirm-ok="Devolver a borrador">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op_borrador ), ProcedureEditor::nonce_name( $op_borrador ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $op_borrador ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Devolver a borrador</button>
-				</form>
-			<?php endif; ?>
+			<?php echo self::toggle_form( $m );?>
+			<?php echo self::unpublish_form( $m );?>
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function op_fields( array $m, string $op ): string {
+		return wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false, false )
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_DO ) . '" value="' . esc_attr( $op ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_PROCEDURE ) . '" value="' . esc_attr( (string) (int) $m['procedure_id'] ) . '" />';
+	}
+
+
+
+
+
+
+
+	private static function publish_timeline( array $m ): string {
+		$etapas = array(
+			ProcedureMetaKeys::STATE_DRAFT    => 0,
+			ProcedureMetaKeys::STATE_ARCHIVED => 4,
+			ProcedureMetaKeys::STATE_RESOLVED => 3,
+			ProcedureMetaKeys::STATE_CLOSED   => empty( $m['pending_documentation'] ) ? 3 : 2,
+		);
+		$stage  = $etapas[ (string) $m['state'] ] ?? 1;
+		$steps  = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array( 'Pendiente de documentación', 'Las solicitudes están cerradas y los centros ya inscritos aún pueden entregar documentos dentro de su plazo.' ),
+			array( 'Cerrado', 'No se admiten solicitudes. Cuando ya no quede nada que gestionar, puede marcar el procedimiento como histórico.' ),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
+		$out    = '<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">';
+		foreach ( $steps as $index => $step ) {
+			$clase  = $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' );
+			$actual = $index === $stage;
+			$out   .= '<li class="prc-ciclo-publicacion__paso' . $clase . '"' . ( $actual ? ' aria-current="step"' : '' ) . '>'
+				. '<h3>' . esc_html( $step[0] ) . ( $actual ? ' <span class="prc-ciclo-publicacion__actual">Etapa actual</span>' : '' ) . '</h3>'
+				. '<p>' . esc_html( $step[1] ) . '</p></li>';
+		}
+		return $out . '</ol>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function checklist( array $m ): string {
+		$puntos = (array) ( $m['checklist'] ?? array() );
+		if ( array() === $puntos ) {
+			return '';
+		}
+		$out = '<div class="prc-antes-de-publicar"><h3 class="prc-antes-de-publicar__titulo">Antes de publicar</h3><ul class="prc-comprobaciones">';
+		foreach ( $puntos as $punto ) {
+			$tipo = ! empty( $punto['ok'] ) ? array( 'ok', '✓', 'Hecho:' ) : ( ! empty( $punto['blocks'] ) ? array( 'falta', '✗', 'Falta:' ) : array( 'aviso', '!', 'Aviso:' ) );
+			$out .= '<li class="prc-comprobacion prc-comprobacion--' . esc_attr( $tipo[0] ) . '">'
+				. '<span class="prc-comprobacion__marca" aria-hidden="true">' . esc_html( $tipo[1] ) . '</span> '
+				. '<span class="screen-reader-text">' . esc_html( $tipo[2] ) . '</span> '
+				. esc_html( (string) $punto['text'] ) . '</li>';
+		}
+		return $out . '</ul>' . PanelParts::help_link( (string) ( $m['help_publish_url'] ?? '' ) ) . '</div>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function toggle_form( array $m ): string {
+		if ( true !== $m['can_toggle_applications'] || 'publish' !== (string) $m['status'] ) {
+			return '';
+		}
+		$cerrada = true === $m['applications_closed'];
+		if ( $cerrada ) {
+			$texto = 'La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega de documentos ya solicitados.';
+		} else {
+			$texto = true === $m['pending_documentation']
+				? 'Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.'
+				: 'Las solicitudes se abren y cierran según las fechas configuradas.';
+		}
+		$pregunta = sprintf(
+			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
+			(string) $m['title']
+		);
+		$confirma = $cerrada ? '' : ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Cerrar solicitudes"';
+		return '<p class="prc-intro">' . esc_html( $texto ) . '</p>'
+			. '<form class="prc-acciones" method="post" action=""' . $confirma . '>'
+			. self::op_fields( $m, ProcedureEditor::OP_TOGGLE_APPLICATIONS )
+			. '<button class="' . esc_attr( Assets::button_class( $cerrada ? false : 'danger' ) ) . '" type="submit">'
+			. ( $cerrada ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora' ) . '</button>'
+			. ( $cerrada ? '' : ' <span class="prc-consecuencia">Los centros dejan de poder solicitar.</span>' )
+			. '</form>';
+	}
+
+
+
+
+
+
+
+	private static function unpublish_form( array $m ): string {
+		if ( true !== $m['can_unpublish'] ) {
+			return '';
+		}
+		$pregunta = sprintf(
+			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar hasta que vuelva a publicarse.',
+			(string) $m['title']
+		);
+		return '<form class="prc-acciones" method="post" action="" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
+			. self::op_fields( $m, ProcedureEditor::OP_UNPUBLISH )
+			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
+			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
+			. '</form>';
 	}
 
 
@@ -23758,7 +23803,10 @@ final class ProcedureEditorView {
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class( $marcar ? 'danger' : false ) ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<?php if ( $marcar ) : ?>
+				<span class="prc-consecuencia">Queda en solo lectura; solo administración lo vuelve a abrir.</span>
+			<?php endif; ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -25260,6 +25308,7 @@ final class ProcedureEditor {
 
 			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
+			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),
@@ -26297,7 +26346,7 @@ final class PeopleView {
 		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
 			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
 			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
-			. '<button type="submit" class="' . esc_attr( Assets::button_class() . ' prc-btn-borrar' ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
+			. '<button type="submit" class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
 			. '</form>';
 	}
 
@@ -34114,9 +34163,22 @@ body.prc-app .btn-light {
   --bs-btn-border-color: var(--prc-c-fondo-accion);
   --bs-btn-color: var(--prc-c-tabla);
 }
-/* La acción destructiva se distingue sin gritar: tonal, no roja rellena. */
-body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border-color: var(--prc-mal-cont); --bs-btn-color: var(--prc-mal); }
-.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); }
+/* La acción destructiva o difícil de deshacer (`Assets::button_class( \'danger\' )`)
+   se distingue sin gritar: tonal, con el borde del mismo rojo, no roja rellena.
+   Al pasar por encima se rellena, para que se vea qué se va a pulsar. */
+body.prc-app .prc-btn-borrar {
+  --bs-btn-bg: var(--prc-mal-cont);
+  --bs-btn-border-color: var(--prc-mal);
+  --bs-btn-color: var(--prc-mal);
+  --bs-btn-hover-bg: var(--prc-mal);
+  --bs-btn-hover-border-color: var(--prc-mal);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--prc-mal);
+  --bs-btn-active-border-color: var(--prc-mal);
+  --bs-btn-active-color: #fff;
+}
+.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); border-color: var(--prc-mal); }
+.prc-sin-bootstrap .prc-btn-borrar:hover { background: var(--prc-mal); color: #fff; filter: none; }
 
 /* El diálogo de confirmación (SweetAlert2) se pinta al final del `body`, así
    que sus clases —`prc-app`, `prc-sin-bootstrap`— siguen valiendo y los
@@ -35608,6 +35670,20 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 .prc-ciclo-publicacion__paso h3 { margin: 0; font-size: var(--prc-t-base); }
 .prc-ciclo-publicacion__paso p { margin: 4px 0 0; }
 .prc-ciclo-publicacion__actual { display: inline-block; margin-left: 6px; font-size: var(--prc-t-menudo); font-weight: 400; }
+
+/* «Antes de publicar»: una línea por punto, con su marca (✓, ✗, !) en su
+   color y la palabra para el lector de pantalla. El color nunca va solo. */
+.prc-antes-de-publicar { margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--prc-c-linea); border-radius: var(--prc-radio); }
+.prc-antes-de-publicar__titulo { margin: 0 0 8px; font-size: var(--prc-t-base); }
+.prc-comprobaciones { list-style: none; margin: 0 0 8px; padding: 0; }
+.prc-comprobacion { margin: 0 0 4px; }
+.prc-comprobacion__marca { display: inline-block; width: 1.25em; font-weight: 700; text-align: center; }
+.prc-comprobacion--ok .prc-comprobacion__marca { color: var(--prc-ok); }
+.prc-comprobacion--falta { color: var(--prc-mal); }
+.prc-comprobacion--aviso .prc-comprobacion__marca { color: var(--prc-esp); }
+
+/* La consecuencia de una acción de peligro, al lado del botón. */
+.prc-consecuencia { align-self: center; margin-left: 8px; font-size: .875rem; color: var(--prc-c-texto); }
 
 @media (max-width: 991.98px) {
   .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }

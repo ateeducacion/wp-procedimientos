@@ -1460,6 +1460,7 @@ final class ProcedureEditor {
 			// Los dos sitios del taller que más dudas levantan: el alta y las preguntas.
 			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
+			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),

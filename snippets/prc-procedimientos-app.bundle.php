@@ -199,6 +199,36 @@ final class ProcedureMetaKeys {
 
 	public const PEOPLE_SPEC = 'prc_people_spec';
 
+
+
+
+
+	public const OBSERVABLE = 'prc_observable';
+
+
+
+
+
+
+
+	public const OBSERVER_COLUMNS = 'prc_observer_columns';
+
+
+
+
+	public const OBSERVER_FILES = 'prc_observer_files';
+
+
+
+
+	public const OBSERVER_EXPORT = 'prc_observer_export';
+
+
+
+
+
+	public const OBSERVER_NOTIFY = 'prc_observer_notify';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -259,6 +289,11 @@ final class ProcedureMetaKeys {
 			self::APPLICATIONS_CLOSED,
 			self::NOTIFY,
 			self::PEOPLE_SPEC,
+			self::OBSERVABLE,
+			self::OBSERVER_COLUMNS,
+			self::OBSERVER_FILES,
+			self::OBSERVER_EXPORT,
+			self::OBSERVER_NOTIFY,
 		);
 	}
 
@@ -3340,21 +3375,26 @@ final class ApplicationPeople {
 
 
 
-	public static function describe( array $spec, array $row ): string {
-		$row = self::row( $row );
-		return implode(
-			' · ',
-			array_filter(
-				array(
-					trim( $row['name'] . ' ' . $row['surname'] ),
-					$row['email'],
-					$row['phone'],
-					PeopleSpec::label( $spec, 'roles', $row['role'] ),
-					PeopleSpec::label( $spec, 'groups', $row['group'] ),
-				),
-				'strlen'
-			)
+
+
+
+
+	public static function describe( array $spec, array $row, ?array $fields = null ): string {
+		$row    = self::row( $row );
+		$partes = array(
+			'name'    => $row['name'],
+			'surname' => $row['surname'],
+			'email'   => $row['email'],
+			'phone'   => $row['phone'],
+			'role'    => PeopleSpec::label( $spec, 'roles', $row['role'] ),
+			'group'   => PeopleSpec::label( $spec, 'groups', $row['group'] ),
 		);
+		if ( null !== $fields ) {
+			$partes = array_intersect_key( $partes, array_flip( $fields ) );
+		}
+		$nombre = trim( ( $partes['name'] ?? '' ) . ' ' . ( $partes['surname'] ?? '' ) );
+		unset( $partes['name'], $partes['surname'] );
+		return implode( ' · ', array_filter( array_merge( array( $nombre ), array_values( $partes ) ), 'strlen' ) );
 	}
 
 
@@ -5233,6 +5273,295 @@ final class CentreScope {
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ProcedurePostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Access\ObserverScope', false ) ) {
+final class ObserverScope {
+
+
+
+
+	public const META_KEY = 'prc_zone';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public const ALLOWED_COLUMNS = array(
+		'date',
+		'centre',
+		'code',
+		'island',
+		'municipality',
+		'centre_type',
+		'ownership',
+		'zone',
+		'zone_code',
+		'applicant',
+		'email',
+		'position',
+		'coordinator',
+		'coordinator_email',
+		'person_name',
+		'person_surname',
+		'person_email',
+		'person_phone',
+		'person_role',
+		'person_group',
+		'state',
+		'score',
+	);
+
+
+
+
+
+
+	public const DEFAULT_GROUPS = array( 'application', 'centre', 'coordination' );
+
+
+
+
+
+
+	public static function meta_key(): string {
+
+
+
+
+
+		$key = apply_filters( 'prc_zone_meta_key', self::META_KEY );
+		return is_string( $key ) ? trim( $key ) : '';
+	}
+
+
+
+
+
+
+
+	public static function zones_for( int $user_id ): array {
+		$key = self::meta_key();
+		if ( $user_id <= 0 || '' === $key ) {
+			return array();
+		}
+		return self::parse_zones( get_user_meta( $user_id, $key, true ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function is_observable( int $procedure_id ): bool {
+		return $procedure_id > 0
+			&& ProcedurePostType::POST_TYPE === get_post_type( $procedure_id )
+			&& 'publish' === get_post_status( $procedure_id )
+			&& (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function observers_of( string $code ): array {
+		$zona = '' !== $code ? (string) ( CentreCatalog::find( $code )['zone'] ?? '' ) : '';
+		$meta = self::meta_key();
+		if ( '' === $zona || '' === $meta ) {
+			return array();
+		}
+
+
+		$ids = get_users(
+			array(
+				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
+				'fields'       => 'ID',
+				'meta_key'     => $meta,
+				'meta_compare' => 'EXISTS',
+			)
+		);
+		$ids = array_map( 'intval', (array) $ids );
+		if ( array() === $ids ) {
+			return array();
+		}
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ')',
+				array_merge( array( $meta ), $ids )
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
+				$out[ (int) $fila->user_id ] = (int) $fila->user_id;
+			}
+		}
+		$out = array_values( $out );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function parse_zones( $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY );
+		}
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $valor ) {
+			$codigo = is_string( $valor ) ? trim( $valor ) : '';
+			if ( CentreScope::is_code( $codigo ) ) {
+				$out[ $codigo ] = $codigo;
+			}
+		}
+		return array_values( $out );
+	}
+
+
+
+
+
+
+
+
+	public static function codes_in( array $zones, array $catalogue ): array {
+		if ( array() === $zones ) {
+			return array();
+		}
+		$buscadas = array_flip( $zones );
+		$out      = array();
+		foreach ( $catalogue as $codigo => $centro ) {
+			$zona = is_array( $centro ) ? (string) ( $centro['zone'] ?? '' ) : '';
+			if ( '' !== $zona && isset( $buscadas[ $zona ] ) ) {
+				$out[] = (string) $codigo;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function is_allowed( string $column ): bool {
+		return in_array( $column, self::ALLOWED_COLUMNS, true ) || (bool) preg_match( '/^q[1-9][0-9]*(:r[1-9][0-9]*)?$/', $column );
+	}
+
+
+
+
+
+
+
+	public static function allowed( array $groups ): array {
+		$out = array();
+		foreach ( $groups as $grupo => $columnas ) {
+			$quedan = array();
+			foreach ( (array) $columnas as $clave => $rotulo ) {
+				if ( self::is_allowed( (string) $clave ) ) {
+					$quedan[ (string) $clave ] = $rotulo;
+				}
+			}
+			if ( array() !== $quedan ) {
+				$out[ (string) $grupo ] = $quedan;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function columns( $chosen, array $groups ): array {
+		$permitidas = self::allowed( $groups );
+		$elegidas   = is_array( $chosen ) ? array_flip( array_filter( $chosen, 'is_string' ) ) : array();
+		$out        = array();
+		foreach ( $permitidas as $columnas ) {
+			$out += array_intersect_key( $columnas, $elegidas );
+		}
+		if ( array() !== $out ) {
+			return $out;
+		}
+		foreach ( self::DEFAULT_GROUPS as $grupo ) {
+			$out += (array) ( $permitidas[ $grupo ] ?? array() );
+		}
+		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\Access;
+
+use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
@@ -5243,6 +5572,9 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\Taxonomy\ProcedureTaxonomies;
+
+
+
 
 
 
@@ -5298,6 +5630,19 @@ final class ProcedureAccess {
 
 
 	public const CAP_EDIT_PEOPLE = 'prc_edit_people';
+
+
+
+
+
+	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
+
+
+
+
+
+	public const VIEW_OWN      = 'own';
+	public const VIEW_DOCUMENT = 'document';
 
 
 
@@ -6046,7 +6391,7 @@ final class ProcedureAccess {
 
 
 
-	public static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
+	private static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
 		$rules = self::eligibility( $post_id );
 		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
 			$rules['ownership'] = array();
@@ -6102,13 +6447,52 @@ final class ProcedureAccess {
 
 
 
-	public static function can_view_application( int $user_id, int $application_id ): bool {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_view_application( int $user_id, int $application_id, string $purpose = '', string $question_key = '' ): bool {
 		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
 			return false;
 		}
-		if ( self::can_review( $user_id, $application_id ) ) {
+		$propia = self::is_own_application( $user_id, $application_id );
+		if ( self::VIEW_OWN === $purpose ) {
+			return $propia;
+		}
+		if ( $propia || self::can_review( $user_id, $application_id ) ) {
 			return true;
 		}
+		if ( ! self::can_observe_application( $user_id, $application_id ) ) {
+			return false;
+		}
+		if ( self::VIEW_DOCUMENT !== $purpose ) {
+			return true;
+		}
+		$raiz = self::root_id( $application_id );
+		return '' !== $question_key
+			&& (bool) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_FILES, true )
+			&& in_array( $question_key, (array) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), true );
+	}
+
+
+
+
+
+
+
+
+	private static function is_own_application( int $user_id, int $application_id ): bool {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
@@ -6233,6 +6617,100 @@ final class ProcedureAccess {
 
 
 
+	public static function observer_zones( int $user_id ): array {
+		return ObserverScope::zones_for( $user_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function observer_codes( int $user_id ): array {
+		$zonas = self::observer_zones( $user_id );
+		return array() === $zonas ? array() : ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_observe( int $user_id, int $procedure_id = 0, ?array &$scope = null ): bool {
+		$scope = 0 === $procedure_id ? null : self::observe_scope( $user_id, $procedure_id );
+		if ( 0 !== $procedure_id ) {
+			return null !== $scope;
+		}
+		return self::can_manage_procedures( $user_id )
+			|| ( $user_id > 0 && user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) && array() !== self::observer_codes( $user_id ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_observe_application( int $user_id, int $application_id ): bool {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || 'publish' !== get_post_status( $application_id ) ) {
+			return false;
+		}
+		$ambito = self::observe_scope( $user_id, (int) wp_get_post_parent_id( $application_id ) );
+		if ( null === $ambito ) {
+			return false;
+		}
+		if ( ! isset( $ambito['codes'] ) ) {
+			return true;
+		}
+		$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		return '' !== $codigo && in_array( $codigo, $ambito['codes'], true );
+	}
+
+
+
+
+
+
+
+
+	private static function observe_scope( int $user_id, int $procedure_id ): ?array {
+		if ( $user_id <= 0 || ! ObserverScope::is_observable( $procedure_id ) ) {
+			return null;
+		}
+		if ( self::can_open( $user_id, $procedure_id ) ) {
+			return array();
+		}
+		$codigos = user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) ? self::observer_codes( $user_id ) : array();
+		return array() === $codigos ? null : array( 'codes' => $codigos );
+	}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6286,7 +6764,7 @@ final class ProcedureAccess {
 
 
 
-	public static function can_read( int $user_id, int $post_id ): bool {
+	private static function can_read( int $user_id, int $post_id ): bool {
 		$estado = get_post_status_object( (string) get_post_status( $post_id ) );
 		if ( null !== $estado && ! empty( $estado->public ) ) {
 			return true;
@@ -6310,7 +6788,7 @@ final class ProcedureAccess {
 
 
 
-	public static function may_use_area( int $user_id, int $term_id ): bool {
+	private static function may_use_area( int $user_id, int $term_id ): bool {
 		$term = $term_id > 0 ? get_term( $term_id ) : null;
 		if ( $term instanceof \WP_Term && ProcedureTaxonomies::AREA !== $term->taxonomy ) {
 
@@ -6383,6 +6861,7 @@ final class ProcedureAccess {
 
 namespace Prc\Meta;
 
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -6525,6 +7004,26 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::PEOPLE_SPEC          => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_people_spec' ),
+			),
+			ProcedureMetaKeys::OBSERVABLE           => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+			),
+			ProcedureMetaKeys::OBSERVER_FILES       => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
 		);
 	}
@@ -6724,6 +7223,27 @@ final class ProcedureMetaRegistration {
 
 	public static function sanitize_text_list( $value ): array {
 		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize_observer_columns( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $clave ) {
+			$clave = is_string( $clave ) ? trim( $clave ) : '';
+			if ( ObserverScope::is_allowed( $clave ) ) {
+				$out[ $clave ] = $clave;
+			}
+		}
+		return array_values( $out );
 	}
 
 
@@ -8186,6 +8706,7 @@ final class Shell {
 		'editor'    => 'editar-procedimiento',
 		'apply'     => 'solicitud',
 		'mine'      => 'mi-centro',
+		'observe'   => 'consulta-de-solicitudes',
 	);
 
 
@@ -8204,6 +8725,7 @@ final class Shell {
 		'editor'    => 'prc_editor',
 		'apply'     => 'prc_apply',
 		'mine'      => 'prc_mine',
+		'observe'   => 'prc_observe',
 	);
 
 
@@ -8602,6 +9124,14 @@ final class Shell {
 		}
 
 
+		if ( ProcedureAccess::can_observe( $user_id ) ) {
+			$out['observe'] = array(
+				'label' => 'Consulta de solicitudes',
+				'url'   => self::url( 'observe' ),
+			);
+		}
+
+
 
 		foreach ( $out as $clave => $seccion ) {
 			if ( '' === $seccion['url'] ) {
@@ -8644,6 +9174,12 @@ final class Shell {
 				'scope' => self::centre_name( $user_id ),
 			);
 		}
+		if ( $user_id > 0 && user_can( $user_id, ProcedureAccess::CAP_VIEW_APPLICATIONS ) ) {
+			return array(
+				'role'  => 'Consulta de solicitudes',
+				'scope' => self::zone_names( $user_id ),
+			);
+		}
 		return array(
 			'role'  => '',
 			'scope' => '',
@@ -8665,6 +9201,21 @@ final class Shell {
 			}
 		}
 		return array() === $nombres ? 'Sin ámbito asignado' : implode( ' · ', $nombres );
+	}
+
+
+
+
+
+
+
+	public static function zone_names( int $user_id ): string {
+		$nombres = array();
+		foreach ( ProcedureAccess::observer_zones( $user_id ) as $zona ) {
+			$centro    = CentreCatalog::find( $zona );
+			$nombres[] = array() !== $centro && '' !== (string) $centro['name'] ? $centro['name'] . ' (' . $zona . ')' : $zona;
+		}
+		return array() === $nombres ? 'Sin zona asignada' : implode( ' · ', $nombres );
 	}
 
 
@@ -8834,6 +9385,8 @@ final class Shell {
 
 
 
+
+
 	private static function menu( int $user_id = 0 ): array {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -8873,6 +9426,8 @@ final class Shell {
 			$menu[]           = $admin;
 		}
 
+		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ) );
+
 
 
 
@@ -8895,6 +9450,23 @@ final class Shell {
 		}
 
 		return $menu;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function observe_entry( array $secciones, string $activa ): array {
+		if ( ! isset( $secciones['observe'] ) ) {
+			return array();
+		}
+		return array( self::entry( 'Consulta', $secciones['observe']['url'], 'observe' === $activa ) );
 	}
 
 
@@ -11239,6 +11811,9 @@ final class ApplicationFiles {
 
 
 
+
+
+
 	public static function handle(): void {
 
 		$file_id = isset( $_GET[ self::ARG_FILE ] ) ? sanitize_text_field( wp_unslash( $_GET[ self::ARG_FILE ] ) ) : '';
@@ -11250,7 +11825,7 @@ final class ApplicationFiles {
 
 		if ( $application_id <= 0
 			|| ApplicationPostType::POST_TYPE !== (string) get_post_type( $application_id )
-			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id ) ) {
+			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id, ProcedureAccess::VIEW_DOCUMENT, self::question_of( $application_id, $file_id ) ) ) {
 			self::deny();
 			return;
 		}
@@ -11267,6 +11842,25 @@ final class ApplicationFiles {
 		}
 		echo $bytes;
 		Shell::leave();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function question_of( int $application_id, string $file_id ): string {
+		foreach ( self::descriptors( $application_id ) as $question_key => $descriptor ) {
+			if ( hash_equals( (string) $descriptor['id'], $file_id ) ) {
+				return (string) $question_key;
+			}
+		}
+		return '';
 	}
 
 
@@ -13513,7 +14107,13 @@ final class ApplicationsPanel {
 			'options'    => $res['options'],
 			'zone_label' => CentreColumns::zone_label(),
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
-			'pager'      => self::pager( $procedure_id, $filtro, (int) $res['pages'] ),
+			'pager'      => self::pager(
+				static function ( array $changes ) use ( $procedure_id, $filtro ): string {
+					return self::url( $procedure_id, $filtro, array(), $changes );
+				},
+				$filtro,
+				(int) $res['pages']
+			),
 			'action'     => strtok( $base, '?' ),
 			'hidden'     => wp_parse_args( (string) wp_parse_url( $base, PHP_URL_QUERY ) ),
 			'reset_url'  => $res['active'] ? $base : '',
@@ -13530,11 +14130,14 @@ final class ApplicationsPanel {
 
 
 
-	private static function pager( int $procedure_id, array $filter, int $pages ): array {
+
+
+
+	public static function pager( callable $url, array $filter, int $pages ): array {
 		$actual = (int) $filter['page'];
 		$out    = array(
-			'prev'  => $actual > 1 ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual - 1 ) ) : '',
-			'next'  => $actual < $pages ? self::url( $procedure_id, $filter, array(), array( 'page' => $actual + 1 ) ) : '',
+			'prev'  => $actual > 1 ? (string) $url( array( 'page' => $actual - 1 ) ) : '',
+			'next'  => $actual < $pages ? (string) $url( array( 'page' => $actual + 1 ) ) : '',
 			'pages' => array(),
 		);
 		$antes  = 0;
@@ -13550,7 +14153,7 @@ final class ApplicationsPanel {
 			}
 			$out['pages'][] = array(
 				'n'   => $n,
-				'url' => self::url( $procedure_id, $filter, array(), array( 'page' => $n ) ),
+				'url' => (string) $url( array( 'page' => $n ) ),
 			);
 			$antes          = $n;
 		}
@@ -17044,7 +17647,7 @@ final class ApplicationsPanelView {
 
 
 
-	private static function states( array $t ): string {
+	public static function states( array $t ): string {
 		$out = '<ul class="prc-contadores" aria-label="Solicitudes por estado de revisión">';
 		foreach ( (array) $t['states'] as $estado ) {
 			$out .= sprintf(
@@ -17113,7 +17716,7 @@ final class ApplicationsPanelView {
 
 
 
-	private static function select( string $id, string $name, string $label, array $options, string $selected ): string {
+	public static function select( string $id, string $name, string $label, array $options, string $selected ): string {
 		$out = '<div class="prc-filtros__campo"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $label ) . '</label>'
 			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '">';
 		foreach ( $options as $valor => $rotulo ) {
@@ -17265,7 +17868,7 @@ final class ApplicationsPanelView {
 
 
 
-	private static function pager( array $t ): string {
+	public static function pager( array $t ): string {
 		if ( (int) $t['pages'] <= 1 ) {
 			return '';
 		}
@@ -17495,6 +18098,8 @@ final class ProcedureEditorView {
 			echo self::notices_panel( $m );
 		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
 			echo PeopleView::spec_panel( $m );
+		} elseif ( ProcedureEditor::PANEL_OBSERVE === $panel ) {
+			echo ObserveView::settings( $m );
 		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
 
 			echo self::custom_code_panel( $m );
@@ -18866,6 +19471,7 @@ final class ProcedureEditor {
 	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
 	public const PANEL_PEOPLE       = 'personas';
+	public const PANEL_OBSERVE      = 'consulta';
 
 	public const OP_REVIEW              = 'review';
 	public const OP_BULK_REVIEW         = 'bulk_review';
@@ -18880,6 +19486,7 @@ final class ProcedureEditor {
 	public const OP_NOTIFY              = 'notify';
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
+	public const OP_OBSERVE             = 'observe';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -18963,6 +19570,7 @@ final class ProcedureEditor {
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
 		self::OP_PEOPLE_SPEC,
+		self::OP_OBSERVE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -18989,6 +19597,7 @@ final class ProcedureEditor {
 		'codigo'       => 'Código adicional guardado.',
 		'avisos'       => 'Avisos por correo guardados.',
 		'personas'     => 'Lista de personas guardada.',
+		'consulta'     => 'Consulta de solicitudes guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -19096,6 +19705,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
+			self::PANEL_OBSERVE      => 'Consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -19205,10 +19815,12 @@ final class ProcedureEditor {
 
 
 
+
 		$sueltas = array(
-			self::OP_NOTIFY         => 'save_notify',
-			self::OP_DELIVERY_DATES => 'save_delivery_dates',
-			self::OP_PEOPLE_SPEC    => 'save_people_spec',
+			self::OP_NOTIFY         => array( self::class, 'save_notify' ),
+			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
+			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
+			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -19216,7 +19828,7 @@ final class ProcedureEditor {
 				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
 				return;
 			}
-			call_user_func( array( self::class, $sueltas[ $op ] ), $procedure_id );
+			call_user_func( $sueltas[ $op ], $procedure_id );
 			return;
 		}
 
@@ -20204,6 +20816,7 @@ final class ProcedureEditor {
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 			'people_spec'             => array(),
 			'people'                  => array(),
+			'observe'                 => array(),
 		);
 	}
 
@@ -20319,6 +20932,7 @@ final class ProcedureEditor {
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']       = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -23584,6 +24198,938 @@ final class MyCentre {
 
 
 
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ObserverScope;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ObserveSettings', false ) ) {
+final class ObserveSettings {
+
+
+	public const FIELD_OBSERVABLE = 'prc_observable';
+
+
+	public const FIELD_COLUMNS = 'prc_observer_columns';
+
+
+	public const FIELD_FILES = 'prc_observer_files';
+
+
+	public const FIELD_EXPORT = 'prc_observer_export';
+
+
+	public const FIELD_NOTIFY = 'prc_observer_notify';
+
+
+
+
+
+
+
+	public static function offered( int $procedure_id ): array {
+		return ObserverScope::allowed( ApplicationExport::groups( $procedure_id ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function columns( int $procedure_id ): array {
+		return ObserverScope::columns( get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), ApplicationExport::groups( $procedure_id ) );
+	}
+
+
+
+
+
+
+
+	public static function model( int $procedure_id ): array {
+		$leer = static function ( string $clave ) use ( $procedure_id ): bool {
+			return (bool) get_post_meta( $procedure_id, $clave, true );
+		};
+		return array(
+			'observable'   => $leer( ProcedureMetaKeys::OBSERVABLE ),
+			'columns'      => array_keys( self::columns( $procedure_id ) ),
+			'groups'       => self::offered( $procedure_id ),
+			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
+			'files'        => $leer( ProcedureMetaKeys::OBSERVER_FILES ),
+			'export'       => $leer( ProcedureMetaKeys::OBSERVER_EXPORT ),
+			'notify'       => $leer( ProcedureMetaKeys::OBSERVER_NOTIFY ),
+			'url'          => Observe::url( $procedure_id ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function handle( int $procedure_id ): void {
+
+		self::save( $procedure_id, $_POST );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_OBSERVE, array( ProcedureEditor::ARG_NOTICE => 'consulta' ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function save( int $procedure_id, array $post ): void {
+		$ofrecidas = array();
+		foreach ( self::offered( $procedure_id ) as $columnas ) {
+			$ofrecidas += $columnas;
+		}
+		$pedidas  = isset( $post[ self::FIELD_COLUMNS ] ) && is_array( $post[ self::FIELD_COLUMNS ] ) ? wp_unslash( $post[ self::FIELD_COLUMNS ] ) : array();
+		$columnas = array();
+		foreach ( $pedidas as $clave ) {
+			$clave = is_string( $clave ) ? sanitize_text_field( $clave ) : '';
+			if ( isset( $ofrecidas[ $clave ] ) ) {
+				$columnas[] = $clave;
+			}
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, $columnas );
+		foreach ( array(
+			self::FIELD_OBSERVABLE => ProcedureMetaKeys::OBSERVABLE,
+			self::FIELD_FILES      => ProcedureMetaKeys::OBSERVER_FILES,
+			self::FIELD_EXPORT     => ProcedureMetaKeys::OBSERVER_EXPORT,
+			self::FIELD_NOTIFY     => ProcedureMetaKeys::OBSERVER_NOTIFY,
+		) as $campo => $clave ) {
+			update_post_meta( $procedure_id, $clave, ! empty( $post[ $campo ] ) );
+		}
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
+use Prc\Domain\ApplicationFilter;
+use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\Observe;
+use Prc\PublicFront\ObserveSettings;
+use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ObserveView', false ) ) {
+final class ObserveView {
+
+
+	private const TITLE = 'Consulta de solicitudes';
+
+
+
+
+
+
+
+	public static function html( array $m ): string {
+		if ( 'table' === (string) $m['mode'] ) {
+			return self::procedure( $m );
+		}
+		if ( '' !== (string) $m['aviso'] ) {
+			$volver = 'error' === (string) $m['aviso_tipo'] && '' !== (string) $m['list_url']
+				? '<p><a href="' . esc_url( (string) $m['list_url'] ) . '">Volver a la consulta</a></p>'
+				: '';
+			return Shell::render( self::TITLE, '', Shell::notice( (string) $m['aviso_tipo'], (string) $m['aviso'] ) . $volver );
+		}
+		return Shell::render( self::TITLE, self::subtitle( $m ), self::listing( (array) $m['procedures'] ) );
+	}
+
+
+
+
+
+
+
+	private static function subtitle( array $m ): string {
+		return '' !== (string) $m['zones']
+			? 'Solicitudes de los centros de: ' . (string) $m['zones']
+			: 'Solicitudes de todas las zonas de sus procedimientos';
+	}
+
+
+
+
+
+
+
+	private static function listing( array $procedures ): string {
+		if ( array() === $procedures ) {
+			return '<p class="prc-vacio">Todavía no hay ningún procedimiento con solicitudes que pueda consultar. Saldrán aquí en cuanto un procedimiento admita la consulta y algún centro de su zona solicite.</p>';
+		}
+		ob_start();
+		?>
+		<div class="prc-tabla-caja prc-consulta">
+			<table class="prc-tabla prc-tabla--densa table">
+				<caption class="screen-reader-text">Procedimientos que puede consultar</caption>
+				<thead>
+					<tr>
+						<th class="prc-th" scope="col">Procedimiento</th>
+						<th class="prc-th" scope="col">Estado</th>
+						<th class="prc-th" scope="col">Solicitudes</th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $procedures as $fila ) : ?>
+						<tr>
+							<td class="prc-celda" data-rotulo="Procedimiento"><a href="<?php echo esc_url( (string) $fila['url'] ); ?>"><?php echo esc_html( (string) $fila['title'] ); ?></a></td>
+							<td class="prc-celda" data-rotulo="Estado"><?php echo esc_html( (string) $fila['state'] ); ?></td>
+							<td class="prc-celda" data-rotulo="Solicitudes"><?php echo esc_html( (string) (int) $fila['count'] ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function procedure( array $m ): string {
+		$t = (array) $m['table'];
+		ob_start();
+		echo Shell::notice( (string) $m['aviso_tipo'], (string) $m['aviso'] );
+		echo '<p><a href="' . esc_url( (string) $m['list_url'] ) . '">Volver a la consulta</a></p>';
+		if ( 0 === (int) $t['all'] ) {
+			echo '<p class="prc-vacio">Todavía no hay solicitudes que pueda consultar en este procedimiento.</p>';
+			return Shell::render( (string) $m['title'], self::subtitle( $m ), (string) ob_get_clean() );
+		}
+		echo '<div class="prc-banda-tabla"><p class="prc-recuento">' . esc_html( self::count_text( $t ) ) . '</p>';
+		echo self::export( $m, $t );
+		echo '</div>';
+		if ( array() !== (array) $t['states'] ) {
+			echo ApplicationsPanelView::states( $t );
+		}
+		echo self::filters( $t );
+		if ( 0 === (int) $t['total'] ) {
+			echo '<p class="prc-vacio">Ninguna solicitud cumple el filtro.';
+			echo '' !== (string) $t['reset_url'] ? ' <a href="' . esc_url( (string) $t['reset_url'] ) . '">Quitar los filtros</a>' : '';
+			echo '</p>';
+		} else {
+			echo self::table( (array) $m['columns'], (array) $m['rows'] );
+			echo ApplicationsPanelView::pager( $t );
+		}
+		return Shell::render( (string) $m['title'], self::subtitle( $m ), (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+	private static function count_text( array $t ): string {
+		$total = (int) $t['total'];
+		if ( empty( $t['active'] ) && 1 === (int) $t['pages'] ) {
+			return sprintf( 1 === $total ? 'Mostrando %d solicitud. Solo lectura.' : 'Mostrando %d solicitudes. Solo lectura.', $total );
+		}
+		if ( 0 === $total ) {
+			return sprintf( 'Ninguna de las %d solicitudes cumple el filtro.', (int) $t['all'] );
+		}
+		$texto = sprintf( 'Mostrando %1$d–%2$d de %3$d solicitudes', (int) $t['from'], (int) $t['to'], $total );
+		return $texto . ( empty( $t['active'] ) ? '.' : sprintf( ' que cumplen el filtro, de %d en total.', (int) $t['all'] ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function export( array $m, array $t ): string {
+		if ( true !== $m['can_export'] ) {
+			return '';
+		}
+		$id = (int) $m['procedure_id'];
+		return '<form class="prc-form prc-exportar" method="post" action="">'
+			. wp_nonce_field( (string) $m['nonce'], Observe::NONCE_NAME, false, false )
+			. '<input type="hidden" name="' . esc_attr( Observe::FIELD_DO ) . '" value="' . esc_attr( Observe::OP_EXPORT ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( Observe::FIELD_ID ) . '" value="' . esc_attr( (string) $id ) . '" />'
+			. ApplicationsPanelView::carry( (array) $t['args'] )
+			. '<button class="' . esc_attr( Assets::button_class() ) . '" type="submit">' . esc_html( empty( $t['active'] ) ? 'Exportar a CSV' : 'Exportar las del filtro a CSV' ) . '</button>'
+			. '</form>';
+	}
+
+
+
+
+
+
+
+	private static function filters( array $t ): string {
+		$f        = (array) $t['filter'];
+		$opciones = (array) $t['options'];
+		$out      = '<form class="prc-filtros" method="get" action="' . esc_url( (string) $t['action'] ) . '" role="search" aria-label="Filtrar las solicitudes">'
+			. ApplicationsPanelView::carry( (array) $t['hidden'] )
+			. '<div class="prc-filtros__campo"><label class="prc-campo__etiqueta" for="prc-filtro-buscar">Centro o código</label>'
+			. '<input class="prc-control" type="search" id="prc-filtro-buscar" name="' . esc_attr( ApplicationFilter::ARG_SEARCH ) . '" value="' . esc_attr( (string) $f['search'] ) . '" maxlength="' . esc_attr( (string) ApplicationFilter::MAX_SEARCH ) . '" /></div>';
+		if ( array() !== (array) $t['states'] ) {
+			$estados = array();
+			foreach ( (array) $t['states'] as $estado ) {
+				$estados[ (string) $estado['key'] ] = '' === (string) $estado['key'] ? 'Todos los estados' : (string) $estado['label'];
+			}
+			$out .= ApplicationsPanelView::select( 'prc-filtro-estado', ApplicationFilter::ARG_REVIEW, 'Estado de revisión', $estados, (string) $f['review'] );
+		}
+		if ( array() !== (array) $opciones['islands'] ) {
+			$out .= ApplicationsPanelView::select( 'prc-filtro-isla', ApplicationFilter::ARG_ISLAND, 'Isla', array( '' => 'Todas las islas' ) + (array) $opciones['islands'], (string) $f['island'] );
+		}
+
+		if ( array() !== (array) $opciones['zones'] ) {
+			$out .= ApplicationsPanelView::select( 'prc-filtro-zona', ApplicationFilter::ARG_ZONE, (string) $t['zone_label'], array( '' => 'Todas' ) + (array) $opciones['zones'], (string) $f['zone'] );
+		}
+		$out .= '<div class="prc-filtros__acciones"><button class="' . esc_attr( Assets::button_class() ) . '" type="submit">Filtrar</button>';
+		if ( '' !== (string) $t['reset_url'] ) {
+			$out .= '<a class="prc-filtros__quitar" href="' . esc_url( (string) $t['reset_url'] ) . '">Quitar los filtros</a>';
+		}
+		return $out . '</div></form>';
+	}
+
+
+
+
+
+
+
+
+	private static function table( array $columns, array $rows ): string {
+		$out = '<div class="prc-tabla-caja prc-consulta"><table class="prc-tabla prc-tabla--densa table">'
+			. '<caption class="screen-reader-text">Solicitudes que puede consultar, en solo lectura</caption><thead><tr>';
+		foreach ( $columns as $rotulo ) {
+			$out .= '<th class="prc-th" scope="col">' . esc_html( (string) $rotulo ) . '</th>';
+		}
+		$out .= '</tr></thead><tbody>';
+		foreach ( $rows as $fila ) {
+			$out .= '<tr>';
+			foreach ( $columns as $clave => $rotulo ) {
+				$out .= '<td class="prc-celda" data-rotulo="' . esc_attr( (string) $rotulo ) . '">' . self::cell( $fila, (string) $clave ) . '</td>';
+			}
+			$out .= '</tr>';
+		}
+		return $out . '</tbody></table></div>';
+	}
+
+
+
+
+
+
+
+
+	private static function cell( array $fila, string $clave ): string {
+		$doc = (array) ( $fila['files'][ $clave ] ?? array() );
+		if ( '' !== (string) ( $doc['id'] ?? '' ) ) {
+			return sprintf(
+				'<a class="prc-descarga" href="%1$s" download>%2$s</a>',
+				esc_url( ApplicationFiles::url( (int) $doc['application'], (string) $doc['id'] ) ),
+				esc_html( '' !== (string) ( $doc['name'] ?? '' ) ? (string) $doc['name'] : 'Descargar' )
+			);
+		}
+		$texto = (string) ( $fila['cells'][ $clave ] ?? '' );
+		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
+	}
+
+
+
+
+
+
+
+
+
+	public static function settings( array $m ): string {
+		$c  = (array) $m['observe'];
+		$op = ProcedureEditor::OP_OBSERVE;
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Consulta de solo lectura</legend>
+				<p class="prc-intro">Quien consulta una zona ve, sin poder cambiar nada, las solicitudes de los centros de su zona. Lo que ve lo decide este procedimiento. El DNI o NIE, la nota de revisión y el historial no se enseñan nunca.</p>
+				<?php echo self::check( ObserveSettings::FIELD_OBSERVABLE, 'Admitir la consulta de solicitudes por zona', true === $c['observable'] );?>
+				<?php if ( true === $c['observable'] && '' !== (string) $c['url'] ) : ?>
+					<p class="prc-campo__ayuda">Se consulta en <a href="<?php echo esc_url( (string) $c['url'] ); ?>">la consulta de este procedimiento</a>.</p>
+				<?php endif; ?>
+			</fieldset>
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Columnas que se enseñan</legend>
+				<p class="prc-intro">Sin ninguna marcada, se enseñan las de la solicitud, el centro y la coordinación.</p>
+				<?php foreach ( (array) $c['groups'] as $grupo => $columnas ) : ?>
+					<p class="prc-campo__etiqueta"><?php echo esc_html( (string) ( $c['group_labels'][ $grupo ] ?? $grupo ) ); ?></p>
+					<div class="prc-opciones">
+						<?php foreach ( (array) $columnas as $clave => $rotulo ) : ?>
+							<div class="prc-opcion">
+								<input type="checkbox" id="<?php echo esc_attr( 'prc-observe-' . sanitize_html_class( str_replace( ':', '-', (string) $clave ) ) ); ?>" name="<?php echo esc_attr( ObserveSettings::FIELD_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( in_array( (string) $clave, (array) $c['columns'], true ) ); ?> />
+								<label for="<?php echo esc_attr( 'prc-observe-' . sanitize_html_class( str_replace( ':', '-', (string) $clave ) ) ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				<?php endforeach; ?>
+			</fieldset>
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Qué más puede hacer quien consulta</legend>
+				<?php echo self::check( ObserveSettings::FIELD_FILES, 'Pueden descargar los documentos de las solicitudes de su zona', true === $c['files'] );?>
+				<?php echo self::check( ObserveSettings::FIELD_EXPORT, 'Pueden exportar a CSV lo que ven', true === $c['export'] );?>
+				<?php echo self::check( ObserveSettings::FIELD_NOTIFY, 'Avisar también a quienes consultan la zona de cada alta, cambio o baja de personas', true === $c['notify'] );?>
+			</fieldset>
+			<?php echo PanelParts::submit( 'Guardar la consulta' );?>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function check( string $name, string $label, bool $checked ): string {
+		return '<div class="prc-opcion"><input type="checkbox" id="' . esc_attr( 'prc-' . $name ) . '" name="' . esc_attr( $name ) . '" value="1"' . ( $checked ? ' checked="checked"' : '' ) . ' />'
+			. '<label for="' . esc_attr( 'prc-' . $name ) . '">' . esc_html( $label ) . '</label></div>';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationFilter;
+use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ObserveView;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\Observe', false ) ) {
+final class Observe {
+
+	public const SHORTCODE = 'prc_observe';
+
+
+	public const ARG_PROCEDURE = Shell::ARG_PROCEDURE;
+
+
+	public const FIELD_DO   = 'prc_observe_do';
+	public const OP_EXPORT  = 'export';
+	public const FIELD_ID   = 'prc_observe_procedure';
+	public const NONCE_NAME = 'prc_observe_nonce';
+
+
+
+
+
+
+	public const NOT_FOUND = 'Ese procedimiento no existe o no tiene consulta de solicitudes. Elija uno de la lista.';
+
+
+
+
+
+
+	private static $rejected = '';
+
+
+
+
+
+
+	public static function register(): void {
+		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+		add_action( 'init', array( self::class, 'handle' ), 20 );
+	}
+
+
+
+
+
+
+
+
+	public static function url( int $procedure_id = 0, array $args = array() ): string {
+		if ( $procedure_id > 0 ) {
+			$args = array( self::ARG_PROCEDURE => $procedure_id ) + $args;
+		}
+		return Shell::url( 'observe', $args );
+	}
+
+
+
+
+
+
+
+	public static function nonce_action( int $procedure_id ): string {
+		return 'prc_observe_export_' . $procedure_id;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function filter( array $source, array $columns ): array {
+		$filtro               = ApplicationsPanel::filter( $source );
+		$filtro['incomplete'] = false;
+		if ( ! isset( $columns['state'] ) ) {
+			$filtro['review'] = '';
+		}
+		return $filtro;
+	}
+
+
+
+
+
+
+
+
+
+	public static function model( array $request ): array {
+		$m       = array(
+			'aviso'      => '',
+			'aviso_tipo' => 'aviso',
+			'mode'       => 'list',
+			'list_url'   => self::url(),
+			'zones'      => '',
+			'procedures' => array(),
+		);
+		$user_id = get_current_user_id();
+		if ( $user_id <= 0 ) {
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para consultar solicitudes.';
+			return $m;
+		}
+		if ( ! ProcedureAccess::can_observe( $user_id ) ) {
+			$m['aviso'] = self::why_not( $user_id );
+			return $m;
+		}
+		$m['zones']   = ProcedureAccess::can_manage_procedures( $user_id ) ? '' : Shell::zone_names( $user_id );
+		$procedure_id = isset( $request[ self::ARG_PROCEDURE ] ) && is_string( $request[ self::ARG_PROCEDURE ] ) ? absint( $request[ self::ARG_PROCEDURE ] ) : 0;
+		if ( $procedure_id <= 0 ) {
+			$m['procedures'] = self::procedures( $user_id );
+			return $m;
+		}
+		$ambito = null;
+		if ( ! ProcedureAccess::can_observe( $user_id, $procedure_id, $ambito ) ) {
+			$m['aviso']      = self::NOT_FOUND;
+			$m['aviso_tipo'] = 'error';
+			return $m;
+		}
+		return array_merge( $m, self::table( $user_id, $procedure_id, $ambito, $request ) );
+	}
+
+
+
+
+
+
+
+	private static function why_not( int $user_id ): string {
+		if ( ! user_can( $user_id, ProcedureAccess::CAP_VIEW_APPLICATIONS ) ) {
+			return 'Su perfil no consulta solicitudes. Si debería hacerlo, pídalo a quien administre el aplicativo.';
+		}
+		return array() === ProcedureAccess::observer_zones( $user_id )
+			? 'Su cuenta no tiene ninguna zona asignada, así que no hay solicitudes que consultar. La zona la pone quien administra el aplicativo.'
+			: 'Ninguna de las zonas de su cuenta tiene centros en el catálogo, así que no hay solicitudes que consultar. Revíselo con quien administre el aplicativo.';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function procedures( int $user_id ): array {
+		$ids = get_posts(
+			array(
+				'post_type'        => ProcedurePostType::POST_TYPE,
+				'post_status'      => 'publish',
+				'numberposts'      => -1,
+				'fields'           => 'ids',
+				'orderby'          => 'title',
+				'order'            => 'ASC',
+				'meta_key'         => ProcedureMetaKeys::OBSERVABLE,
+				'meta_value'       => '1',
+				'suppress_filters' => true,
+			)
+		);
+		$ids = array_map( 'intval', is_array( $ids ) ? $ids : array() );
+		if ( array() === $ids ) {
+			return array();
+		}
+		$codigos = self::codes_by_procedure( $ids );
+		$out     = array();
+		foreach ( $ids as $id ) {
+			$ambito = null;
+			if ( ! ProcedureAccess::can_observe( $user_id, $id, $ambito ) ) {
+				continue;
+			}
+			$suyas = (array) ( $codigos[ $id ] ?? array() );
+			if ( isset( $ambito['codes'] ) ) {
+				$suyas = array_intersect( $suyas, $ambito['codes'] );
+				if ( array() === $suyas ) {
+					continue;
+				}
+			}
+			$out[] = array(
+				'id'    => $id,
+				'title' => (string) get_post_field( 'post_title', $id ),
+				'state' => ProcedureState::label( ProcedureState::of_post( $id ) ),
+				'count' => count( $suyas ),
+				'url'   => self::url( $id ),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function codes_by_procedure( array $procedure_ids ): array {
+		global $wpdb;
+		$huecos = implode( ',', array_fill( 0, count( $procedure_ids ), '%d' ) );
+
+		$filas = $wpdb->get_results(
+			$wpdb->prepare(
+
+
+
+				'SELECT p.post_parent, COALESCE(m.meta_value, \'\') AS code FROM ' . $wpdb->posts . ' p LEFT JOIN ' . $wpdb->postmeta . ' m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = %s AND p.post_status = \'publish\' AND p.post_parent IN (' . $huecos . ')',
+				array_merge( array( ApplicationMetaKeys::CENTRE_CODE, ApplicationPostType::POST_TYPE ), $procedure_ids )
+			)
+		);
+
+		$out = array();
+		foreach ( (array) $filas as $fila ) {
+			$out[ (int) $fila->post_parent ][] = (string) $fila->code;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function table( int $user_id, int $procedure_id, array $scope, array $request ): array {
+		$columnas = ObserveSettings::columns( $procedure_id );
+		$res      = ApplicationQuery::run( $procedure_id, self::filter( $request, $columnas ), $scope );
+		$filtro   = $res['filter'];
+		$url      = static function ( array $changes = array() ) use ( $procedure_id, $filtro ): string {
+			return self::url( $procedure_id, array_map( 'rawurlencode', ApplicationFilter::query( $filtro, $changes ) ) );
+		};
+		$base     = self::url( $procedure_id );
+		return array(
+			'mode'         => 'table',
+			'aviso'        => self::$rejected,
+			'aviso_tipo'   => 'error',
+			'procedure_id' => $procedure_id,
+			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
+			'columns'      => $columnas,
+
+
+			'rows'         => self::rows( $procedure_id, $res['posts'], $columnas, (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_FILES, true ) ),
+			'can_export'   => self::may_export( $procedure_id ),
+			'nonce'        => self::nonce_action( $procedure_id ),
+			'table'        => array(
+				'filter'     => $filtro,
+				'active'     => $res['active'],
+				'args'       => ApplicationFilter::query( array( 'page' => 1 ) + $filtro ),
+				'all'        => (int) $res['all'],
+				'total'      => (int) $res['total'],
+				'page'       => (int) $res['page'],
+				'pages'      => (int) $res['pages'],
+				'from'       => (int) $res['from'],
+				'to'         => (int) $res['to'],
+				'states'     => isset( $columnas['state'] ) ? self::states( $res, $procedure_id ) : array(),
+				'options'    => $res['options'],
+				'zone_label' => CentreColumns::zone_label(),
+				'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
+				'pager'      => ApplicationsPanel::pager( $url, $filtro, (int) $res['pages'] ),
+				'action'     => strtok( $base, '?' ),
+				'hidden'     => wp_parse_args( (string) wp_parse_url( $base, PHP_URL_QUERY ) ),
+				'reset_url'  => $res['active'] ? $base : '',
+			),
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function states( array $res, int $procedure_id ): array {
+		$vacio = ApplicationFilter::sanitize( array() );
+		$out   = array(
+			array(
+				'key'     => '',
+				'label'   => 'Todas',
+				'count'   => (int) $res['all'],
+				'url'     => self::url( $procedure_id ),
+				'current' => '' === $res['filter']['review'],
+			),
+		);
+		foreach ( ApplicationMetaKeys::review_states() as $clave => $rotulo ) {
+			$out[] = array(
+				'key'     => $clave,
+				'label'   => $rotulo,
+				'count'   => (int) ( $res['counts'][ $clave ] ?? 0 ),
+				'url'     => self::url( $procedure_id, array_map( 'rawurlencode', ApplicationFilter::query( $vacio, array( 'review' => $clave ) ) ) ),
+				'current' => $clave === $res['filter']['review'],
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function rows( int $procedure_id, array $posts, array $columns, bool $files ): array {
+		$catalogo  = array() !== array_intersect_key( $columns, array_flip( CentreColumns::KEYS ) );
+		$personas  = array() !== array_intersect_key( $columns, PeopleExport::COLUMNS ) ? PeopleExport::spec( $procedure_id ) : null;
+		$ficheros  = array();
+		$preguntas = Applications::questions( $procedure_id );
+		foreach ( $preguntas as $pregunta ) {
+			if ( ProcedureQuestions::TYPE_FILE === (string) ( $pregunta['type'] ?? '' ) && isset( $columns[ (string) $pregunta['key'] ] ) ) {
+				$ficheros[ (string) $pregunta['key'] ] = true;
+			}
+		}
+		$out = array();
+		foreach ( Applications::rows( $procedure_id, $posts, $catalogo ) as $fila ) {
+			if ( null !== $personas ) {
+				$fila += PeopleExport::cells( $personas, People::of( (int) $fila['id'] ) );
+			}
+			$celdas = array();
+			foreach ( array_keys( $columns ) as $clave ) {
+				$celdas[ $clave ] = (string) ( $fila[ $clave ] ?? '' );
+			}
+			$out[] = array(
+				'id'    => (int) $fila['id'],
+				'cells' => $celdas,
+				'files' => $files ? array_intersect_key( (array) $fila[ Applications::KEY_FILES ], $ficheros ) : array(),
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function handle(): void {
+
+		if ( self::OP_EXPORT !== sanitize_key( wp_unslash( (string) ( $_POST[ self::FIELD_DO ] ?? '' ) ) ) || ! is_user_logged_in() ) {
+			return;
+		}
+		$procedure_id = absint( wp_unslash( $_POST[ self::FIELD_ID ] ?? 0 ) );
+		$nonce        = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::NONCE_NAME ] ?? '' ) ) );
+		$post         = $_POST;
+
+		if ( false === wp_verify_nonce( $nonce, self::nonce_action( $procedure_id ) ) ) {
+			return;
+		}
+		$cuerpo = self::csv( get_current_user_id(), $procedure_id, $post );
+		if ( null === $cuerpo ) {
+			self::$rejected = 'Este procedimiento no permite exportar su consulta.';
+			return;
+		}
+		$nombre = ApplicationExport::filename( (string) get_post_field( 'post_title', $procedure_id ), ApplicationExport::FORMAT_CSV );
+		Shell::send_header( 'Content-Type: text/csv; charset=utf-8' );
+		Shell::send_header( 'Content-Disposition: attachment; filename="' . $nombre . '"' );
+		Shell::send_header( 'Content-Length: ' . strlen( $cuerpo ) );
+		Shell::send_header( 'Cache-Control: no-store, no-cache, must-revalidate' );
+		echo $cuerpo;
+		Shell::leave();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function may_export( int $procedure_id ): bool {
+		return (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_EXPORT, true );
+	}
+
+
+
+
+
+
+
+
+
+	public static function csv( int $user_id, int $procedure_id, array $source ): ?string {
+		$ambito = null;
+		if ( ! ProcedureAccess::can_observe( $user_id, $procedure_id, $ambito ) || ! self::may_export( $procedure_id ) ) {
+			return null;
+		}
+		$columnas = ObserveSettings::columns( $procedure_id );
+
+		if ( array() === $columnas ) {
+			return null;
+		}
+		$ids = ApplicationQuery::ids( $procedure_id, self::filter( $source, $columnas ), $ambito );
+		return ApplicationExport::csv( $procedure_id, array_keys( $columnas ), ApplicationExport::SHAPE_APPLICATION, $ids );
+	}
+
+
+
+
+
+
+
+	public static function render( $atts = array() ): string {
+		unset( $atts );
+		Assets::enqueue();
+
+		return ObserveView::html( self::model( $_GET ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\Notifications;
 
 
@@ -23784,7 +25330,7 @@ final class Messages {
 				array( '' ),
 				self::field( 'Antes', self::text( $ctx, 'before' ) ),
 				self::field( 'Después', self::text( $ctx, 'after' ) ),
-				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+				self::link( '' !== self::text( $ctx, 'url_label' ) ? self::text( $ctx, 'url_label' ) : 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
 			),
 		);
 	}
@@ -23912,6 +25458,7 @@ final class Messages {
 namespace Prc\Notifications;
 
 use Prc\Access\CentreScope;
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureQuestions;
@@ -23923,7 +25470,10 @@ use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\Observe;
+use Prc\PublicFront\ObserveSettings;
 use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -24269,7 +25819,9 @@ final class Mailer {
 			return;
 		}
 		$autor = (int) get_post_field( 'post_author', (int) $application_id );
-		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id ) ) {
+
+
+		if ( ! ProcedureAccess::can_view_application( $autor, (int) $application_id, ProcedureAccess::VIEW_OWN ) ) {
 			return;
 		}
 		self::safely(
@@ -24359,6 +25911,7 @@ final class Mailer {
 
 
 
+
 	public static function on_people_changed( $application_id, $change = '', $before = array(), $after = array(), $user_id = 0 ): void {
 		self::safely(
 			static function () use ( $application_id, $change, $before, $after, $user_id ): void {
@@ -24374,8 +25927,61 @@ final class Mailer {
 				$ctx['url']    = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
 				unset( $ctx['answers'] );
 				self::send( self::EVENT_PEOPLE_CHANGED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
+				self::send_to_zone( (int) $application_id, $ctx, (array) $before, (array) $after );
 			}
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function send_to_zone( int $application_id, array $ctx, array $before, array $after ): void {
+		$procedure_id = (int) $ctx['procedure_id'];
+		if ( ! ObserverScope::is_observable( $procedure_id ) || ! get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_NOTIFY, true ) ) {
+			return;
+		}
+		$codigo   = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		$destinos = array_filter( array_map( array( self::class, 'email_of' ), ObserverScope::observers_of( $codigo ) ) );
+		if ( array() === $destinos ) {
+			return;
+		}
+		$columnas = ObserveSettings::columns( $procedure_id );
+		$campos   = array();
+		foreach ( array_keys( array_intersect_key( $columnas, PeopleExport::COLUMNS ) ) as $columna ) {
+			$campos[] = substr( (string) $columna, strlen( 'person_' ) );
+		}
+		$spec = People::spec( $procedure_id );
+
+
+		$zona = array(
+			'procedure'    => $ctx['procedure'] ?? '',
+			'procedure_id' => $procedure_id,
+			'centre'       => $ctx['centre'] ?? '',
+			'change'       => $ctx['change'] ?? '',
+			'date'         => $ctx['date'] ?? '',
+			'before'       => array() !== $before && array() !== $campos ? ApplicationPeople::describe( $spec, $before, $campos ) : '',
+			'after'        => array() !== $after && array() !== $campos ? ApplicationPeople::describe( $spec, $after, $campos ) : '',
+			'url'          => Observe::url( $procedure_id ),
+			'url_label'    => 'Se consulta en la consulta de solicitudes:',
+		);
+		if ( isset( $columnas['applicant'] ) ) {
+			$zona['applicant'] = $ctx['applicant'] ?? '';
+		}
+		self::send( self::EVENT_PEOPLE_CHANGED, $destinos, $zona );
 	}
 
 
@@ -25291,6 +26897,7 @@ use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
+use Prc\PublicFront\Observe;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
@@ -25344,6 +26951,8 @@ final class App {
 		ApplyForm::class,
 		PeopleForm::class,
 		MyCentre::class,
+
+		Observe::class,
 		Workspace::class,
 		ProcedureEditor::class,
 		Home::class,

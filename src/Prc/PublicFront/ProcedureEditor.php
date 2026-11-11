@@ -66,6 +66,7 @@ final class ProcedureEditor {
 	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
 	public const PANEL_PEOPLE       = 'personas';
+	public const PANEL_OBSERVE      = 'consulta';
 
 	public const OP_REVIEW              = 'review';
 	public const OP_BULK_REVIEW         = 'bulk_review';
@@ -80,6 +81,7 @@ final class ProcedureEditor {
 	public const OP_NOTIFY              = 'notify';
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
+	public const OP_OBSERVE             = 'observe';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
@@ -163,6 +165,7 @@ final class ProcedureEditor {
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
 		self::OP_PEOPLE_SPEC,
+		self::OP_OBSERVE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -189,6 +192,7 @@ final class ProcedureEditor {
 		'codigo'       => 'Código adicional guardado.',
 		'avisos'       => 'Avisos por correo guardados.',
 		'personas'     => 'Lista de personas guardada.',
+		'consulta'     => 'Consulta de solicitudes guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -296,6 +300,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
+			self::PANEL_OBSERVE      => 'Consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -403,12 +408,14 @@ final class ProcedureEditor {
 			return;
 		}
 		// Lo que se guarda en cualquier estado mientras el procedimiento se
-		// pueda editar: los avisos, el cierre de las entregas y la lista de
-		// personas, que tiene su propia ventana (ADR-0041).
+		// pueda editar: los avisos, el cierre de las entregas, la lista de
+		// personas, que tiene su propia ventana (ADR-0041), y la consulta por
+		// zona (ADR-0043).
 		$sueltas = array(
-			self::OP_NOTIFY         => 'save_notify',
-			self::OP_DELIVERY_DATES => 'save_delivery_dates',
-			self::OP_PEOPLE_SPEC    => 'save_people_spec',
+			self::OP_NOTIFY         => array( self::class, 'save_notify' ),
+			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
+			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
+			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -416,7 +423,7 @@ final class ProcedureEditor {
 				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
 				return;
 			}
-			call_user_func( array( self::class, $sueltas[ $op ] ), $procedure_id );
+			call_user_func( $sueltas[ $op ], $procedure_id );
 			return;
 		}
 
@@ -1404,6 +1411,7 @@ final class ProcedureEditor {
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 			'people_spec'             => array(),
 			'people'                  => array(),
+			'observe'                 => array(),
 		);
 	}
 
@@ -1519,6 +1527,7 @@ final class ProcedureEditor {
 		$m['questions']     = Applications::questions( $procedure_id );
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']   = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']       = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de

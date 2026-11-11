@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -157,6 +157,11 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_archived` | boolean | Histórico: cierra la edición (ADR-0023) |
 | `prc_applications_closed` | boolean | Pausa manual de solicitudes, sin modificar fechas ni plazos documentales (ADR-0035) |
 | `prc_people_spec` | array | Lo que pide de la lista de personas de cada solicitud: papeles y grupos con clave estable, mínimo, máximo, una por papel y grupo, ventana propia y «solo admitidas» (ADR-0041) |
+| `prc_observable` | boolean | Admite la consulta de solo lectura por zona; apagada, la consulta responde como si no existiera (ADR-0043) |
+| `prc_observer_columns` | array de string | Columnas de la exportación que enseña la consulta; vacía, las de solicitud, centro y coordinación. Nunca el DNI ni la nota (ADR-0043) |
+| `prc_observer_files` | boolean | Quien consulta descarga los documentos de su zona (ADR-0043) |
+| `prc_observer_export` | boolean | Quien consulta exporta a CSV lo que ve (ADR-0043) |
+| `prc_observer_notify` | boolean | El aviso de personas se copia a quienes consultan la zona del centro (ADR-0043) |
 
 **`prc_application` — Solicitud.** `public => false`, `show_ui => true` (solo
 para diagnóstico en el escritorio), `post_parent` = el procedimiento,
@@ -270,10 +275,11 @@ Capacidades del aplicativo:
 | `prc_apply_as_teacher` | `prc_teacher` | Presentar y editar solicitudes individuales en procedimientos para docentes |
 | `prc_manage_procedures` | `prc_manager` | Crear, editar, publicar y archivar procedimientos **de sus ámbitos** |
 | `prc_review_applications` | `prc_manager` | Ver, admitir, excluir, pedir subsanar y exportar solicitudes de esos procedimientos |
+| `prc_view_applications` | `prc_observer` | Consultar, en solo lectura, las solicitudes de los centros de sus zonas en los procedimientos que lo admiten (ADR-0043) |
 | `prc_manage_all_areas` | `administrator` | Lo anterior en todos los ámbitos |
 | `prc_manage_app` | `administrator` | Ajustes, diagnóstico y desarchivar |
 
-Acotados, ambos **fail-closed**:
+Acotados, los tres **fail-closed**:
 
 - **Por ámbito**: la meta de usuario `prc_area` (uno o varios IDs de término
   de `prc_area`; un término incluye sus descendientes). Sin ámbito y sin
@@ -282,14 +288,21 @@ Acotados, ambos **fail-closed**:
   clave devuelve el filtro `prc_centre_code_meta_key` (por defecto
   `prc_centre_code`). Sin código válido, `prc_apply` no sirve para nada
   (ADR-0016).
+- **Por zona**: `Access\ObserverScope::zones_for( $user_id )` lee la meta
+  cuya clave devuelve el filtro `prc_zone_meta_key` (por defecto `prc_zone`),
+  con una o varias zonas; los centros de cada zona se leen del catálogo al
+  decidir. Sin zona con centros, `prc_view_applications` no abre nada, y nunca
+  escribe: `ProcedureAccess::can_observe()` y `can_observe_application()` dan
+  `read_post` y nada más (ADR-0043).
 
 La capa que protege es `map_meta_cap` sobre `edit_post`, `delete_post`,
 `publish_post` y `read_post` de ambos CPT; el listado del escritorio se acota
 además con `pre_get_posts`. Roles: los crea el snippet suelto
 `snippets/roles-and-profiles.php`; el aplicativo solo comprueba capacidades
 (ADR-0015). Ese mismo snippet añade a la ficha de usuario del escritorio los
-campos «Ámbitos» (para quien gestiona) y «Código de centro» (para quien
-solicita), editables solo por administración.
+campos «Ámbitos» (para quien gestiona), «Código de centro» (para quien
+solicita) y «Zonas de consulta» (para quien consulta), editables solo por
+administración.
 
 ### Catálogo de centros (`Domain/CentreCatalog`, ADR-0017)
 
@@ -325,9 +338,10 @@ confirmaciones, con degradación a `confirm()` y a formulario sin JavaScript).
 | `home` | `procedimientos` | `[prc_home]` | Público | Listado por curso: abiertos, en subsanación, próximos, cerrados y resueltos; filtro por ámbito; tarjeta con estado, fechas y ámbito |
 | `procedure` | (single de `prc_procedure`) | — | Público | Ficha: descripción, fechas, estado, ámbito, contacto, enlaces a resolución y listados; botón «Solicitar» / «Mi solicitud» / «Gestionar» según quién mira |
 | `workspace` | `gestion-de-procedimientos` | `[prc_workspace]` | `prc_manage_procedures` | Mis procedimientos por curso, con estado y nº de solicitudes; «Nuevo procedimiento» |
-| `editor` | `editar-procedimiento` | `[prc_editor]` | `prc_manage_procedures` | El taller del procedimiento, una pantalla con paneles: **Datos** (título, descripción, ámbito, curso, dirigido a, fechas, contacto, compromisos, coordinación), **Preguntas** (constructor), **Enlaces** (resolución, listados), **Solicitudes** (tabla con centro, código, fecha, cargo, coordinación, estado de revisión y lo que le falta a una incompleta, de 50 en 50, con contadores por estado y filtro por GET —estado, isla, zona, incompletas y búsqueda por centro, código o persona—; acciones admitir / subsanar / excluir con nota, una a una o en bloque; exportar a medida, todas o las del filtro, en CSV o como fichero de alta de usuarios, ADR-0039), **Publicación** (publicar, devolver a borrador, cerrar solicitudes, histórico) |
+| `editor` | `editar-procedimiento` | `[prc_editor]` | `prc_manage_procedures` | El taller del procedimiento, una pantalla con paneles: **Datos** (título, descripción, ámbito, curso, dirigido a, fechas, contacto, compromisos, coordinación), **Preguntas** (constructor), **Enlaces** (resolución, listados), **Solicitudes** (tabla con centro, código, fecha, cargo, coordinación, estado de revisión y lo que le falta a una incompleta, de 50 en 50, con contadores por estado y filtro por GET —estado, isla, zona, incompletas y búsqueda por centro, código o persona—; acciones admitir / subsanar / excluir con nota, una a una o en bloque; exportar a medida, todas o las del filtro, en CSV o como fichero de alta de usuarios, ADR-0039), **Publicación** (publicar, devolver a borrador, cerrar solicitudes, histórico), **Consulta** (si admite la consulta por zona y qué enseña, ADR-0043) |
 | `apply` | `solicitud` | `[prc_apply]` | `prc_apply` | Formulario de solicitud del centro para `?procedimiento=ID`, o la solicitud presentada con su estado y la nota de revisión |
 | `mine` | `mi-centro` | `[prc_mine]` | `prc_apply` | Las solicitudes del centro: procedimiento, fecha, estado del procedimiento, estado de revisión |
+| `observe` | `consulta-de-solicitudes` | `[prc_observe]` | `prc_view_applications` o quien gestiona | Consulta de solo lectura: los procedimientos observables con solicitudes de sus zonas y, en cada uno, la tabla acotada a sus centros, con filtro, páginas y, si el procedimiento lo deja, documentos y CSV. Sin DNI ni nota (ADR-0043) |
 
 Toda escritura va por POST con nonce y comprobación de capacidad, patrón
 «POST → redirect → GET» con avisos en la sesión de la URL (`?aviso=`). Borrar
@@ -470,6 +484,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
 | Las pantallas son páginas de WordPress pintadas enteras por código | ADR-0022 | Propuesta |
 | El estado histórico cierra la edición | ADR-0023 | Propuesta |
 | Las solicitudes y documentos de hoy no se migran en la fase 1 | ADR-0024 | Propuesta |
+| La consulta de solo lectura se acota por zona y la decide el procedimiento | ADR-0043 | Propuesta |
 
 ## Pendientes y trabajo futuro
 

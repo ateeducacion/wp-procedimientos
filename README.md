@@ -199,6 +199,7 @@ contraseña es `password` en todos.
 | `direccion` | `prc_school_head` | Un centro del catálogo inventado |
 | `direccion2` | `prc_school_head` | Otro centro |
 | `profesor` | `prc_teacher` | Sin centro; tiene una solicitud de ejemplo |
+| `consulta` | `prc_observer` | Una zona del catálogo inventado: consulta, en solo lectura, las solicitudes de sus centros |
 
 Flujo sugerido: entra como `editor-ambito1` y `editor-ambito2` y comprueba que
 ambos pueden editar el procedimiento compartido, pero cada uno solo cambia

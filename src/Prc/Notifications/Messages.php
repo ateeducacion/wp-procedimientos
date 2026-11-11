@@ -204,7 +204,7 @@ final class Messages {
 				array( '' ),
 				self::field( 'Antes', self::text( $ctx, 'before' ) ),
 				self::field( 'Después', self::text( $ctx, 'after' ) ),
-				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+				self::link( '' !== self::text( $ctx, 'url_label' ) ? self::text( $ctx, 'url_label' ) : 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
 			),
 		);
 	}

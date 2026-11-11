@@ -52,8 +52,9 @@ class Test_Shell extends WP_UnitTestCase {
 		$this->assertFalse( ProcedureAccess::can_manage_procedures( $huerfano ) );
 		$this->assertSame( array( 'home' ), array_keys( Shell::sections() ) );
 
+		// Quien gestiona tiene además la consulta de sus procedimientos (ADR-0043).
 		$this->acting_as( $this->manager( array( $this->area( 'Área de prueba' ) ) ) );
-		$this->assertSame( array( 'home', 'workspace' ), array_keys( Shell::sections() ) );
+		$this->assertSame( array( 'home', 'workspace', 'observe' ), array_keys( Shell::sections() ) );
 
 		// Y con el rol del equipo directivo pero sin código de centro, tampoco.
 		$this->acting_as( $this->school_head() );
@@ -65,7 +66,11 @@ class Test_Shell extends WP_UnitTestCase {
 		// Administración gestiona todos los ámbitos, pero no tiene centro con
 		// el que solicitar: «Mi centro» no es suya.
 		$this->acting_as( $this->administrator() );
-		$this->assertSame( array( 'home', 'workspace' ), array_keys( Shell::sections() ) );
+		$this->assertSame( array( 'home', 'workspace', 'observe' ), array_keys( Shell::sections() ) );
+
+		// Quien consulta, sin zona no tiene nada; con zona, su consulta.
+		$this->acting_as( $this->observer() );
+		$this->assertSame( array( 'home' ), array_keys( Shell::sections() ) );
 	}
 
 	/**
@@ -84,7 +89,7 @@ class Test_Shell extends WP_UnitTestCase {
 		);
 
 		$this->assertSame( '', Shell::url( 'workspace' ) );
-		$this->assertSame( array( 'home' ), array_keys( Shell::sections() ) );
+		$this->assertSame( array( 'home', 'observe' ), array_keys( Shell::sections() ) );
 	}
 
 	// ─── las direcciones ───────────────────────────────────────────────────

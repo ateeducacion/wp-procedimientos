@@ -6,6 +6,7 @@
  */
 
 use Prc\Access\CentreScope;
+use Prc\Access\ObserverScope;
 
 /**
  * El snippet suelto de roles y perfiles.
@@ -22,7 +23,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 	 * el nativo de WordPress, que no se crea: solo recibe capacidades.
 	 */
 	public function test_role_slugs_are_the_product_roles() {
-		$this->assertSame( array( 'prc_manager', 'prc_school_head', 'prc_teacher' ), prc_role_slugs() );
+		$this->assertSame( array( 'prc_manager', 'prc_school_head', 'prc_teacher', 'prc_observer' ), prc_role_slugs() );
 		$this->assertSame( prc_role_slugs(), array_keys( prc_role_definitions() ) );
 	}
 
@@ -58,6 +59,17 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		$this->assertTrue( $teacher->has_cap( 'prc_apply' ) );
 		$this->assertTrue( $teacher->has_cap( 'prc_apply_as_teacher' ) );
 		$this->assertFalse( $teacher->has_cap( 'prc_manage_procedures' ) );
+
+		// Quien consulta solo lee: ni gestiona, ni revisa, ni solicita (ADR-0043).
+		$observer = get_role( 'prc_observer' );
+		$this->assertNotNull( $observer );
+		$this->assertSame( 'Consulta de solicitudes', wp_roles()->role_names['prc_observer'] );
+		$this->assertTrue( $observer->has_cap( 'read' ) );
+		$this->assertTrue( $observer->has_cap( 'prc_view_applications' ) );
+		$this->assertFalse( $observer->has_cap( 'prc_manage_procedures' ) );
+		$this->assertFalse( $observer->has_cap( 'prc_review_applications' ) );
+		$this->assertFalse( $observer->has_cap( 'prc_apply' ) );
+		$this->assertFalse( $observer->has_cap( 'edit_posts' ) );
 
 		// La administración gestiona y revisa en todos los ámbitos y administra
 		// el aplicativo, pero no solicita.
@@ -195,6 +207,49 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		$_POST['prc_centre_code'] = '';
 		prc_save_profile_fields( $quien );
 		$this->assertSame( '', CentreScope::code_for( $quien ) );
+	}
+
+	/**
+	 * Las zonas de consulta las escribe administración: una o varias, y solo
+	 * lo que tiene forma de código. Quien consulta no se pone otra.
+	 */
+	public function test_administration_sets_the_zones_and_nobody_else() {
+		$quien = $this->observer();
+		$this->acting_as( $this->administrator() );
+		ob_start();
+		prc_render_profile_fields( get_user_by( 'id', $quien ) );
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'name="prc_zone"', $html );
+
+		$_POST = array(
+			'prc_profile_scope_nonce' => wp_create_nonce( 'prc_profile_scope_' . $quien ),
+			'prc_profile_present'     => '1',
+			'prc_zone'                => ' Z0001, Z0002 ;n/v; Z0001 ',
+		);
+		prc_save_profile_fields( $quien );
+		$this->assertSame( array( 'Z0001', 'Z0002' ), get_user_meta( $quien, ObserverScope::meta_key(), true ) );
+		$this->assertSame( array( 'Z0001', 'Z0002' ), \Prc\Access\ProcedureAccess::observer_zones( $quien ) );
+
+		// Vaciarlo lo borra: sin zona, la consulta no abre nada.
+		$_POST['prc_zone'] = '';
+		prc_save_profile_fields( $quien );
+		$this->assertSame( '', get_user_meta( $quien, ObserverScope::meta_key(), true ) );
+
+		// Y quien consulta no se la pone, ni con su propio perfil.
+		update_user_meta( $quien, ObserverScope::meta_key(), array( 'Z0001' ) );
+		$this->acting_as( $quien );
+		ob_start();
+		prc_render_profile_fields( get_user_by( 'id', $quien ) );
+		$html = (string) ob_get_clean();
+		$this->assertStringNotContainsString( 'name="prc_zone"', $html );
+		$this->assertStringContainsString( 'Z0001', $html, 'la ve como texto' );
+		$_POST = array(
+			'prc_profile_scope_nonce' => wp_create_nonce( 'prc_profile_scope_' . $quien ),
+			'prc_profile_present'     => '1',
+			'prc_zone'                => 'Z0001, Z0002',
+		);
+		prc_save_profile_fields( $quien );
+		$this->assertSame( array( 'Z0001' ), get_user_meta( $quien, ObserverScope::meta_key(), true ) );
 	}
 
 	/** Scope assignment is visible and writable only to administration. */

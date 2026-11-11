@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0020, ADR-0023]
+  adrs: [ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0020, ADR-0023, ADR-0043]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -33,6 +33,11 @@ ramas al guardar. Solo administración ve y modifica el selector del perfil.
 | `prc_review_applications` | ✓ acotado | ✓ acotado | ✓ |
 | `prc_manage_app`, `prc_manage_all_areas` | — | — | ✓ |
 
+Desde la [ADR-0043](adr/ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md)
+hay además una capacidad de **solo lectura**, `prc_view_applications`, con
+su rol de conveniencia `prc_observer` y su acotado, la **zona**: se describen
+en la sección «El acotado por zona», más abajo.
+
 Las secciones siguientes conservan el análisis de la etapa anterior en que
 `prc_manager` era el único actor editorial explícito. Donde difieran, rige
 el modelo vigente de ADR-0030.
@@ -46,9 +51,10 @@ buscar:
 | Qué | Dónde |
 |---|---|
 | Los dos roles del entorno local y sus capacidades | `prc_register_roles()`, en `snippets/roles-and-profiles.php` |
-| Los campos «Ámbitos» y «Código de centro» de la ficha de usuario | El mismo snippet |
+| Los campos «Ámbitos», «Código de centro» y «Zonas de consulta» de la ficha de usuario | El mismo snippet |
 | Quién puede hacer qué con cada procedimiento y cada solicitud | `ProcedureAccess`, en `src/Prc/Access/ProcedureAccess.php` |
 | El código de centro de la persona | `CentreScope::code_for()`, en `src/Prc/Access/CentreScope.php` |
+| Las zonas de quien consulta y sus centros | `ObserverScope::zones_for()` y `ProcedureAccess::observer_codes()`, en `src/Prc/Access/` |
 
 Están separados a propósito: el snippet de roles es un fichero suelto que se
 activa antes que nada (`init` prioridad 5) y el aplicativo **solo comprueba
@@ -111,6 +117,7 @@ migrar nada) y de
 |---|---|---|---|---|
 | `prc_manager` | Gestión de procedimientos | Personal de un ámbito que convoca y gestiona las solicitudes | `gestion-de-procedimientos`, `editar-procedimiento`, y el escritorio acotado a sus ámbitos | **Ámbitos** (`prc_area`): uno o varios. Sin ninguno, no ve ni edita nada |
 | `prc_school_head` | Dirección de centro | Miembro del equipo directivo de un centro | `solicitud`, `mi-centro`, y el botón «Solicitar» en las fichas | **Código de centro**. Sin él, no solicita nada |
+| `prc_observer` | Consulta de solicitudes | Quien acompaña a los centros de una o varias zonas | `consulta-de-solicitudes`, en solo lectura | **Zonas de consulta**: una o varias. Sin ninguna con centros en el catálogo, no ve nada |
 | `administrator` | Administrador | Administración del sitio | Todo, en todos los ámbitos, más «Ajustes» del aplicativo | — |
 
 Los dos primeros los crea `snippets/roles-and-profiles.php` **para el
@@ -135,9 +142,10 @@ diagnóstico.
 
 ### Capacidades por rol
 
-Son **cinco**, todas del aplicativo. Las columnas se leen «tiene la
-capacidad», no «puede hacerlo con cualquier procedimiento»: los dos acotados
-son una segunda comprobación y van en la sección siguiente.
+Son **seis**, todas del aplicativo; la del profesorado,
+`prc_apply_as_teacher`, la explica la ADR-0037. Las columnas se leen «tiene la capacidad», no «puede hacerlo
+con cualquier procedimiento»: los tres acotados son una segunda comprobación
+y van en las secciones siguientes.
 
 | Capacidad | `prc_school_head` | `prc_manager` | `administrator` | Qué abre |
 |---|:-:|:-:|:-:|---|
@@ -146,6 +154,7 @@ son una segunda comprobación y van en la sección siguiente.
 | `prc_review_applications` | | ✓ | ✓ | El panel Solicitudes del taller: ver, admitir, excluir, pedir subsanar con nota y exportar el CSV de esos procedimientos |
 | `prc_manage_all_areas` | | | ✓ | Saltarse el acotado por ámbito, y ver los procedimientos que se han quedado sin ámbito |
 | `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico |
+| `prc_view_applications` | | | | Solo la tiene `prc_observer`: la página `consulta-de-solicitudes` y **leer** las solicitudes de los centros **de sus zonas** en los procedimientos que admiten consulta. Nunca editar, revisar, borrar ni exportar el fichero de usuarios |
 
 Y `read`, que llevan los dos roles del snippet.
 
@@ -190,6 +199,9 @@ coincide con `prc_centre_code` de la solicitud.
 | Admitir, excluir, pedir subsanar | Los mismos | Excluir y pedir subsanar exigen nota |
 | Exportar el CSV | Los mismos | — |
 | Ver una solicitud en el escritorio | Los mismos, más `prc_manage_app` | Solo diagnóstico: `prc_application` no es público |
+| Consultar las solicitudes de un procedimiento en solo lectura | `prc_view_applications` con zona, o quien gestiona su ámbito | El procedimiento publicado y con `prc_observable`; quien consulta, solo los centros de sus zonas |
+| Descargar los documentos desde la consulta | Los mismos | Además, `prc_observer_files` en el procedimiento |
+| Exportar la consulta a CSV | Los mismos | Además, `prc_observer_export`; nunca el DNI ni la nota |
 
 Lo que cada **estado** del procedimiento permite está en la tabla de
 [SDD-0001](sdd/SDD-0001-arquitectura-del-aplicativo-de-procedimientos.md):
@@ -274,6 +286,51 @@ Cuatro reglas:
    código de centro editan la misma solicitud; quien la presentó es
    `post_author` y sirve para los correos y para las peticiones de acceso.
 
+### El acotado por zona
+
+La zona de quien consulta es una **meta de usuario** cuya clave devuelve el
+filtro `prc_zone_meta_key` —por defecto `prc_zone`—, con **una o varias**
+zonas, y la lee `ObserverScope::zones_for( $user_id )`
+([ADR-0043](adr/ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md)).
+Una zona es el código de otro centro del catálogo: el mismo valor que el
+campo `zone` de cada centro (ADR-0042).
+
+| Pieza | Dónde |
+|---|---|
+| Zonas de la persona | meta de usuario, clave por `prc_zone_meta_key`; se lee como lista o como texto con comas, y **guardar el perfil la reescribe como lista** —cuidado si el filtro apunta a una meta que escribe otro sistema— |
+| Centros de esas zonas | `ProcedureAccess::observer_codes()`, del catálogo de hoy |
+| Si el procedimiento admite consulta | `prc_observable`, y que esté publicado (`ObserverScope::is_observable()`) |
+| Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en el panel «Consulta» del taller |
+| Quién escribe el campo de la ficha | solo `prc_manage_app` o `edit_users` |
+| Quién decide | `ProcedureAccess::can_observe()` y `can_observe_application()` |
+
+Cinco reglas:
+
+1. **Falla en cerrado.** Sin zona, o con zonas sin ningún centro en el
+   catálogo, la consulta no enseña nada y lo dice.
+2. **Solo lee.** `map_meta_cap` da `read_post` sobre esas solicitudes y nada
+   más; editar, borrar, publicar y revisar siguen siendo de quien gestiona.
+   El rol no lleva `edit_prc_applications`, así que el listado del
+   escritorio no se abre, y la REST no publica las solicitudes.
+3. **La zona no se copia.** Los centros de cada zona se leen del catálogo al
+   decidir: un centro que cambia de zona deja de verse desde la antigua. Una
+   solicitud de profesorado no tiene centro, y un centro fuera del catálogo
+   no tiene zona: por zona, no se ven.
+4. **Solo columnas de una lista cerrada.** Las que puede enseñar están
+   escritas a mano (`ObserverScope::ALLOWED_COLUMNS`) más las preguntas; el
+   DNI y la nota no están, ni en la pantalla ni en el CSV, y una columna nueva
+   de la exportación no entra sola. Tampoco el historial ni el fichero de
+   alta de usuarios. Los documentos, solo los de preguntas que se enseñan, y
+   el aviso de personas a la zona describe a la persona con esas mismas
+   columnas.
+5. **No confirma lo que no enseña.** Un procedimiento que no admite consulta
+   responde igual que uno que no existe.
+
+Quien gestiona el ámbito del procedimiento —y quien tiene todos— ve su
+consulta entera, igual que ve el taller. Quien dirige un centro y además
+consulta una zona tiene las dos cosas sin mezclarlas: lee las de su zona y
+solo escribe en lo de su centro.
+
 ### El estado «histórico»: el cierre que va por encima del ámbito
 
 Un procedimiento marcado como **histórico** no lo edita su ámbito, ni nadie
@@ -332,6 +389,7 @@ Las cuentas de demostración, todas con contraseña `password`:
 | `gestion2` | `prc_manager` | Otro ámbito: sirve para ver el acotado |
 | `direccion` | `prc_school_head` | Un centro del catálogo inventado |
 | `direccion2` | `prc_school_head` | Otro centro: sirve para ver que no se ven las solicitudes entre centros |
+| `consulta` | `prc_observer` | Una zona del catálogo inventado: consulta, en solo lectura, las solicitudes de sus centros |
 
 Para probar el fallo en cerrado hacen falta además una cuenta con
 `prc_manage_procedures` **sin** ámbito y otra con `prc_apply` **sin** código

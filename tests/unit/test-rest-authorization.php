@@ -471,7 +471,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$caso  = $this->two_areas( 'publish' );
 		$curso = $this->course( '2030-2031' );
 
-		$this->assertTrue( ProcedureAccess::may_use_area( $caso['theirs'], $curso ) );
+		$this->assertTrue( user_can( $caso['theirs'], 'assign_term', $curso ) );
 
 		$alta = $this->request(
 			$caso['theirs'],
@@ -492,7 +492,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 	public function test_an_unknown_term_is_never_assignable() {
 		$caso = $this->two_areas( 'publish' );
 
-		$this->assertFalse( ProcedureAccess::may_use_area( $caso['theirs'], 999999 ) );
+		$this->assertFalse( user_can( $caso['theirs'], 'assign_term', 999999 ) );
 		$this->assertFalse( ProcedureEditor::may_set_area( $caso['theirs'], array( 999999 ) ) );
 		$this->assertFalse( ProcedureEditor::may_set_area( $caso['theirs'], array( $caso['area'] ) ) );
 		$this->assertTrue( ProcedureEditor::may_set_area( $caso['mine'], array( $caso['area'] ) ) );
@@ -528,6 +528,53 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			$item = $this->request( $quien, 'GET', '/wp/v2/prc_procedure/' . $solicitud );
 			$this->assertSame( 404, $item->get_status() );
 		}
+	}
+
+	/**
+	 * Quien consulta una zona no llega por la REST a ninguna solicitud: no hay
+	 * ruta del tipo, y la búsqueda general no las devuelve.
+	 */
+	public function test_an_observer_reaches_no_application_through_rest() {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'CEIP Uno',
+						'zone' => 'Z0001',
+					),
+					array(
+						'code' => 'C0002',
+						'name' => 'IES Dos',
+						'zone' => 'Z0002',
+					),
+				);
+			}
+		);
+		\Prc\Domain\CentreCatalog::flush();
+		$caso = $this->two_areas( 'publish' );
+		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::OBSERVABLE, true );
+		$suya  = $this->application( $caso['procedure'], $this->school_head( 'C0002' ) );
+		$ajena = $this->application( $caso['procedure'], $this->school_head( 'C0001' ) );
+		$uid   = $this->observer( array( 'Z0002' ) );
+
+		foreach ( array_keys( $this->server->get_routes() ) as $ruta ) {
+			$this->assertStringNotContainsString( ApplicationPostType::POST_TYPE, $ruta );
+		}
+		$busqueda = $this->request(
+			$uid,
+			'GET',
+			'/wp/v2/search',
+			array(
+				'search'   => 'Centro de prueba',
+				'subtype'  => 'any',
+				'per_page' => 100,
+			)
+		);
+		$this->assertSame( 200, $busqueda->get_status() );
+		$this->assertNotContains( $suya, $this->ids( $busqueda ), 'ni la de su zona' );
+		$this->assertNotContains( $ajena, $this->ids( $busqueda ) );
 	}
 
 	/**

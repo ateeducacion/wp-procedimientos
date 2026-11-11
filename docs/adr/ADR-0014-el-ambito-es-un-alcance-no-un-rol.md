@@ -204,3 +204,15 @@ meta de usuario `prc_area` en la persona. Lo comprueba un único guardián,
   y su propia decisión
   ([ADR-0016](ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md));
   el guardián es el mismo.
+
+## Adenda — 2026-11-10 (ADR-0043)
+
+El ámbito deja de ser uno de dos acotados y pasa a ser uno de tres: se suma
+la **zona** de quien consulta, en solo lectura
+([ADR-0043](ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md)).
+Quien gestiona el ámbito de un procedimiento ve su consulta entera, igual
+que ve el taller; quien gestiona otro ámbito, nada. El guardián sigue siendo
+`ProcedureAccess`, y la zona no es un ámbito: el ámbito es de quien convoca y
+la zona, del centro.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

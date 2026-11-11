@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -66,6 +66,13 @@ la [ADR-0017](ADR-0017-el-catalogo-de-centros-no-se-versiona.md), la
 [ADR-0029](ADR-0029-el-catalogo-de-centros-es-externo-y-se-cachea-localmente.md)
 y la [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md).
 
+La ADR-0043 añade un tercer acotado, por zona, a los del ámbito
+([ADR-0014](ADR-0014-el-ambito-es-un-alcance-no-un-rol.md)) y el centro
+([ADR-0016](ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)),
+y una capacidad de solo lectura a las de la
+[ADR-0015](ADR-0015-el-aplicativo-comprueba-capacidades-no-roles.md); las tres
+llevan una adenda que remite a ella.
+
 | ID | Título | Estado | Fecha |
 |----|--------|--------|-------|
 | [ADR-0001](ADR-0001-repo-entorno-desarrollo-no-plugin.md) | El repositorio es un entorno de desarrollo, no un plugin | Propuesta | 2026-09-15 |
@@ -110,3 +117,4 @@ y la [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-cen
 | [ADR-0040](ADR-0040-numero-fecha-rejilla-y-puntos-amplian-las-preguntas.md) | Número, fecha, rejilla y opciones con puntos amplían las preguntas | Propuesta | 2026-11-10 |
 | [ADR-0041](ADR-0041-las-personas-de-la-solicitud-son-una-lista-que-gestiona-el-centro.md) | Las personas de la solicitud son una lista que gestiona el centro, con su propia ventana | Propuesta | 2026-11-10 |
 | [ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md) | La titularidad se deriva del tipo, la zona es otro centro del catálogo y el procedimiento acota qué centros solicitan | Propuesta | 2026-11-10 |
+| [ADR-0043](ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md) | La consulta de solo lectura se acota por zona con una capacidad y una meta, y la decide el procedimiento | Propuesta | 2026-11-10 |

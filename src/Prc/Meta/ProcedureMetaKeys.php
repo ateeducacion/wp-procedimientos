@@ -171,6 +171,36 @@ final class ProcedureMetaKeys {
 	 */
 	public const PEOPLE_SPEC = 'prc_people_spec';
 
+	/**
+	 * Si el procedimiento admite la consulta de solo lectura por zona
+	 * (ADR-0043). Apagada, la consulta responde como si no existiera.
+	 */
+	public const OBSERVABLE = 'prc_observable';
+
+	/**
+	 * Qué columnas de la exportación enseña la consulta. Vacía, las de
+	 * solicitud, centro y coordinación; solo las de una lista cerrada más
+	 * las preguntas, sin el DNI ni la nota
+	 * ({@see \Prc\Access\ObserverScope::ALLOWED_COLUMNS}).
+	 */
+	public const OBSERVER_COLUMNS = 'prc_observer_columns';
+
+	/**
+	 * Si quien consulta descarga los documentos de las solicitudes de su zona.
+	 */
+	public const OBSERVER_FILES = 'prc_observer_files';
+
+	/**
+	 * Si quien consulta exporta lo que ve.
+	 */
+	public const OBSERVER_EXPORT = 'prc_observer_export';
+
+	/**
+	 * Si el aviso de cambios en las personas se copia a quienes consultan la
+	 * zona del centro.
+	 */
+	public const OBSERVER_NOTIFY = 'prc_observer_notify';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -231,6 +261,11 @@ final class ProcedureMetaKeys {
 			self::APPLICATIONS_CLOSED,
 			self::NOTIFY,
 			self::PEOPLE_SPEC,
+			self::OBSERVABLE,
+			self::OBSERVER_COLUMNS,
+			self::OBSERVER_FILES,
+			self::OBSERVER_EXPORT,
+			self::OBSERVER_NOTIFY,
 		);
 	}
 

@@ -23,13 +23,16 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 /**
  * El único guardián del aplicativo: aquí se responde «¿quién puede qué?».
  *
- * Dos acotados y los dos fallan en cerrado (ADR-0014, ADR-0016):
+ * Tres acotados y los tres fallan en cerrado (ADR-0014, ADR-0016, ADR-0043):
  *
  * - **Por ámbito**: la meta de usuario `prc_area` lleva uno o varios términos
  *   de `prc_area`, y un término incluye a sus descendientes. Sin ámbito y sin
  *   `prc_manage_all_areas`, no se edita ni se ve nada en el taller.
  * - **Por centro**: {@see CentreScope::code_for()}. Sin código, `prc_apply`
  *   no sirve para nada.
+ * - **Por zona**: {@see ObserverScope::zones_for()}. Sin zona con centros en
+ *   el catálogo, `prc_view_applications` no abre nada; y solo lee, nunca
+ *   escribe.
  *
  * La capa que protege es {@see map_meta_cap()}: el acotado del listado del
  * escritorio solo esconde.
@@ -73,6 +76,19 @@ final class ProcedureAccess {
 	 * {@see can_edit_people()}; no la tiene ningún rol (ADR-0041).
 	 */
 	public const CAP_EDIT_PEOPLE = 'prc_edit_people';
+
+	/**
+	 * Consultar, en solo lectura, las solicitudes de los centros de su zona en
+	 * los procedimientos que lo admiten (ADR-0043).
+	 */
+	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
+
+	/**
+	 * What {@see can_view_application()} asks: only if it is the user's own, or
+	 * whether one of its documents may be downloaded.
+	 */
+	public const VIEW_OWN      = 'own';
+	public const VIEW_DOCUMENT = 'document';
 
 	/**
 	 * Register filters.
@@ -821,7 +837,7 @@ final class ProcedureAccess {
 	 * @param string $kind    One of ProcedureMetaKeys::centre_kinds().
 	 * @return string Empty when it may.
 	 */
-	public static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
+	private static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
 		$rules = self::eligibility( $post_id );
 		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
 			$rules['ownership'] = array();
@@ -871,19 +887,58 @@ final class ProcedureAccess {
 	}
 
 	/**
-	 * Whether the user may see this application: their school's, or one they review.
+	 * Whether the user may see this application: their school's, one they
+	 * review, or one of their zone in a procedure that admits consultation.
+	 *
+	 * `$purpose` acota la pregunta:
+	 *
+	 * - {@see VIEW_OWN}: solo si es **suya** —de su centro, o su solicitud
+	 *   individual de profesorado—. Es lo que pregunta el correo que lleva la
+	 *   nota de revisión: verla por la consulta no basta.
+	 * - {@see VIEW_DOCUMENT}: si puede descargar el documento de la pregunta
+	 *   `$question_key`. Quien la presentó y quien la revisa, siempre; quien la
+	 *   consulta por su zona, solo con `prc_observer_files` y si esa pregunta
+	 *   está entre las columnas que la consulta enseña. Lo pregunta la descarga
+	 *   de {@see \Prc\PublicFront\ApplicationFiles}, que no se fía del
+	 *   identificador del documento (ADR-0028, ADR-0043).
+	 *
+	 * @param int    $user_id        User ID.
+	 * @param int    $application_id Application ID.
+	 * @param string $purpose        Empty to read it; {@see VIEW_OWN} or {@see VIEW_DOCUMENT}.
+	 * @param string $question_key   With {@see VIEW_DOCUMENT}, the question the document answers.
+	 * @return bool
+	 */
+	public static function can_view_application( int $user_id, int $application_id, string $purpose = '', string $question_key = '' ): bool {
+		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
+			return false;
+		}
+		$propia = self::is_own_application( $user_id, $application_id );
+		if ( self::VIEW_OWN === $purpose ) {
+			return $propia;
+		}
+		if ( $propia || self::can_review( $user_id, $application_id ) ) {
+			return true;
+		}
+		if ( ! self::can_observe_application( $user_id, $application_id ) ) {
+			return false;
+		}
+		if ( self::VIEW_DOCUMENT !== $purpose ) {
+			return true;
+		}
+		$raiz = self::root_id( $application_id );
+		return '' !== $question_key
+			&& (bool) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_FILES, true )
+			&& in_array( $question_key, (array) get_post_meta( $raiz, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), true );
+	}
+
+	/**
+	 * Whether this application is of the user's school, or the user's own as a teacher.
 	 *
 	 * @param int $user_id        User ID.
 	 * @param int $application_id Application ID.
 	 * @return bool
 	 */
-	public static function can_view_application( int $user_id, int $application_id ): bool {
-		if ( $user_id <= 0 || ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) ) {
-			return false;
-		}
-		if ( self::can_review( $user_id, $application_id ) ) {
-			return true;
-		}
+	private static function is_own_application( int $user_id, int $application_id ): bool {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
@@ -1000,6 +1055,100 @@ final class ProcedureAccess {
 		return 'Este procedimiento es de otro ámbito. Solo lo edita el ámbito que lo convoca o quien administra el aplicativo.';
 	}
 
+	// ─── la consulta por zona (ADR-0043) ────────────────────────────────────
+
+	/**
+	 * The zones a person observes, as written in the profile.
+	 *
+	 * @param int $user_id User ID.
+	 * @return string[] Zone codes.
+	 */
+	public static function observer_zones( int $user_id ): array {
+		return ObserverScope::zones_for( $user_id );
+	}
+
+	/**
+	 * The codes of the centres of the zones a person observes, from today's catalogue.
+	 *
+	 * Se lee del catálogo al preguntar: un centro que cambia de zona deja de
+	 * verse desde la antigua sin que nadie toque nada.
+	 *
+	 * @param int $user_id User ID.
+	 * @return string[]
+	 */
+	public static function observer_codes( int $user_id ): array {
+		$zonas = self::observer_zones( $user_id );
+		return array() === $zonas ? array() : ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+	}
+
+	/**
+	 * Whether the user may open the consultation of this procedure, and what of it.
+	 *
+	 * Quien gestiona su ámbito —o todos— la ve entera, igual que ve el taller;
+	 * quien consulta, solo los centros de sus zonas. Un procedimiento que no
+	 * admite consulta no lo ve nadie por aquí. Sin procedimiento, si tiene
+	 * alguna consulta que abrir: gestiona procedimientos, o consulta una zona
+	 * con centros en el catálogo.
+	 *
+	 * @param int        $user_id      User ID.
+	 * @param int        $procedure_id Procedure ID; 0 for «any».
+	 * @param array|null $scope        Set to what they see: empty for every application, `codes` for only those centres; null when they may not.
+	 * @return bool
+	 */
+	public static function can_observe( int $user_id, int $procedure_id = 0, ?array &$scope = null ): bool {
+		$scope = 0 === $procedure_id ? null : self::observe_scope( $user_id, $procedure_id );
+		if ( 0 !== $procedure_id ) {
+			return null !== $scope;
+		}
+		return self::can_manage_procedures( $user_id )
+			|| ( $user_id > 0 && user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) && array() !== self::observer_codes( $user_id ) );
+	}
+
+	/**
+	 * Whether the user may read this application through the consultation.
+	 *
+	 * Solo leer: `map_meta_cap()` lo pregunta para `read_post` y nunca para
+	 * editar, borrar ni publicar. Una solicitud de profesorado no tiene
+	 * centro, y un centro que no está en el catálogo no es de ninguna zona:
+	 * por zona, ninguna de las dos se ve.
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return bool
+	 */
+	public static function can_observe_application( int $user_id, int $application_id ): bool {
+		if ( ApplicationPostType::POST_TYPE !== get_post_type( $application_id ) || 'publish' !== get_post_status( $application_id ) ) {
+			return false;
+		}
+		$ambito = self::observe_scope( $user_id, (int) wp_get_post_parent_id( $application_id ) );
+		if ( null === $ambito ) {
+			return false;
+		}
+		if ( ! isset( $ambito['codes'] ) ) {
+			return true;
+		}
+		$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		return '' !== $codigo && in_array( $codigo, $ambito['codes'], true );
+	}
+
+	/**
+	 * What the user sees of the consultation of one procedure.
+	 *
+	 * @param int $user_id      User ID.
+	 * @param int $procedure_id Procedure ID.
+	 * @return array<string, string[]>|null Null when they may not; empty for every application; `codes` for only those centres.
+	 */
+	private static function observe_scope( int $user_id, int $procedure_id ): ?array {
+		if ( $user_id <= 0 || ! ObserverScope::is_observable( $procedure_id ) ) {
+			return null;
+		}
+		if ( self::can_open( $user_id, $procedure_id ) ) {
+			return array();
+		}
+		$codigos = user_can( $user_id, self::CAP_VIEW_APPLICATIONS ) ? self::observer_codes( $user_id ) : array();
+		return array() === $codigos ? null : array( 'codes' => $codigos );
+	}
+
 	/**
 	 * Turn the policy into a denial for the core meta caps this guard owns.
 	 *
@@ -1061,7 +1210,7 @@ final class ProcedureAccess {
 	 * @param int $post_id Procedure ID.
 	 * @return bool
 	 */
-	public static function can_read( int $user_id, int $post_id ): bool {
+	private static function can_read( int $user_id, int $post_id ): bool {
 		$estado = get_post_status_object( (string) get_post_status( $post_id ) );
 		if ( null !== $estado && ! empty( $estado->public ) ) {
 			return true;
@@ -1085,7 +1234,7 @@ final class ProcedureAccess {
 	 * @param int $term_id Term ID; only prc_area terms are scoped.
 	 * @return bool
 	 */
-	public static function may_use_area( int $user_id, int $term_id ): bool {
+	private static function may_use_area( int $user_id, int $term_id ): bool {
 		$term = $term_id > 0 ? get_term( $term_id ) : null;
 		if ( $term instanceof \WP_Term && ProcedureTaxonomies::AREA !== $term->taxonomy ) {
 			// El curso y cualquier otra taxonomía no se acotan por ámbito.

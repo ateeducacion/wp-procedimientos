@@ -202,3 +202,17 @@ sin abrir la base de datos.
 - `scripts/seed-demo.php` crea las cuentas `gestion`, `gestion2`,
   `direccion` y `direccion2` con los roles de conveniencia; son de
   demostración y no existen en producción.
+
+## Adenda — 2026-11-10 (ADR-0043)
+
+Las capacidades del aplicativo son una más: **`prc_view_applications`**,
+consultar en solo lectura las solicitudes de los centros de sus zonas en los
+procedimientos que lo admiten. Acota además por dato —la meta de zona— y
+falla en cerrado, como las otras. El snippet de roles crea un cuarto rol de
+conveniencia, `prc_observer` («Consulta de solicitudes»), con `read` y esa
+capacidad; en el destino basta con colgarla de un rol que ya exista
+([ADR-0043](ADR-0043-la-consulta-de-solo-lectura-se-acota-por-zona.md)).
+La ficha de usuario gana el campo «Zonas de consulta», editable solo por
+administración.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

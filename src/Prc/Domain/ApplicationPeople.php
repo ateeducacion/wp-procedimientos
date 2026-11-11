@@ -190,25 +190,30 @@ final class ApplicationPeople {
 	 * One person as a line of text: name, email, phone, role and group by
 	 * their label. Never the DNI: this goes in mails.
 	 *
-	 * @param array<string, mixed> $spec Specification.
-	 * @param array<string, mixed> $row  Row.
+	 * Con `$fields`, solo esos campos: la copia a quien consulta la zona lleva
+	 * solo lo que la consulta enseña (ADR-0043); sin ninguno, nada.
+	 *
+	 * @param array<string, mixed> $spec   Specification.
+	 * @param array<string, mixed> $row    Row.
+	 * @param string[]|null        $fields Of `name`, `surname`, `email`, `phone`, `role`, `group`; null for all.
 	 * @return string
 	 */
-	public static function describe( array $spec, array $row ): string {
-		$row = self::row( $row );
-		return implode(
-			' · ',
-			array_filter(
-				array(
-					trim( $row['name'] . ' ' . $row['surname'] ),
-					$row['email'],
-					$row['phone'],
-					PeopleSpec::label( $spec, 'roles', $row['role'] ),
-					PeopleSpec::label( $spec, 'groups', $row['group'] ),
-				),
-				'strlen'
-			)
+	public static function describe( array $spec, array $row, ?array $fields = null ): string {
+		$row    = self::row( $row );
+		$partes = array(
+			'name'    => $row['name'],
+			'surname' => $row['surname'],
+			'email'   => $row['email'],
+			'phone'   => $row['phone'],
+			'role'    => PeopleSpec::label( $spec, 'roles', $row['role'] ),
+			'group'   => PeopleSpec::label( $spec, 'groups', $row['group'] ),
 		);
+		if ( null !== $fields ) {
+			$partes = array_intersect_key( $partes, array_flip( $fields ) );
+		}
+		$nombre = trim( ( $partes['name'] ?? '' ) . ' ' . ( $partes['surname'] ?? '' ) );
+		unset( $partes['name'], $partes['surname'] );
+		return implode( ' · ', array_filter( array_merge( array( $nombre ), array_values( $partes ) ), 'strlen' ) );
 	}
 
 	/**

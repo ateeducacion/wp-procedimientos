@@ -637,11 +637,14 @@ final class ApplicationFiles {
 	 * Serve one private file, when whoever is asking may have it.
 	 *
 	 * El identificador del fichero **no autoriza nada por sí solo**: quien
-	 * decide es la política de solicitudes que ya existe,
-	 * {@see ProcedureAccess::can_view_application()}, sobre **esta** solicitud.
+	 * decide es la política de solicitudes,
+	 * {@see ProcedureAccess::can_view_application()} con
+	 * `ProcedureAccess::VIEW_DOCUMENT` y la pregunta del documento, sobre
+	 * **esta** solicitud.
 	 * No se inventa aquí ningún sistema de roles, y no vale una capacidad
-	 * genérica: el centro que la presentó ve la suya, y quien revisa ese
-	 * procedimiento ve las de su ámbito.
+	 * genérica: el centro que la presentó ve la suya, quien revisa ese
+	 * procedimiento ve las de su ámbito y quien consulta una zona, las de su
+	 * zona solo si el procedimiento lo permite (ADR-0043).
 	 *
 	 * @return void
 	 */
@@ -656,7 +659,7 @@ final class ApplicationFiles {
 
 		if ( $application_id <= 0
 			|| ApplicationPostType::POST_TYPE !== (string) get_post_type( $application_id )
-			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id ) ) {
+			|| ! ProcedureAccess::can_view_application( get_current_user_id(), $application_id, ProcedureAccess::VIEW_DOCUMENT, self::question_of( $application_id, $file_id ) ) ) {
 			self::deny();
 			return;
 		}
@@ -673,6 +676,25 @@ final class ApplicationFiles {
 		}
 		echo $bytes; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- es el fichero, no HTML: se sirve como descarga y con nosniff.
 		Shell::leave();
+	}
+
+	/**
+	 * The question a document answers, or nothing when there is no such document.
+	 *
+	 * No dice nada a nadie: solo se usa para preguntar al guardián, que con
+	 * una pregunta vacía no deja descargar a quien consulta.
+	 *
+	 * @param int    $application_id Application post ID.
+	 * @param string $file_id        Opaque file ID.
+	 * @return string Question key.
+	 */
+	private static function question_of( int $application_id, string $file_id ): string {
+		foreach ( self::descriptors( $application_id ) as $question_key => $descriptor ) {
+			if ( hash_equals( (string) $descriptor['id'], $file_id ) ) {
+				return (string) $question_key;
+			}
+		}
+		return '';
 	}
 
 	/**

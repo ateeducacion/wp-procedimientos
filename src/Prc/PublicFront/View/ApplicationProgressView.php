@@ -80,14 +80,9 @@ final class ApplicationProgressView {
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {
-			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto, true );
 		}
-		$tonos = array(
-			'ok'    => 'success',
-			'aviso' => 'warning',
-			'error' => 'danger',
-		);
-		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+		return Shell::notice_open( (string) ( $flash['tipo'] ?? '' ), true )
 			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
 	}
 

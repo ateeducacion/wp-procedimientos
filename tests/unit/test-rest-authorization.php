@@ -541,4 +541,55 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$this->assertSame( 200, $item->get_status() );
 		$this->assertStringNotContainsString( 'alguien@example.org', wp_json_encode( $item->get_data() ) );
 	}
+
+	/**
+	 * Los acotados de centros no salen por la REST, y un centro que no es
+	 * elegible no se los quita: ni por la REST ni escribiendo la meta.
+	 */
+	public function test_a_school_cannot_lift_the_centre_rules() {
+		$caso = $this->two_areas( 'publish' );
+		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES, array( 'LISTA01' ) );
+		update_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ISLANDS, array( 'Isla Inventada' ) );
+		$head = $this->school_head( 'C0001' );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $caso['procedure'] ) );
+
+		$item = $this->request( 0, 'GET', '/wp/v2/prc_procedure/' . $caso['procedure'] );
+		$this->assertStringNotContainsString( 'LISTA01', wp_json_encode( $item->get_data() ) );
+		$this->assertStringNotContainsString( 'Isla Inventada', wp_json_encode( $item->get_data() ) );
+
+		$cambio = $this->request(
+			$head,
+			'POST',
+			'/wp/v2/prc_procedure/' . $caso['procedure'],
+			array( 'meta' => array( \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0001' ) ) )
+		);
+		$this->assertContains( $cambio->get_status(), array( 401, 403 ) );
+		wp_set_current_user( $head );
+		$this->assertFalse( current_user_can( 'edit_post_meta', $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES ) );
+		$this->assertSame( array( 'LISTA01' ), get_post_meta( $caso['procedure'], \Prc\Meta\ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+		$this->assertFalse( ProcedureAccess::can_apply( $head, $caso['procedure'] ) );
+	}
+
+	/**
+	 * Los tipos privados se guardan por `options.php` con la capacidad del
+	 * aplicativo, sin `manage_options`; sin ella, no.
+	 */
+	public function test_options_php_saves_the_private_types_with_the_app_capability() {
+		\Prc\Admin\Settings::register_settings();
+		$gestion = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		get_userdata( $gestion )->add_cap( ProcedureAccess::CAP_MANAGE );
+		$nadie = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		// Lo que comprueba options.php antes de guardar el grupo.
+		$capacidad  = apply_filters( 'option_page_capability_' . \Prc\Admin\Settings::CENTRES_GROUP, 'manage_options' );
+		$permitidas = apply_filters( 'allowed_options', array() );
+		$this->assertContains( \Prc\Domain\CentreCatalog::OPTION_PRIVATE_TYPES, (array) ( $permitidas[ \Prc\Admin\Settings::CENTRES_GROUP ] ?? array() ) );
+
+		wp_set_current_user( $gestion );
+		$this->assertFalse( current_user_can( 'manage_options' ) );
+		$this->assertTrue( current_user_can( $capacidad ), 'con prc_manage_app guarda el grupo' );
+
+		wp_set_current_user( $nadie );
+		$this->assertFalse( current_user_can( $capacidad ), 'sin prc_manage_app, no' );
+	}
 }

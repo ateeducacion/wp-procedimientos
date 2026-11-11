@@ -148,6 +148,9 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_contact_email` | string email | Correo de contacto del ámbito convocante |
 | `prc_audience` | string | `schools` (fase 1) o `teachers`; lista cerrada `ProcedureMetaKeys::audiences()` |
 | `prc_ownership` | array de string | A quién se dirige: `public`, `private` (concertados y privados); lista cerrada |
+| `prc_centre_types` | array de string | Tipos de centro admitidos, como los escribe el catálogo; vacía, todos (ADR-0042) |
+| `prc_islands` | array de string | Islas admitidas; vacía, todas (ADR-0042) |
+| `prc_allowed_centres` | array de string | Lista cerrada de códigos de centro, hasta 2000; vacía, sin lista (ADR-0042) |
 | `prc_requires_coordinator` | boolean | La solicitud pide una persona coordinadora |
 | `prc_questions` | array | Preguntas del procedimiento (ver más abajo) |
 | `prc_commitments` | string | Texto de compromiso que el centro acepta al solicitar |
@@ -297,6 +300,16 @@ sobre eso. El mu-plugin de desarrollo contesta el filtro con un catálogo
 **inventado** de una docena de centros; el catálogo real no se versiona.
 `ownership` ∈ `public` | `private` y se cruza con `prc_ownership` del
 procedimiento para decidir si el centro puede solicitar.
+
+Adenda (ADR-0042): `all()` sirve además `kind`, `island`, `municipality`,
+`type`, `zone` —el código de otro centro del catálogo— con su `zone_name`
+resuelto en memoria, y `active`. Si la titularidad no viene escrita, se deriva
+del tipo con el filtro `prc_private_centre_types` (vacío por defecto: todo
+público). Con un acotado de titularidad, tipo o isla, un centro que no está
+en el catálogo no crea solicitud (con la lista cerrada sola basta estar en
+ella; con el catálogo vacío la titularidad no cierra; la ya presentada se
+sigue editando); lo decide
+`ProcedureAccess::apply_codes()` con `Domain/CentreEligibility`.
 
 ### Pantallas (`PublicFront/`)
 

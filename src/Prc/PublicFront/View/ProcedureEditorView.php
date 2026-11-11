@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -16,6 +17,7 @@ use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -322,6 +324,7 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
+			$secciones .= PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo );
 		}
 
 		ob_start();
@@ -404,6 +407,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
+					<?php echo self::centre_warning( $m, 'ownership' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -699,6 +703,80 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Qué centros pueden solicitar»: tipos, islas y una lista cerrada de códigos.
+	 *
+	 * Las casillas son los tipos y las islas que trae el catálogo, más los ya
+	 * elegidos aunque el catálogo los haya perdido. Ninguna marcada es «todos»
+	 * (ADR-0042).
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @param array<string, mixed> $v Field values.
+	 * @return string
+	 */
+	private static function eligibility_fields( array $m, array $v ): string {
+		$opciones = (array) ( $m['centre_options'] ?? array() );
+		$listas   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+		);
+
+		$elegidos = array();
+		foreach ( array_keys( $listas ) as $nombre ) {
+			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
+		}
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--completo">
+				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<?php echo self::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			</div>
+			<?php foreach ( $listas as $nombre => $lista ) : ?>
+				<div class="prc-campo prc-campo--medio">
+					<fieldset>
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
+						<?php if ( array() === $lista[1] ) : ?>
+							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php endif; ?>
+						<div class="prc-opciones prc-opciones--vertical">
+							<?php foreach ( $lista[1] as $i => $valor ) : ?>
+								<div class="prc-opcion">
+									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
+										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
+										<?php checked( in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
+									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
+								</div>
+							<?php endforeach; ?>
+						</div>
+						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
+					</fieldset>
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-campo--completo">
+				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
+				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
+					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
+			</div>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * One warning about the centre rules, when the model has it.
+	 *
+	 * @param array<string, mixed> $m   Model.
+	 * @param string               $key `ownership` or `catalogue`.
+	 * @return string
+	 */
+	private static function centre_warning( array $m, string $key ): string {
+		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
+		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
 
 	/**
@@ -1232,7 +1310,7 @@ final class ProcedureEditorView {
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
 							Todas las columnas
 						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas y no se miran las de abajo.</p>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
 						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
 							<?php
 							if ( array() === $de_grupo ) {
@@ -1242,8 +1320,13 @@ final class ProcedureEditorView {
 							<fieldset class="prc-exportar__columnas">
 								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
 								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<?php
+									// Las del catálogo del centro no son de «Todas»: el guion no
+									// las marca con ella, y sin elegirlas no salen (ADR-0042).
+									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
+									?>
 									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" data-prc-export-col <?php checked( array() === $columnas || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
 										<?php echo esc_html( (string) $rotulo ); ?>
 									</label>
 								<?php endforeach; ?>

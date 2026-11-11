@@ -8,6 +8,7 @@
 namespace Prc\Meta;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -89,6 +90,18 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::CENTRE_KINDS         => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_centre_kinds' ),
+			),
+			ProcedureMetaKeys::CENTRE_TYPES         => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ISLANDS              => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ALLOWED_CENTRES      => array(
+				'type'     => 'array',
+				'sanitize' => array( CentreEligibility::class, 'codes' ),
 			),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => array(
 				'type'     => 'boolean',
@@ -324,6 +337,16 @@ final class ProcedureMetaRegistration {
 	 */
 	public static function sanitize_centre_kinds( $value ): array {
 		return ProcedureInput::centre_kinds( $value );
+	}
+
+	/**
+	 * Distinct texts, cleaned: the centre types or islands a procedure takes.
+	 *
+	 * @param mixed $value Raw value: a list, or one value per line.
+	 * @return string[]
+	 */
+	public static function sanitize_text_list( $value ): array {
+		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
 	}
 
 	/**

@@ -428,6 +428,174 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * «Qué centros pueden solicitar»: las casillas salen del catálogo, se
+	 * guardan, y una lista mal escrita no guarda nada y repinta lo tecleado.
+	 */
+	public function test_the_data_panel_narrows_which_centres_may_apply() {
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code'   => 'C0001',
+						'name'   => 'Escuela Inventada',
+						'type'   => 'CEIP',
+						'island' => 'Isla Uno',
+					),
+					array(
+						'code'   => 'C0002',
+						'name'   => 'Instituto Inventado',
+						'type'   => 'IES',
+						'island' => 'Isla Dos',
+					),
+				);
+			}
+		);
+		list( $area, $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::ISLANDS => array( 'Isla Perdida' ) ) );
+		$curso                              = $this->course( '2027-2028' );
+
+		$this->acting_as( $uid );
+		$m    = $this->modelo( $procedimiento );
+		$html = ProcedureEditorView::html( $m );
+		$this->assertSame( array( 'CEIP', 'IES' ), $m['centre_options']['types'] );
+		$this->assertSame( array( 'Isla Dos', 'Isla Perdida', 'Isla Uno' ), $m['centre_options']['islands'], 'lo elegido se ofrece aunque el catálogo ya no lo traiga' );
+		$this->assertStringContainsString( '<legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>', $html );
+		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::CENTRE_TYPES . '[]" value="IES"', $html );
+		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::ALLOWED_CENTRES . '"', $html );
+
+		$url = $this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$procedimiento,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureMetaKeys::CENTRE_TYPES    => array( 'CEIP' ),
+					ProcedureMetaKeys::ISLANDS         => array( 'Isla Uno', 'Isla Uno' ),
+					ProcedureMetaKeys::ALLOWED_CENTRES => " C0001,\nC0002\n\nC0001 ",
+				)
+			)
+		);
+		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( array( 'CEIP' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array( 'Isla Uno' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+		$this->assertSame( array( 'C0001', 'C0002' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+		$this->acting_as( $uid );
+		$this->assertSame( "C0001\nC0002", $this->modelo( $procedimiento )['values'][ ProcedureMetaKeys::ALLOWED_CENTRES ] );
+
+		$this->olvidar_rechazo();
+		$this->assertNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001, mal-escrito' ) ) )
+		);
+		$this->assertSame( array( 'C0001', 'C0002' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'no se guarda nada' );
+		$m = $this->modelo( $procedimiento );
+		$this->assertStringContainsString( 'lista cerrada de centros', $m['flash']['texto'] );
+		$this->assertSame( 'C0001, mal-escrito', $m['values'][ ProcedureMetaKeys::ALLOWED_CENTRES ], 'se repinta lo tecleado' );
+
+		// Sin marcar nada se quita el acotado: vuelve a ser para todos.
+		$this->olvidar_rechazo();
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso ) ) );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+	}
+
+	/**
+	 * Lo guardado con otras mayúsculas que el catálogo sale marcado, y guardar
+	 * «Datos» sin tocar las casillas no borra el acotado.
+	 */
+	public function test_the_data_panel_keeps_choices_that_differ_only_in_case() {
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code'   => 'C0001',
+						'name'   => 'Escuela Inventada',
+						'type'   => 'CEIP',
+						'island' => 'Isla Uno (inventada)',
+					),
+					array(
+						'code'   => 'C0002',
+						'name'   => 'Instituto Inventado',
+						'type'   => 'IES',
+						'island' => 'Isla Dos (inventada)',
+					),
+				);
+			}
+		);
+		list( $area, $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::CENTRE_TYPES => array( 'ceip' ),
+				ProcedureMetaKeys::ISLANDS      => array( 'isla uno (inventada)' ),
+			)
+		);
+		$curso                              = $this->course( '2027-2028' );
+
+		$this->acting_as( $uid );
+		$m    = $this->modelo( $procedimiento );
+		$html = ProcedureEditorView::html( $m );
+		$this->assertSame( array( 'ceip', 'IES' ), $m['centre_options']['types'], 'una sola casilla, con la grafía guardada' );
+		$this->assertSame( array( 'Isla Dos (inventada)', 'isla uno (inventada)' ), $m['centre_options']['islands'] );
+
+		// Lo que mandaría el navegador: las casillas marcadas, tal cual.
+		$marcadas = array();
+		foreach ( array( ProcedureMetaKeys::CENTRE_TYPES, ProcedureMetaKeys::ISLANDS ) as $nombre ) {
+			preg_match_all( '/name="' . preg_quote( $nombre, '/' ) . '\[\]" value="([^"]*)"\s*checked=/', $html, $coincidencias );
+			$marcadas[ $nombre ] = array_map( 'html_entity_decode', $coincidencias[1] );
+		}
+		$this->assertSame( array( 'ceip' ), $marcadas[ ProcedureMetaKeys::CENTRE_TYPES ], 'la casilla sale marcada' );
+		$this->assertSame( array( 'isla uno (inventada)' ), $marcadas[ ProcedureMetaKeys::ISLANDS ], 'la casilla sale marcada' );
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $marcadas ) ) );
+		$this->assertSame( array( 'ceip' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array( 'isla uno (inventada)' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+	}
+
+	/**
+	 * El panel «Datos» avisa de lo que cierra sin verse: el catálogo vacío y
+	 * una sola titularidad sin ningún tipo de centro marcado como privado.
+	 */
+	public function test_the_data_panel_warns_about_silent_closures() {
+		remove_all_filters( 'prc_private_centre_types' );
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::OWNERSHIP    => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ),
+			)
+		);
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $html );
+		$this->assertStringContainsString( 'El catálogo de centros está vacío', $html );
+		$this->assertStringContainsString( 'ningún centro puede solicitar hasta que se cargue', $html );
+		$this->assertStringContainsString( 'un centro que ya la presentó la sigue editando o subsanando', $html );
+
+		// Con catálogo y con tipos privados, nada que avisar.
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Escuela Inventada',
+						'type' => 'CEIP',
+					),
+				);
+			}
+		);
+		add_filter(
+			'prc_private_centre_types',
+			static function () {
+				return array( 'Colegio privado inventado' );
+			}
+		);
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringNotContainsString( 'prc-aviso-centros', $html );
+	}
+
+	/**
 	 * Un procedimiento se convoca desde varios ámbitos, y se vuelven a leer todos.
 	 */
 	public function test_the_data_panel_saves_several_areas() {
@@ -1315,10 +1483,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( $m );
 		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
-		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan' );
+		$this->assertSame( 6, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los seis bloques que ya no se tocan, con «Qué centros pueden solicitar»' );
 		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
 		// Y cada bloque apagado dice por qué lo está, junto al bloque.
-		$this->assertSame( 5, substr_count( $html, 'class="prc-seccion__bloqueo"' ) );
+		$this->assertSame( 6, substr_count( $html, 'class="prc-seccion__bloqueo"' ) );
 
 		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) ), 'las preguntas no se pintan editables' );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS ) ), 'los enlaces sí' );

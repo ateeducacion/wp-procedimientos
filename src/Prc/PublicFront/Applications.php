@@ -318,7 +318,7 @@ final class Applications {
 		} elseif ( ! isset( CentreScope::codes_for( $user_id )[ $code ] ) ) {
 			$code = '';
 		}
-		$centro = '' !== $code ? CentreCatalog::find( $code ) : array();
+		$centro = CentreCatalog::find( $code );
 		return array(
 			'code'      => $code,
 			'name'      => (string) ( $centro['name'] ?? '' ),
@@ -595,13 +595,20 @@ final class Applications {
 	 * columna calculada `score` va tras la nota (ADR-0040). Una rejilla es
 	 * aquí una columna; la exportación la abre en una por fila.
 	 *
+	 * Con `$centre`, detrás del código van los atributos del centro que se leen
+	 * del catálogo ({@see CentreColumns}); sin él, las de siempre.
+	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @param bool                             $centre    Whether to add the catalogue columns.
 	 * @return array<string, string> clave => rótulo.
 	 */
-	public static function columns( array $questions ): array {
+	public static function columns( array $questions, bool $centre = false ): array {
 		$out  = array(
-			'centre'            => 'Centro',
-			'code'              => 'Código',
+			'centre' => 'Centro',
+			'code'   => 'Código',
+		);
+		$out += CentreColumns::columns( $centre );
+		$out += array(
 			'date'              => 'Fecha',
 			'applicant'         => 'Presentada por',
 			'email'             => 'Correo',
@@ -624,16 +631,19 @@ final class Applications {
 	 *
 	 * @param int             $procedure_id Procedure post ID.
 	 * @param \WP_Post[]|null $applications Its applications, if already loaded; null to load them.
+	 * @param bool            $centre       Whether the catalogue columns are painted; without them the catalogue is not read.
 	 * @return array<int, array<string, mixed>> One row per application, keyed by columns(); `id`, `state_key`, `date_label` and {@see KEY_FILES} on top.
 	 */
-	public static function rows( int $procedure_id, ?array $applications = null ): array {
+	public static function rows( int $procedure_id, ?array $applications = null, bool $centre = false ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
 		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 		// Quién presentó cada una: todas las personas en una consulta, no una por fila.
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
+		// Y el catálogo, una vez: no una búsqueda por fila.
+		$catalogo = CentreColumns::index_for( $solicitudes, $centre );
 		foreach ( $solicitudes as $solicitud ) {
-			$filas[] = self::row( $solicitud, $preguntas );
+			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}
 		return $filas;
 	}
@@ -641,17 +651,21 @@ final class Applications {
 	/**
 	 * One application as a row of the table.
 	 *
-	 * @param \WP_Post                         $application The application.
-	 * @param array<int, array<string, mixed>> $questions   Normalised questions of its procedure.
+	 * Los atributos del centro ({@see CentreColumns}) salen del catálogo de
+	 * hoy; el nombre, de la foto que guardó la solicitud (ADR-0017).
+	 *
+	 * @param \WP_Post                                 $application The application.
+	 * @param array<int, array<string, mixed>>         $questions   Normalised questions of its procedure.
+	 * @param array<string, array<string, mixed>>|null $catalogue   {@see CentreCatalog::index()}, when already read; null to look the code up.
 	 * @return array<string, mixed> Columns as strings —each grid row too, as `q4:r1`—, plus {@see KEY_FILES}, which is not one.
 	 */
-	public static function row( \WP_Post $application, array $questions ): array {
+	public static function row( \WP_Post $application, array $questions, ?array $catalogue = null ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
 		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
-		$fila = array(
+		$fila  = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
 			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
@@ -670,6 +684,7 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);
+		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la
 		// meta bajo su clave: solo salen las preguntas que hoy tiene el procedimiento.
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];

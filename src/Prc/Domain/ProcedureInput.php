@@ -56,6 +56,8 @@ final class ProcedureInput {
 			? self::ownership( $raw['ownership'] ?? array() )
 			: array();
 		$urls         = array();
+		$acotados     = CentreEligibility::input( $raw, ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience );
+		$errors       = array_merge( $errors, $acotados['errors'] );
 
 		if ( '' === $title ) {
 			$errors[] = 'title';
@@ -151,7 +153,8 @@ final class ProcedureInput {
 					'requires_coordinator' => $coordinator_count > 0,
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
-				$urls
+				$urls,
+				$acotados['data']
 			),
 		);
 	}
@@ -182,6 +185,7 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
+			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 

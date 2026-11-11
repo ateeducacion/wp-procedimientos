@@ -9,6 +9,8 @@
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -692,6 +694,10 @@ final class ProcedureEditor {
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- textos: CentreEligibility::values() los limpia y la meta los sanea al guardar.
+		$tipos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() );
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- textos: CentreEligibility::values() los limpia y la meta los sanea al guardar.
+		$islas = (array) wp_unslash( $_POST[ ProcedureMetaKeys::ISLANDS ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		$datos                      = array(
@@ -710,6 +716,9 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'centre_types'         => $tipos,
+			'islands'              => $islas,
+			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -759,7 +768,8 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
+				),
+				CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) )
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
@@ -789,6 +799,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
+			ProcedureMetaKeys::CENTRE_TYPES         => $limpio['centre_types'],
+			ProcedureMetaKeys::ISLANDS              => $limpio['islands'],
+			ProcedureMetaKeys::ALLOWED_CENTRES      => $limpio['allowed_centres'],
 		);
 		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
@@ -1297,7 +1310,13 @@ final class ProcedureEditor {
 			return $m;
 		}
 
-		return self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
+		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+		// Lo que el taller tiene que avisar de los acotados guardados: un
+		// catálogo vacío o ningún tipo de centro marcado como privado (ADR-0042).
+		$m['centre_warnings'] = CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() );
+		return $m;
 	}
 
 	/**
@@ -1346,6 +1365,11 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_warnings'         => array(),
+			'centre_options'          => array(
+				'types'   => array(),
+				'islands' => array(),
+			),
 			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
 			'audiences'               => ProcedureMetaKeys::audiences(),
 			'header_colors'           => ProcedureMetaKeys::header_colors(),
@@ -1542,6 +1566,10 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
+		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
+		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
@@ -1564,6 +1592,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
 			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
+			ProcedureMetaKeys::CENTRE_TYPES    => 'centre_types',
+			ProcedureMetaKeys::ISLANDS         => 'islands',
+			ProcedureMetaKeys::ALLOWED_CENTRES => 'allowed_centres',
 		);
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se repinta lo tecleado; el nonce lo comprobó handle().
 		$enviados                 = array_keys( (array) $_POST );

@@ -529,6 +529,8 @@ class Test_Centres extends WP_UnitTestCase {
 	 * 13. Settings::render renderiza correctamente para administrador.
 	 */
 	public function test_settings_centres_render_page_admin(): void {
+		// Sin el catálogo inventado del entorno: el estado es el que sirve el dominio.
+		remove_all_filters( 'prc_centres' );
 		$admin = $this->administrator();
 		$this->acting_as( $admin );
 
@@ -936,5 +938,260 @@ class Test_Centres extends WP_UnitTestCase {
 		} catch ( RuntimeException $e ) {
 			$this->assertStringContainsString( 'debe ser booleano', $e->getMessage() );
 		}
+	}
+
+	/**
+	 * Sync one record and return the domain view of it.
+	 *
+	 * @param array<string, mixed> $item One record of the source.
+	 * @return array<string, mixed> What CentreCatalog::find() serves.
+	 */
+	private function sync_one( array $item ): array {
+		$payload = $this->make_payload( array( $item ) );
+		$this->mock_http( $payload['manifest_json'], $payload['catalogue_json'] );
+		update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, 'https://example.org/manifest.json', false );
+		CentreCatalogueSync::sync( true );
+		return CentreCatalog::find( (string) $item['code'] );
+	}
+
+	/**
+	 * Paso 1 del PR 5: un centro privado sincronizado se lee privado en el dominio.
+	 *
+	 * Antes de este PR la sincronización no guardaba `ownership` y
+	 * `for_domain()` la rellenaba con «público»: todo centro sincronizado
+	 * salía público, viniera lo que viniera de la fuente.
+	 */
+	public function test_a_synced_private_centre_reads_private_in_the_domain(): void {
+		$centro = $this->sync_one(
+			array(
+				'code'      => '90000301',
+				'name'      => 'Colegio Inventado Privado',
+				'type'      => 'CPRIV',
+				'ownership' => 'private',
+				'active'    => true,
+			)
+		);
+
+		$this->assertSame( 'private', $centro['ownership'] ?? '' );
+	}
+
+	/**
+	 * La fuente no trae titularidad: se deriva del tipo con la lista de tipos
+	 * privados, sin distinguir mayúsculas. Vacía, todo es público.
+	 */
+	public function test_ownership_is_derived_from_the_type(): void {
+		$item = array(
+			'code'   => '90000302',
+			'name'   => 'Colegio Inventado Dos',
+			'type'   => 'Centro Privado Inventado',
+			'active' => true,
+		);
+		$this->assertSame( 'public', $this->sync_one( $item )['ownership'], 'sin lista, público' );
+
+		add_filter(
+			'prc_private_centre_types',
+			static function () {
+				return array( ' centro privado inventado ', '' );
+			}
+		);
+		$this->assertSame( 'private', CentreCatalog::find( '90000302' )['ownership'], 'el tipo está en la lista' );
+		remove_all_filters( 'prc_private_centre_types' );
+
+		// La opción de los ajustes alimenta el filtro.
+		update_option( CentreCatalog::OPTION_PRIVATE_TYPES, array( 'CENTRO PRIVADO INVENTADO' ) );
+		$this->assertSame( 'private', CentreCatalog::find( '90000302' )['ownership'] );
+		delete_option( CentreCatalog::OPTION_PRIVATE_TYPES );
+	}
+
+	/**
+	 * Una titularidad explícita —de la fuente o del filtro `prc_centres`— manda sobre la derivada.
+	 */
+	public function test_an_explicit_ownership_wins_over_the_type(): void {
+		add_filter(
+			'prc_private_centre_types',
+			static function () {
+				return array( 'TIPOPRIV' );
+			}
+		);
+		$centro = $this->sync_one(
+			array(
+				'code'      => '90000303',
+				'name'      => 'Colegio Inventado Tres',
+				'type'      => 'TIPOPRIV',
+				'ownership' => 'public',
+				'active'    => true,
+			)
+		);
+		$this->assertSame( 'public', $centro['ownership'] );
+
+		add_filter(
+			'prc_centres',
+			static function ( $centros ) {
+				$centros[] = array(
+					'code'      => 'X0001',
+					'name'      => 'Del filtro',
+					'type'      => 'otro tipo',
+					'ownership' => 'private',
+				);
+				return $centros;
+			}
+		);
+		$this->assertSame( 'private', CentreCatalog::find( 'X0001' )['ownership'] );
+		remove_all_filters( 'prc_private_centre_types' );
+	}
+
+	/**
+	 * La zona es el código de otro centro del catálogo, y de ahí sale su nombre.
+	 */
+	public function test_the_zone_is_another_centre_of_the_catalogue(): void {
+		$items   = array(
+			array(
+				'code'   => '90000401',
+				'name'   => 'Centro de Zona Inventado',
+				'type'   => 'ZONA',
+				'active' => true,
+			),
+			array(
+				'code'         => '90000402',
+				'name'         => 'Escuela Inventada',
+				'island'       => 'Isla Inventada',
+				'municipality' => 'Villa Inventada',
+				'type'         => 'CEIP',
+				'cep'          => ' 90000401 ',
+				'active'       => true,
+			),
+			array(
+				'code'   => '90000403',
+				'name'   => 'Escuela Huérfana',
+				'cep'    => '99999999',
+				'active' => true,
+			),
+			array(
+				'code'   => '90000404',
+				'name'   => 'Escuela Con Zona Rara',
+				'cep'    => 'ZONA-1',
+				'active' => false,
+			),
+		);
+		$payload = $this->make_payload( $items );
+		$this->mock_http( $payload['manifest_json'], $payload['catalogue_json'] );
+		update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, 'https://example.org/manifest.json', false );
+		CentreCatalogueSync::sync( true );
+
+		$this->assertSame( '90000401', CentreCatalogue::find( '90000402' )['zone'], 'se guarda limpia' );
+		$this->assertSame( '', CentreCatalogue::find( '90000404' )['zone'], 'lo que no es un código de 8 cifras no se guarda' );
+
+		$centro = CentreCatalog::find( '90000402' );
+		$this->assertSame( 'Isla Inventada', $centro['island'] );
+		$this->assertSame( 'Villa Inventada', $centro['municipality'] );
+		$this->assertSame( 'CEIP', $centro['type'] );
+		$this->assertSame( '90000401', $centro['zone'] );
+		$this->assertSame( 'Centro de Zona Inventado', $centro['zone_name'] );
+		$this->assertTrue( $centro['active'] );
+
+		$huerfana = CentreCatalog::find( '90000403' );
+		$this->assertSame( '99999999', $huerfana['zone'], 'el código se sirve aunque no esté' );
+		$this->assertSame( '', $huerfana['zone_name'], 'y sin nombre' );
+
+		$inactivo = CentreCatalog::find( '90000404' );
+		$this->assertFalse( $inactivo['active'], 'un centro inactivo sigue en el catálogo' );
+		$this->assertSame( '', $inactivo['zone'] );
+	}
+
+	/**
+	 * Un catálogo guardado antes de la zona no rompe nada: la zona, vacía.
+	 */
+	public function test_a_catalogue_stored_before_the_zone_still_works(): void {
+		update_option(
+			CentreCatalogue::OPTION_CATALOGUE,
+			array(
+				'90000501' => array(
+					'code'         => '90000501',
+					'name'         => 'Centro Antiguo Inventado',
+					'island'       => 'Isla Inventada',
+					'municipality' => 'Villa Inventada',
+					'type'         => 'IES',
+					'active'       => true,
+				),
+			),
+			false
+		);
+
+		$centro = CentreCatalog::find( '90000501' );
+		$this->assertSame( '', $centro['zone'] );
+		$this->assertSame( '', $centro['zone_name'] );
+		$this->assertSame( 'public', $centro['ownership'] );
+		$this->assertSame( 'Isla Inventada', $centro['island'] );
+	}
+
+	/**
+	 * Los tipos privados se escriben en los ajustes, uno por línea, y la
+	 * pantalla los repinta; la opción alimenta la titularidad derivada.
+	 */
+	public function test_settings_store_the_private_types(): void {
+		$this->assertSame( array( 'Tipo Privado A', 'tipo b' ), Settings::sanitize_private_types( "Tipo Privado A\n tipo b \n\nTIPO B\n<b></b>" ) );
+		$this->assertSame( array(), Settings::sanitize_private_types( 42 ) );
+
+		Settings::register_settings();
+		update_option( CentreCatalog::OPTION_PRIVATE_TYPES, "Tipo Privado A\nTipo B" );
+		$this->assertSame( array( 'Tipo Privado A', 'Tipo B' ), get_option( CentreCatalog::OPTION_PRIVATE_TYPES ) );
+		$this->assertSame( 'prc_manage_app', apply_filters( 'option_page_capability_' . Settings::CENTRES_GROUP, 'manage_options' ) );
+
+		$this->acting_as( $this->administrator() );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'name="' . CentreCatalog::OPTION_PRIVATE_TYPES . '"', $html );
+		$this->assertStringContainsString( "Tipo Privado A\nTipo B</textarea>", $html );
+		delete_option( CentreCatalog::OPTION_PRIVATE_TYPES );
+	}
+
+	/**
+	 * El diagnóstico mira lo que sirve el dominio y cuenta qué procedimientos
+	 * publicados dependen del catálogo y de los tipos privados.
+	 */
+	public function test_settings_count_what_depends_on_the_catalogue(): void {
+		remove_all_filters( 'prc_centres' );
+		remove_all_filters( 'prc_private_centre_types' );
+		$admin = $this->administrator();
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'public' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::CENTRE_TYPES => array( 'CEIP' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'public', 'private' ) ) );
+		$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'private' ) ), array( 'post_status' => 'draft' ) );
+
+		$this->assertSame(
+			array(
+				'catalogue' => 2,
+				'private'   => 1,
+			),
+			Settings::dependents()
+		);
+
+		$this->acting_as( $admin );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Centros que sirve el aplicativo: 0.', $html );
+		$this->assertStringContainsString( '2 procedimientos publicados dependen del catálogo', $html );
+		$this->assertStringContainsString( '1 procedimientos publicados dependen de los tipos privados', $html );
+
+		// Un catálogo que solo contesta el filtro también cuenta como disponible.
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Escuela Inventada',
+					),
+				);
+			}
+		);
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Centros que sirve el aplicativo: 1.', $html );
+		$this->assertStringNotContainsString( 'dependen del catálogo', $html );
+		$this->assertStringContainsString( '> Disponible', $html );
 	}
 }

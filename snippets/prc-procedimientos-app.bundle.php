@@ -126,6 +126,22 @@ final class ProcedureMetaKeys {
 
 
 
+	public const CENTRE_TYPES = 'prc_centre_types';
+
+
+
+
+	public const ISLANDS = 'prc_islands';
+
+
+
+
+
+	public const ALLOWED_CENTRES = 'prc_allowed_centres';
+
+
+
+
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
 
@@ -229,6 +245,9 @@ final class ProcedureMetaKeys {
 			self::AUDIENCE,
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
+			self::CENTRE_TYPES,
+			self::ISLANDS,
+			self::ALLOWED_CENTRES,
 			self::REQUIRES_COORDINATOR,
 			self::COORDINATOR_COUNT,
 			self::CUSTOM_CSS,
@@ -308,6 +327,20 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP_PUBLIC  => 'Centros públicos',
 			self::OWNERSHIP_PRIVATE => 'Centros privados y concertados',
 		);
+	}
+
+
+
+
+
+
+
+	public static function ownership_name( string $ownership ): string {
+		$nombres = array(
+			self::OWNERSHIP_PUBLIC  => 'Pública',
+			self::OWNERSHIP_PRIVATE => 'Privada',
+		);
+		return $nombres[ $ownership ] ?? '';
 	}
 
 
@@ -2157,6 +2190,8 @@ final class ProcedureInput {
 			? self::ownership( $raw['ownership'] ?? array() )
 			: array();
 		$urls         = array();
+		$acotados     = CentreEligibility::input( $raw, ProcedureMetaKeys::AUDIENCE_SCHOOLS === $audience );
+		$errors       = array_merge( $errors, $acotados['errors'] );
 
 		if ( '' === $title ) {
 			$errors[] = 'title';
@@ -2252,7 +2287,8 @@ final class ProcedureInput {
 					'requires_coordinator' => $coordinator_count > 0,
 					'commitments'          => self::text( $raw, 'commitments' ),
 				),
-				$urls
+				$urls,
+				$acotados['data']
 			),
 		);
 	}
@@ -2283,6 +2319,7 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
+			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
 
@@ -3357,6 +3394,327 @@ final class ApplicationPeople {
 
 
 
+namespace Prc\Domain;
+
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\CentreEligibility', false ) ) {
+final class CentreEligibility {
+
+
+
+
+	public const MAX_CODES = 2000;
+
+
+
+
+	public const MAX_VALUES = 200;
+
+
+
+
+
+
+
+	public static function fold( string $value ): string {
+		return mb_strtolower( trim( (string) preg_replace( '/\s+/u', ' ', $value ) ), 'UTF-8' );
+	}
+
+
+
+
+
+
+
+	public static function values( $raw ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/\R/u', $raw );
+		}
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $valor ) {
+			$valor = is_scalar( $valor ) ? trim( (string) preg_replace( '/\s+/u', ' ', (string) $valor ) ) : '';
+			if ( '' !== $valor && ! isset( $out[ self::fold( $valor ) ] ) ) {
+				$out[ self::fold( $valor ) ] = $valor;
+			}
+		}
+		return array_slice( array_values( $out ), 0, self::MAX_VALUES );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function parse_codes( $raw ): array {
+		$trozos = is_array( $raw ) ? $raw : preg_split( '/[\s,;]+/u', is_scalar( $raw ) ? (string) $raw : '' );
+		$codes  = array();
+		$malos  = array();
+		foreach ( (array) $trozos as $trozo ) {
+			$trozo = is_scalar( $trozo ) ? trim( (string) $trozo ) : '';
+			if ( '' === $trozo ) {
+				continue;
+			}
+			if ( self::is_code( $trozo ) ) {
+
+				$codes[ strtoupper( $trozo ) ] = true;
+			} else {
+				$malos[ $trozo ] = true;
+			}
+		}
+		return array(
+			'codes'   => array_map( 'strval', array_keys( $codes ) ),
+			'invalid' => array_map( 'strval', array_keys( $malos ) ),
+		);
+	}
+
+
+
+
+
+
+
+	public static function codes( $raw ): array {
+		return array_slice( self::parse_codes( $raw )['codes'], 0, self::MAX_CODES );
+	}
+
+
+
+
+
+
+
+
+
+	public static function is_code( string $code ): bool {
+		return (bool) preg_match( '/^[A-Za-z0-9]{3,20}$/', $code );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function input( array $raw, bool $schools ): array {
+		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
+		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
+		return array(
+			'data'   => array(
+				'centre_types'    => $schools ? self::values( $raw['centre_types'] ?? array() ) : array(),
+				'islands'         => $schools ? self::values( $raw['islands'] ?? array() ) : array(),
+				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
+			),
+			'errors' => $schools ? $errors : array(),
+		);
+	}
+
+
+
+
+
+
+
+	public static function rules( array $raw ): array {
+		$titular = is_array( $raw['ownership'] ?? null ) ? array_map( 'strval', array_filter( $raw['ownership'], 'is_scalar' ) ) : array();
+		return array(
+			'ownership' => array_values( array_intersect( array_keys( ProcedureMetaKeys::ownerships() ), $titular ) ),
+			'types'     => self::values( $raw['types'] ?? array() ),
+			'islands'   => self::values( $raw['islands'] ?? array() ),
+			'codes'     => self::codes( $raw['codes'] ?? array() ),
+		);
+	}
+
+
+
+
+
+
+
+	public static function form_values( array $rules ): array {
+		$rules = self::rules( $rules );
+		return array(
+			'centre_types'    => $rules['types'],
+			'islands'         => $rules['islands'],
+			'allowed_centres' => implode( "\n", $rules['codes'] ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function restricted( array $rules ): bool {
+		$titular = (array) ( $rules['ownership'] ?? array() );
+		return ( array() !== $titular && count( $titular ) < count( ProcedureMetaKeys::ownerships() ) )
+			|| array() !== (array) ( $rules['types'] ?? array() )
+			|| array() !== (array) ( $rules['islands'] ?? array() )
+			|| array() !== (array) ( $rules['codes'] ?? array() );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not( array $rules, string $code, array $centre, bool $catalogue = true ): string {
+		$rules = self::rules( $rules );
+		if ( ! self::restricted( $rules ) ) {
+			return '';
+		}
+		if ( array() !== $rules['codes'] && ! in_array( strtoupper( trim( $code ) ), $rules['codes'], true ) ) {
+			return 'Este procedimiento es solo para una lista cerrada de centros, y el suyo no está en ella.';
+		}
+		$resto = self::without_list( $rules, $catalogue );
+		if ( ! self::restricted( $resto ) ) {
+			return '';
+		}
+		if ( array() === $centre ) {
+			return 'Este procedimiento es solo para algunos centros, y el suyo no está en el catálogo de centros, así que no se puede comprobar si es uno de ellos. Si cree que es un error, escriba a los correos de contacto del procedimiento.';
+		}
+		return self::why_not_attributes( $resto, $centre );
+	}
+
+
+
+
+
+
+
+
+	private static function without_list( array $rules, bool $catalogue ): array {
+		$rules['codes'] = array();
+		if ( ! $catalogue ) {
+			$rules['ownership'] = array();
+		}
+		return $rules;
+	}
+
+
+
+
+
+
+
+
+	private static function why_not_attributes( array $rules, array $centre ): string {
+		$titular = $rules['ownership'];
+		if ( array() !== $titular && ! in_array( (string) ( $centre['ownership'] ?? '' ), $titular, true ) ) {
+			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::ownerships(), array_flip( $titular ) ) );
+			return 'Este procedimiento es solo para ' . implode( ' y ', $rotulos ) . '.';
+		}
+		if ( ! self::takes( $rules['types'], (string) ( $centre['type'] ?? '' ) ) ) {
+			return 'Este procedimiento es solo para centros de tipo ' . self::either( $rules['types'] ) . '.';
+		}
+		if ( ! self::takes( $rules['islands'], (string) ( $centre['island'] ?? '' ) ) ) {
+			return 'Este procedimiento es solo para centros de ' . self::either( $rules['islands'] ) . '.';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function warnings( array $rules, bool $empty_catalogue, bool $no_private ): array {
+		$rules   = self::rules( $rules );
+		$out     = array();
+		$titular = $rules['ownership'];
+		if ( $no_private && 1 === count( $titular ) ) {
+			$out['ownership'] = ProcedureMetaKeys::OWNERSHIP_PUBLIC === $titular[0]
+				? 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy todos los centros cuentan como públicos, salvo los que el catálogo marque expresamente, así que este límite no deja fuera a casi nadie.'
+				: 'No hay ningún tipo de centro marcado como privado en los ajustes: hoy ningún centro cuenta como privado, salvo los que el catálogo marque expresamente, así que nadie o casi nadie puede solicitar.';
+		}
+		if ( $empty_catalogue && self::restricted( $rules ) ) {
+			$resto = self::without_list( $rules, false );
+			if ( self::restricted( $resto ) ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: con los tipos o las islas que pide este procedimiento, ningún centro puede solicitar hasta que se cargue.';
+			} elseif ( array() !== $rules['codes'] ) {
+				$out['catalogue'] = 'El catálogo de centros está vacío: solo pueden solicitar los centros de la lista cerrada.';
+			} else {
+				$out['catalogue'] = 'El catálogo de centros está vacío, así que la titularidad no se puede comprobar: puede solicitar cualquier centro.';
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function takes( array $allowed, string $value ): bool {
+		return array() === $allowed || in_array( self::fold( $value ), array_map( array( self::class, 'fold' ), $allowed ), true );
+	}
+
+
+
+
+
+
+
+	private static function either( array $allowed ): string {
+		$ultimo = (string) array_pop( $allowed );
+		return array() === $allowed ? $ultimo : implode( ', ', $allowed ) . ' o ' . $ultimo;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\Centre;
 
 use Prc\Meta\ProcedureMetaKeys;
@@ -3431,25 +3789,31 @@ final class CentreCatalogue {
 
 
 
+
+
+
+
+
+
 	public static function for_domain(): array {
-		$all = self::all();
-		if ( empty( $all ) ) {
-			return array();
-		}
-
 		$out = array();
-		foreach ( $all as $code => $centre ) {
-			$ownership = isset( $centre['ownership'] ) && is_string( $centre['ownership'] )
-				? $centre['ownership']
-				: ProcedureMetaKeys::OWNERSHIP_PUBLIC;
-
-			$out[] = array(
-				'code'      => (string) $code,
-				'name'      => isset( $centre['name'] ) ? (string) $centre['name'] : '',
-				'ownership' => ProcedureMetaKeys::in_list( $ownership, ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+		foreach ( self::all() as $code => $centre ) {
+			if ( ! is_array( $centre ) ) {
+				continue;
+			}
+			$fila = array(
+				'code'   => (string) $code,
+				'active' => ! isset( $centre['active'] ) || (bool) $centre['active'],
 			);
+			foreach ( array( 'name', 'island', 'municipality', 'type', 'zone' ) as $campo ) {
+				$fila[ $campo ] = isset( $centre[ $campo ] ) && is_scalar( $centre[ $campo ] ) ? (string) $centre[ $campo ] : '';
+			}
+			$titular = isset( $centre['ownership'] ) && is_string( $centre['ownership'] ) ? $centre['ownership'] : '';
+			if ( '' !== ProcedureMetaKeys::in_list( $titular, ProcedureMetaKeys::ownerships() ) ) {
+				$fila['ownership'] = $titular;
+			}
+			$out[] = $fila;
 		}
-
 		return $out;
 	}
 
@@ -3534,6 +3898,7 @@ final class CentreCatalogue {
 
 namespace Prc\Centre;
 
+use Prc\Meta\ProcedureMetaKeys;
 use RuntimeException;
 
 
@@ -3557,6 +3922,47 @@ final class CentreCatalogueSync {
 	public const CRON_HOOK = 'prc_centres_cron_sync';
 
 	public const HTTP_TIMEOUT = 30;
+
+
+
+
+
+	public const SOURCE_ZONE_FIELD = 'cep';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function record( array $item, string $code, string $name, bool $is_active ): array {
+		$texto   = static function ( string $campo ) use ( $item ): string {
+			return isset( $item[ $campo ] ) && is_scalar( $item[ $campo ] ) ? trim( (string) $item[ $campo ] ) : '';
+		};
+		$zona    = $texto( self::SOURCE_ZONE_FIELD );
+		$record  = array(
+			'code'         => $code,
+			'name'         => $name,
+			'island'       => $texto( 'island' ),
+			'municipality' => $texto( 'municipality' ),
+			'type'         => $texto( 'type' ),
+			'zone'         => 1 === preg_match( '/^\d{8}$/', $zona ) ? $zona : '',
+			'active'       => $is_active,
+		);
+		$titular = strtolower( $texto( 'ownership' ) );
+		if ( in_array( $titular, array( ProcedureMetaKeys::OWNERSHIP_PUBLIC, ProcedureMetaKeys::OWNERSHIP_PRIVATE ), true ) ) {
+			$record['ownership'] = $titular;
+		}
+		return $record;
+	}
 
 
 
@@ -3899,18 +4305,13 @@ final class CentreCatalogueSync {
 					++$active_count;
 				}
 
-				$indexed[ $code ] = array(
-					'code'         => $code,
-					'name'         => $name,
-					'island'       => isset( $item['island'] ) && is_scalar( $item['island'] ) ? trim( (string) $item['island'] ) : '',
-					'municipality' => isset( $item['municipality'] ) && is_scalar( $item['municipality'] ) ? trim( (string) $item['municipality'] ) : '',
-					'type'         => isset( $item['type'] ) && is_scalar( $item['type'] ) ? trim( (string) $item['type'] ) : '',
-					'active'       => $is_active,
-				);
+				$indexed[ $code ] = self::record( $item, $code, $name, $is_active );
 			}
 
 
 			update_option( CentreCatalogue::OPTION_CATALOGUE, $indexed, false );
+
+			\Prc\Domain\CentreCatalog::flush();
 
 			$status = array(
 				'schema_version'       => 1,
@@ -3967,6 +4368,15 @@ use Prc\Meta\ProcedureMetaKeys;
 
 
 
+
+
+
+
+
+
+
+
+
 if ( ! class_exists( 'Prc\Domain\CentreCatalog', false ) ) {
 final class CentreCatalog {
 
@@ -3974,6 +4384,71 @@ final class CentreCatalog {
 
 
 	public const SEARCH_LIMIT = 20;
+
+
+
+
+
+	public const OPTION_PRIVATE_TYPES = 'prc_private_centre_types';
+
+
+
+
+
+	private const CACHE_GROUP = 'prc_centres';
+
+
+
+
+
+
+	private static $memo = array(
+		'key'   => null,
+		'all'   => array(),
+		'index' => null,
+	);
+
+
+
+
+
+
+	public static function register(): void {
+		foreach ( array( 'added_option', 'updated_option', 'deleted_option' ) as $accion ) {
+			add_action( $accion, array( self::class, 'on_option' ) );
+		}
+	}
+
+
+
+
+
+
+
+	public static function on_option( $option ): void {
+		if ( in_array( $option, array( \Prc\Centre\CentreCatalogue::OPTION_CATALOGUE, self::OPTION_PRIVATE_TYPES ), true ) ) {
+			self::flush();
+		}
+	}
+
+
+
+
+
+
+	public static function flush(): void {
+		self::$memo = array(
+			'key'   => null,
+			'all'   => array(),
+			'index' => null,
+		);
+		wp_cache_delete( 'last_changed', self::CACHE_GROUP );
+	}
+
+
+
+
+
 
 
 
@@ -3989,34 +4464,69 @@ final class CentreCatalog {
 
 
 
+		$clave = self::memo_key();
+		if ( $clave === self::$memo['key'] ) {
+			return self::$memo['all'];
+		}
 		$default = class_exists( '\Prc\Centre\CentreCatalogue' ) ? \Prc\Centre\CentreCatalogue::for_domain() : array();
 		if ( empty( $default ) ) {
 			$default = self::from_uploads();
 		}
 		$raw = apply_filters( 'prc_centres', $default );
-		if ( ! is_array( $raw ) ) {
-			return array();
+		$raw = is_array( $raw ) ? $raw : array();
+
+		$privados = self::private_types();
+		$out      = array();
+		$nombres  = array();
+		foreach ( $raw as $item ) {
+			$centro = is_array( $item ) ? self::normalise( $item, $privados ) : null;
+			if ( null === $centro || isset( $nombres[ $centro['code'] ] ) ) {
+				continue;
+			}
+			$nombres[ $centro['code'] ] = $centro['name'];
+			$out[]                      = $centro;
 		}
 
-		$out    = array();
-		$vistos = array();
-		foreach ( $raw as $item ) {
-			if ( ! is_array( $item ) ) {
-				continue;
-			}
-			$code = isset( $item['code'] ) && is_scalar( $item['code'] ) ? trim( (string) $item['code'] ) : '';
-			if ( '' === $code || isset( $vistos[ $code ] ) ) {
-				continue;
-			}
-			$vistos[ $code ] = true;
-			$out[]           = array(
-				'code'      => $code,
-				'name'      => isset( $item['name'] ) && is_scalar( $item['name'] ) ? trim( (string) $item['name'] ) : '',
-				'ownership' => ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships(), ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
-				'kind'      => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
-			);
+		foreach ( $out as $i => $centro ) {
+			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
 		}
+		self::$memo = array(
+			'key'   => $clave,
+			'all'   => $out,
+			'index' => null,
+		);
 		return $out;
+	}
+
+
+
+
+
+
+	private static function memo_key(): string {
+		global $wp_filter;
+		$clave = (string) wp_cache_get_last_changed( self::CACHE_GROUP );
+		foreach ( array( 'prc_centres', 'prc_private_centre_types' ) as $hook ) {
+			$clave  .= '|' . $hook;
+			$ganchos = isset( $wp_filter[ $hook ] ) && $wp_filter[ $hook ] instanceof \WP_Hook ? $wp_filter[ $hook ]->callbacks : array();
+			foreach ( $ganchos as $prioridad => $funciones ) {
+				$clave .= ':' . $prioridad . '=' . implode( ',', array_keys( $funciones ) );
+			}
+		}
+		return $clave;
+	}
+
+
+
+
+
+
+	public static function index(): array {
+		$todos = self::all();
+		if ( null === self::$memo['index'] ) {
+			self::$memo['index'] = array_column( $todos, null, 'code' );
+		}
+		return self::$memo['index'];
 	}
 
 
@@ -4030,12 +4540,7 @@ final class CentreCatalog {
 		if ( '' === $code ) {
 			return array();
 		}
-		foreach ( self::all() as $centro ) {
-			if ( $centro['code'] === $code ) {
-				return $centro;
-			}
-		}
-		return array();
+		return self::index()[ $code ] ?? array();
 	}
 
 
@@ -4059,6 +4564,127 @@ final class CentreCatalog {
 			}
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function values( string $field ): array {
+		$out = array();
+		foreach ( self::all() as $centro ) {
+			$valor = (string) ( $centro[ $field ] ?? '' );
+			if ( '' !== $valor && ! isset( $out[ CentreEligibility::fold( $valor ) ] ) ) {
+				$out[ CentreEligibility::fold( $valor ) ] = $valor;
+			}
+		}
+		$out = array_values( $out );
+		usort( $out, 'strnatcasecmp' );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function choices( bool $wanted, array $types, array $islands ): array {
+		if ( ! $wanted ) {
+			return array(
+				'types'   => array(),
+				'islands' => array(),
+			);
+		}
+		return array(
+			'types'   => self::chosen_first( $types, self::values( 'type' ) ),
+			'islands' => self::chosen_first( $islands, self::values( 'island' ) ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	private static function chosen_first( array $chosen, array $catalogue ): array {
+		$out = CentreEligibility::values( array_merge( $chosen, $catalogue ) );
+		usort( $out, 'strnatcasecmp' );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function private_types(): array {
+		$guardados = get_option( self::OPTION_PRIVATE_TYPES, array() );
+
+
+
+
+
+		$tipos = apply_filters( 'prc_private_centre_types', is_array( $guardados ) ? $guardados : array() );
+		return array_map( array( CentreEligibility::class, 'fold' ), CentreEligibility::values( $tipos ) );
+	}
+
+
+
+
+
+
+
+
+	private static function normalise( array $item, array $privados ): ?array {
+		$code = self::text( $item, 'code' );
+		if ( '' === $code ) {
+			return null;
+		}
+		$tipo      = self::text( $item, 'type' );
+		$explicita = ProcedureMetaKeys::in_list( $item['ownership'] ?? '', ProcedureMetaKeys::ownerships() );
+		$derivada  = in_array( CentreEligibility::fold( $tipo ), $privados, true ) ? ProcedureMetaKeys::OWNERSHIP_PRIVATE : ProcedureMetaKeys::OWNERSHIP_PUBLIC;
+		return array(
+			'code'         => $code,
+			'name'         => self::text( $item, 'name' ),
+			'ownership'    => '' !== $explicita ? $explicita : $derivada,
+			'kind'         => ProcedureMetaKeys::in_list( $item['kind'] ?? '', ProcedureMetaKeys::centre_kinds(), ProcedureMetaKeys::KIND_SCHOOL ),
+			'island'       => self::text( $item, 'island' ),
+			'municipality' => self::text( $item, 'municipality' ),
+			'type'         => $tipo,
+			'zone'         => self::text( $item, 'zone' ),
+			'zone_name'    => '',
+			'active'       => ! array_key_exists( 'active', $item ) || (bool) $item['active'],
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function text( array $item, string $field ): string {
+		return isset( $item[ $field ] ) && is_scalar( $item[ $field ] ) ? trim( (string) $item[ $field ] ) : '';
 	}
 
 
@@ -4243,6 +4869,7 @@ final class CentreScope {
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -4962,29 +5589,135 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
 	public static function apply_codes( int $user_id, int $post_id ): array {
+		$out = array();
+		foreach ( self::kind_codes( $user_id, $post_id ) as $code => $kind ) {
+			if ( '' === self::why_not_code( $post_id, (string) $code, $kind ) || self::has_application( $post_id, (string) $code ) ) {
+				$out[ $code ] = $kind;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function has_application( int $post_id, string $code ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $post_id,
+				'post_status'      => 'publish',
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
+				'meta_value'       => $code,
+				'suppress_filters' => true,
+			)
+		);
+		return array() !== $ids;
+	}
+
+
+
+
+
+
+
+
+	private static function kind_codes( int $user_id, int $post_id ): array {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
 		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
 			return array();
 		}
-		$kinds     = self::centre_kinds( $post_id );
-		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
-		$ownership = is_array( $ownership ) ? $ownership : array();
+		return array_intersect( CentreScope::codes_for( $user_id ), self::centre_kinds( $post_id ) );
+	}
 
-		$out = array();
-		foreach ( CentreScope::codes_for( $user_id ) as $code => $kind ) {
-			$centro = CentreCatalog::find( $code );
-			if ( ! in_array( $kind, $kinds, true ) ) {
-				continue;
-			}
-			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
-				continue;
-			}
-			$out[ $code ] = $kind;
+
+
+
+
+
+
+	public static function eligibility( int $post_id ): array {
+		$leer = static function ( string $clave ) use ( $post_id ): array {
+			$valor = get_post_meta( $post_id, $clave, true );
+			return is_array( $valor ) ? $valor : array();
+		};
+		return CentreEligibility::rules(
+			array(
+				'ownership' => $leer( ProcedureMetaKeys::OWNERSHIP ),
+				'types'     => $leer( ProcedureMetaKeys::CENTRE_TYPES ),
+				'islands'   => $leer( ProcedureMetaKeys::ISLANDS ),
+				'codes'     => $leer( ProcedureMetaKeys::ALLOWED_CENTRES ),
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_code( int $post_id, string $code, string $kind = ProcedureMetaKeys::KIND_SCHOOL ): string {
+		$rules = self::eligibility( $post_id );
+		if ( ProcedureMetaKeys::KIND_RURAL_GROUP === $kind ) {
+			$rules['ownership'] = array();
 		}
-		return $out;
+		return CentreEligibility::restricted( $rules )
+			? CentreEligibility::why_not( $rules, $code, CentreCatalog::find( $code ), array() !== CentreCatalog::all() )
+			: '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function why_not_eligible( int $user_id, int $post_id, string $code = '' ): string {
+		$codes = self::kind_codes( $user_id, $post_id );
+		if ( '' !== $code ) {
+			$codes = array_intersect_key( $codes, array( $code => true ) );
+		}
+		$primero = '';
+		foreach ( $codes as $uno => $kind ) {
+			$porque = self::why_not_code( $post_id, (string) $uno, $kind );
+			if ( '' === $porque || self::has_application( $post_id, (string) $uno ) ) {
+				return '';
+			}
+			$primero = '' !== $primero ? $primero : $porque;
+		}
+		return $primero;
 	}
 
 
@@ -5287,6 +6020,7 @@ final class ProcedureAccess {
 namespace Prc\Meta;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
@@ -5369,6 +6103,18 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::CENTRE_KINDS         => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_centre_kinds' ),
+			),
+			ProcedureMetaKeys::CENTRE_TYPES         => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ISLANDS              => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_text_list' ),
+			),
+			ProcedureMetaKeys::ALLOWED_CENTRES      => array(
+				'type'     => 'array',
+				'sanitize' => array( CentreEligibility::class, 'codes' ),
 			),
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => array(
 				'type'     => 'boolean',
@@ -5604,6 +6350,16 @@ final class ProcedureMetaRegistration {
 
 	public static function sanitize_centre_kinds( $value ): array {
 		return ProcedureInput::centre_kinds( $value );
+	}
+
+
+
+
+
+
+
+	public static function sanitize_text_list( $value ): array {
+		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
 	}
 
 
@@ -8509,6 +9265,174 @@ final class PanelParts {
 
 
 
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\CentreCatalog;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\CentreColumns', false ) ) {
+final class CentreColumns {
+
+
+
+
+
+
+	public const KEYS = array( 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' );
+
+
+
+
+
+
+
+	public static function columns( bool $wanted = true ): array {
+		if ( ! $wanted ) {
+			return array();
+		}
+		$zona = self::zone_label();
+		return array(
+			'island'       => 'Isla',
+			'municipality' => 'Municipio',
+			'centre_type'  => 'Tipo de centro',
+			'ownership'    => 'Titularidad',
+			'zone'         => $zona,
+			'zone_code'    => $zona . ' (código)',
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function zone_label(): string {
+
+
+
+
+
+		$rotulo = apply_filters( 'prc_zone_label', 'Zona' );
+		$rotulo = is_string( $rotulo ) ? trim( wp_strip_all_tags( $rotulo ) ) : '';
+		return '' !== $rotulo ? $rotulo : 'Zona';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function attributes( string $code, ?array $index = null ): array {
+		$code   = trim( $code );
+		$centro = array();
+		if ( '' !== $code ) {
+			$centro = null === $index ? CentreCatalog::find( $code ) : (array) ( $index[ $code ] ?? array() );
+		}
+		$out = array();
+		foreach ( array( 'island', 'municipality', 'type', 'ownership', 'zone', 'zone_name' ) as $campo ) {
+			$out[ $campo ] = (string) ( $centro[ $campo ] ?? '' );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function index_for( array $applications, bool $wanted = true ): array {
+		return $wanted && array() !== $applications ? CentreCatalog::index() : array();
+	}
+
+
+
+
+
+
+
+
+	public static function cells( string $code, ?array $index ): array {
+		$centro = self::attributes( $code, $index );
+		return array(
+			'island'       => $centro['island'],
+			'municipality' => $centro['municipality'],
+			'centre_type'  => $centro['type'],
+			'ownership'    => ProcedureMetaKeys::ownership_name( $centro['ownership'] ),
+			'zone'         => $centro['zone_name'],
+			'zone_code'    => $centro['zone'],
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function ordered( array $chosen, array $always, array $available ): array {
+		$faltan = array_diff_key( $always, $chosen );
+		if ( array() === $chosen || ( array() === $faltan && count( $chosen ) === count( $always ) ) ) {
+			return $always;
+		}
+		return array() === $faltan ? array_intersect_key( $available, $chosen ) : $chosen;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function all_plus( array $ticked, array $always ): array {
+		$extras = array_values( array_intersect( self::KEYS, $ticked ) );
+		return array() === $extras ? array() : array_merge( $always, $extras );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
@@ -8823,7 +9747,7 @@ final class Applications {
 		} elseif ( ! isset( CentreScope::codes_for( $user_id )[ $code ] ) ) {
 			$code = '';
 		}
-		$centro = '' !== $code ? CentreCatalog::find( $code ) : array();
+		$centro = CentreCatalog::find( $code );
 		return array(
 			'code'      => $code,
 			'name'      => (string) ( $centro['name'] ?? '' ),
@@ -9103,10 +10027,17 @@ final class Applications {
 
 
 
-	public static function columns( array $questions ): array {
+
+
+
+
+	public static function columns( array $questions, bool $centre = false ): array {
 		$out  = array(
-			'centre'            => 'Centro',
-			'code'              => 'Código',
+			'centre' => 'Centro',
+			'code'   => 'Código',
+		);
+		$out += CentreColumns::columns( $centre );
+		$out += array(
 			'date'              => 'Fecha',
 			'applicant'         => 'Presentada por',
 			'email'             => 'Correo',
@@ -9131,14 +10062,17 @@ final class Applications {
 
 
 
-	public static function rows( int $procedure_id, ?array $applications = null ): array {
+
+	public static function rows( int $procedure_id, ?array $applications = null, bool $centre = false ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
 		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
+
+		$catalogo = CentreColumns::index_for( $solicitudes, $centre );
 		foreach ( $solicitudes as $solicitud ) {
-			$filas[] = self::row( $solicitud, $preguntas );
+			$filas[] = self::row( $solicitud, $preguntas, $catalogo );
 		}
 		return $filas;
 	}
@@ -9150,13 +10084,17 @@ final class Applications {
 
 
 
-	public static function row( \WP_Post $application, array $questions ): array {
+
+
+
+
+	public static function row( \WP_Post $application, array $questions, ?array $catalogue = null ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
 		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
-		$fila = array(
+		$fila  = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
 			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
@@ -9175,6 +10113,7 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);
+		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 
 
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
@@ -10641,9 +11580,13 @@ final class PeopleExport {
 
 
 
-	public static function all_columns( int $procedure_id ): array {
+
+
+
+
+	public static function all_columns( int $procedure_id, bool $centre = false ): array {
 		$preguntas = Applications::questions( $procedure_id );
-		$columns   = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$columns   = QuestionGrid::expand( Applications::columns( $preguntas, $centre ), $preguntas );
 		if ( ! People::enabled( $procedure_id ) ) {
 			return $columns;
 		}
@@ -10767,6 +11710,7 @@ final class PeopleExport {
 
 namespace Prc\PublicFront;
 
+use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -10827,7 +11771,7 @@ final class ApplicationExport {
 
 	private const GROUPS = array(
 		'application'  => array( 'date' ),
-		'centre'       => array( 'centre', 'code' ),
+		'centre'       => array( 'centre', 'code', 'island', 'municipality', 'centre_type', 'ownership', 'zone', 'zone_code' ),
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
@@ -10893,8 +11837,10 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function groups( int $procedure_id ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		$fijas = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
@@ -10914,7 +11860,7 @@ final class ApplicationExport {
 
 
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = PeopleExport::all_columns( $procedure_id );
+		$todas = PeopleExport::all_columns( $procedure_id, true );
 		$out   = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
@@ -10941,18 +11887,15 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = PeopleExport::all_columns( $procedure_id );
-		$columnas  = self::valid_columns( $procedure_id, $columns );
+		$columnas  = CentreColumns::ordered( self::valid_columns( $procedure_id, $columns ), PeopleExport::all_columns( $procedure_id ), PeopleExport::all_columns( $procedure_id, true ) );
 		$personas  = PeopleExport::spec( $procedure_id );
+		$claves    = array_flip( array_keys( $columnas ) );
+		$filas     = array();
 
-		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
-			$columnas = $todas;
-		}
-		$claves = array_flip( array_keys( $columnas ) );
-		$filas  = array();
+		$catalogo = array() !== array_intersect_key( $claves, array_flip( CentreColumns::KEYS ) ) ? CentreCatalog::index() : array();
 		foreach ( self::batches( $procedure_id ) as $tanda ) {
 			foreach ( $tanda as $solicitud ) {
-				$fila = Applications::row( $solicitud, $preguntas ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
+				$fila = Applications::row( $solicitud, $preguntas, $catalogo ) + PeopleExport::cells( $personas, People::of( (int) $solicitud->ID ) );
 				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila, $personas, $claves ) : array( $fila ) as $una ) {
 
 					$filas[] = array_intersect_key( $una, $claves );
@@ -11364,9 +12307,15 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function sanitize_choice( int $procedure_id, array $raw ): array {
-		$columnas = is_array( $raw['columns'] ?? null ) && empty( $raw['all'] ) ? $raw['columns'] : array();
+		$columnas = is_array( $raw['columns'] ?? null ) ? $raw['columns'] : array();
 		$quienes  = is_array( $raw['who'] ?? null ) ? array_filter( $raw['who'], 'is_string' ) : array();
+		if ( ! empty( $raw['all'] ) ) {
+
+			$columnas = CentreColumns::all_plus( $columnas, array_keys( PeopleExport::all_columns( $procedure_id ) ) );
+		}
 		return array(
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
@@ -14589,6 +15538,7 @@ final class Workspace {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -14598,6 +15548,7 @@ use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 
@@ -14905,6 +15856,7 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
+			$secciones .= PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo );
 		}
 
 		ob_start();
@@ -14987,6 +15939,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Un centro de otra titularidad no ve el botón de solicitar.</p>
+					<?php echo self::centre_warning( $m, 'ownership' );?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -15282,6 +16235,80 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function eligibility_fields( array $m, array $v ): string {
+		$opciones = (array) ( $m['centre_options'] ?? array() );
+		$listas   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+		);
+
+		$elegidos = array();
+		foreach ( array_keys( $listas ) as $nombre ) {
+			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
+		}
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
+			<div class="prc-campo prc-campo--completo">
+				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<?php echo self::centre_warning( $m, 'catalogue' );?>
+			</div>
+			<?php foreach ( $listas as $nombre => $lista ) : ?>
+				<div class="prc-campo prc-campo--medio">
+					<fieldset>
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
+						<?php if ( array() === $lista[1] ) : ?>
+							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php endif; ?>
+						<div class="prc-opciones prc-opciones--vertical">
+							<?php foreach ( $lista[1] as $i => $valor ) : ?>
+								<div class="prc-opcion">
+									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
+										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
+										<?php checked( in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
+									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
+								</div>
+							<?php endforeach; ?>
+						</div>
+						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
+					</fieldset>
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-campo--completo">
+				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
+				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
+					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
+			</div>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function centre_warning( array $m, string $key ): string {
+		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
+		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
 
 
@@ -15815,7 +16842,7 @@ final class ProcedureEditorView {
 							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
 							Todas las columnas
 						</label>
-						<p class="prc-campo__ayuda">Marcada, se exportan todas y no se miran las de abajo.</p>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
 						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
 							<?php
 							if ( array() === $de_grupo ) {
@@ -15825,8 +16852,13 @@ final class ProcedureEditorView {
 							<fieldset class="prc-exportar__columnas">
 								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
 								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<?php
+
+
+									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
+									?>
 									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" data-prc-export-col <?php checked( array() === $columnas || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
 										<?php echo esc_html( (string) $rotulo ); ?>
 									</label>
 								<?php endforeach; ?>
@@ -16252,6 +17284,8 @@ final class ProcedureEditorView {
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -16937,6 +17971,10 @@ final class ProcedureEditor {
 
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
 
+		$tipos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_TYPES ] ?? array() );
+
+		$islas = (array) wp_unslash( $_POST[ ProcedureMetaKeys::ISLANDS ] ?? array() );
+
 
 		$datos                      = array(
 			'title'                => self::field( self::FIELD_TITLE ),
@@ -16954,6 +17992,9 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'centre_types'         => $tipos,
+			'islands'              => $islas,
+			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -17003,7 +18044,8 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
+				),
+				CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) )
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
@@ -17033,6 +18075,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::CENTRE_KINDS         => $limpio['centre_kinds'],
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
+			ProcedureMetaKeys::CENTRE_TYPES         => $limpio['centre_types'],
+			ProcedureMetaKeys::ISLANDS              => $limpio['islands'],
+			ProcedureMetaKeys::ALLOWED_CENTRES      => $limpio['allowed_centres'],
 		);
 		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
@@ -17541,7 +18586,13 @@ final class ProcedureEditor {
 			return $m;
 		}
 
-		return self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
+
+		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+
+
+		$m['centre_warnings'] = CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() );
+		return $m;
 	}
 
 
@@ -17590,6 +18641,11 @@ final class ProcedureEditor {
 				'course' => array(),
 			),
 			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_warnings'         => array(),
+			'centre_options'          => array(
+				'types'   => array(),
+				'islands' => array(),
+			),
 			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
 			'audiences'               => ProcedureMetaKeys::audiences(),
 			'header_colors'           => ProcedureMetaKeys::header_colors(),
@@ -17786,6 +18842,10 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
+		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
+		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
@@ -17808,6 +18868,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::OWNERSHIP       => 'ownership',
 			ProcedureMetaKeys::CENTRE_KINDS    => 'centre_kinds',
 			ProcedureMetaKeys::COMMITMENTS     => 'commitments',
+			ProcedureMetaKeys::CENTRE_TYPES    => 'centre_types',
+			ProcedureMetaKeys::ISLANDS         => 'islands',
+			ProcedureMetaKeys::ALLOWED_CENTRES => 'allowed_centres',
 		);
 
 		$enviados                 = array_keys( (array) $_POST );
@@ -19632,7 +20695,8 @@ final class ApplyForm {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
 			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
 		}
-		return 'Este procedimiento no se dirige a centros de la titularidad del suyo.';
+		$porque = ProcedureAccess::why_not_eligible( $user_id, $procedure_id, $code );
+		return '' !== $porque ? $porque : 'Este procedimiento no se dirige a centros como el suyo.';
 	}
 
 
@@ -22112,12 +23176,16 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Centre\CentreCatalogue;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Domain\CentreCatalog;
+use Prc\Domain\CentreEligibility;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
+
 
 
 
@@ -22148,6 +23216,11 @@ final class Settings {
 
 
 
+	public const CENTRES_GROUP = 'prc_centres';
+
+
+
+
 
 
 	public static function register(): void {
@@ -22157,6 +23230,7 @@ final class Settings {
 
 
 		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
+		add_filter( 'option_page_capability_' . self::CENTRES_GROUP, array( self::class, 'capability' ) );
 	}
 
 
@@ -22184,6 +23258,26 @@ final class Settings {
 				)
 			);
 		}
+		register_setting(
+			self::CENTRES_GROUP,
+			CentreCatalog::OPTION_PRIVATE_TYPES,
+			array(
+				'type'              => 'array',
+				'default'           => array(),
+				'sanitize_callback' => array( self::class, 'sanitize_private_types' ),
+				'show_in_rest'      => false,
+			)
+		);
+	}
+
+
+
+
+
+
+
+	public static function sanitize_private_types( $value ): array {
+		return CentreEligibility::values( array_map( 'sanitize_text_field', CentreEligibility::values( $value ) ) );
 	}
 
 
@@ -22257,6 +23351,87 @@ final class Settings {
 
 
 
+
+
+
+	private static function catalogue_dependencies(): void {
+		$centros  = count( CentreCatalog::all() );
+		$privados = CentreCatalog::private_types();
+		$dependen = self::dependents();
+		$lineas   = array( sprintf( 'Centros que sirve el aplicativo: %d.', $centros ) );
+		if ( 0 === $centros ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen del catálogo: acotan qué centros solicitan y, con el catálogo vacío, no se pueden comprobar.', $dependen['catalogue'] );
+		}
+		if ( array() === $privados ) {
+			$lineas[] = sprintf( '%d procedimientos publicados dependen de los tipos privados: se dirigen a una sola titularidad y no hay ningún tipo de centro marcado como privado.', $dependen['private'] );
+		}
+		echo '<p style="margin-top:0.75rem;max-width:46rem">' . implode( '<br />', array_map( 'esc_html', $lineas ) ) . '</p>';
+	}
+
+
+
+
+
+
+
+	public static function dependents(): array {
+		$out = array(
+			'catalogue' => 0,
+			'private'   => 0,
+		);
+		$ids = get_posts(
+			array(
+				'post_type'      => ProcedurePostType::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			)
+		);
+		foreach ( $ids as $id ) {
+			if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( (int) $id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+				continue;
+			}
+			$reglas            = ProcedureAccess::eligibility( (int) $id );
+			$out['catalogue'] += CentreEligibility::restricted( $reglas ) ? 1 : 0;
+			$out['private']   += 1 === count( $reglas['ownership'] ) ? 1 : 0;
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	private static function private_types_form(): void {
+		$tipos = get_option( CentreCatalog::OPTION_PRIVATE_TYPES, array() );
+		?>
+		<h3>Titularidad de los centros</h3>
+		<p style="max-width:46rem">
+			El catálogo no dice si un centro es público o privado: se deduce de su tipo. Los
+			tipos que escriba aquí, uno por línea y como los trae el catálogo, son privados;
+			los demás, públicos. En blanco, todos los centros son públicos.
+		</p>
+		<form method="post" action="options.php">
+			<?php settings_fields( self::CENTRES_GROUP ); ?>
+			<label class="screen-reader-text" for="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>">Tipos de centro privados</label>
+			<textarea class="large-text" rows="4" style="max-width:46rem" id="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>" name="<?php echo esc_attr( CentreCatalog::OPTION_PRIVATE_TYPES ); ?>"><?php echo esc_textarea( implode( "\n", is_array( $tipos ) ? array_map( 'strval', $tipos ) : array() ) ); ?></textarea>
+			<?php submit_button( 'Guardar los tipos privados' ); ?>
+		</form>
+		<?php
+	}
+
+
+
+
+
+
+
+
 	private static function leave( string $url ): void {
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
 
@@ -22295,7 +23470,7 @@ final class Settings {
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
-				que guarda es la configuración del correo.
+				que guarda es la configuración del correo y qué tipos de centro son privados.
 			</p>
 
 			<h2>Correo</h2>
@@ -22435,8 +23610,9 @@ final class Settings {
 			$status       = CentreCatalogue::status();
 			$total_count  = CentreCatalogue::count();
 			$active_count = CentreCatalogue::active_count();
-			$is_ready     = $total_count > 0;
-			$has_source   = '' !== CentreCatalogueSync::manifest_url();
+
+			$is_ready   = array() !== CentreCatalog::all();
+			$has_source = '' !== CentreCatalogueSync::manifest_url();
 			?>
 			<table class="widefat striped" style="max-width:46rem">
 				<tbody>
@@ -22506,6 +23682,8 @@ final class Settings {
 					</button>
 				</form>
 			</div>
+			<?php self::catalogue_dependencies(); ?>
+			<?php self::private_types_form(); ?>
 			<p style="margin-top:0.75rem;">
 				La clave de usuario con el código de centro es <code><?php echo esc_html( CentreScope::meta_key() ); ?></code>.
 			</p>
@@ -22552,6 +23730,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
@@ -22644,6 +23823,7 @@ final class App {
 		ProcedureMetaRegistration::register();
 		ApplicationMetaRegistration::register();
 		ProcedureAccess::register();
+		CentreCatalog::register();
 
 
 

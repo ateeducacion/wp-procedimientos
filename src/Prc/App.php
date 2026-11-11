@@ -11,6 +11,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Admin\ProcedureAdmin;
 use Prc\Admin\Settings;
 use Prc\Centre\CentreCatalogueSync;
+use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
@@ -102,6 +103,7 @@ final class App {
 		ProcedureMetaRegistration::register();
 		ApplicationMetaRegistration::register();
 		ProcedureAccess::register();
+		CentreCatalog::register();
 
 		// Las páginas cuelgan de una madre si quien despliega lo pidió, y los
 		// enlaces del armazón tienen que llevar la ruta entera.

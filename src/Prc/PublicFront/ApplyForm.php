@@ -376,7 +376,8 @@ final class ApplyForm {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
 			return 'Este procedimiento solo admite solicitudes de ' . implode( ' y de ', $rotulos ) . ', y su cuenta no tiene un código así.';
 		}
-		return 'Este procedimiento no se dirige a centros de la titularidad del suyo.';
+		$porque = ProcedureAccess::why_not_eligible( $user_id, $procedure_id, $code );
+		return '' !== $porque ? $porque : 'Este procedimiento no se dirige a centros como el suyo.';
 	}
 
 	/**

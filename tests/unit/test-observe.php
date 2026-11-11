@@ -586,7 +586,7 @@ class Test_Observe extends WP_UnitTestCase {
 	// ─── el panel del taller ───────────────────────────────────────────────
 
 	/**
-	 * El panel «Consulta» guarda lo que se marca, y nunca el DNI.
+	 * El panel «Acceso de consulta» guarda lo que se marca, y nunca el DNI.
 	 */
 	public function test_the_workshop_panel_saves_the_settings() {
 		$caso   = $this->caso( array( ProcedureMetaKeys::OBSERVABLE => false ) );

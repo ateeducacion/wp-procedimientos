@@ -18602,7 +18602,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -18678,7 +18678,7 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-consulta',
 				'level' => 3,
-				'title' => 'Consulta',
+				'title' => 'Acceso de consulta',
 				'html'  => '<p>Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
 				'shots' => array(),
 			),
@@ -23133,20 +23133,32 @@ final class ProcedureEditorView {
 
 
 
+
+
+
 	private static function tabs( array $m ): string {
-		$activa = (string) $m['panel'];
+		$activa  = (string) $m['panel'];
+		$grupos  = array();
+		foreach ( (array) $m['panels'] as $clave => $panel ) {
+			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
+		}
 
 		ob_start();
 		?>
-		<nav class="prc-tabs" aria-label="Paneles del procedimiento">
+		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
-					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-							<span class="prc-tab-n badge"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-						<?php endif; ?></a>
+				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
+					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
+						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
+						<?php foreach ( $paneles as $clave => $panel ) : ?>
+							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+								<?php endif; ?></a>
+						<?php endforeach; ?>
+					</div>
 				<?php endforeach; ?>
 			</div>
 		</nav>
@@ -24672,7 +24684,16 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
 	public static function panels( int $procedure_id ): array {
+		$grupos  = array(
+			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Más ajustes' => array( self::PANEL_NOTICES, self::PANEL_OBSERVE, self::PANEL_CODE ),
+		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Preguntas',
@@ -24682,7 +24703,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
-			self::PANEL_OBSERVE      => 'Consulta',
+			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -24692,12 +24713,15 @@ final class ProcedureEditor {
 		);
 
 		$out = array();
-		foreach ( $rotulos as $slug => $rotulo ) {
-			$out[ $slug ] = array(
-				'label' => $rotulo,
-				'url'   => self::url( $procedure_id, $slug ),
-				'count' => $cuentas[ $slug ] ?? null,
-			);
+		foreach ( $grupos as $grupo => $slugs ) {
+			foreach ( $slugs as $slug ) {
+				$out[ $slug ] = array(
+					'label' => $rotulos[ $slug ],
+					'url'   => self::url( $procedure_id, $slug ),
+					'count' => $cuentas[ $slug ] ?? null,
+					'group' => $grupo,
+				);
+			}
 		}
 		return $out;
 	}
@@ -34407,6 +34431,8 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-c-tenue);
 }
 
+/* El contador de una pestaña: texto oscuro sobre el amarillo claro, que
+   pasa de 4,5:1. Sin la clase `badge`, que con Bootstrap lo pinta en blanco. */
 .prc-tab-n {
   padding: .05em .5em;
   border-radius: 999px;
@@ -34414,6 +34440,21 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-esp);
   font-size: var(--prc-t-menudo);
   font-weight: 700;
+}
+
+/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
+   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
+.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
+.prc-tabs-grupo__rotulo {
+  position: absolute;
+  top: 0;
+  font-size: var(--prc-t-menudo);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--prc-c-medio);
 }
 
 /* --- lienzo -------------------------------------------------------------- */

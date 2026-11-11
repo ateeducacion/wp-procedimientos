@@ -208,17 +208,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			array(
 				ProcedureEditor::PANEL_DATA,
 				ProcedureEditor::PANEL_QUESTIONS,
+				ProcedureEditor::PANEL_PEOPLE,
 				ProcedureEditor::PANEL_LINKS,
+				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
-				ProcedureEditor::PANEL_PEOPLE,
-				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_NOTICES,
 				ProcedureEditor::PANEL_OBSERVE,
 				ProcedureEditor::PANEL_CODE,
 			),
-			array_keys( $m['panels'] )
+			array_keys( $m['panels'] ),
+			'en el orden en que se trabaja: preparar, gestionar y el resto'
 		);
+		$this->assertSame(
+			array( 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Gestionar', 'Gestionar', 'Más ajustes', 'Más ajustes', 'Más ajustes' ),
+			array_values( wp_list_pluck( $m['panels'], 'group' ) )
+		);
+		$this->assertSame( 'Acceso de consulta', $m['panels'][ ProcedureEditor::PANEL_OBSERVE ]['label'], 'no se llama como el menú de arriba' );
+
+		$html = ProcedureEditorView::html( $m );
+		$this->assertStringContainsString( 'role="group" aria-label="Gestionar"', $html, 'cada grupo se nombra' );
+		$this->assertStringContainsString( '<span class="prc-tabs-grupo__rotulo" aria-hidden="true">Más ajustes</span>', $html );
+		$this->assertStringContainsString( '<span class="prc-tab-n">1</span>', $html, 'el contador sin la clase de Bootstrap que lo pinta en blanco' );
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );

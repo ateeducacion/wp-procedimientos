@@ -725,7 +725,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * interno y el estado) aquí **no existen**: el primero es el `ID` del post
 	 * y el segundo lo derivan las fechas (ADR-0013).
 	 */
-	public function test_the_create_screen_is_the_express_form_without_its_hidden_fields() {
+	public function test_the_create_screen_asks_the_minimum_without_its_hidden_fields() {
 		$area  = $this->area( 'Área de prueba' );
 		$curso = $this->course();
 		$uid   = $this->manager( array( $area ) );
@@ -734,11 +734,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 
-		// El subtítulo y las cuatro bandas son los literales del sistema que se
-		// sustituye: quien da de alta pidió esta pantalla igual que aquella. Las
-		// mayúsculas de la banda las pone el CSS: escritas, un lector de pantalla
-		// las deletrea.
-		$this->assertStringContainsString( '<strong>Formato Express</strong>', $html );
+		// Las cuatro bandas son los literales del sistema que se sustituye;
+		// «Formato Express», su jerga, ya no. Las mayúsculas de la banda las
+		// pone el CSS: escritas, un lector de pantalla las deletrea.
+		$this->assertStringNotContainsString( 'Formato Express', $html );
+		$this->assertStringContainsString( 'Rellene lo mínimo para crearlo.', $html );
+		$this->assertStringContainsString( '&larr; Gestión de procedimientos</a>', $html, 'la vuelta se llama como la pantalla' );
 		foreach ( array( 'Ajustes generales', 'Promociona', 'Más información', 'Aspectos de diseño' ) as $banda ) {
 			$this->assertStringContainsString( '<legend class="prc-seccion__titulo">' . $banda . '</legend>', $html );
 		}
@@ -771,8 +772,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_AREA . '[]" value="' . $area . '"', $html );
 		$this->assertStringNotContainsString( '<select class="prc-control" id="prc-area"', $html );
 
-		// Los tres correos y las diez muestras de color.
+		// Los tres correos —el primero, y los otros como un grupo opcional— y
+		// las diez muestras de color, sin asterisco: ya viene una elegida.
 		$this->assertSame( ProcedureMetaKeys::CONTACT_EMAILS_MAX, substr_count( $html, 'name="' . ProcedureMetaKeys::CONTACT_EMAILS . '[]"' ) );
+		$this->assertStringContainsString( 'Otros correos de contacto (opcional)', $html );
+		$this->assertStringNotContainsString( '2.º correo', $html );
+		$this->assertMatchesRegularExpression( '#<legend class="prc-campo__etiqueta">Color de cabecera\s*</legend>#', $html );
 		$this->assertSame( count( ProcedureMetaKeys::header_colors() ), substr_count( $html, 'name="' . ProcedureMetaKeys::HEADER_COLOR . '"' ) );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 

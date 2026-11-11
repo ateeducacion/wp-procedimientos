@@ -638,6 +638,10 @@ body.prc-app .prc-hoja {
   padding: 0 0 10px;
 }
 
+/* La vuelta a la pantalla de la que se viene: texto corriente, no un título
+   que compita con el h1. */
+.prc-miga { margin: 0 0 4px; font-size: .875rem; }
+
 .prc-sub {
   font-size: var(--prc-t-h2);
   line-height: var(--prc-i-h2);

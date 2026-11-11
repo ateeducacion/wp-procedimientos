@@ -298,7 +298,7 @@ final class HelpContent {
 				'id'    => 'su-lista',
 				'level' => 2,
 				'title' => 'Su lista: «Gestión de procedimientos»',
-				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento, a quién se dirige, su estado, la fecha límite de solicitud y tres columnas de acciones: <strong>Detalles</strong> (abre el taller), <strong>Solicitudes</strong> y <strong>Duplicar</strong>. Al lado, la leyenda de los iconos de estado; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
+				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, cuántas <strong>solicitudes</strong> tiene (abre la lista) y las <strong>acciones</strong>: «Ver la ficha» y «Duplicar». Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
 				'shots' => array(
 					array(
 						'caption' => '«Gestión de procedimientos» con la tabla y la leyenda de estados',
@@ -310,13 +310,13 @@ final class HelpContent {
 				'id'    => 'crear-o-duplicar',
 				'level' => 2,
 				'title' => 'Cree uno nuevo o duplique uno anterior',
-				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong> en su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El <strong>Formato Express</strong> pide solo lo mínimo:</p>'
-					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Mis procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha) y <strong>Color de cabecera</strong>.</li></ul>'
+				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong>, junto al título de su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El alta pide solo lo mínimo:</p>'
+					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Gestión de procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha), <strong>Otros correos de contacto</strong>, si quiere, y <strong>Color de cabecera</strong>, que ya viene elegido.</li></ul>'
 					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
-					. '<p><strong>Duplicar</strong>: el icono «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+					. '<p><strong>Duplicar</strong>: el botón «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pantalla «Crear un procedimiento», Formato Express',
+						'caption' => 'pantalla «Crear un procedimiento»',
 						'image'   => '',
 					),
 				),

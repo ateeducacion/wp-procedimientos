@@ -221,3 +221,15 @@ se concede ni se usa una prórroga y no se presenta en nombre de nadie,
 que rematar en ellas. Marcar y desmarcar siguen sin registrarse.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-11
+
+**Solo se marca como histórico lo que ya terminó**: un procedimiento cerrado o
+resuelto. Marcar uno vivo por error dejaba a los centros sin poder solicitar
+hasta que administración lo volviera a abrir. `ProcedureAccess::can_archive()`
+lo comprueba con `ProcedureState::why_not_archivable()`, que da también el
+motivo, y la pestaña «Publicación» pinta «Marcar como histórico» lo último y
+solo en esos estados, con el estilo de peligro. Desmarcar no cambia: lo hace
+administración. Lo ya marcado sigue marcado.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

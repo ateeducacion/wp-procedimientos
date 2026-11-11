@@ -283,4 +283,17 @@ class Test_Procedure_State extends WP_UnitTestCase {
 		$this->assertSame( '', ProcedureState::application_window( ProcedureMetaKeys::STATE_AMENDMENT, 'admitted', false, true ) );
 		$this->assertSame( 'Las solicitudes están cerradas.', ProcedureState::application_window( ProcedureMetaKeys::STATE_CLOSED, '' ) );
 	}
+
+	/**
+	 * Solo se marca como histórico lo que ya terminó: cerrado o resuelto. Un
+	 * procedimiento vivo, no, y se dice por qué.
+	 */
+	public function test_only_a_closed_or_resolved_procedure_can_be_archived() {
+		$this->assertSame( '', ProcedureState::why_not_archivable( ProcedureMetaKeys::STATE_CLOSED ) );
+		$this->assertSame( '', ProcedureState::why_not_archivable( ProcedureMetaKeys::STATE_RESOLVED ) );
+		foreach ( array( ProcedureMetaKeys::STATE_DRAFT, ProcedureMetaKeys::STATE_UPCOMING, ProcedureMetaKeys::STATE_OPEN, ProcedureMetaKeys::STATE_AMENDMENT ) as $estado ) {
+			$this->assertStringContainsString( 'Solo se marca como histórico un procedimiento cerrado o resuelto', ProcedureState::why_not_archivable( $estado ), $estado );
+		}
+		$this->assertStringContainsString( 'ya está marcado como histórico', ProcedureState::why_not_archivable( ProcedureMetaKeys::STATE_ARCHIVED ) );
+	}
 }

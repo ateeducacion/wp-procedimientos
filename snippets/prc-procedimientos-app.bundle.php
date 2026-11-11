@@ -1002,6 +1002,25 @@ final class ProcedureState {
 
 
 
+
+	public static function why_not_archivable( string $state ): string {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_CLOSED, ProcedureMetaKeys::STATE_RESOLVED ), true ) ) {
+			return '';
+		}
+		return ProcedureMetaKeys::STATE_ARCHIVED === $state
+			? 'Este procedimiento ya está marcado como histórico.'
+			: 'Solo se marca como histórico un procedimiento cerrado o resuelto: este sigue vivo.';
+	}
+
+
+
+
+
+
+
+
+
+
 	public static function accepts_applications( string $state ): bool {
 		return ProcedureMetaKeys::STATE_OPEN === $state;
 	}
@@ -2467,17 +2486,109 @@ final class ProcedureInput {
 
 
 
-	public static function not_ready( int $course, array $questions ): array {
+
+
+
+
+
+
+	public static function not_ready( int $course, array $questions, string $opens_at ): array {
+		return self::blocking(
+			self::checklist(
+				array(
+					'course'    => $course,
+					'questions' => $questions,
+					'opens_at'  => $opens_at,
+				)
+			)
+		);
+	}
+
+
+
+
+
+
+
+	public static function blocking( array $checklist ): array {
 		$faltan = array();
-		if ( $course <= 0 ) {
-			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
-		}
-		foreach ( $questions as $pregunta ) {
-			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
-				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+		foreach ( $checklist as $punto ) {
+			if ( ! empty( $punto['blocks'] ) && empty( $punto['ok'] ) ) {
+				$faltan = array_merge( $faltan, (array) $punto['missing'] );
 			}
 		}
 		return $faltan;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function checklist( array $facts ): array {
+		$abre       = self::text( $facts, 'opens_at' );
+		$abre       = self::is_valid_date( $abre ) ? $abre : '';
+		$cierra     = self::text( $facts, 'closes_at' );
+		$cierra     = self::is_valid_date( $cierra ) ? $cierra : $abre;
+		$preguntas  = (array) ( $facts['questions'] ?? array() );
+		$sin_curso  = 'Falta el curso: elíjalo en «Datos».';
+		$sin_plazo  = 'Falta el plazo de solicitud: ponga al menos su fecha de inicio en «Datos».';
+		$lista      = array(
+			self::point( 'course', (int) ( $facts['course'] ?? 0 ) > 0, true, 'Curso elegido.', $sin_curso, array( $sin_curso ) ),
+			self::point( 'window', '' !== $abre, true, sprintf( 'Plazo de solicitud: del %1$s al %2$s.', self::dmy( $abre ), self::dmy( $cierra ) ), $sin_plazo . ' Sin él, el procedimiento se quedaría en «Próximo» y nadie podría solicitar.', array( $sin_plazo ) ),
+			self::point( 'questions', true, false, array() === $preguntas ? 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Preguntas propias: %d.', count( $preguntas ) ), '', array() ),
+		);
+		$sin_fechas = array();
+		$entregas   = 0;
+		foreach ( $preguntas as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
+				++$entregas;
+				if ( ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+				}
+			}
+		}
+		if ( $entregas > 0 ) {
+			$lista[] = self::point( 'delivery', array() === $sin_fechas, true, 'Las entregas con plazo propio tienen sus fechas.', implode( ' ', $sin_fechas ), $sin_fechas );
+		}
+		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces».', array() );
+		return $lista;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function point( string $key, bool $ok, bool $blocks, string $done, string $missing, array $why ): array {
+		return array(
+			'key'     => $key,
+			'ok'      => $ok,
+			'blocks'  => $blocks,
+			'text'    => $ok ? $done : $missing,
+			'missing' => $ok ? array() : $why,
+		);
+	}
+
+
+
+
+
+
+
+	private static function dmy( string $ymd ): string {
+		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
 	}
 
 
@@ -2624,6 +2735,30 @@ final class ProcedureInput {
 
 	public static function is_url( string $value ): bool {
 		return (bool) preg_match( '#^https?://[^\s/$.?\#].[^\s]*$#i', $value );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function is_acceptable_link( string $url, string $stored ): bool {
+		if ( '' === $url ) {
+			return true;
+		}
+		if ( ! self::is_url( $url ) ) {
+			return false;
+		}
+		$partes = (array) parse_url( $url );
+		return $url === $stored || ( 'https' === strtolower( (string) ( $partes['scheme'] ?? '' ) ) && false !== strpos( (string) ( $partes['host'] ?? '' ), '.' ) );
 	}
 
 
@@ -2946,6 +3081,7 @@ final class PeopleSpec {
 			'min'              => null === $min ? 0 : max( 0, min( $min, self::MAX_PEOPLE ) ),
 			'max'              => null === $max || $max <= 0 ? self::MAX_PEOPLE : min( $max, self::MAX_PEOPLE ),
 			'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+			'multi_role'       => ! empty( $raw['multi_role'] ),
 			'opens_at'         => self::date( $raw['opens_at'] ?? '' ),
 			'closes_at'        => self::date( $raw['closes_at'] ?? '' ),
 			'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -3023,6 +3159,7 @@ final class PeopleSpec {
 				'min'              => $min,
 				'max'              => $max,
 				'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+				'multi_role'       => ! empty( $raw['multi_role'] ),
 				'opens_at'         => self::text( $raw, 'opens_at' ),
 				'closes_at'        => self::text( $raw, 'closes_at' ),
 				'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -3048,15 +3185,8 @@ final class PeopleSpec {
 		$marcas = array();
 		$lineas = array();
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
-			$partes = array_map( 'trim', explode( '|', (string) $linea ) );
-			$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
-			if ( $marca ) {
-				array_pop( $partes );
-			}
-
-
-			$rotulo   = trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) );
-			$lineas[] = $rotulo;
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			$lineas[]               = $rotulo;
 			if ( '' !== $rotulo ) {
 				$marcas[] = $marca;
 			}
@@ -3068,6 +3198,68 @@ final class PeopleSpec {
 			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+	private static function split_role( string $linea ): array {
+		$partes = array_map( 'trim', explode( '|', $linea ) );
+		$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
+		if ( $marca ) {
+			array_pop( $partes );
+		}
+
+
+		return array( trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) ), $marca );
+	}
+
+
+
+
+
+
+
+
+	public static function role_lines( string $text ): array {
+		$out = array();
+		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			if ( '' !== $rotulo ) {
+				$out[] = array(
+					'label'       => $rotulo,
+					'needs_group' => $marca,
+				);
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function coordination_clash( array $before, array $after, int $count_before, int $count_after ): string {
+		$ya_estaba = $count_before > 0 && self::collects_coordination( $before );
+		if ( $ya_estaba || $count_after <= 0 || ! self::collects_coordination( $after ) ) {
+			return '';
+		}
+		return $count_after !== $count_before
+			? 'La coordinación ya se da de alta en la lista de la pestaña «Personas»: deje aquí «No se piden». No se ha guardado nada.'
+			: 'En «Datos» se piden personas coordinadoras: para recogerlas en esta lista, deje antes «No se piden» en «Datos». No se ha guardado nada.';
 	}
 
 
@@ -3661,6 +3853,15 @@ final class ApplicationPeople {
 
 
 
+
+	public const CLASHES = array( 'duplicate', 'same_person', 'unique_group' );
+
+
+
+
+
+
+
 	public static function row( $raw ): array {
 		$raw = is_array( $raw ) ? $raw : array();
 		$out = array();
@@ -3710,19 +3911,27 @@ final class ApplicationPeople {
 	public static function validate( array $spec, array $people, array $row ): array {
 		$spec   = PeopleSpec::sanitize( $spec );
 		$row    = self::row( $row );
-		$otras  = array_values(
-			array_filter(
-				self::rows( $people ),
-				static function ( array $otra ) use ( $row ): bool {
-					return '' === $row['id'] || $otra['id'] !== $row['id'];
-				}
-			)
-		);
 		$errors = self::fields( $spec, $row );
 		if ( array() !== $errors ) {
 			return $errors;
 		}
-		return self::against( $spec, $otras, $row );
+		return self::against( $spec, self::rows( $people ), $row );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function clash( array $spec, array $people, array $row ): string {
+		$choque = self::conflict( PeopleSpec::sanitize( $spec ), self::rows( $people ), self::row( $row ) );
+		return null === $choque ? '' : (string) $choque['row']['id'];
 	}
 
 
@@ -3744,7 +3953,7 @@ final class ApplicationPeople {
 		);
 		if ( array() !== $papel ) {
 			$grupo           = '' === $row['group'] || array() !== self::find( $spec['groups'], $row['group'] );
-			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que este papel exige' );
+			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que el papel «' . $papel['label'] . '» exige (por ejemplo, el eje)' );
 		}
 		$out = array();
 		foreach ( $checks as $clave => list( $bien, $texto ) ) {
@@ -3763,20 +3972,117 @@ final class ApplicationPeople {
 
 
 
-	private static function against( array $spec, array $otras, array $row ): array {
-		foreach ( $otras as $otra ) {
-			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
-			if ( $mismo_sitio && $otra['dni'] === $row['dni'] ) {
-				return array( 'duplicate' => 'Esa persona ya está en la lista con el mismo papel y grupo.' );
-			}
-			if ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
-				return array( 'unique_group' => 'Ese papel ya lo tiene otra persona en ese grupo: solo cabe una por papel y grupo.' );
-			}
+	private static function against( array $spec, array $people, array $row ): array {
+		$choque = self::conflict( $spec, $people, $row );
+		if ( null !== $choque ) {
+			$quien  = trim( $choque['row']['name'] . ' ' . $choque['row']['surname'] );
+			$donde  = 'use «Sustituir o corregir» en su fila.';
+			$textos = array(
+				'duplicate'    => 'Esa persona ya está en la lista con el mismo papel y grupo.',
+				'same_person'  => $quien . ' ya está en la lista como «' . self::place( $spec, $choque['row'] ) . '». Para cambiarle el papel o sustituirla, ' . $donde,
+				'unique_group' => 'Ese papel ya lo tiene ' . $quien . ' en ese grupo, y solo cabe una persona por papel y grupo. Para sustituirla, ' . $donde,
+			);
+			return array( $choque['error'] => $textos[ $choque['error'] ] );
 		}
-		if ( '' === $row['id'] && count( $otras ) + 1 > (int) $spec['max'] ) {
-			return array( 'max' => 'La lista ya tiene ' . count( $otras ) . ' personas, que es el máximo que admite este procedimiento.' );
+		$otras = count( self::others( $people, $row ) );
+		if ( '' === $row['id'] && $otras + 1 > (int) $spec['max'] ) {
+			return array( 'max' => 'La lista ya tiene ' . $otras . ' personas, que es el máximo que admite este procedimiento.' );
 		}
 		return array();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function conflict( array $spec, array $people, array $row ): ?array {
+		$ya_era = self::was_already( $people, $row );
+		foreach ( self::others( $people, $row ) as $otra ) {
+			$error = self::clash_kind( $spec, $otra, $row, $ya_era );
+			if ( '' !== $error ) {
+				return array(
+					'error' => $error,
+					'row'   => $otra,
+				);
+			}
+		}
+		return null;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function clash_kind( array $spec, array $otra, array $row, bool $ya_era ): string {
+		$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+		$misma       = $otra['dni'] === $row['dni'];
+		if ( $mismo_sitio && $misma ) {
+			return 'duplicate';
+		}
+		if ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
+			return 'same_person';
+		}
+		return $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ? 'unique_group' : '';
+	}
+
+
+
+
+
+
+
+
+	private static function was_already( array $people, array $row ): bool {
+		foreach ( $people as $fila ) {
+			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
+				return $fila['dni'] === $row['dni'] && $fila['role'] === $row['role'] && $fila['group'] === $row['group'];
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+	private static function others( array $people, array $row ): array {
+		return array_values(
+			array_filter(
+				$people,
+				static function ( array $otra ) use ( $row ): bool {
+					return '' === $row['id'] || $otra['id'] !== $row['id'];
+				}
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function place( array $spec, array $row ): string {
+		return implode( ' · ', array_filter( array( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ), PeopleSpec::label( $spec, 'groups', (string) $row['group'] ) ), 'strlen' ) );
 	}
 
 
@@ -6250,6 +6556,7 @@ final class ProcedureAccess {
 
 
 
+
 	private static function is_unready_publication( int $post_id, string $status, $course, ?array &$why = null ): bool {
 		$why        = array();
 		$publicados = array( 'publish', 'future' );
@@ -6267,7 +6574,8 @@ final class ProcedureAccess {
 			}
 		}
 		$preguntas = ProcedureQuestions::sanitize( $post_id > 0 ? get_post_meta( $post_id, ProcedureMetaKeys::QUESTIONS, true ) : array() );
-		$why       = ProcedureInput::not_ready( $curso, $preguntas );
+		$abre      = $post_id > 0 ? (string) get_post_meta( $post_id, ProcedureMetaKeys::OPENS_AT, true ) : '';
+		$why       = ProcedureInput::not_ready( $curso, $preguntas, $abre );
 		return array() !== $why;
 	}
 
@@ -6313,6 +6621,8 @@ final class ProcedureAccess {
 		if ( 0 === $post_id && ! self::can_edit_all_areas() && in_array( $request->get_param( 'status' ), array( 'publish', 'future', 'private' ), true ) ) {
 			return new \WP_Error( 'prc_scope_draft_first', 'Cree el procedimiento como borrador antes de publicarlo, para que tenga ámbito desde el principio.', array( 'status' => 400 ) );
 		}
+
+
 
 		$faltan = array();
 		if ( self::is_unready_publication( $post_id, (string) $request->get_param( 'status' ), $request->has_param( ProcedureTaxonomies::COURSE ) ? $request->get_param( ProcedureTaxonomies::COURSE ) : null, $faltan ) ) {
@@ -6685,8 +6995,9 @@ final class ProcedureAccess {
 
 
 
+
 	public static function can_archive( int $user_id, int $post_id ): bool {
-		return self::can_open( $user_id, $post_id );
+		return self::can_open( $user_id, $post_id ) && '' === ProcedureState::why_not_archivable( ProcedureState::of_post( $post_id ) );
 	}
 
 
@@ -9804,8 +10115,16 @@ final class Assets {
 
 
 
-	public static function button_class( bool $primary = false ): string {
-		return $primary
+
+
+
+
+
+	public static function button_class( $variant = false ): string {
+		if ( 'danger' === $variant ) {
+			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		}
+		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
 			: 'prc-btn btn btn-light';
 	}
@@ -11899,11 +12218,28 @@ final class Applications {
 
 
 	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
+		return array_fill_keys( array_keys( self::answer_counts( $procedure_id, $empty_too ) ), true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function answer_counts( int $procedure_id, bool $empty_too = false ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
 			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
 			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
-			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+			foreach ( array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) as $clave ) {
+				$out[ (string) $clave ] = ( $out[ (string) $clave ] ?? 0 ) + 1;
+			}
 		}
 		return $out;
 	}
@@ -16087,6 +16423,12 @@ final class PeopleSpecPanel {
 	public const FIELD_ADMITTED = 'prc_people_admitted_only';
 
 
+	public const FIELD_MULTI_ROLE = 'prc_people_multi_role';
+
+
+	public const FIELD_ROLE_GROUP = 'prc_people_role_group';
+
+
 
 
 	public const ARG_HISTORY = 'historial';
@@ -16103,6 +16445,7 @@ final class PeopleSpecPanel {
 		'min'              => self::FIELD_MIN,
 		'max'              => self::FIELD_MAX,
 		'unique_per_group' => self::FIELD_UNIQUE,
+		'multi_role'       => self::FIELD_MULTI_ROLE,
 		'opens_at'         => self::FIELD_OPENS,
 		'closes_at'        => self::FIELD_CLOSES,
 		'admitted_only'    => self::FIELD_ADMITTED,
@@ -16127,9 +16470,18 @@ final class PeopleSpecPanel {
 		if ( '' !== $porque ) {
 			return $porque;
 		}
+		$coordina = Applications::coordinator_count( $procedure_id );
+		$porque   = PeopleSpec::coordination_clash( $antes, $res['spec'], $coordina, $coordina );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, wp_slash( $res['spec'] ) );
 		return '';
 	}
+
+
+
+
 
 
 
@@ -16143,6 +16495,18 @@ final class PeopleSpecPanel {
 			$valor         = isset( $_POST[ $campo ] ) && is_string( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : '';
 			$out[ $clave ] = in_array( $clave, array( 'roles', 'groups' ), true ) ? sanitize_textarea_field( $valor ) : sanitize_text_field( $valor );
 		}
+
+		if ( isset( $_POST[ self::FIELD_ROLES ] ) && is_array( $_POST[ self::FIELD_ROLES ] ) ) {
+			$filas  = wp_unslash( $_POST[ self::FIELD_ROLES ] );
+			$grupos = (array) wp_unslash( $_POST[ self::FIELD_ROLE_GROUP ] ?? array() );
+			$lineas = array();
+			foreach ( $filas as $i => $rotulo ) {
+				$rotulo   = is_string( $rotulo ) ? sanitize_text_field( $rotulo ) : '';
+				$lineas[] = '' !== $rotulo && ! empty( $grupos[ $i ] ) ? $rotulo . ' | ' . PeopleSpec::GROUP_MARK : $rotulo;
+			}
+			$out['roles'] = implode( "\n", $lineas );
+		}
+
 		return $out;
 	}
 
@@ -16162,7 +16526,10 @@ final class PeopleSpecPanel {
 			'groups'           => PeopleSpec::groups_text( $spec ),
 			'min'              => (string) $spec['min'],
 			'max'              => (string) $spec['max'],
-			'unique_per_group' => $spec['unique_per_group'] ? '1' : '',
+
+
+			'unique_per_group' => $spec['unique_per_group'] || ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC ) ? '1' : '',
+			'multi_role'       => $spec['multi_role'] ? '1' : '',
 			'opens_at'         => (string) $spec['opens_at'],
 			'closes_at'        => (string) $spec['closes_at'],
 			'admitted_only'    => $spec['admitted_only'] ? '1' : '',
@@ -16170,9 +16537,11 @@ final class PeopleSpecPanel {
 
 
 		$de_aqui = $rejected && isset( $_POST[ self::FIELD_ROLES ] );
+		$valores = $de_aqui ? self::typed() : $valores;
 		return array(
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
-			'values'     => $de_aqui ? self::typed() : $valores,
+			'values'     => $valores,
+			'role_rows'  => PeopleSpec::role_lines( (string) $valores['roles'] ),
 			'max_people' => PeopleSpec::MAX_PEOPLE,
 			'max_roles'  => PeopleSpec::MAX_ROLES,
 			'max_groups' => PeopleSpec::MAX_GROUPS,
@@ -17910,14 +18279,14 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
 				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
-						'caption' => 'lista con dos personas, papel y grupo, y los botones «Cambiar o sustituir» y «Dar de baja»',
+						'caption' => 'lista con dos personas, papel y grupo, y los botones «Sustituir o corregir» y «Dar de baja»',
 						'image'   => '',
 					),
 				),
@@ -18024,7 +18393,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio, el procedimiento queda como «Próximo» y nadie puede solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias) y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Personas») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -18041,10 +18410,10 @@ final class HelpContent {
 				'id'    => 'taller-preguntas',
 				'level' => 3,
 				'title' => 'Preguntas',
-				'html'  => '<p>Hasta 40 preguntas propias. Al final aparece siempre una <strong>«Pregunta nueva»</strong> vacía: rellénela y pulse <strong>«Guardar las preguntas»</strong>; aparecerá otra vacía para la siguiente. Se crean <strong>de una en una</strong>.</p>'
+				'html'  => '<p>Hasta 40 preguntas propias. Al final hay siempre una <strong>«Pregunta nueva»</strong> vacía y, en <strong>«Añadir otra pregunta»</strong>, dos más: rellene las que necesite y pulse <strong>«Guardar las preguntas»</strong>. Las que deje sin rótulo no se crean. Cada pregunta enseña solo los campos de su tipo.</p>'
 					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, borre su rótulo y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar. El rótulo sí, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, marque <strong>«Quitar esta pregunta»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el rótulo se dice cuántas la han contestado. El rótulo sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
@@ -18056,7 +18425,7 @@ final class HelpContent {
 				'id'    => 'taller-enlaces',
 				'level' => 3,
 				'title' => 'Enlaces',
-				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://; si no, no se guarda. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>. Debajo de cada enlace guardado, <strong>«Abrir el enlace guardado ↗»</strong> lo abre en otra pestaña para comprobar que llega entero.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Enlaces»',
@@ -18069,8 +18438,8 @@ final class HelpContent {
 				'level' => 3,
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
+					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -18103,8 +18472,9 @@ final class HelpContent {
 				'id'    => 'publicar',
 				'level' => 2,
 				'title' => 'Publique',
-				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>.</p>'
-					. '<p>Antes de publicar, repase las fechas del plazo, a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
+					. '<p>Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>, que tiene el aspecto de las acciones delicadas y dice al lado lo que pasa: deja de verse en la portada.</p>'
+					. '<p>Antes de publicar, repase también a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Publicación» con la línea de estados y la etapa actual',
@@ -18152,7 +18522,7 @@ final class HelpContent {
 				'id'    => 'cerrar-y-archivar',
 				'level' => 2,
 				'title' => 'Cierre y archive',
-				'html'  => '<ul><li>El plazo se cierra solo en la fecha de fin. Si necesita cerrarlo antes, pulse <strong>«Cerrar solicitudes ahora»</strong> en la pestaña «Publicación»; <strong>«Volver al calendario automático»</strong> lo deshace.</li><li>Cuando ya no quede nada que tocar (resuelto, listados enlazados, solicitudes revisadas), pulse <strong>«Marcar como histórico»</strong>. Queda en solo lectura y se puede consultar y exportar. <strong>Para volver a abrirlo hay que pedírselo a quien administra el aplicativo.</strong></li></ul>',
+				'html'  => '<ul><li>El plazo se cierra solo en la fecha de fin. Si necesita cerrarlo antes, pulse <strong>«Cerrar solicitudes ahora»</strong> en la pestaña «Publicación»; <strong>«Volver al calendario automático»</strong> lo deshace.</li><li>Cuando ya no quede nada que tocar (resuelto, listados enlazados, solicitudes revisadas), pulse <strong>«Marcar como histórico»</strong>, al final de la pestaña. Solo aparece con el procedimiento cerrado o resuelto: uno vivo no se puede marcar. Queda en solo lectura y se puede consultar y exportar. <strong>Para volver a abrirlo hay que pedírselo a quien administra el aplicativo.</strong></li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Dar el procedimiento por terminado»',
@@ -18222,21 +18592,21 @@ final class HelpContent {
 				'id'    => 'coordino-un-eje',
 				'level' => 3,
 				'title' => 'Coordino un eje: ¿dónde digo cuál?',
-				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. Si el papel exige grupo, no se puede guardar sin él.</p>',
+				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. La etiqueta del grupo dice qué papeles lo exigen («Grupo (obligatorio para: …)»): con uno de ellos, no se puede guardar sin él.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'persona-dada-de-alta-dos-veces',
 				'level' => 3,
 				'title' => 'He dado de alta dos veces a la misma persona',
-				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja a …». Si el procedimiento solo admite una persona por papel y grupo, el aplicativo se lo indicará.</p>',
+				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja». El aplicativo ya no deja dar de alta a la misma persona dos veces, salvo que el procedimiento admita varios papeles por persona: si lo intenta, le dice con qué papel está y le lleva a su fila para cambiarla.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'sustituir-a-una-persona',
 				'level' => 3,
 				'title' => 'Tengo que sustituir a una persona',
-				'html'  => '<p>Pulse «Cambiar o sustituir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
+				'html'  => '<p>Pulse «Sustituir o corregir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -18278,14 +18648,14 @@ final class HelpContent {
 				'id'    => 'sale-como-proximo',
 				'level' => 3,
 				'title' => 'Está publicado, pero sale como «Próximo» y nadie puede solicitar',
-				'html'  => '<p>Falta la fecha de inicio del plazo de solicitud, o todavía no ha llegado. El estado sale de las fechas: no hay que cambiarlo a mano. Revise los plazos en la pestaña «Datos».</p>',
+				'html'  => '<p>Todavía no ha llegado la fecha de inicio del plazo de solicitud, o, si se publicó antes de que se exigiera, no la tiene. El estado sale de las fechas: no hay que cambiarlo a mano. Revise los plazos en la pestaña «Datos». Hoy ya no se puede publicar sin esa fecha.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'varias-casillas',
 				'level' => 3,
 				'title' => '¿Cómo creo varias casillas o varias preguntas?',
-				'html'  => '<p>Se crean de una en una: rellene la «Pregunta nueva» y pulse «Guardar las preguntas»; aparecerá otra vacía. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'html'  => '<p>Rellene la «Pregunta nueva» y, si necesita más, las dos de «Añadir otra pregunta», y pulse «Guardar las preguntas»; aparecerán otras tres vacías. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -18320,7 +18690,7 @@ final class HelpContent {
 				'id'    => 'enlaces-cortados',
 				'level' => 3,
 				'title' => 'Los enlaces de la resolución salen cortados o no abren',
-				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela con «Abrir el enlace guardado ↗», debajo del campo.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -21422,7 +21792,7 @@ final class ApplicationActionsView {
 					<?php wp_nonce_field( (string) $w['nonce_action'], WithdrawForm::NONCE_FIELD, false ); ?>
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_OP ); ?>" value="<?php echo esc_attr( WithdrawForm::OP_WITHDRAW ); ?>" />
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_APPLICATION ); ?>" value="<?php echo esc_attr( (string) (int) $w['application'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button>
+					<button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button>
 				</form>
 			<?php else : ?>
 				<p><?php echo esc_html( (string) $w['why'] ); ?></p>
@@ -21691,7 +22061,7 @@ final class ApplicationActionsView {
 					<textarea class="prc-control" id="prc-motivo-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_REASON ); ?>" rows="2" required></textarea>
 					<p class="prc-campo__ayuda">Obligatorio: queda en el historial de la solicitud. Úselo para lo que se presentó por error; para decir que no se admite, está «Excluida».</p>
 				</div>
-				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button></p>
+				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button></p>
 			</form>
 		</details>
 		<?php
@@ -22273,6 +22643,11 @@ final class ProcedureEditorView {
 
 
 
+	private const NEW_QUESTIONS = 3;
+
+
+
+
 
 
 
@@ -22299,12 +22674,6 @@ final class ProcedureEditorView {
 		echo Shell::notice( 'aviso', (string) $m['state_notice'] );
 
 		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) );
-
-
-
-		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::archive_switch( $m );
-		}
 
 
 
@@ -22340,6 +22709,12 @@ final class ProcedureEditorView {
 
 		if ( $cerrado ) {
 			echo '</fieldset>';
+		}
+
+
+
+		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
+			echo self::archive_switch( $m );
 		}
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
@@ -22987,7 +23362,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo.</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Personas».</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -23125,19 +23500,25 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
+
+
 	private static function questions_panel( array $m ): string {
-		$op    = ProcedureEditor::PANEL_QUESTIONS;
-		$filas = (array) $m['questions'];
-		if ( count( $filas ) < (int) $m['q_max'] ) {
-			$filas[] = array(
-				'key'      => '',
-				'label'    => '',
-				'help'     => '',
-				'type'     => ProcedureQuestions::TYPE_TEXT,
-				'required' => false,
-				'choices'  => array(),
-			);
-		}
+		$op        = ProcedureEditor::PANEL_QUESTIONS;
+		$guardas   = (array) $m['questions'];
+		$total     = count( $guardas );
+		$nuevas    = max( 0, min( self::NEW_QUESTIONS, (int) $m['q_max'] - $total ) );
+		$en_blanco = array(
+			'key'      => '',
+			'label'    => '',
+			'help'     => '',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
 
 		ob_start();
 		?>
@@ -23149,14 +23530,24 @@ final class ProcedureEditorView {
 			<p class="prc-intro">
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
-				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
+			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) );?>
 
-			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) );?>
+			<?php foreach ( $guardas as $i => $pregunta ) : ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, $m, $total );?>
 			<?php endforeach; ?>
+			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
+				<?php if ( 1 === $n ) : ?>
+					<details class="prc-preguntas-mas">
+						<summary>Añadir otra pregunta</summary>
+				<?php endif; ?>
+				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total );?>
+			<?php endfor; ?>
+			<?php if ( $nuevas > 1 ) : ?>
+				</details>
+			<?php endif; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
 		</form>
@@ -23177,6 +23568,8 @@ final class ProcedureEditorView {
 
 
 
+
+
 	private static function move_buttons( int $i, array $p, int $total ): string {
 		$botones = array(
 			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
@@ -23186,7 +23579,7 @@ final class ProcedureEditorView {
 		foreach ( $botones as $hacia => $boton ) {
 			$out .= sprintf(
 				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
-				esc_attr( Assets::button_class( true ) ),
+				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
 				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
@@ -23194,7 +23587,10 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
+			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
 
@@ -23210,22 +23606,24 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<div class="prc-seccion__cuerpo">
-			<?php
-			foreach ( array(
-				'min' => 'Mínimo',
-				'max' => 'Máximo',
-			) as $limite => $rotulo ) :
-				?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
-					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+		<div data-prc-q-for="number">
+			<div class="prc-seccion__cuerpo">
+				<?php
+				foreach ( array(
+					'min' => 'Mínimo',
+					'max' => 'Máximo',
+				) as $limite => $rotulo ) :
+					?>
+					<div class="prc-campo prc-campo--medio">
+						<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+						<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+							value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
 		</div>
-		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
-		<div class="prc-campo">
+		<div class="prc-campo" data-prc-q-for="grid">
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
@@ -23242,12 +23640,39 @@ final class ProcedureEditorView {
 
 
 
+	private static function delivery_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$ayuda = 'prc-q-d-help-' . $i;
+		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
+			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
+			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+		foreach ( array(
+			'opens_at'  => 'Apertura de la entrega',
+			'closes_at' => 'Cierre de la entrega (inclusive)',
+		) as $date_key => $date_label ) {
+			$id   = 'prc-q-' . $date_key . '-' . $i;
+			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+		}
+		return $out . '</div>';
+	}
 
 
-	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
-		$nueva  = '' === (string) $p['key'];
-		$campo  = ProcedureEditor::FIELD_Q;
-		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+
+
+
+
+
+
+
+
+	private static function question_row( int $i, array $p, array $m, int $total ): string {
+		$nueva     = '' === (string) $p['key'];
+		$campo     = ProcedureEditor::FIELD_Q;
+		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
+		$aviso     = 'prc-q-l-aviso-' . $i;
 
 		ob_start();
 		?>
@@ -23259,12 +23684,15 @@ final class ProcedureEditorView {
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>" />
+						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
+					<?php if ( $contestan > 0 ) : ?>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-t-<?php echo esc_attr( (string) $i ); ?>">Tipo</label>
-					<select class="prc-control" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
-						<?php foreach ( $tipos as $valor => $nombre ) : ?>
+					<select class="prc-control prc-pregunta__tipo" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
+						<?php foreach ( (array) $m['q_types'] as $valor => $nombre ) : ?>
 							<option value="<?php echo esc_attr( (string) $valor ); ?>" <?php selected( (string) $valor, (string) $p['type'] ); ?>><?php echo esc_html( (string) $nombre ); ?></option>
 						<?php endforeach; ?>
 					</select>
@@ -23276,29 +23704,14 @@ final class ProcedureEditorView {
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
 				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
 			</div>
-			<div class="prc-campo">
+			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
 				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p );?>
-			<div class="prc-campo prc-opcion">
-				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
-				<p class="prc-campo__ayuda" id="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p>
-			</div>
-			<?php
-			foreach ( array(
-				'opens_at'  => 'Apertura de la entrega',
-				'closes_at' => 'Cierre de la entrega (inclusive)',
-			) as $date_key => $date_label ) :
-				?>
-				<div class="prc-campo">
-					<label for="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>"><?php echo esc_html( $date_label ); ?></label>
-					<input class="prc-control" type="date" id="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $date_key ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) ( $p[ $date_key ] ?? '' ) ); ?>" aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+			<?php echo self::delivery_fields( $i, $p );?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
@@ -23334,13 +23747,17 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia. Pegue la dirección completa, que empieza por https://.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php $guardado = (string) ( $v['saved_links'][ $clave ] ?? '' ); ?>
+						<?php if ( '' !== $guardado ) : ?>
+							<p class="prc-campo__ayuda"><a href="<?php echo esc_url( $guardado ); ?>" target="_blank" rel="noopener noreferrer">Abrir el enlace guardado ↗<span class="screen-reader-text"> (se abre en otra pestaña)</span></a></p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>
@@ -23360,131 +23777,168 @@ final class ProcedureEditorView {
 
 
 
-	private static function publish_panel( array $m ): string {
-		$op                 = ProcedureEditor::OP_PUBLISH;
-		$state              = (string) $m['state'];
-		$close_confirmation = sprintf(
-			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
-				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
-			(string) $m['title']
-		);
-		$draft_confirmation = sprintf(
-			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar '
-				. 'hasta que vuelva a publicarse.',
-			(string) $m['title']
-		);
-		$stage              = 1;
-		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
-			$stage = 0;
-		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
-			$stage = 4;
-		} elseif ( ProcedureMetaKeys::STATE_RESOLVED === $state ) {
-			$stage = 3;
-		} elseif ( ProcedureMetaKeys::STATE_CLOSED === $state ) {
-			$stage = $m['pending_documentation'] ? 2 : 3;
-		}
-		$steps = array(
-			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
-			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
-			array(
-				'Pendiente de documentación',
-				'Las solicitudes están cerradas y los centros ya inscritos aún pueden '
-					. 'entregar documentos dentro de su plazo.',
-			),
-			array(
-				'Cerrado',
-				'No se admiten solicitudes. Cuando ya no quede nada que gestionar, '
-					. 'puede marcar el procedimiento como histórico.',
-			),
-			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
-		);
 
+
+
+
+
+	private static function publish_panel( array $m ): string {
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
-			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
-				<?php foreach ( $steps as $index => $step ) : ?>
-					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
-						<h3><?php echo esc_html( $step[0] ); ?>
-						<?php
-						if ( $index === $stage ) :
-							?>
-							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
-						<p><?php echo esc_html( $step[1] ); ?></p>
-					</li>
-				<?php endforeach; ?>
-			</ol>
+			<?php echo self::publish_timeline( $m );?>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
 				El estado sale de las fechas y los enlaces; no hay que marcarlo a mano. Con el listado definitivo enlazado pasa a «Resuelto».
 				Si necesita cerrar las solicitudes antes, puede hacerlo aquí sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
+			<?php echo self::checklist( $m );?>
 			<?php if ( true === $m['can_publish'] ) : ?>
+				<?php $op = ProcedureEditor::OP_PUBLISH; ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
 					y los centros solicitan cuando abra el plazo.</p>
 				<form class="prc-acciones" method="post" action=""
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<?php echo self::op_fields( $m, $op );?>
 					<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit">Publicar el procedimiento</button>
 				</form>
 			<?php elseif ( 'publish' === (string) $m['status'] ) : ?>
 				<p class="prc-intro">Publicado: se ve en la portada y en su ficha. Si necesita retirarlo temporalmente,
 					puede devolverlo a borrador.</p>
 			<?php endif; ?>
-			<?php if ( true === $m['can_toggle_applications'] && 'publish' === (string) $m['status'] ) : ?>
-				<p class="prc-intro">
-					<?php if ( true === $m['applications_closed'] ) : ?>
-						La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega
-						de documentos ya solicitados.
-					<?php else : ?>
-						<?php if ( true === $m['pending_documentation'] ) : ?>
-							Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.
-						<?php else : ?>
-							Las solicitudes se abren y cierran según las fechas configuradas.
-						<?php endif; ?>
-					<?php endif; ?>
-				</p>
-				<?php $toggle = ProcedureEditor::OP_TOGGLE_APPLICATIONS; ?>
-				<form class="prc-acciones" method="post" action=""
-					<?php if ( false === $m['applications_closed'] ) : ?>
-						data-prc-confirm="<?php echo esc_attr( $close_confirmation ); ?>"
-						data-prc-confirm-ok="Cerrar solicitudes"
-					<?php endif; ?>
-				>
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $toggle ), ProcedureEditor::nonce_name( $toggle ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $toggle ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">
-						<?php echo true === $m['applications_closed'] ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora'; ?>
-					</button>
-				</form>
-			<?php endif; ?>
-			<?php if ( true === $m['can_unpublish'] ) : ?>
-				<?php $op_borrador = ProcedureEditor::OP_UNPUBLISH; ?>
-				<form class="prc-acciones" method="post" action=""
-					data-prc-confirm="<?php echo esc_attr( $draft_confirmation ); ?>"
-					data-prc-confirm-ok="Devolver a borrador">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op_borrador ), ProcedureEditor::nonce_name( $op_borrador ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $op_borrador ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Devolver a borrador</button>
-				</form>
-			<?php endif; ?>
+			<?php echo self::toggle_form( $m );?>
+			<?php echo self::unpublish_form( $m );?>
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function op_fields( array $m, string $op ): string {
+		return wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false, false )
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_DO ) . '" value="' . esc_attr( $op ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_PROCEDURE ) . '" value="' . esc_attr( (string) (int) $m['procedure_id'] ) . '" />';
+	}
+
+
+
+
+
+
+
+	private static function publish_timeline( array $m ): string {
+		$etapas = array(
+			ProcedureMetaKeys::STATE_DRAFT    => 0,
+			ProcedureMetaKeys::STATE_ARCHIVED => 4,
+			ProcedureMetaKeys::STATE_RESOLVED => 3,
+			ProcedureMetaKeys::STATE_CLOSED   => empty( $m['pending_documentation'] ) ? 3 : 2,
+		);
+		$stage  = $etapas[ (string) $m['state'] ] ?? 1;
+		$steps  = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array( 'Pendiente de documentación', 'Las solicitudes están cerradas y los centros ya inscritos aún pueden entregar documentos dentro de su plazo.' ),
+			array( 'Cerrado', 'No se admiten solicitudes. Cuando ya no quede nada que gestionar, puede marcar el procedimiento como histórico.' ),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
+		$out    = '<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">';
+		foreach ( $steps as $index => $step ) {
+			$clase  = $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' );
+			$actual = $index === $stage;
+			$out   .= '<li class="prc-ciclo-publicacion__paso' . $clase . '"' . ( $actual ? ' aria-current="step"' : '' ) . '>'
+				. '<h3>' . esc_html( $step[0] ) . ( $actual ? ' <span class="prc-ciclo-publicacion__actual">Etapa actual</span>' : '' ) . '</h3>'
+				. '<p>' . esc_html( $step[1] ) . '</p></li>';
+		}
+		return $out . '</ol>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function checklist( array $m ): string {
+		$puntos = (array) ( $m['checklist'] ?? array() );
+		if ( array() === $puntos ) {
+			return '';
+		}
+		$out = '<div class="prc-antes-de-publicar"><h3 class="prc-antes-de-publicar__titulo">Antes de publicar</h3><ul class="prc-comprobaciones">';
+		foreach ( $puntos as $punto ) {
+			$tipo = ! empty( $punto['ok'] ) ? array( 'ok', '✓', 'Hecho:' ) : ( ! empty( $punto['blocks'] ) ? array( 'falta', '✗', 'Falta:' ) : array( 'aviso', '!', 'Aviso:' ) );
+			$out .= '<li class="prc-comprobacion prc-comprobacion--' . esc_attr( $tipo[0] ) . '">'
+				. '<span class="prc-comprobacion__marca" aria-hidden="true">' . esc_html( $tipo[1] ) . '</span> '
+				. '<span class="screen-reader-text">' . esc_html( $tipo[2] ) . '</span> '
+				. esc_html( (string) $punto['text'] ) . '</li>';
+		}
+		return $out . '</ul>' . PanelParts::help_link( (string) ( $m['help_publish_url'] ?? '' ) ) . '</div>';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function toggle_form( array $m ): string {
+		if ( true !== $m['can_toggle_applications'] || 'publish' !== (string) $m['status'] ) {
+			return '';
+		}
+		$cerrada = true === $m['applications_closed'];
+		if ( $cerrada ) {
+			$texto = 'La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega de documentos ya solicitados.';
+		} else {
+			$texto = true === $m['pending_documentation']
+				? 'Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.'
+				: 'Las solicitudes se abren y cierran según las fechas configuradas.';
+		}
+		$pregunta = sprintf(
+			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
+			(string) $m['title']
+		);
+		$confirma = $cerrada ? '' : ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Cerrar solicitudes"';
+		return '<p class="prc-intro">' . esc_html( $texto ) . '</p>'
+			. '<form class="prc-acciones" method="post" action=""' . $confirma . '>'
+			. self::op_fields( $m, ProcedureEditor::OP_TOGGLE_APPLICATIONS )
+			. '<button class="' . esc_attr( Assets::button_class( $cerrada ? false : 'danger' ) ) . '" type="submit">'
+			. ( $cerrada ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora' ) . '</button>'
+			. ( $cerrada ? '' : ' <span class="prc-consecuencia">Los centros dejan de poder solicitar.</span>' )
+			. '</form>';
+	}
+
+
+
+
+
+
+
+	private static function unpublish_form( array $m ): string {
+		if ( true !== $m['can_unpublish'] ) {
+			return '';
+		}
+		$pregunta = sprintf(
+			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar hasta que vuelva a publicarse.',
+			(string) $m['title']
+		);
+		return '<form class="prc-acciones" method="post" action="" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
+			. self::op_fields( $m, ProcedureEditor::OP_UNPUBLISH )
+			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
+			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
+			. '</form>';
 	}
 
 
@@ -23642,7 +24096,10 @@ final class ProcedureEditorView {
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class( $marcar ? 'danger' : false ) ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<?php if ( $marcar ) : ?>
+				<span class="prc-consecuencia">Queda en solo lectura; solo administración lo vuelve a abrir.</span>
+			<?php endif; ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -23694,6 +24151,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -24318,6 +24776,13 @@ final class ProcedureEditor {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
 			return;
 		}
+
+
+		$lista          = People::spec( $procedure_id );
+		self::$rejected = PeopleSpec::coordination_clash( $lista, $lista, Applications::coordinator_count( $procedure_id ), (int) $revisado['data']['coordinator_count'] );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
 		wp_update_post(
 			array(
 				'ID'           => $procedure_id,
@@ -24558,6 +25023,7 @@ final class ProcedureEditor {
 
 
 
+
 	private static function save_questions( int $procedure_id ): void {
 
 		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
@@ -24572,7 +25038,10 @@ final class ProcedureEditor {
 		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
 		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
 		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
+		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 
+
+		$rotulos = array_replace( $rotulos, array_fill_keys( array_keys( array_filter( $quitadas ) ), '' ) );
 
 		$antes   = Applications::questions( $procedure_id );
 		$previas = array_column( $antes, null, 'key' );
@@ -24744,8 +25213,8 @@ final class ProcedureEditor {
 		$urls   = array();
 		foreach ( $claves as $clave ) {
 			$url = self::field( $clave );
-			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
-				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
+			if ( ! ProcedureInput::is_acceptable_link( $url, self::meta( $procedure_id, $clave ) ) ) {
+				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) ) . ' Pegue la dirección completa, que empieza por https://: cópiela entera desde la barra del navegador.';
 				return;
 			}
 			$urls[ $clave ] = $url;
@@ -24770,7 +25239,7 @@ final class ProcedureEditor {
 		}
 
 
-		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ), self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ) );
 		if ( array() !== $faltan ) {
 			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
 			return;
@@ -24854,8 +25323,9 @@ final class ProcedureEditor {
 			? ProcedureAccess::can_archive( $user_id, $procedure_id )
 			: ProcedureAccess::can_unarchive( $user_id );
 		if ( ! $puede ) {
+			$no_es_suyo     = 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.';
 			self::$rejected = $marcar
-				? 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.'
+				? ( ProcedureAccess::can_open( $user_id, $procedure_id ) ? ProcedureState::why_not_archivable( ProcedureState::of_post( $procedure_id ) ) : $no_es_suyo )
 				: 'Volver a abrir un procedimiento histórico solo lo hace quien administra el aplicativo.';
 			return;
 		}
@@ -25074,7 +25544,20 @@ final class ProcedureEditor {
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 
 
-		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+
+		$m['checklist'] = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+			array(
+				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
+				'questions'  => Applications::questions( $procedure_id ),
+				'opens_at'   => self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ),
+				'closes_at'  => self::meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT ),
+				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
+			)
+		);
+		$m['not_ready'] = ProcedureInput::blocking( $m['checklist'] );
+
+
+		$m['answers']       = self::PANEL_QUESTIONS === $m['panel'] ? Applications::answer_counts( $procedure_id ) : array();
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 
@@ -25111,6 +25594,8 @@ final class ProcedureEditor {
 			'can_publish'             => false,
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
+			'checklist'               => array(),
+			'answers'                 => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -25132,6 +25617,7 @@ final class ProcedureEditor {
 
 			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
+			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),
@@ -25358,6 +25844,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+
+
+		$guardado['saved_links']                        = array_intersect_key( $guardado, array_flip( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) ) );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
@@ -25935,6 +26424,9 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
+				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
+					<p class="prc-campo--completo"><a href="<?php echo esc_attr( '#' . self::row_anchor( (string) $p['clash_row'] ) ); ?>">Ir a su fila</a></p>
+				<?php endif; ?>
 				<?php echo self::until( $p );?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
@@ -25947,6 +26439,9 @@ final class PeopleView {
 				<?php if ( ! empty( $p['can_edit'] ) && $lleno ) : ?>
 					<p class="prc-campo--completo">La lista ha llegado al máximo de personas que admite este procedimiento. Para añadir a alguien, dé antes de baja a otra persona o cámbiela.</p>
 				<?php elseif ( ! empty( $p['can_edit'] ) ) : ?>
+					<?php if ( array() !== $filas ) : ?>
+						<p class="prc-campo__ayuda prc-campo--completo">¿Viene a sustituir a alguien de la lista? Use «Sustituir o corregir» en su fila: así queda en el historial como sustitución y no se duplica.</p>
+					<?php endif; ?>
 					<details class="prc-personas__alta prc-campo--completo"<?php echo PeopleForm::NEW_ROW === (string) $p['typed_row'] ? ' open' : ''; ?>>
 						<summary>Dar de alta a una persona</summary>
 						<?php echo self::form( $p, PeopleForm::OP_ADD, PeopleForm::NEW_ROW === (string) $p['typed_row'] ? (array) $p['typed'] : array() );?>
@@ -26022,13 +26517,13 @@ final class PeopleView {
 				</thead>
 				<tbody>
 					<?php foreach ( $filas as $fila ) : ?>
-						<tr>
+						<tr id="<?php echo esc_attr( self::row_anchor( (string) $fila['id'] ) ); ?>">
 							<?php echo self::cells( $fila );?>
 							<?php if ( $editable ) : ?>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
-									<details class="prc-personas__cambio"<?php echo (string) $p['typed_row'] === $fila['id'] ? ' open' : ''; ?>>
-										<summary>Cambiar o sustituir</summary>
+									<details class="prc-personas__cambio"<?php echo in_array( $fila['id'], array( (string) $p['typed_row'], (string) ( $p['clash_row'] ?? '' ) ), true ) ? ' open' : ''; ?>>
+										<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Sustituir o corregir</summary>
 										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila );?>
 									</details>
 									<?php echo self::remove_form( $p, $fila );?>
@@ -26041,6 +26536,16 @@ final class PeopleView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function row_anchor( string $id ): string {
+		return 'prc-persona-' . $id;
 	}
 
 
@@ -26124,7 +26629,8 @@ final class PeopleView {
 			<?php endforeach; ?>
 			<?php echo self::select( $base . 'role', 'role', 'Papel', (array) $p['roles'], (string) ( $valores['role'] ?? '' ), true );?>
 			<?php if ( array() !== (array) $p['groups'] ) : ?>
-				<?php echo self::select( $base . 'group', 'group', 'Grupo', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
+				<?php $exigen = (array) ( $p['group_roles'] ?? array() ); ?>
+				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
 				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
@@ -26169,7 +26675,7 @@ final class PeopleView {
 		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
 			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
 			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
-			. '<button type="submit" class="' . esc_attr( Assets::button_class() . ' prc-btn-borrar' ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
+			. '<button type="submit" class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" title="' . esc_attr( 'Dar de baja a ' . $nombre ) . '">Dar de baja</button>'
 			. '</form>';
 	}
 
@@ -26228,11 +26734,7 @@ final class PeopleView {
 				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
 				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' );?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-people-roles">Papeles</label>
-					<textarea class="prc-control" id="prc-people-roles" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_ROLES ); ?>" rows="5" aria-describedby="prc-people-roles-ayuda"><?php echo esc_textarea( (string) ( $v['roles'] ?? '' ) ); ?></textarea>
-					<p class="prc-campo__ayuda" id="prc-people-roles-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Coordinación». Escriba «| grupo» detrás del que exija grupo: «Participante | grupo». Para quitar uno, deje su línea en blanco; cambiarle el nombre no cambia a nadie de papel.', (int) ( $p['max_roles'] ?? 0 ) ) ); ?></p>
-				</div>
+				<?php echo self::role_rows( $p );?>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
 					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
@@ -26244,12 +26746,43 @@ final class PeopleView {
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' );?>
 				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_UNIQUE, 'Una sola persona por papel y grupo', $v, 'unique_per_group' );?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_MULTI_ROLE, 'Una persona puede tener varios papeles (sin marcar, la misma persona no entra dos veces en la lista)', $v, 'multi_role' );?>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' );?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar la lista de personas' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function role_rows( array $p ): string {
+		$max   = (int) ( $p['max_roles'] ?? 0 );
+		$filas = array_slice( (array) ( $p['role_rows'] ?? array() ), 0, $max );
+		$vacia = array(
+			'label'       => '',
+			'needs_group' => false,
+		);
+		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
+		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+		foreach ( $filas as $i => $fila ) {
+			$id   = 'prc-people-role-' . $i;
+			$out .= '<div class="prc-papel">'
+				. '<label class="screen-reader-text" for="' . esc_attr( $id ) . '">' . esc_html( 'Papel ' . ( $i + 1 ) ) . '</label>'
+				. '<input class="prc-control" type="text" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLES . '[' . $i . ']' ) . '" value="' . esc_attr( (string) $fila['label'] ) . '" aria-describedby="prc-people-roles-ayuda" />'
+				. '<span class="prc-opcion"><input type="checkbox" id="' . esc_attr( $id . '-grupo' ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLE_GROUP . '[' . $i . ']' ) . '" value="1"' . checked( ! empty( $fila['needs_group'] ), true, false ) . ' />'
+
+				. '<label for="' . esc_attr( $id . '-grupo' ) . '"><span class="screen-reader-text">' . esc_html( 'Papel ' . ( $i + 1 ) . ': ' ) . '</span>Exige indicar el grupo</label></span>'
+				. '</div>';
+		}
+		return $out . '</fieldset>';
 	}
 
 
@@ -28175,6 +28708,13 @@ final class PeopleForm {
 
 
 
+	private static $clash = false;
+
+
+
+
+
+
 	public static function register(): void {
 		add_action( 'init', array( self::class, 'handle' ), 20 );
 	}
@@ -28237,6 +28777,7 @@ final class PeopleForm {
 		if ( ! $res['ok'] ) {
 			self::$rejected = $res['error'];
 			self::$stale    = $res['stale'];
+			self::$clash    = array() !== array_intersect_key( $res['errors'], array_flip( ApplicationPeople::CLASHES ) );
 			return;
 		}
 		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => $res['changed'] ? self::NOTICE[ $op ] : 'persona-sin-cambios' ) ) );
@@ -28329,12 +28870,15 @@ final class PeopleForm {
 		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
 
 
-		$abierta = $solicitud > 0 ? $puede : '' === $despues;
+		$abierta  = $solicitud > 0 ? $puede : '' === $despues;
+		$tecleado = '' !== self::$rejected && ! self::$stale ? self::person() : array();
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
 			'roles'          => array_column( $spec['roles'], 'label', 'key' ),
 			'groups'         => array_column( $spec['groups'], 'label', 'key' ),
+
+			'group_roles'    => array_column( wp_list_filter( $spec['roles'], array( 'needs_group' => true ) ), 'label' ),
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
@@ -28349,9 +28893,31 @@ final class PeopleForm {
 
 
 
-			'typed'          => '' !== self::$rejected && ! self::$stale ? self::person() : array(),
+			'typed'          => $tecleado,
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
+			'clash_row'      => self::clash_row( $spec, $filas, $tecleado ),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function clash_row( array $spec, array $filas, array $tecleado ): string {
+		if ( array() === $tecleado || ! self::$clash ) {
+			return '';
+		}
+		$id = self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row;
+		return ApplicationPeople::clash( $spec, $filas, array( 'id' => $id ) + $tecleado );
 	}
 
 
@@ -31548,8 +32114,10 @@ final class Mailer {
 			$falta[] = 'Enlace a la resolución';
 		}
 
+
+
 		$curso = wp_get_post_terms( $procedure_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) );
-		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ) ) );
+		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ), ProcedureState::today() ) );
 	}
 
 
@@ -33984,9 +34552,22 @@ body.prc-app .btn-light {
   --bs-btn-border-color: var(--prc-c-fondo-accion);
   --bs-btn-color: var(--prc-c-tabla);
 }
-/* La acción destructiva se distingue sin gritar: tonal, no roja rellena. */
-body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border-color: var(--prc-mal-cont); --bs-btn-color: var(--prc-mal); }
-.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); }
+/* La acción destructiva o difícil de deshacer (`Assets::button_class( \'danger\' )`)
+   se distingue sin gritar: tonal, con el borde del mismo rojo, no roja rellena.
+   Al pasar por encima se rellena, para que se vea qué se va a pulsar. */
+body.prc-app .prc-btn-borrar {
+  --bs-btn-bg: var(--prc-mal-cont);
+  --bs-btn-border-color: var(--prc-mal);
+  --bs-btn-color: var(--prc-mal);
+  --bs-btn-hover-bg: var(--prc-mal);
+  --bs-btn-hover-border-color: var(--prc-mal);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-active-bg: var(--prc-mal);
+  --bs-btn-active-border-color: var(--prc-mal);
+  --bs-btn-active-color: #fff;
+}
+.prc-sin-bootstrap .prc-btn-borrar { background: var(--prc-mal-cont); color: var(--prc-mal); border-color: var(--prc-mal); }
+.prc-sin-bootstrap .prc-btn-borrar:hover { background: var(--prc-mal); color: #fff; filter: none; }
 
 /* El diálogo de confirmación (SweetAlert2) se pinta al final del `body`, así
    que sus clases —`prc-app`, `prc-sin-bootstrap`— siguen valiendo y los
@@ -35479,6 +36060,20 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 .prc-ciclo-publicacion__paso p { margin: 4px 0 0; }
 .prc-ciclo-publicacion__actual { display: inline-block; margin-left: 6px; font-size: var(--prc-t-menudo); font-weight: 400; }
 
+/* «Antes de publicar»: una línea por punto, con su marca (✓, ✗, !) en su
+   color y la palabra para el lector de pantalla. El color nunca va solo. */
+.prc-antes-de-publicar { margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--prc-c-linea); border-radius: var(--prc-radio); }
+.prc-antes-de-publicar__titulo { margin: 0 0 8px; font-size: var(--prc-t-base); }
+.prc-comprobaciones { list-style: none; margin: 0 0 8px; padding: 0; }
+.prc-comprobacion { margin: 0 0 4px; }
+.prc-comprobacion__marca { display: inline-block; width: 1.25em; font-weight: 700; text-align: center; }
+.prc-comprobacion--ok .prc-comprobacion__marca { color: var(--prc-ok); }
+.prc-comprobacion--falta { color: var(--prc-mal); }
+.prc-comprobacion--aviso .prc-comprobacion__marca { color: var(--prc-esp); }
+
+/* La consecuencia de una acción de peligro, al lado del botón. */
+.prc-consecuencia { align-self: center; margin-left: 8px; font-size: .875rem; color: var(--prc-c-texto); }
+
 @media (max-width: 991.98px) {
   .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
 }
@@ -35722,6 +36317,35 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   .prc-tabla--taller .prc-celda-accion { text-align: left; }
   .prc-mini-color { width: 100%; height: 10px; }
 }
+
+/* --- «Preguntas» ---------------------------------------------------------- */
+
+/* Cada pregunta enseña solo los campos de su tipo. Cada grupo dice para qué
+   tipos es (`data-prc-q-for`) y aquí se esconde el resto según la opción
+   elegida en «Tipo», sin guion. Un navegador sin `:has()` no entiende la
+   regla y lo enseña todo, como antes: es el fallo bueno. Lo escondido se
+   sigue enviando, como cuando se veía. */
+.prc-pregunta:has(.prc-pregunta__tipo option[value="text"]:checked) [data-prc-q-for]:not([data-prc-q-for~="text"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="single"]:checked) [data-prc-q-for]:not([data-prc-q-for~="single"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="multiple"]:checked) [data-prc-q-for]:not([data-prc-q-for~="multiple"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="yesno"]:checked) [data-prc-q-for]:not([data-prc-q-for~="yesno"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="file"]:checked) [data-prc-q-for]:not([data-prc-q-for~="file"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="number"]:checked) [data-prc-q-for]:not([data-prc-q-for~="number"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="date"]:checked) [data-prc-q-for]:not([data-prc-q-for~="date"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="grid"]:checked) [data-prc-q-for]:not([data-prc-q-for~="grid"]) { display: none; }
+
+/* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
+.prc-preguntas-mas { margin: 0 0 16px; }
+.prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prc-pregunta__quitar { margin-left: auto; }
+.prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
+
+/* --- «Personas» ----------------------------------------------------------- */
+
+/* Un papel por fila: el rótulo y, al lado, si exige indicar el grupo. */
+.prc-papel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }
+.prc-papel .prc-control { flex: 1 1 18rem; max-width: 32rem; }
 ',
   'js/prc-app.js' => '/*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.

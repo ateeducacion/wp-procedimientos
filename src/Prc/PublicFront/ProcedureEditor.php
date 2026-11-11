@@ -11,6 +11,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -634,6 +635,13 @@ final class ProcedureEditor {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
 			return;
 		}
+		// La coordinación, en un solo sitio: si la lista de «Personas» ya la
+		// recoge, «Datos» no la pide también.
+		$lista          = People::spec( $procedure_id );
+		self::$rejected = PeopleSpec::coordination_clash( $lista, $lista, Applications::coordinator_count( $procedure_id ), (int) $revisado['data']['coordinator_count'] );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
 		wp_update_post(
 			array(
 				'ID'           => $procedure_id,
@@ -861,9 +869,10 @@ final class ProcedureEditor {
 	 * Save the question list of the procedure.
 	 *
 	 * Campos paralelos, sin JavaScript: una fila por índice. La que llegue sin
-	 * rótulo se cae sola en {@see ProcedureQuestions::sanitize()}, y es lo que
-	 * hace que la fila en blanco del final sirva para añadir una pregunta y
-	 * también para no añadir ninguna. Las respuestas ya dadas a una pregunta
+	 * rótulo —o con «Quitar esta pregunta» marcada— se cae sola en
+	 * {@see ProcedureQuestions::sanitize()}, y es lo que hace que las filas en
+	 * blanco del final sirvan para añadir preguntas y también para no añadir
+	 * ninguna. Las respuestas ya dadas a una pregunta
 	 * que se borra se quedan bajo su clave (ADR-0019).
 	 *
 	 * Las filas de una rejilla llegan como texto y se casan con las que tenía
@@ -888,7 +897,10 @@ final class ProcedureEditor {
 		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
 		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
 		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
+		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// «Quitar esta pregunta» es lo mismo que dejar el rótulo en blanco.
+		$rotulos = array_replace( $rotulos, array_fill_keys( array_keys( array_filter( $quitadas ) ), '' ) );
 
 		$antes   = Applications::questions( $procedure_id );
 		$previas = array_column( $antes, null, 'key' );
@@ -1060,8 +1072,8 @@ final class ProcedureEditor {
 		$urls   = array();
 		foreach ( $claves as $clave ) {
 			$url = self::field( $clave );
-			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
-				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
+			if ( ! ProcedureInput::is_acceptable_link( $url, self::meta( $procedure_id, $clave ) ) ) {
+				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) ) . ' Pegue la dirección completa, que empieza por https://: cópiela entera desde la barra del navegador.';
 				return;
 			}
 			$urls[ $clave ] = $url;
@@ -1086,7 +1098,7 @@ final class ProcedureEditor {
 		}
 		// Un duplicado nace sin curso y con sus entregas sin fechas: se
 		// completa en borrador y no se publica hasta tenerlos.
-		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ), self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ) );
 		if ( array() !== $faltan ) {
 			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
 			return;
@@ -1170,8 +1182,9 @@ final class ProcedureEditor {
 			? ProcedureAccess::can_archive( $user_id, $procedure_id )
 			: ProcedureAccess::can_unarchive( $user_id );
 		if ( ! $puede ) {
+			$no_es_suyo     = 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.';
 			self::$rejected = $marcar
-				? 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.'
+				? ( ProcedureAccess::can_open( $user_id, $procedure_id ) ? ProcedureState::why_not_archivable( ProcedureState::of_post( $procedure_id ) ) : $no_es_suyo )
 				: 'Volver a abrir un procedimiento histórico solo lo hace quien administra el aplicativo.';
 			return;
 		}
@@ -1389,8 +1402,21 @@ final class ProcedureEditor {
 
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 		// Lo que falta para publicar se avisa en todo el taller mientras no
-		// esté publicado, y sin ello no se ofrece publicar.
-		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		// esté publicado, y sin ello no se ofrece publicar. «Publicación» lo
+		// enseña punto por punto, con lo que solo avisa (la resolución).
+		$m['checklist'] = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+			array(
+				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
+				'questions'  => Applications::questions( $procedure_id ),
+				'opens_at'   => self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ),
+				'closes_at'  => self::meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT ),
+				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
+			)
+		);
+		$m['not_ready'] = ProcedureInput::blocking( $m['checklist'] );
+		// Cuántas solicitudes contestaron cada pregunta: solo en su pestaña,
+		// que es la única que lo dice y la única que recorre las solicitudes.
+		$m['answers']       = self::PANEL_QUESTIONS === $m['panel'] ? Applications::answer_counts( $procedure_id ) : array();
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
@@ -1427,6 +1453,8 @@ final class ProcedureEditor {
 			'can_publish'             => false,
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
+			'checklist'               => array(),
+			'answers'                 => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -1448,6 +1476,7 @@ final class ProcedureEditor {
 			// Los dos sitios del taller que más dudas levantan: el alta y las preguntas.
 			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
+			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'terms'                   => array(
 				'area'   => array(),
@@ -1674,6 +1703,9 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
+		// Lo guardado de verdad, aunque se repinte lo tecleado: es lo que
+		// «Abrir el enlace guardado» abre.
+		$guardado['saved_links']                        = array_intersect_key( $guardado, array_flip( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) ) );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];

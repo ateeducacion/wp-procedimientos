@@ -57,6 +57,20 @@
 .prc-ciclo-publicacion__paso p { margin: 4px 0 0; }
 .prc-ciclo-publicacion__actual { display: inline-block; margin-left: 6px; font-size: var(--prc-t-menudo); font-weight: 400; }
 
+/* «Antes de publicar»: una línea por punto, con su marca (✓, ✗, !) en su
+   color y la palabra para el lector de pantalla. El color nunca va solo. */
+.prc-antes-de-publicar { margin: 0 0 24px; padding: 12px 16px; border: 1px solid var(--prc-c-linea); border-radius: var(--prc-radio); }
+.prc-antes-de-publicar__titulo { margin: 0 0 8px; font-size: var(--prc-t-base); }
+.prc-comprobaciones { list-style: none; margin: 0 0 8px; padding: 0; }
+.prc-comprobacion { margin: 0 0 4px; }
+.prc-comprobacion__marca { display: inline-block; width: 1.25em; font-weight: 700; text-align: center; }
+.prc-comprobacion--ok .prc-comprobacion__marca { color: var(--prc-ok); }
+.prc-comprobacion--falta { color: var(--prc-mal); }
+.prc-comprobacion--aviso .prc-comprobacion__marca { color: var(--prc-esp); }
+
+/* La consecuencia de una acción de peligro, al lado del botón. */
+.prc-consecuencia { align-self: center; margin-left: 8px; font-size: .875rem; color: var(--prc-c-texto); }
+
 @media (max-width: 991.98px) {
   .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
 }
@@ -300,3 +314,32 @@
   .prc-tabla--taller .prc-celda-accion { text-align: left; }
   .prc-mini-color { width: 100%; height: 10px; }
 }
+
+/* --- «Preguntas» ---------------------------------------------------------- */
+
+/* Cada pregunta enseña solo los campos de su tipo. Cada grupo dice para qué
+   tipos es (`data-prc-q-for`) y aquí se esconde el resto según la opción
+   elegida en «Tipo», sin guion. Un navegador sin `:has()` no entiende la
+   regla y lo enseña todo, como antes: es el fallo bueno. Lo escondido se
+   sigue enviando, como cuando se veía. */
+.prc-pregunta:has(.prc-pregunta__tipo option[value="text"]:checked) [data-prc-q-for]:not([data-prc-q-for~="text"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="single"]:checked) [data-prc-q-for]:not([data-prc-q-for~="single"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="multiple"]:checked) [data-prc-q-for]:not([data-prc-q-for~="multiple"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="yesno"]:checked) [data-prc-q-for]:not([data-prc-q-for~="yesno"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="file"]:checked) [data-prc-q-for]:not([data-prc-q-for~="file"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="number"]:checked) [data-prc-q-for]:not([data-prc-q-for~="number"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="date"]:checked) [data-prc-q-for]:not([data-prc-q-for~="date"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="grid"]:checked) [data-prc-q-for]:not([data-prc-q-for~="grid"]) { display: none; }
+
+/* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
+.prc-preguntas-mas { margin: 0 0 16px; }
+.prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prc-pregunta__quitar { margin-left: auto; }
+.prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
+
+/* --- «Personas» ----------------------------------------------------------- */
+
+/* Un papel por fila: el rótulo y, al lado, si exige indicar el grupo. */
+.prc-papel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }
+.prc-papel .prc-control { flex: 1 1 18rem; max-width: 32rem; }

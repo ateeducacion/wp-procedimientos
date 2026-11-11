@@ -678,9 +678,10 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertStringStartsWith( 'Ha duplicado «Red de prueba». Revise las fechas y el curso antes de publicarlo.', $m['flash']['texto'] );
 		$this->assertStringContainsString( 'no tiene permiso para el código JavaScript de este procedimiento', $m['flash']['texto'] );
 		$this->assertStringNotContainsString( 'administra', $m['flash']['texto'] );
-		$this->assertCount( 2, $m['not_ready'] );
+		$this->assertCount( 3, $m['not_ready'] );
 		$this->assertStringContainsString( 'curso', $m['not_ready'][0] );
-		$this->assertStringContainsString( '«Memoria final»', $m['not_ready'][1] );
+		$this->assertStringContainsString( 'plazo de solicitud', $m['not_ready'][1], 'el duplicado nace sin plazos' );
+		$this->assertStringContainsString( '«Memoria final»', $m['not_ready'][2] );
 		$this->assertFalse( $m['can_publish'], 'sin el botón de publicar' );
 		$html = ProcedureEditorView::html( $m );
 		$this->assertStringContainsString( 'Falta el curso', $html );
@@ -689,8 +690,9 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertNull( $this->submit_publish( $uid, $copia ) );
 		$this->assertSame( 'draft', get_post_status( $copia ) );
 
-		// Con curso, todavía falta la entrega.
+		// Con curso y plazo, todavía falta la entrega.
 		wp_set_object_terms( $copia, array( $this->course( '2027-2028' ) ), ProcedureTaxonomies::COURSE );
+		update_post_meta( $copia, ProcedureMetaKeys::OPENS_AT, '2027-04-01' );
 		$this->assertNull( $this->submit_publish( $uid, $copia ) );
 		$this->assertSame( 'draft', get_post_status( $copia ) );
 

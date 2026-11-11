@@ -336,15 +336,85 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 			'opens_at'  => '',
 			'closes_at' => '',
 		);
-		$this->assertSame( array(), ProcedureInput::not_ready( 3, array() ) );
+		$this->assertSame( array(), ProcedureInput::not_ready( 3, array(), '2026-04-01' ) );
 
-		$faltan = ProcedureInput::not_ready( 0, array( $entrega ) );
+		$faltan = ProcedureInput::not_ready( 0, array( $entrega ), '2026-04-01' );
 		$this->assertCount( 2, $faltan );
 		$this->assertStringContainsString( 'curso', $faltan[0] );
 		$this->assertStringContainsString( '«Memoria final»', $faltan[1] );
 
 		$entrega['opens_at']  = '2026-05-01';
 		$entrega['closes_at'] = '2026-05-31';
-		$this->assertSame( array(), ProcedureInput::not_ready( 3, array( $entrega ) ) );
+		$this->assertSame( array(), ProcedureInput::not_ready( 3, array( $entrega ), '2026-04-01' ) );
+	}
+
+	/**
+	 * Sin plazo de solicitud no se publica: se quedaría en «Próximo» para
+	 * siempre y nadie podría solicitar.
+	 */
+	public function test_not_ready_without_the_application_window() {
+		$faltan = ProcedureInput::not_ready( 3, array(), '' );
+		$this->assertSame( array( 'Falta el plazo de solicitud: ponga al menos su fecha de inicio en «Datos».' ), $faltan );
+		$this->assertSame( array(), ProcedureInput::not_ready( 3, array(), '2026-04-01' ) );
+		$this->assertCount( 1, ProcedureInput::not_ready( 3, array(), 'no es un día' ), 'un día que no existe no es un plazo' );
+	}
+
+	/**
+	 * «Antes de publicar»: lo que bloquea y lo que solo avisa, en el orden en
+	 * que se rellena el taller.
+	 */
+	public function test_the_checklist_before_publishing() {
+		$lista = ProcedureInput::checklist(
+			array(
+				'course'     => 0,
+				'questions'  => array(),
+				'opens_at'   => '',
+				'closes_at'  => '',
+				'resolution' => '',
+			)
+		);
+		$this->assertSame( array( 'course', 'window', 'questions', 'resolution' ), array_column( $lista, 'key' ) );
+		$this->assertSame( array( false, false, true, false ), array_column( $lista, 'ok' ) );
+		$this->assertSame( array( true, true, false, false ), array_column( $lista, 'blocks' ), 'la resolución avisa y no bloquea' );
+		$this->assertSame( 'Falta el curso: elíjalo en «Datos».', $lista[0]['text'] );
+		$this->assertStringContainsString( 'nadie podría solicitar', $lista[1]['text'] );
+		$this->assertSame( 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.', $lista[2]['text'] );
+		$this->assertStringContainsString( 'Sin enlace a la resolución', $lista[3]['text'] );
+		$this->assertStringContainsString( 'puede publicar igual', $lista[3]['text'] );
+
+		$entrega = array(
+			'key'       => 'q2',
+			'label'     => 'Memoria final',
+			'type'      => 'file',
+			'required'  => false,
+			'delivery'  => true,
+			'opens_at'  => '',
+			'closes_at' => '',
+		);
+		$lista   = ProcedureInput::checklist(
+			array(
+				'course'     => 3,
+				'questions'  => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Modalidad',
+						'type'  => 'text',
+					),
+					$entrega,
+				),
+				'opens_at'   => '2026-04-01',
+				'closes_at'  => '2026-04-15',
+				'resolution' => 'https://example.org/resolucion.pdf',
+			)
+		);
+		$this->assertSame( array( 'course', 'window', 'questions', 'delivery', 'resolution' ), array_column( $lista, 'key' ) );
+		$this->assertSame( 'Curso elegido.', $lista[0]['text'] );
+		$this->assertSame( 'Plazo de solicitud: del 01-04-2026 al 15-04-2026.', $lista[1]['text'] );
+		$this->assertSame( 'Preguntas propias: 2.', $lista[2]['text'] );
+		$this->assertFalse( $lista[3]['ok'] );
+		$this->assertTrue( $lista[3]['blocks'] );
+		$this->assertStringContainsString( '«Memoria final»', $lista[3]['text'] );
+		$this->assertSame( 'Resolución enlazada.', $lista[4]['text'] );
+		$this->assertTrue( $lista[4]['ok'] );
 	}
 }

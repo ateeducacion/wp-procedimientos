@@ -266,11 +266,28 @@ final class Applications {
 	 * @return array<string, bool> Question key => true.
 	 */
 	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
+		return array_fill_keys( array_keys( self::answer_counts( $procedure_id, $empty_too ) ), true );
+	}
+
+	/**
+	 * How many applications of the procedure have answered each question.
+	 *
+	 * Lo que cuenta como respuesta es lo de {@see answered_keys()}. El taller
+	 * lo dice debajo del rótulo: cambiarle el sentido a una pregunta ya
+	 * contestada cambia lo que significan esas respuestas.
+	 *
+	 * @param int  $procedure_id Procedure post ID.
+	 * @param bool $empty_too    Whether an empty answer counts too.
+	 * @return array<string, int> Question key => how many applications.
+	 */
+	public static function answer_counts( int $procedure_id, bool $empty_too = false ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
 			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
 			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
-			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+			foreach ( array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) as $clave ) {
+				$out[ (string) $clave ] = ( $out[ (string) $clave ] ?? 0 ) + 1;
+			}
 		}
 		return $out;
 	}

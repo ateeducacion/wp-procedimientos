@@ -291,6 +291,11 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$admin         = $this->administrator();
 		$procedimiento = $this->procedure( $yo, array( $area ) );
 
+		// Vivo —sin plazo es «Próximo»— no se marca: solo cerrado o resuelto.
+		$this->assertFalse( ProcedureAccess::can_archive( $yo, $procedimiento ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, gmdate( 'Y-m-d', strtotime( '-20 days' ) ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, gmdate( 'Y-m-d', strtotime( '-10 days' ) ) );
+
 		$this->assertTrue( ProcedureAccess::can_archive( $yo, $procedimiento ) );
 		$this->assertTrue( ProcedureAccess::can_toggle_archived( $yo, $procedimiento ) );
 		$this->assertFalse( ProcedureAccess::can_unarchive( $yo ) );

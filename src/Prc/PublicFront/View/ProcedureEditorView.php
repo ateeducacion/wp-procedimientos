@@ -26,6 +26,11 @@ use Prc\PublicFront\Shell;
 final class ProcedureEditorView {
 
 	/**
+	 * Blank rows the «Preguntas» panel offers to add questions at once.
+	 */
+	private const NEW_QUESTIONS = 3;
+
+	/**
 	 * Paint the workshop.
 	 *
 	 * @param array<string, mixed> $m What ProcedureEditor::model() returned.
@@ -54,12 +59,6 @@ final class ProcedureEditorView {
 		echo Shell::notice( 'aviso', (string) $m['state_notice'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		// Lo que falta para publicar: el curso y las fechas de las entregas.
 		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-
-		// El interruptor de histórico va fuera de lo que se apaga: si estuviera
-		// dentro del panel bloqueado, marcar sería un viaje sin vuelta.
-		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::archive_switch( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		}
 
 		// Solo lectura: un `fieldset` desactivado apaga de una vez todos los
 		// controles de dentro. Los enlaces siguen funcionando: consultar y
@@ -95,6 +94,12 @@ final class ProcedureEditorView {
 
 		if ( $cerrado ) {
 			echo '</fieldset>';
+		}
+		// El interruptor de histórico va fuera de lo que se apaga —si estuviera
+		// dentro del panel bloqueado, marcar sería un viaje sin vuelta— y al
+		// final: es lo último que se hace con un procedimiento.
+		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
+			echo self::archive_switch( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
 		return Shell::render( '', '', (string) ob_get_clean() );
 	}
@@ -742,7 +747,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo.</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Personas».</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -866,12 +871,18 @@ final class ProcedureEditorView {
 	// ─── Preguntas ─────────────────────────────────────────────────────────
 
 	/**
-	 * The «Preguntas» panel: the question list, plus one blank row to add another.
+	 * The «Preguntas» panel: the question list, plus three blank rows to add more.
 	 *
 	 * **No es un constructor de formularios**: una pregunta tiene rótulo,
 	 * indicaciones, tipo, opciones y si es obligatoria. Ni condiciones ni
-	 * reglas (ADR-0019). Sin JavaScript: las filas son campos paralelos y la
-	 * última va en blanco; se borra el rótulo y la pregunta se va.
+	 * reglas (ADR-0019). Sin JavaScript: las filas son campos paralelos y las
+	 * tres últimas van en blanco, la primera a la vista y las otras dos en
+	 * «Añadir otra pregunta»; la que se guarda sin rótulo no se crea. Una
+	 * guardada se quita con su casilla «Quitar esta pregunta».
+	 *
+	 * Cada grupo de campos dice para qué tipos es (`data-prc-q-for`) y el CSS
+	 * esconde con `:has()` los que no tocan al tipo elegido; sin `:has()` se
+	 * ven todos, como antes.
 	 *
 	 * «Subir» y «bajar» son botones de otro formulario, el de mover, que va
 	 * fuera de este (`form="prc-q-mover"`): mueven una pregunta por POST y
@@ -881,18 +892,18 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function questions_panel( array $m ): string {
-		$op    = ProcedureEditor::PANEL_QUESTIONS;
-		$filas = (array) $m['questions'];
-		if ( count( $filas ) < (int) $m['q_max'] ) {
-			$filas[] = array(
-				'key'      => '',
-				'label'    => '',
-				'help'     => '',
-				'type'     => ProcedureQuestions::TYPE_TEXT,
-				'required' => false,
-				'choices'  => array(),
-			);
-		}
+		$op        = ProcedureEditor::PANEL_QUESTIONS;
+		$guardas   = (array) $m['questions'];
+		$total     = count( $guardas );
+		$nuevas    = max( 0, min( self::NEW_QUESTIONS, (int) $m['q_max'] - $total ) );
+		$en_blanco = array(
+			'key'      => '',
+			'label'    => '',
+			'help'     => '',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
 
 		ob_start();
 		?>
@@ -904,14 +915,24 @@ final class ProcedureEditorView {
 			<p class="prc-intro">
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
-				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
+			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php foreach ( $guardas as $i => $pregunta ) : ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, $m, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endforeach; ?>
+			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
+				<?php if ( 1 === $n ) : ?>
+					<details class="prc-preguntas-mas">
+						<summary>Añadir otra pregunta</summary>
+				<?php endif; ?>
+				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php endfor; ?>
+			<?php if ( $nuevas > 1 ) : ?>
+				</details>
+			<?php endif; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
@@ -925,7 +946,9 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The «Subir» and «Bajar» buttons of one saved question.
+	 * The «Subir» and «Bajar» buttons of one saved question, and its «Quitar».
+	 *
+	 * Secundarios: no compiten con «Guardar las preguntas».
 	 *
 	 * @param int                  $i     Row index.
 	 * @param array<string, mixed> $p     Question.
@@ -941,7 +964,7 @@ final class ProcedureEditorView {
 		foreach ( $botones as $hacia => $boton ) {
 			$out .= sprintf(
 				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
-				esc_attr( Assets::button_class( true ) ),
+				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
 				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
@@ -949,7 +972,10 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
+			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
 	/**
@@ -965,22 +991,24 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<div class="prc-seccion__cuerpo">
-			<?php
-			foreach ( array(
-				'min' => 'Mínimo',
-				'max' => 'Máximo',
-			) as $limite => $rotulo ) :
-				?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
-					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+		<div data-prc-q-for="number">
+			<div class="prc-seccion__cuerpo">
+				<?php
+				foreach ( array(
+					'min' => 'Mínimo',
+					'max' => 'Máximo',
+				) as $limite => $rotulo ) :
+					?>
+					<div class="prc-campo prc-campo--medio">
+						<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+						<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+							value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
 		</div>
-		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
-		<div class="prc-campo">
+		<div class="prc-campo" data-prc-q-for="grid">
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
@@ -991,18 +1019,45 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * One question row.
+	 * «Entrega con plazo propio» and its two dates: only for «Archivo».
 	 *
-	 * @param int                   $i     Row index.
-	 * @param array<string, mixed>  $p     Question.
-	 * @param array<string, string> $tipos Question types.
-	 * @param int                   $total Saved questions, to know the last one.
+	 * @param int                  $i Row index.
+	 * @param array<string, mixed> $p Question.
 	 * @return string
 	 */
-	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
-		$nueva  = '' === (string) $p['key'];
-		$campo  = ProcedureEditor::FIELD_Q;
-		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+	private static function delivery_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$ayuda = 'prc-q-d-help-' . $i;
+		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
+			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
+			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+		foreach ( array(
+			'opens_at'  => 'Apertura de la entrega',
+			'closes_at' => 'Cierre de la entrega (inclusive)',
+		) as $date_key => $date_label ) {
+			$id   = 'prc-q-' . $date_key . '-' . $i;
+			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+		}
+		return $out . '</div>';
+	}
+
+	/**
+	 * One question row.
+	 *
+	 * @param int                  $i     Row index.
+	 * @param array<string, mixed> $p     Question.
+	 * @param array<string, mixed> $m     Model: `q_types` and `answers`.
+	 * @param int                  $total Saved questions, to know the last one.
+	 * @return string
+	 */
+	private static function question_row( int $i, array $p, array $m, int $total ): string {
+		$nueva     = '' === (string) $p['key'];
+		$campo     = ProcedureEditor::FIELD_Q;
+		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
+		$aviso     = 'prc-q-l-aviso-' . $i;
 
 		ob_start();
 		?>
@@ -1014,12 +1069,15 @@ final class ProcedureEditorView {
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>" />
+						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
+					<?php if ( $contestan > 0 ) : ?>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-t-<?php echo esc_attr( (string) $i ); ?>">Tipo</label>
-					<select class="prc-control" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
-						<?php foreach ( $tipos as $valor => $nombre ) : ?>
+					<select class="prc-control prc-pregunta__tipo" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
+						<?php foreach ( (array) $m['q_types'] as $valor => $nombre ) : ?>
 							<option value="<?php echo esc_attr( (string) $valor ); ?>" <?php selected( (string) $valor, (string) $p['type'] ); ?>><?php echo esc_html( (string) $nombre ); ?></option>
 						<?php endforeach; ?>
 					</select>
@@ -1031,29 +1089,14 @@ final class ProcedureEditorView {
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
 				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
 			</div>
-			<div class="prc-campo">
+			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
 				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<div class="prc-campo prc-opcion">
-				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
-				<p class="prc-campo__ayuda" id="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p>
-			</div>
-			<?php
-			foreach ( array(
-				'opens_at'  => 'Apertura de la entrega',
-				'closes_at' => 'Cierre de la entrega (inclusive)',
-			) as $date_key => $date_label ) :
-				?>
-				<div class="prc-campo">
-					<label for="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>"><?php echo esc_html( $date_label ); ?></label>
-					<input class="prc-control" type="date" id="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $date_key ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) ( $p[ $date_key ] ?? '' ) ); ?>" aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+			<?php echo self::delivery_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
@@ -1089,13 +1132,17 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia. Pegue la dirección completa, que empieza por https://.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php $guardado = (string) ( $v['saved_links'][ $clave ] ?? '' ); ?>
+						<?php if ( '' !== $guardado ) : ?>
+							<p class="prc-campo__ayuda"><a href="<?php echo esc_url( $guardado ); ?>" target="_blank" rel="noopener noreferrer">Abrir el enlace guardado ↗<span class="screen-reader-text"> (se abre en otra pestaña)</span></a></p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>
@@ -1112,134 +1159,171 @@ final class ProcedureEditorView {
 	/**
 	 * The «Publicación» panel: publish, and what the state means.
 	 *
+	 * Primero la línea de etapas; en borrador, «Antes de publicar» y el
+	 * botón; publicado, cerrar las solicitudes y devolver a borrador, cada uno
+	 * con su consecuencia al lado. El histórico va aparte, al final
+	 * ({@see archive_switch()}).
+	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function publish_panel( array $m ): string {
-		$op                 = ProcedureEditor::OP_PUBLISH;
-		$state              = (string) $m['state'];
-		$close_confirmation = sprintf(
-			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; '
-				. 'se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
-			(string) $m['title']
-		);
-		$draft_confirmation = sprintf(
-			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar '
-				. 'hasta que vuelva a publicarse.',
-			(string) $m['title']
-		);
-		$stage              = 1;
-		if ( ProcedureMetaKeys::STATE_DRAFT === $state ) {
-			$stage = 0;
-		} elseif ( ProcedureMetaKeys::STATE_ARCHIVED === $state ) {
-			$stage = 4;
-		} elseif ( ProcedureMetaKeys::STATE_RESOLVED === $state ) {
-			$stage = 3;
-		} elseif ( ProcedureMetaKeys::STATE_CLOSED === $state ) {
-			$stage = $m['pending_documentation'] ? 2 : 3;
-		}
-		$steps = array(
-			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
-			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
-			array(
-				'Pendiente de documentación',
-				'Las solicitudes están cerradas y los centros ya inscritos aún pueden '
-					. 'entregar documentos dentro de su plazo.',
-			),
-			array(
-				'Cerrado',
-				'No se admiten solicitudes. Cuando ya no quede nada que gestionar, '
-					. 'puede marcar el procedimiento como histórico.',
-			),
-			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
-		);
-
 		ob_start();
 		?>
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Estado</h2>
-			<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">
-				<?php foreach ( $steps as $index => $step ) : ?>
-					<li class="prc-ciclo-publicacion__paso<?php echo $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' ); ?>"<?php echo $index === $stage ? ' aria-current="step"' : ''; ?>>
-						<h3><?php echo esc_html( $step[0] ); ?>
-						<?php
-						if ( $index === $stage ) :
-							?>
-							<span class="prc-ciclo-publicacion__actual">Etapa actual</span><?php endif; ?></h3>
-						<p><?php echo esc_html( $step[1] ); ?></p>
-					</li>
-				<?php endforeach; ?>
-			</ol>
+			<?php echo self::publish_timeline( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<p class="prc-intro">
 				<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				El estado sale de las fechas y los enlaces; no hay que marcarlo a mano. Con el listado definitivo enlazado pasa a «Resuelto».
 				Si necesita cerrar las solicitudes antes, puede hacerlo aquí sin cambiar esos datos ni los plazos de entrega documental.
 			</p>
+			<?php echo self::checklist( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php if ( true === $m['can_publish'] ) : ?>
+				<?php $op = ProcedureEditor::OP_PUBLISH; ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
 					y los centros solicitan cuando abra el plazo.</p>
 				<form class="prc-acciones" method="post" action=""
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+					<?php echo self::op_fields( $m, $op ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit">Publicar el procedimiento</button>
 				</form>
 			<?php elseif ( 'publish' === (string) $m['status'] ) : ?>
 				<p class="prc-intro">Publicado: se ve en la portada y en su ficha. Si necesita retirarlo temporalmente,
 					puede devolverlo a borrador.</p>
 			<?php endif; ?>
-			<?php if ( true === $m['can_toggle_applications'] && 'publish' === (string) $m['status'] ) : ?>
-				<p class="prc-intro">
-					<?php if ( true === $m['applications_closed'] ) : ?>
-						La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega
-						de documentos ya solicitados.
-					<?php else : ?>
-						<?php if ( true === $m['pending_documentation'] ) : ?>
-							Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.
-						<?php else : ?>
-							Las solicitudes se abren y cierran según las fechas configuradas.
-						<?php endif; ?>
-					<?php endif; ?>
-				</p>
-				<?php $toggle = ProcedureEditor::OP_TOGGLE_APPLICATIONS; ?>
-				<form class="prc-acciones" method="post" action=""
-					<?php if ( false === $m['applications_closed'] ) : ?>
-						data-prc-confirm="<?php echo esc_attr( $close_confirmation ); ?>"
-						data-prc-confirm-ok="Cerrar solicitudes"
-					<?php endif; ?>
-				>
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $toggle ), ProcedureEditor::nonce_name( $toggle ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $toggle ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">
-						<?php echo true === $m['applications_closed'] ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora'; ?>
-					</button>
-				</form>
-			<?php endif; ?>
-			<?php if ( true === $m['can_unpublish'] ) : ?>
-				<?php $op_borrador = ProcedureEditor::OP_UNPUBLISH; ?>
-				<form class="prc-acciones" method="post" action=""
-					data-prc-confirm="<?php echo esc_attr( $draft_confirmation ); ?>"
-					data-prc-confirm-ok="Devolver a borrador">
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( $op_borrador ), ProcedureEditor::nonce_name( $op_borrador ), false ); ?>
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>"
-						value="<?php echo esc_attr( $op_borrador ); ?>" />
-					<input type="hidden"
-						name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>"
-						value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Devolver a borrador</button>
-				</form>
-			<?php endif; ?>
+			<?php echo self::toggle_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo self::unpublish_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The hidden fields of one operation of the workshop, with its nonce.
+	 *
+	 * @param array<string, mixed> $m  Model.
+	 * @param string               $op Operation.
+	 * @return string
+	 */
+	private static function op_fields( array $m, string $op ): string {
+		return wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false, false )
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_DO ) . '" value="' . esc_attr( $op ) . '" />'
+			. '<input type="hidden" name="' . esc_attr( ProcedureEditor::FIELD_PROCEDURE ) . '" value="' . esc_attr( (string) (int) $m['procedure_id'] ) . '" />';
+	}
+
+	/**
+	 * The stages of the procedure, with the current one marked.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function publish_timeline( array $m ): string {
+		$etapas = array(
+			ProcedureMetaKeys::STATE_DRAFT    => 0,
+			ProcedureMetaKeys::STATE_ARCHIVED => 4,
+			ProcedureMetaKeys::STATE_RESOLVED => 3,
+			ProcedureMetaKeys::STATE_CLOSED   => empty( $m['pending_documentation'] ) ? 3 : 2,
+		);
+		$stage  = $etapas[ (string) $m['state'] ] ?? 1;
+		$steps  = array(
+			array( 'Borrador', 'Solo quienes gestionan el procedimiento pueden verlo; los centros aún no pueden solicitar.' ),
+			array( 'Publicado', 'La ficha se muestra públicamente. Los centros pueden solicitar cuando se abre el plazo.' ),
+			array( 'Pendiente de documentación', 'Las solicitudes están cerradas y los centros ya inscritos aún pueden entregar documentos dentro de su plazo.' ),
+			array( 'Cerrado', 'No se admiten solicitudes. Cuando ya no quede nada que gestionar, puede marcar el procedimiento como histórico.' ),
+			array( 'Histórico', 'Se conserva para consulta y exportación; el procedimiento queda en solo lectura.' ),
+		);
+		$out    = '<ol class="prc-ciclo-publicacion" aria-label="Etapas del procedimiento">';
+		foreach ( $steps as $index => $step ) {
+			$clase  = $index < $stage ? ' prc-ciclo-publicacion__paso--completado' : ( $index === $stage ? ' prc-ciclo-publicacion__paso--actual' : '' );
+			$actual = $index === $stage;
+			$out   .= '<li class="prc-ciclo-publicacion__paso' . $clase . '"' . ( $actual ? ' aria-current="step"' : '' ) . '>'
+				. '<h3>' . esc_html( $step[0] ) . ( $actual ? ' <span class="prc-ciclo-publicacion__actual">Etapa actual</span>' : '' ) . '</h3>'
+				. '<p>' . esc_html( $step[1] ) . '</p></li>';
+		}
+		return $out . '</ol>';
+	}
+
+	/**
+	 * «Antes de publicar»: what is done, what is missing and what only warns.
+	 *
+	 * Cada punto lleva su marca a la vista (✓, ✗, !) y su palabra para el
+	 * lector de pantalla: el color no es lo único que lo dice.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string Empty once published.
+	 */
+	private static function checklist( array $m ): string {
+		$puntos = (array) ( $m['checklist'] ?? array() );
+		if ( array() === $puntos ) {
+			return '';
+		}
+		$out = '<div class="prc-antes-de-publicar"><h3 class="prc-antes-de-publicar__titulo">Antes de publicar</h3><ul class="prc-comprobaciones">';
+		foreach ( $puntos as $punto ) {
+			$tipo = ! empty( $punto['ok'] ) ? array( 'ok', '✓', 'Hecho:' ) : ( ! empty( $punto['blocks'] ) ? array( 'falta', '✗', 'Falta:' ) : array( 'aviso', '!', 'Aviso:' ) );
+			$out .= '<li class="prc-comprobacion prc-comprobacion--' . esc_attr( $tipo[0] ) . '">'
+				. '<span class="prc-comprobacion__marca" aria-hidden="true">' . esc_html( $tipo[1] ) . '</span> '
+				. '<span class="screen-reader-text">' . esc_html( $tipo[2] ) . '</span> '
+				. esc_html( (string) $punto['text'] ) . '</li>';
+		}
+		return $out . '</ul>' . PanelParts::help_link( (string) ( $m['help_publish_url'] ?? '' ) ) . '</div>';
+	}
+
+	/**
+	 * «Cerrar solicitudes ahora» or «Volver al calendario automático».
+	 *
+	 * Cerrar es de peligro —los centros dejan de poder solicitar— y lleva la
+	 * consecuencia al lado; volver al calendario no lo es.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function toggle_form( array $m ): string {
+		if ( true !== $m['can_toggle_applications'] || 'publish' !== (string) $m['status'] ) {
+			return '';
+		}
+		$cerrada = true === $m['applications_closed'];
+		if ( $cerrada ) {
+			$texto = 'La inscripción está cerrada manualmente. Se mantienen los plazos de subsanación y de entrega de documentos ya solicitados.';
+		} else {
+			$texto = true === $m['pending_documentation']
+				? 'Hay documentos pendientes de entrega. Cerrar solicitudes no cerrará esos plazos.'
+				: 'Las solicitudes se abren y cierran según las fechas configuradas.';
+		}
+		$pregunta = sprintf(
+			'¿Cerrar la inscripción de «%s» ahora? No se aceptarán nuevas solicitudes; se mantienen los plazos de subsanación y entrega documental que ya estén abiertos.',
+			(string) $m['title']
+		);
+		$confirma = $cerrada ? '' : ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Cerrar solicitudes"';
+		return '<p class="prc-intro">' . esc_html( $texto ) . '</p>'
+			. '<form class="prc-acciones" method="post" action=""' . $confirma . '>'
+			. self::op_fields( $m, ProcedureEditor::OP_TOGGLE_APPLICATIONS )
+			. '<button class="' . esc_attr( Assets::button_class( $cerrada ? false : 'danger' ) ) . '" type="submit">'
+			. ( $cerrada ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora' ) . '</button>'
+			. ( $cerrada ? '' : ' <span class="prc-consecuencia">Los centros dejan de poder solicitar.</span>' )
+			. '</form>';
+	}
+
+	/**
+	 * «Devolver a borrador», with its consequence beside it.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function unpublish_form( array $m ): string {
+		if ( true !== $m['can_unpublish'] ) {
+			return '';
+		}
+		$pregunta = sprintf(
+			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar hasta que vuelva a publicarse.',
+			(string) $m['title']
+		);
+		return '<form class="prc-acciones" method="post" action="" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
+			. self::op_fields( $m, ProcedureEditor::OP_UNPUBLISH )
+			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
+			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
+			. '</form>';
 	}
 
 	/**
@@ -1397,7 +1481,10 @@ final class ProcedureEditorView {
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class( $marcar ? 'danger' : false ) ); ?>"><?php echo esc_html( $rotulo ); ?></button>
+			<?php if ( $marcar ) : ?>
+				<span class="prc-consecuencia">Queda en solo lectura; solo administración lo vuelve a abrir.</span>
+			<?php endif; ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();

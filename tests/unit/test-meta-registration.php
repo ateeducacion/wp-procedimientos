@@ -100,7 +100,8 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 	public function test_the_archived_mark_follows_its_asymmetry() {
 		$area          = $this->area( 'Área de prueba' );
 		$mio           = $this->manager( array( $area ) );
-		$procedimiento = $this->procedure( $mio, array( $area ) );
+		// Cerrado: solo se marca lo que ya terminó.
+		$procedimiento = $this->procedure( $mio, array( $area ), array( ProcedureMetaKeys::APPLICATIONS_CLOSED => true ) );
 
 		$this->assertTrue( ProcedureMetaRegistration::auth_archived( false, ProcedureMetaKeys::ARCHIVED, $procedimiento, $mio ) );
 

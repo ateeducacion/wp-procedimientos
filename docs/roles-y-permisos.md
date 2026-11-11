@@ -190,7 +190,7 @@ coincide con `prc_centre_code` de la solicitud.
 | Ver un procedimiento publicado | Cualquiera | — |
 | Ver un procedimiento en borrador | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | — |
 | Crear, editar, publicar, despublicar, enviar a la papelera | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | Que **no** esté archivado |
-| Marcar como histórico | Los mismos | Con confirmación: no hay vuelta atrás sin administración |
+| Marcar como histórico | Los mismos | Solo con el procedimiento cerrado o resuelto (`ProcedureState::why_not_archivable()`); con confirmación: no hay vuelta atrás sin administración |
 | Desarchivar | Solo `prc_manage_app` | — |
 | Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; para crear, el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno además de la lista, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa aunque el procedimiento se haya acotado después) |
 | Editar su solicitud | `prc_apply` de **ese** centro | Procedimiento `open`; o `amendment` **y** la solicitud en `amend`; o con la **prórroga** de esa solicitud viva (`prc_late_until`), en cualquier estado salvo borrador e histórico |
@@ -354,7 +354,7 @@ con `prc_manage_all_areas`: solo administración
 
 | Acción | Quién | Por qué |
 |---|---|---|
-| **Marcar** como histórico | `prc_manage_procedures` en su ámbito | Es su procedimiento y es quien sabe cuándo ya no queda nada que hacer |
+| **Marcar** como histórico | `prc_manage_procedures` en su ámbito, con el procedimiento cerrado o resuelto | Es su procedimiento y es quien sabe cuándo ya no queda nada que hacer; vivo, no ha terminado (adenda de la ADR-0023) |
 | **Desmarcar** | Solo `prc_manage_app` | Un candado que abre quien lo cerró no es un candado |
 
 Antes de marcar, el taller avisa de que **no hay vuelta atrás sin

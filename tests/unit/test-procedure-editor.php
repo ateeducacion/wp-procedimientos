@@ -1740,7 +1740,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			'Enlaces',
 			'Solicitudes',
 			'Publicación',
-			'Ver la ficha pública',
+			'Ver la ficha',
 			'Guardar los datos',
 		);
 		foreach ( $labels as $rotulo ) {

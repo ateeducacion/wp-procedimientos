@@ -310,15 +310,9 @@ final class Workspace {
 	 */
 	private static function collect( int $user_id ): array {
 		$rows = array();
-		// Duplicar es abrir y poder crear (`ProcedureAccess::can_duplicate()`):
-		// abrir ya lo pregunta cada fila, y crear es de la persona, así que se
-		// pregunta una vez y no una por fila.
-		$crea = ProcedureAccess::can_manage_procedures( $user_id );
 		foreach ( self::scope( $user_id ) as $post ) {
 			if ( ProcedureAccess::can_open( $user_id, (int) $post->ID ) ) {
-				$fila                  = self::row( $post );
-				$fila['can_duplicate'] = $crea && 'trash' !== $post->post_status;
-				$rows[]                = $fila;
+				$rows[] = self::row( $post );
 			}
 		}
 		return $rows;
@@ -412,13 +406,9 @@ final class Workspace {
 			),
 			'warning'          => self::mismatch( $id, $opens, $closes ),
 			'archived'         => ProcedureAccess::is_archived( $id ),
-			'status'           => (string) $post->post_status,
 			'applications'     => 0,
 			'url'              => Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ),
 			'applications_url' => ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ),
-			// **Un borrador también se mira**: estando dentro y con permiso,
-			// WordPress lo sirve en previsualización.
-			'view_url'         => 'publish' === $post->post_status ? (string) get_permalink( $id ) : (string) get_preview_post_link( $id ),
 		);
 	}
 
@@ -645,14 +635,15 @@ final class Workspace {
 	 */
 	private static function flash(): array {
 		$avisos = array(
-			'creado'       => array( 'ok', 'Procedimiento creado. Ya puede completarlo y publicarlo.' ),
-			'guardado'     => array( 'ok', 'Cambios guardados.' ),
-			'retirado'     => array( 'ok', 'El procedimiento se ha guardado. Su ámbito ya no lo organiza y dejará de tener acceso a su edición.' ),
-			'borrado'      => array( 'ok', 'Procedimiento enviado a la papelera. Nada se ha perdido: se restaura desde el escritorio de WordPress.' ),
-			'publicado'    => array( 'ok', 'Procedimiento publicado: ya se ve en la portada.' ),
-			'despublicado' => array( 'ok', 'Procedimiento devuelto a borrador: deja de verse en la portada y no se pierde nada.' ),
-			'archivado'    => array( 'ok', 'Procedimiento marcado como histórico: se consulta y se exporta, pero ya no se edita.' ),
-			'permiso'      => array( 'error', 'Ese procedimiento es de otro ámbito: solo lo edita el ámbito que lo convoca o quien administra el aplicativo.' ),
+			'creado'                => array( 'ok', 'Procedimiento creado. Ya puede completarlo y publicarlo.' ),
+			'guardado'              => array( 'ok', 'Cambios guardados.' ),
+			'retirado'              => array( 'ok', 'El procedimiento se ha guardado. Su ámbito ya no lo organiza y dejará de tener acceso a su edición.' ),
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se lee qué se borró para el aviso.
+			ProcedureDelete::NOTICE => array( 'ok', ProcedureDelete::notice( $_GET ) ),
+			'publicado'             => array( 'ok', 'Procedimiento publicado: ya se ve en la portada.' ),
+			'despublicado'          => array( 'ok', 'Procedimiento devuelto a borrador: deja de verse en la portada y no se pierde nada.' ),
+			'archivado'             => array( 'ok', 'Procedimiento marcado como histórico: se consulta y se exporta, pero ya no se edita.' ),
+			'permiso'               => array( 'error', 'Ese procedimiento es de otro ámbito: solo lo edita el ámbito que lo convoca o quien administra el aplicativo.' ),
 		);
 
 		$aviso = $avisos[ self::input( self::VAR_NOTICE ) ] ?? array( '', '' );

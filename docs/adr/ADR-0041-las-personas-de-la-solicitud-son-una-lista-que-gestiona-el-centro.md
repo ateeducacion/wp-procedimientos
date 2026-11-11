@@ -324,3 +324,24 @@ caracteres, y **nunca** en un correo.
 - `unique_per_group` solo mira las personas que tienen grupo.
 - La lista no es parte del acuse de la solicitud: tiene su propio aviso.
 - La certificación de participantes sigue fuera (PLAN-0003, D-5).
+
+## Adenda — 2026-11-11
+
+- **La misma persona no entra dos veces.** Antes solo se rechazaba el mismo DNI
+  o NIE con el mismo papel y grupo; la coordinación general y la de un eje
+  entraban dos veces. Ahora se rechaza también con otro papel u otro grupo,
+  salvo que el procedimiento marque «Una persona puede tener varios papeles»
+  (`multi_role`, apagado por defecto). Una fila que ya estaba así guardada se
+  sigue editando: solo se rechaza lo que el cambio trae nuevo.
+- **El aviso lleva a la fila.** La persona repetida y el papel ocupado dicen
+  quién está y la pantalla enlaza a su fila y la abre
+  (`ApplicationPeople::clash()`): sustituir es editar esa fila.
+- **«Exige grupo» es una casilla**, una por papel; se guarda como el «| grupo»
+  de siempre, así que la forma guardada no cambia.
+- Una lista que nunca se guardó empieza con «Una sola persona por papel y
+  grupo» marcada.
+- La coordinación no se configura a la vez en «Datos» y en una lista que la
+  recoge (`PeopleSpec::coordination_clash()`); lo que ya estaba así se sigue
+  guardando.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

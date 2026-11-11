@@ -18362,7 +18362,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio, el procedimiento queda como «Próximo» y nadie puede solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias) y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Personas») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -18441,8 +18441,9 @@ final class HelpContent {
 				'id'    => 'publicar',
 				'level' => 2,
 				'title' => 'Publique',
-				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>.</p>'
-					. '<p>Antes de publicar, repase las fechas del plazo, a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso o sin fecha de inicio del plazo no se puede publicar</strong>, porque nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
+					. '<p>Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>, que tiene el aspecto de las acciones delicadas y dice al lado lo que pasa: deja de verse en la portada.</p>'
+					. '<p>Antes de publicar, repase también a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Publicación» con la línea de estados y la etapa actual',
@@ -18490,7 +18491,7 @@ final class HelpContent {
 				'id'    => 'cerrar-y-archivar',
 				'level' => 2,
 				'title' => 'Cierre y archive',
-				'html'  => '<ul><li>El plazo se cierra solo en la fecha de fin. Si necesita cerrarlo antes, pulse <strong>«Cerrar solicitudes ahora»</strong> en la pestaña «Publicación»; <strong>«Volver al calendario automático»</strong> lo deshace.</li><li>Cuando ya no quede nada que tocar (resuelto, listados enlazados, solicitudes revisadas), pulse <strong>«Marcar como histórico»</strong>. Queda en solo lectura y se puede consultar y exportar. <strong>Para volver a abrirlo hay que pedírselo a quien administra el aplicativo.</strong></li></ul>',
+				'html'  => '<ul><li>El plazo se cierra solo en la fecha de fin. Si necesita cerrarlo antes, pulse <strong>«Cerrar solicitudes ahora»</strong> en la pestaña «Publicación»; <strong>«Volver al calendario automático»</strong> lo deshace.</li><li>Cuando ya no quede nada que tocar (resuelto, listados enlazados, solicitudes revisadas), pulse <strong>«Marcar como histórico»</strong>, al final de la pestaña. Solo aparece con el procedimiento cerrado o resuelto: uno vivo no se puede marcar. Queda en solo lectura y se puede consultar y exportar. <strong>Para volver a abrirlo hay que pedírselo a quien administra el aplicativo.</strong></li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Dar el procedimiento por terminado»',
@@ -18616,7 +18617,7 @@ final class HelpContent {
 				'id'    => 'sale-como-proximo',
 				'level' => 3,
 				'title' => 'Está publicado, pero sale como «Próximo» y nadie puede solicitar',
-				'html'  => '<p>Falta la fecha de inicio del plazo de solicitud, o todavía no ha llegado. El estado sale de las fechas: no hay que cambiarlo a mano. Revise los plazos en la pestaña «Datos».</p>',
+				'html'  => '<p>Todavía no ha llegado la fecha de inicio del plazo de solicitud, o, si se publicó antes de que se exigiera, no la tiene. El estado sale de las fechas: no hay que cambiarlo a mano. Revise los plazos en la pestaña «Datos». Hoy ya no se puede publicar sin esa fecha.</p>',
 				'shots' => array(),
 			),
 			array(

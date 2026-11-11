@@ -24,6 +24,7 @@ use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
@@ -73,6 +74,7 @@ final class App {
 		// procedimiento borrado para siempre (ADR-0039).
 		ApplicationExport::class,
 		ApplyForm::class,
+		PeopleForm::class,
 		MyCentre::class,
 		Workspace::class,
 		ProcedureEditor::class,

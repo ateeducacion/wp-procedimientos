@@ -197,6 +197,8 @@ final class MyCentre {
 		$opciones     = self::options( $procedure_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] );
 		$cierre       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
 		$estado       = ProcedureState::of_post( $procedure_id );
+		$personas     = ApplicationMetaKeys::TYPE_TEACHER !== ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] )
+			&& People::enabled( $procedure_id );
 
 		// La subsanación está abierta mientras no se haya pasado su último
 		// día; sin fecha de cierre no ha vencido, solo no se sabe cuándo.
@@ -227,6 +229,9 @@ final class MyCentre {
 			'note'         => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 			'amend'        => $subsanar,
 			'amend_closes' => $cierre,
+			// La lista de personas se gestiona en la solicitud (ADR-0041).
+			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
+			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
 		);
 	}
 

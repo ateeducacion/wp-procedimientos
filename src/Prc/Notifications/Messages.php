@@ -24,7 +24,9 @@ namespace Prc\Notifications;
  * - `created`: si la solicitud es nueva (para el aviso a los contactos);
  * - `state`, `note`: rótulo del estado de revisión y la nota que se manda;
  * - `document`, `file`: rótulo de la entrega y nombre del documento;
- * - `missing`, `editor_url`, `workspace_url`, `extra`: el correo del alta.
+ * - `missing`, `editor_url`, `workspace_url`, `extra`: el correo del alta;
+ * - `change`, `before`, `after`: el cambio en la lista de personas y la
+ *   persona antes y después, ya escrita en una línea y sin DNI.
  */
 final class Messages {
 
@@ -128,6 +130,9 @@ final class Messages {
 
 			case Mailer::EVENT_PROCEDURE_CREATED:
 				return array( 'Procedimiento creado en borrador: ' . $titulo, self::created( $titulo, $ctx ) );
+
+			case Mailer::EVENT_PEOPLE_CHANGED:
+				return self::people( $titulo, $quien, $ctx );
 		}
 		return null;
 	}
@@ -168,6 +173,40 @@ final class Messages {
 			$lineas[] = $extra;
 		}
 		return $lineas;
+	}
+
+	/**
+	 * Subject and body of a change in the list of people of an application.
+	 *
+	 * @param string               $titulo Procedure title.
+	 * @param string               $quien  The school, or who applied.
+	 * @param array<string, mixed> $ctx    Context.
+	 * @return array{0:string, 1:array<int, string>}|null Null for an unknown change.
+	 */
+	private static function people( string $titulo, string $quien, array $ctx ): ?array {
+		$cambios = array(
+			'added'   => array( 'alta', 'Se ha dado de alta a una persona en' ),
+			'changed' => array( 'cambio', 'Se ha cambiado una persona de' ),
+			'removed' => array( 'baja', 'Se ha dado de baja a una persona de' ),
+		);
+		$cambio  = $cambios[ self::text( $ctx, 'change' ) ] ?? null;
+		if ( null === $cambio ) {
+			return null;
+		}
+		return array(
+			'Personas de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			array_merge(
+				array( $cambio[1] . ' la lista de personas de una solicitud del procedimiento «' . $titulo . '».', '' ),
+				self::field( 'Procedimiento', $titulo ),
+				self::field( 'Centro', self::text( $ctx, 'centre' ) ),
+				self::field( 'Hecho por', self::text( $ctx, 'applicant' ) ),
+				self::field( 'Fecha', self::text( $ctx, 'date' ) ),
+				array( '' ),
+				self::field( 'Antes', self::text( $ctx, 'before' ) ),
+				self::field( 'Después', self::text( $ctx, 'after' ) ),
+				self::link( 'Se consulta en el taller del procedimiento:', $ctx, 'url' )
+			),
+		);
 	}
 
 	/**

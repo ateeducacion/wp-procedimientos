@@ -12,6 +12,7 @@ use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\People;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ProcedureEditorView;
 
@@ -178,7 +179,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$grupos = ApplicationExport::groups( $this->procedimiento() );
 
 		$this->assertSame( array( 'application', 'centre', 'applicant', 'coordination', 'review', 'questions' ), array_keys( $grupos ) );
-		$this->assertSame( array_keys( $grupos ), array_keys( ApplicationExport::group_labels() ) );
+		$this->assertSame( array_keys( $grupos ), array_keys( ApplicationExport::group_labels( $this->procedimiento() ) ) );
 		$this->assertSame( array( 'centre', 'code' ), array_keys( $grupos['centre'] ) );
 		$this->assertSame( 'DNI o NIE de coordinación', $grupos['coordination']['coordinator_dni'] );
 		$this->assertSame(
@@ -559,6 +560,13 @@ class Test_Application_Export extends WP_UnitTestCase {
 					'conflict'   => 0,
 					'invalid'    => 0,
 				),
+				ApplicationExport::WHO_PEOPLE       => array(
+					'count'      => 0,
+					'email'      => 0,
+					'incomplete' => 0,
+					'conflict'   => 0,
+					'invalid'    => 0,
+				),
 			),
 			ApplicationExport::who_counts( $solicitudes ),
 			'las cuentas de prueba no tienen nombre ni apellidos, y su nombre público es el usuario'
@@ -833,9 +841,10 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
 
 		$this->assertStringContainsString( '<details class="prc-exportar" data-prc-export>', $html );
-		foreach ( ApplicationExport::group_labels() as $rotulo ) {
+		foreach ( ApplicationExport::group_labels( $procedimiento ) as $rotulo ) {
 			$this->assertStringContainsString( '<legend>' . esc_html( $rotulo ) . '</legend>', $html );
 		}
+		$this->assertStringNotContainsString( 'Personas de la solicitud', $html, 'sin lista, el diálogo no la ofrece' );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_EXPORT_ALL . '"', $html );
 		$this->assertMatchesRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="code"[^>]*checked/', $html );
 		$this->assertDoesNotMatchRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="q3"[^>]*checked/', $html );
@@ -1039,5 +1048,209 @@ class Test_Application_Export extends WP_UnitTestCase {
 		$fila = Applications::rows( $procedimiento )[0];
 		$this->assertSame( 'Curso | 2024', $fila['q1'] );
 		$this->assertArrayNotHasKey( 'score', $fila );
+	}
+
+	// ─── la lista de personas (ADR-0041) ───────────────────────────────────
+
+	/**
+	 * Un procedimiento con lista de personas abierta: dos papeles, un grupo.
+	 *
+	 * @return int Procedure ID.
+	 */
+	private function con_personas(): int {
+		$procedimiento = $this->procedimiento();
+		update_post_meta(
+			$procedimiento,
+			ProcedureMetaKeys::PEOPLE_SPEC,
+			array(
+				'enabled'   => true,
+				'roles'     => array(
+					array(
+						'key'   => 'r1',
+						'label' => 'Coordinación',
+					),
+					array(
+						'key'   => 'r2',
+						'label' => 'Participante',
+					),
+				),
+				'groups'    => array(
+					array(
+						'key'   => 'g1',
+						'label' => 'Eje 1',
+					),
+				),
+				'opens_at'  => gmdate( 'Y-m-d', strtotime( '-1 day' ) ),
+				'closes_at' => gmdate( 'Y-m-d', strtotime( '+1 day' ) ),
+			)
+		);
+		return $procedimiento;
+	}
+
+	/**
+	 * Dar de alta a una persona en la solicitud de un centro, como su dirección.
+	 *
+	 * @param int    $solicitud Application ID.
+	 * @param string $nombre    Name.
+	 * @param string $correo    Email.
+	 * @param string $dni       DNI.
+	 * @return void
+	 */
+	private function alta( int $solicitud, string $nombre, string $correo, string $dni ): void {
+		$res = People::add(
+			$solicitud,
+			(int) get_post_field( 'post_author', $solicitud ),
+			array(
+				'name'    => $nombre,
+				'surname' => 'Díaz',
+				'dni'     => $dni,
+				'email'   => $correo,
+				'phone'   => '600000000',
+				'role'    => 'r2',
+				'group'   => 'g1',
+			)
+		);
+		$this->assertTrue( $res['ok'], $res['error'] );
+	}
+
+	/**
+	 * Con la lista, el grupo «Personas» sale tras la coordinación; sin ella, no.
+	 */
+	public function test_the_people_group_exists_only_with_the_list() {
+		$this->assertArrayNotHasKey( 'people', ApplicationExport::groups( $this->procedimiento() ) );
+		$this->assertArrayNotHasKey( ApplicationExport::WHO_PEOPLE, ApplicationExport::who( $this->procedimiento() ) );
+
+		$procedimiento = $this->con_personas();
+		$grupos        = ApplicationExport::groups( $procedimiento );
+		$this->assertSame( array( 'application', 'centre', 'applicant', 'coordination', 'people', 'review', 'questions' ), array_keys( $grupos ) );
+		$this->assertSame( array_keys( $grupos ), array_keys( ApplicationExport::group_labels( $procedimiento ) ) );
+		$this->assertSame( array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ), array_keys( $grupos['people'] ) );
+		$this->assertArrayHasKey( ApplicationExport::WHO_PEOPLE, ApplicationExport::who( $procedimiento ) );
+	}
+
+	/**
+	 * Forma `person`: una fila por persona coordinadora y otra por cada
+	 * persona de la lista, cada una con sus columnas; papel y grupo por su
+	 * rótulo.
+	 */
+	public function test_person_shape_adds_one_row_per_listed_person() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Eva', 'Ruiz', 'eva@example.org' ) ) );
+		$this->alta( $solicitud, 'Luis', 'luis@example.org', '11111111H' );
+		$this->alta( $solicitud, 'Marta', 'marta@example.org', 'X1234567L' );
+
+		$lineas = $this->lineas(
+			ApplicationExport::csv(
+				$procedimiento,
+				array( 'code', 'coordinator', 'person_name', 'person_dni', 'person_role', 'person_group' ),
+				ApplicationExport::SHAPE_PERSON
+			)
+		);
+		$this->assertSame(
+			array(
+				'"Código";"Coordinación";"Nombre (persona)";"DNI o NIE (persona)";"Papel (persona)";"Grupo (persona)"',
+				'"C0001";"Eva Ruiz";"";"";"";""',
+				'"C0001";"";"Luis";"11111111H";"Participante";"Eje 1"',
+				'"C0001";"";"Marta";"X1234567L";"Participante";"Eje 1"',
+			),
+			$lineas
+		);
+
+		$una = $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_name' ) ) );
+		$this->assertSame( '"C0001";"Luis · Marta"', $una[1], 'una fila por solicitud junta a sus personas' );
+	}
+
+	/**
+	 * El fichero de usuarios toma las personas de la lista, con la parte
+	 * local del correo como usuario y sin repetir.
+	 */
+	public function test_the_user_file_takes_the_listed_people() {
+		$procedimiento = $this->con_personas();
+		$una           = $this->solicitud( $procedimiento, 'C0001', array() );
+		$otra          = $this->solicitud( $procedimiento, 'C0002', array() );
+		$this->alta( $una, 'Luis', 'Luis.Diaz@example.org', '11111111H' );
+		$this->alta( $otra, 'Luis', 'luis.diaz@example.org', '11111111H' );
+		$this->alta( $otra, 'Marta', 'marta@example.org', 'X1234567L' );
+
+		$this->assertSame(
+			"username,firstname,lastname,email\nluis.diaz,Luis,Díaz,luis.diaz@example.org\nmarta,Marta,Díaz,marta@example.org",
+			ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_PEOPLE ) ) )
+		);
+	}
+
+	/**
+	 * Por persona, cada grupo da filas solo si alguna de sus columnas sale:
+	 * con `code` y columnas de personas, ni una fila de coordinación; sin
+	 * ninguna de los dos grupos, una fila por solicitud.
+	 */
+	public function test_person_shape_only_gives_rows_of_the_groups_exported() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array( $this->persona( 'Eva', 'Ruiz', 'eva@example.org' ) ) );
+		$this->alta( $solicitud, 'Luis', 'luis@example.org', '11111111H' );
+		$this->alta( $solicitud, 'Marta', 'marta@example.org', 'X1234567L' );
+
+		$this->assertSame(
+			array( '"Código";"Nombre (persona)";"Papel (persona)"', '"C0001";"Luis";"Participante"', '"C0001";"Marta";"Participante"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_name', 'person_role' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertSame(
+			array( '"Código";"Coordinación"', '"C0001";"Eva Ruiz"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'coordinator' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertSame(
+			array( '"Código"', '"C0001"' ),
+			$this->lineas( ApplicationExport::csv( $procedimiento, array( 'code' ), ApplicationExport::SHAPE_PERSON ) )
+		);
+		$this->assertCount( 4, $this->lineas( ApplicationExport::csv( $procedimiento, array(), ApplicationExport::SHAPE_PERSON ) ), 'todas: una de coordinación y dos de personas' );
+	}
+
+	/**
+	 * Un teléfono con «+» sale tal cual, sin la comilla de las fórmulas.
+	 */
+	public function test_a_phone_with_a_plus_is_not_neutralised() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array() );
+		$res           = People::add(
+			$solicitud,
+			(int) get_post_field( 'post_author', $solicitud ),
+			array(
+				'name'    => 'Luis',
+				'surname' => 'Díaz',
+				'dni'     => '11111111H',
+				'email'   => 'luis@example.org',
+				'phone'   => '+34 600 000 000',
+				'role'    => 'r1',
+			)
+		);
+		$this->assertTrue( $res['ok'], $res['error'] );
+		$this->assertSame( '"C0001";"+34 600 000 000"', $this->lineas( ApplicationExport::csv( $procedimiento, array( 'code', 'person_phone' ), ApplicationExport::SHAPE_PERSON ) )[1] );
+		$this->assertSame( "'+1", ApplicationExport::neutralize( '+1' ), 'lo demás se sigue neutralizando' );
+	}
+
+	/**
+	 * Un procedimiento que tuvo lista y la apagó: el fichero de usuarios no
+	 * la lleva y la elección recordada la olvida.
+	 */
+	public function test_a_list_switched_off_leaves_the_user_file() {
+		$procedimiento = $this->con_personas();
+		$solicitud     = $this->solicitud( $procedimiento, 'C0001', array() );
+		$this->alta( $solicitud, 'Luis', 'luis@example.org', '11111111H' );
+		$quien = $this->administrator();
+		ApplicationExport::remember(
+			$quien,
+			$procedimiento,
+			array(
+				'format' => ApplicationExport::FORMAT_MOODLE,
+				'who'    => array( ApplicationExport::WHO_PEOPLE ),
+			)
+		);
+		$this->assertSame( array( ApplicationExport::WHO_PEOPLE ), ApplicationExport::choice( $quien, $procedimiento )['who'] );
+
+		$spec            = get_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, true );
+		$spec['enabled'] = false;
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+
+		$this->assertSame( ApplicationExport::MOODLE_HEADER, ApplicationExport::moodle( $procedimiento, array( 'who' => array( ApplicationExport::WHO_PEOPLE ) ) ) );
+		$this->assertSame( array(), ApplicationExport::choice( $quien, $procedimiento )['who'] );
 	}
 }

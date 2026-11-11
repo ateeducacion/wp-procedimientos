@@ -8,6 +8,7 @@
 namespace Prc\Meta;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\PostType\ProcedurePostType;
@@ -130,6 +131,10 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::NOTIFY               => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_notify' ),
+			),
+			ProcedureMetaKeys::PEOPLE_SPEC          => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_people_spec' ),
 			),
 		);
 	}
@@ -379,5 +384,21 @@ final class ProcedureMetaRegistration {
 			}
 		}
 		return $preguntas;
+	}
+
+	/**
+	 * Store the people specification normalised, with its labels cleaned.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return array<string, mixed>
+	 */
+	public static function sanitize_people_spec( $value ): array {
+		$spec = PeopleSpec::sanitize( $value );
+		foreach ( array( 'roles', 'groups' ) as $lista ) {
+			foreach ( $spec[ $lista ] as $i => $item ) {
+				$spec[ $lista ][ $i ]['label'] = sanitize_text_field( (string) $item['label'] );
+			}
+		}
+		return $spec;
 	}
 }

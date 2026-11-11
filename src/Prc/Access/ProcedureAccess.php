@@ -9,6 +9,7 @@
 namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
@@ -64,6 +65,13 @@ final class ProcedureAccess {
 	 * Ajustes, diagnóstico y desarchivar.
 	 */
 	public const CAP_MANAGE = 'prc_manage_app';
+
+	/**
+	 * Meta capacidad: dar de alta, cambiar o dar de baja personas de la
+	 * lista de una solicitud. La resuelve {@see map_meta_cap()} con
+	 * {@see can_edit_people()}; no la tiene ningún rol (ADR-0041).
+	 */
+	public const CAP_EDIT_PEOPLE = 'prc_edit_people';
 
 	/**
 	 * Register filters.
@@ -806,6 +814,56 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Whether the user may add, change or remove people of this application now.
+	 *
+	 * Quién: el equipo directivo del centro de la solicitud —cualquier cuenta
+	 * con su código, no solo la que la presentó—. Quien revisa no la escribe:
+	 * la lista es del centro. Cuándo: lo dice
+	 * {@see PeopleSpec::why_closed()}, con su ventana propia, aunque el plazo
+	 * de solicitud esté cerrado. Pasa también por `map_meta_cap`
+	 * ({@see CAP_EDIT_PEOPLE}).
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return bool
+	 */
+	public static function can_edit_people( int $user_id, int $application_id ): bool {
+		return '' === self::why_not_people( $user_id, $application_id );
+	}
+
+	/**
+	 * Why the user cannot touch the people of this application now, in words.
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return string Empty when they can.
+	 */
+	public static function why_not_people( int $user_id, int $application_id ): string {
+		$ajena = 'Solo gestiona las personas de una solicitud el equipo directivo de su centro.';
+		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) || 'publish' !== get_post_status( $application_id ) ) {
+			return $ajena;
+		}
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		if ( ! $docente && ! isset( CentreScope::codes_for( $user_id )[ (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ) ] ) ) {
+			return $ajena;
+		}
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
+			return 'Ese procedimiento no existe o no está publicado.';
+		}
+		return PeopleSpec::why_closed(
+			get_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, true ),
+			array(
+				'today'    => ProcedureState::today(),
+				'archived' => self::is_archived( $procedure_id ),
+				'teacher'  => $docente || ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
+				'review'   => (string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
+				'state'    => ProcedureState::of_post( $procedure_id ),
+			)
+		);
+	}
+
+	/**
 	 * Why the user cannot touch this procedure, or that group of it, in words.
 	 *
 	 * Vive aquí y no en cada pantalla para que todas lo cuenten igual.
@@ -854,6 +912,9 @@ final class ProcedureAccess {
 			return self::may_use_area( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 )
 				? $caps
 				: array( 'do_not_allow' );
+		}
+		if ( self::CAP_EDIT_PEOPLE === $cap ) {
+			return self::can_edit_people( $user_id, isset( $args[0] ) ? (int) $args[0] : 0 ) ? array( 'exist' ) : array( 'do_not_allow' );
 		}
 		if ( ! in_array( $cap, array( 'edit_post', 'delete_post', 'publish_post', 'read_post' ), true ) ) {
 			return $caps;

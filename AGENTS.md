@@ -100,11 +100,14 @@ src/Prc/
 ├── Domain/QuestionChanges.php              Subir, bajar y qué cambios de preguntas se rechazan. Puro
 ├── Domain/ProcedureInput.php               Valida el alta/edición del procedimiento. Puro
 ├── Domain/ApplicationInput.php             Valida la solicitud. Puro
+├── Domain/PeopleSpec.php                   Lo que pide el procedimiento de la lista de personas y su ventana. Puro
+├── Domain/ApplicationPeople.php            Valida cada persona de la lista; huella de la fila. Puro
 ├── Domain/CentreCatalog.php                Filtro prc_centres, find/search
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
 ├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, map_meta_cap, pre_get_posts
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
 ├── Meta/ApplicationMetaRegistration.php    Ídem para la solicitud
+├── Meta/MetaSwap.php                       Escribe una meta solo si sigue como se leyó (comparar y cambiar)
 ├── PostType/ProcedurePostType.php          CPT prc_procedure
 ├── PostType/ApplicationPostType.php        CPT prc_application
 ├── Taxonomy/ProcedureTaxonomies.php        prc_area (jerárquica), prc_course
@@ -115,7 +118,11 @@ src/Prc/
 ├── PublicFront/View/PanelParts.php         Piezas comunes de los paneles
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
+├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
+├── PublicFront/People.php                  La lista de personas: alta, cambio y baja de fila en fila, relee al escribir (ADR-0041)
+├── PublicFront/PeopleExport.php            Las columnas y filas que la lista de personas añade a la exportación
 ├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
+├── PublicFront/PeopleSpecPanel.php         El panel «Personas» del taller y la lista en la revisión
 ├── PublicFront/View/HomeView.php           Pinta la portada
 ├── PublicFront/Home.php                    [prc_home]
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública
@@ -125,8 +132,10 @@ src/Prc/
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla
+├── PublicFront/View/PeopleView.php         Pinta la lista de personas: la del centro, la de la revisión y el panel del taller
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
+├── PublicFront/PeopleForm.php              La sección «Personas» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]
 ├── Notifications/Messages.php              Asunto y cuerpo de cada correo, en texto plano. Puro
@@ -402,6 +411,13 @@ versionaría y falla con el motivo escrito. Las reglas genéricas están en
   ni las páginas de adjunto. Vive en `PublicFront/ApplicationFiles`, con
   nombre físico opaco y descarga autorizada por `ProcedureAccess`. El
   contenido público del sitio sigue por el camino normal de WordPress.
+- **Las personas de una solicitud son una meta de la solicitud, no un tipo
+  de contenido** (ADR-0041): `prc_people`, escrita de fila en fila por
+  `PublicFront/People`, que escribe con `Meta/MetaSwap` (solo si nadie
+  escribió entremedias) y rechaza un cambio sobre una fila que cambió desde
+  que se pintó. Sin lista escrita, ni historial ni aviso. Quién y cuándo, siempre
+  `ProcedureAccess::can_edit_people()`. Tocarla no devuelve la solicitud a
+  «presentada», y el DNI no va nunca en un correo.
 - El mu-plugin de `scripts/mu-plugins/` es solo desarrollo.
 - Diffs pequeños y enfocados. No inventar ficheros que nadie ha pedido.
 

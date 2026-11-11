@@ -213,3 +213,16 @@ usuario es una lista de claves de columnas, no datos de nadie.
 - Una cuenta de quien presenta sin nombre ni apellidos deja de salir en el
   fichero de usuarios hasta que alguien se los ponga: es preferible a crear
   en Moodle una cuenta llamada como su usuario.
+
+## Adenda — 2026-11-10 (ADR-0041)
+
+El punto de extensión de `ApplicationExport::who()` recibe la fuente `people`,
+las personas de la lista de la solicitud
+([ADR-0041](ADR-0041-las-personas-de-la-solicitud-son-una-lista-que-gestiona-el-centro.md)),
+con la parte local del correo como usuario, como la coordinación. La forma por
+persona del CSV añade una fila por cada persona de la lista, con el grupo de
+columnas «Personas». Las dos cosas solo aparecen si el procedimiento pide la
+lista: `who()` y `group_labels()` aceptan ahora el procedimiento para no
+ofrecerla cuando no la pide.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

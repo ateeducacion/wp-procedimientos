@@ -7,10 +7,12 @@
 
 namespace Prc\Meta;
 
+use Prc\Domain\ApplicationPeople;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
+use Prc\PublicFront\ApplicationLog;
 
 /**
  * Lo mismo que {@see ProcedureMetaRegistration}, para la solicitud.
@@ -73,6 +75,14 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::REVIEW_NOTE        => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',
+			),
+			ApplicationMetaKeys::PEOPLE             => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_people' ),
+			),
+			ApplicationMetaKeys::LOG                => array(
+				'type'     => 'array',
+				'sanitize' => array( ApplicationLog::class, 'sanitize' ),
 			),
 		);
 	}
@@ -156,6 +166,20 @@ final class ApplicationMetaRegistration {
 				'dni'     => strtoupper( (string) preg_replace( '/[ -]/', '', self::text( $coordinator, 'dni' ) ) ),
 				'email'   => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
+		}
+		return $out;
+	}
+
+	/**
+	 * The people of an application, one row each, with their texts cleaned.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return array<int, array<string, string>>
+	 */
+	public static function sanitize_people( $value ): array {
+		$out = array();
+		foreach ( ApplicationPeople::rows( $value ) as $fila ) {
+			$out[] = array_map( 'sanitize_text_field', $fila );
 		}
 		return $out;
 	}

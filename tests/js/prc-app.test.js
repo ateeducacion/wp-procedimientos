@@ -460,3 +460,140 @@ describe( 'publication switch', () => {
 		expect( document.getElementById( 'suelta' ).disabled ).toBe( false );
 	} );
 } );
+
+describe( 'the export dialog', () => {
+	const EXPORT = `
+		<div class="banda">
+			<details class="prc-exportar" data-prc-export open>
+				<summary class="prc-btn btn">Exportar…</summary>
+				<form class="prc-exportar__form" aria-labelledby="t">
+					<h2 id="t">Exportar las solicitudes</h2>
+					<input type="radio" name="f" value="csv" data-prc-export-format checked>
+					<input type="radio" name="f" value="moodle" data-prc-export-format>
+					<div data-prc-export-for="csv">
+						<input type="checkbox" name="all" value="1" data-prc-export-all checked>
+						<input type="checkbox" name="c[]" value="code" data-prc-export-col checked>
+						<input type="checkbox" name="c[]" value="q1" data-prc-export-col checked>
+					</div>
+					<fieldset data-prc-export-for="moodle">
+						<input type="checkbox" name="w[]" value="coordinators">
+					</fieldset>
+					<div class="prc-acciones"><button type="submit">Descargar</button></div>
+				</form>
+			</details>
+		</div>`;
+
+	/**
+	 * Fire a change on an input, as the browser does after a click.
+	 *
+	 * @param {HTMLInputElement} input  The input.
+	 * @param {boolean}          estado Its new checked state.
+	 */
+	function change( input, estado ) {
+		input.checked = estado;
+		input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	}
+
+	it( 'moves the form into a modal dialog opened by a button that says so', async () => {
+		document.body.innerHTML = EXPORT;
+		await load();
+		const caja = document.querySelector( '[data-prc-export]' );
+		const dialogo = document.querySelector( 'dialog.prc-dialogo--exportar' );
+		const boton = document.querySelector( '[data-prc-export-open]' );
+
+		expect( dialogo ).not.toBeNull();
+		expect( dialogo.querySelector( 'form.prc-exportar__form' ) ).not.toBeNull();
+		expect( caja.querySelector( 'form' ) ).toBeNull();
+		expect( caja.hidden ).toBe( true );
+		expect( dialogo.getAttribute( 'aria-labelledby' ) ).toBe( 't' );
+
+		// Un lector de pantalla oye «botón, abre un diálogo», no un desplegable.
+		expect( boton.tagName ).toBe( 'BUTTON' );
+		expect( boton.type ).toBe( 'button' );
+		expect( boton.getAttribute( 'aria-haspopup' ) ).toBe( 'dialog' );
+		expect( boton.getAttribute( 'aria-controls' ) ).toBe( dialogo.id );
+		expect( boton.textContent ).toBe( 'Exportar…' );
+		expect( boton.className ).toBe( 'prc-btn btn' );
+
+		dialogo.showModal = vi.fn( () => dialogo.setAttribute( 'open', '' ) );
+		boton.click();
+
+		expect( dialogo.showModal ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'falls back to the open attribute and closes with «Cancelar»', async () => {
+		document.body.innerHTML = EXPORT;
+		await load();
+		const dialogo = document.querySelector( 'dialog.prc-dialogo--exportar' );
+		dialogo.showModal = undefined;
+		dialogo.close = undefined;
+
+		document.querySelector( '[data-prc-export-open]' ).click();
+		expect( dialogo.hasAttribute( 'open' ) ).toBe( true );
+
+		dialogo.querySelector( '[data-prc-export-close]' ).click();
+		expect( dialogo.hasAttribute( 'open' ) ).toBe( false );
+	} );
+
+	it( 'shows only what the chosen format uses, without disabling anything', async () => {
+		document.body.innerHTML = EXPORT;
+		await load();
+		const csv = document.querySelector( '[data-prc-export-for="csv"]' );
+		const moodle = document.querySelector( '[data-prc-export-for="moodle"]' );
+
+		expect( csv.hidden ).toBe( false );
+		expect( moodle.hidden ).toBe( true );
+
+		change( document.querySelector( '[value="moodle"]' ), true );
+		expect( csv.hidden ).toBe( true );
+		expect( moodle.hidden ).toBe( false );
+		expect( csv.querySelector( 'input' ).disabled ).toBe( false );
+	} );
+
+	it( 'ties «Todas las columnas» to the column boxes', async () => {
+		document.body.innerHTML = EXPORT;
+		await load();
+		const todas = document.querySelector( '[data-prc-export-all]' );
+		const columnas = document.querySelectorAll( '[data-prc-export-col]' );
+
+		change( columnas[ 0 ], false );
+		expect( todas.checked ).toBe( false );
+
+		change( columnas[ 0 ], true );
+		expect( todas.checked ).toBe( true );
+
+		change( todas, false );
+		expect( Array.from( columnas ).map( ( c ) => c.checked ) ).toEqual( [ false, false ] );
+
+		change( todas, true );
+		expect( Array.from( columnas ).map( ( c ) => c.checked ) ).toEqual( [ true, true ] );
+	} );
+
+	it( 'closes the dialog once the download has been sent', async () => {
+		vi.useFakeTimers();
+		document.body.innerHTML = EXPORT;
+		await load();
+		const dialogo = document.querySelector( 'dialog.prc-dialogo--exportar' );
+		dialogo.setAttribute( 'open', '' );
+		dialogo.close = vi.fn();
+
+		const event = submit( dialogo.querySelector( 'form' ) );
+		expect( event.defaultPrevented ).toBe( false );
+		vi.runAllTimers();
+		expect( dialogo.close ).toHaveBeenCalledTimes( 1 );
+		vi.useRealTimers();
+	} );
+
+	it( 'leaves alone a page without the dialog and a box without a form', async () => {
+		document.body.innerHTML = '<details data-prc-export><summary>Nada</summary></details><input type="checkbox" id="x">';
+		await load();
+		expect( document.querySelector( 'dialog' ) ).toBeNull();
+		expect( document.querySelector( '[data-prc-export-open]' ) ).toBeNull();
+		expect( document.querySelector( '[data-prc-export]' ).hidden ).toBe( false );
+
+		const click = new MouseEvent( 'click', { bubbles: true, cancelable: true } );
+		document.querySelector( 'summary' ).dispatchEvent( click );
+		expect( click.defaultPrevented ).toBe( false );
+		document.getElementById( 'x' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	} );
+} );

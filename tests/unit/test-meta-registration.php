@@ -309,17 +309,19 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 		$this->assertSame(
 			array(
 				array(
-					'name'  => 'Ana Pérez',
-					'dni'   => '12345678Z',
-					'email' => 'ana@example.org',
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
 				),
 			),
 			ApplicationMetaRegistration::sanitize_coordinator(
 				array(
-					'name'  => ' Ana <b>Pérez</b> ',
-					'dni'   => ' 12345678z ',
-					'email' => 'Ana@Example.org',
-					'phone' => '600000000',
+					'name'    => ' Ana ',
+					'surname' => ' <b>Pérez</b> ',
+					'dni'     => ' 12345678z ',
+					'email'   => 'Ana@Example.org',
+					'phone'   => '600000000',
 				)
 			)
 		);
@@ -341,6 +343,26 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 						'dni'   => '',
 						'email' => 'luis@example.org',
 					),
+				)
+			)
+		);
+		$this->assertSame(
+			'',
+			ApplicationMetaRegistration::sanitize_coordinator(
+				array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				)
+			)[0]['surname'],
+			'lo guardado antes de los apellidos los lee vacíos: el nombre se queda entero'
+		);
+		$this->assertSame( 'Ana Pérez', ApplicationMetaRegistration::full_name( array( 'name' => 'Ana Pérez' ) ) );
+		$this->assertSame(
+			'Ana Pérez',
+			ApplicationMetaRegistration::full_name(
+				array(
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
 				)
 			)
 		);

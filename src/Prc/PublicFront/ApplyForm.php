@@ -65,15 +65,16 @@ final class ApplyForm {
 	public const OP_DELIVER     = 'deliver';
 	public const FIELD_DELIVERY = 'prc_delivery';
 
-	public const FIELD_PROCEDURE    = 'prc_apply_procedure';
-	public const FIELD_CENTRE       = 'prc_apply_centre';
-	public const FIELD_POSITION     = 'prc_position';
-	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
-	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
-	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
-	public const FIELD_COORDINATORS = 'prc_coordinators';
-	public const FIELD_ACCEPT       = 'prc_accept';
-	public const FIELD_ANSWERS      = 'prc_q';
+	public const FIELD_PROCEDURE     = 'prc_apply_procedure';
+	public const FIELD_CENTRE        = 'prc_apply_centre';
+	public const FIELD_POSITION      = 'prc_position';
+	public const FIELD_COORD_NAME    = 'prc_coordinator_name';
+	public const FIELD_COORD_SURNAME = 'prc_coordinator_surname';
+	public const FIELD_COORD_DNI     = 'prc_coordinator_dni';
+	public const FIELD_COORD_EMAIL   = 'prc_coordinator_email';
+	public const FIELD_COORDINATORS  = 'prc_coordinators';
+	public const FIELD_ACCEPT        = 'prc_accept';
+	public const FIELD_ANSWERS       = 'prc_q';
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
@@ -282,13 +283,14 @@ final class ApplyForm {
 		$coordinators = is_array( $coordinators ) ? self::clean_coordinators( $coordinators ) : array();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		return array(
-			'position'          => self::field( self::FIELD_POSITION ),
-			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
-			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
-			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
-			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
-			'accept'            => $acepta,
-			'answers'           => self::clean_answers( $respuestas ),
+			'position'            => self::field( self::FIELD_POSITION ),
+			'coordinators'        => is_array( $coordinators ) ? $coordinators : array(),
+			'coordinator_name'    => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_surname' => self::field( self::FIELD_COORD_SURNAME ),
+			'coordinator_dni'     => self::field( self::FIELD_COORD_DNI ),
+			'coordinator_email'   => self::field( self::FIELD_COORD_EMAIL ),
+			'accept'              => $acepta,
+			'answers'             => self::clean_answers( $respuestas ),
 		);
 	}
 
@@ -314,20 +316,17 @@ final class ApplyForm {
 	 * Clean coordinator fields before they are shown again after a rejected submit.
 	 *
 	 * @param array<mixed> $raw Submitted rows.
-	 * @return array<int, array{name:string, dni:string, email:string}>
+	 * @return array<int, array{name:string, surname:string, dni:string, email:string}>
 	 */
 	private static function clean_coordinators( array $raw ): array {
 		$out = array();
 		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
-			$row   = is_array( $row ) ? $row : array();
-			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
-			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
-			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
-			$out[] = array(
-				'name'  => $name,
-				'dni'   => $dni,
-				'email' => $email,
-			);
+			$row  = is_array( $row ) ? $row : array();
+			$fila = array();
+			foreach ( array( 'name', 'surname', 'dni', 'email' ) as $campo ) {
+				$fila[ $campo ] = is_scalar( $row[ $campo ] ?? null ) ? sanitize_text_field( (string) $row[ $campo ] ) : '';
+			}
+			$out[] = $fila;
 		}
 		return $out;
 	}
@@ -613,7 +612,12 @@ final class ApplyForm {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+		// Lo guardado antes de los apellidos abre ya partido: si «Nombre»
+		// llevara el nombre entero, al guardar los apellidos saldrían dos veces.
+		$coordinators = array_map(
+			array( ApplicationMetaRegistration::class, 'with_surname' ),
+			ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() )
+		);
 		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),

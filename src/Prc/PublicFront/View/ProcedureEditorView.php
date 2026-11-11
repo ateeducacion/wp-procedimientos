@@ -10,6 +10,7 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
@@ -914,7 +915,7 @@ final class ProcedureEditorView {
 		<div class="prc-banda-tabla">
 			<p class="prc-recuento">
 				<?php echo esc_html( sprintf( 1 === $cuenta ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $cuenta ) ); ?>
-				Cada una se revisa desde su fila; la exportación lleva todas las columnas, respuestas incluidas.
+				Cada una se revisa desde su fila; al exportar se eligen las columnas, una fila por solicitud o por persona, o el fichero de alta de usuarios.
 			</p>
 			<?php echo self::export_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</div>
@@ -1060,24 +1061,165 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The export button: a POST with its nonce, never a link.
+	 * The export dialog: a POST with its nonce, never a link.
+	 *
+	 * Sin guion es un desplegable con el formulario dentro, y funciona igual:
+	 * «Todas las columnas» es un campo que el servidor lee, no un atajo del
+	 * guion. Con guion, `prc-app.js` lo abre como diálogo modal, marca y
+	 * desmarca las casillas con «Todas» y enseña solo lo del formato elegido
+	 * (ADR-0039).
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function export_form( array $m ): string {
-		$op = ProcedureEditor::OP_EXPORT;
+		$op       = ProcedureEditor::OP_EXPORT;
+		$export   = (array) ( $m['export'] ?? array() );
+		$eleccion = (array) ( $export['choice'] ?? array() );
+		$columnas = (array) ( $eleccion['columns'] ?? array() );
+		$quienes  = (array) ( $eleccion['who'] ?? array() );
+		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
+		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
+
+		$radios_formato = self::export_radio(
+			ProcedureEditor::FIELD_EXPORT_FORMAT,
+			array(
+				ApplicationExport::FORMAT_CSV    => 'Hoja de cálculo (CSV)',
+				ApplicationExport::FORMAT_MOODLE => 'Fichero de alta de usuarios de Moodle',
+			),
+			$formato,
+			'data-prc-export-format'
+		);
+		$radios_forma   = self::export_radio(
+			ProcedureEditor::FIELD_EXPORT_SHAPE,
+			array(
+				ApplicationExport::SHAPE_APPLICATION => 'Solicitud',
+				ApplicationExport::SHAPE_PERSON      => 'Persona coordinadora: la solicitud se repite en cada una',
+			),
+			$forma
+		);
 
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action="">
-			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Exportar a CSV</button>
-		</form>
+		<details class="prc-exportar" data-prc-export>
+			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
+			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
+				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+
+				<fieldset class="prc-exportar__grupo">
+					<legend>Formato</legend>
+					<?php echo $radios_formato; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				</fieldset>
+
+				<div class="prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_CSV ); ?>">
+					<fieldset class="prc-exportar__grupo">
+						<legend>Una fila por</legend>
+						<?php echo $radios_forma; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					</fieldset>
+					<fieldset class="prc-exportar__grupo">
+						<legend>Columnas</legend>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
+							Todas las columnas
+						</label>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas y no se miran las de abajo.</p>
+						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
+							<?php
+							if ( array() === $de_grupo ) {
+								continue;
+							}
+							?>
+							<fieldset class="prc-exportar__columnas">
+								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
+								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<label class="prc-casilla">
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" data-prc-export-col <?php checked( array() === $columnas || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<?php echo esc_html( (string) $rotulo ); ?>
+									</label>
+								<?php endforeach; ?>
+							</fieldset>
+						<?php endforeach; ?>
+					</fieldset>
+				</div>
+
+				<fieldset class="prc-exportar__grupo prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_MOODLE ); ?>">
+					<legend>Quiénes salen en el fichero de usuarios</legend>
+					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
+							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
+						</label>
+					<?php endforeach; ?>
+					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
+				</fieldset>
+
+				<div class="prc-acciones">
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+				</div>
+			</form>
+		</details>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * One closed choice of the export dialog, as radio buttons.
+	 *
+	 * @param string                $name     Field name.
+	 * @param array<string, string> $options  value => label.
+	 * @param string                $selected Chosen value.
+	 * @param string                $marca    Extra data attribute, or empty.
+	 * @return string
+	 */
+	private static function export_radio( string $name, array $options, string $selected, string $marca = '' ): string {
+		$out = '';
+		foreach ( $options as $valor => $rotulo ) {
+			$out .= sprintf(
+				'<label class="prc-casilla"><input type="radio" name="%1$s" value="%2$s"%3$s%4$s /> %5$s</label>',
+				esc_attr( $name ),
+				esc_attr( (string) $valor ),
+				'' !== $marca ? ' ' . esc_attr( $marca ) : '',
+				checked( (string) $valor, $selected, false ),
+				esc_html( $rotulo )
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Who goes in the user upload file, with how many and who is left out, and why.
+	 *
+	 * Cada motivo con su rótulo: sin correo válido, incompletas (sin nombre,
+	 * apellidos o usuario), usuario en conflicto (el mismo usuario con otro
+	 * correo) y usuario no válido para la plataforma. Una persona repetida con
+	 * el mismo correo no es una omisión.
+	 *
+	 * @param array<string, mixed> $quien One source: `label`, `count`, `email`, `incomplete`, `conflict`, `invalid`.
+	 * @return string
+	 */
+	private static function who_label( array $quien ): string {
+		$cuenta  = (int) ( $quien['count'] ?? 0 );
+		$motivos = array(
+			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
+			'incomplete' => array( '%d incompleta', '%d incompletas' ),
+			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
+		);
+		$fuera   = array();
+		foreach ( $motivos as $clave => list( $una, $varias ) ) {
+			$n = (int) ( $quien[ $clave ] ?? 0 );
+			if ( $n > 0 ) {
+				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
+			}
+		}
+		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		if ( array() !== $fuera ) {
+			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
+		}
+		return $texto . ')';
 	}
 
 	// ─── Publicación ───────────────────────────────────────────────────────

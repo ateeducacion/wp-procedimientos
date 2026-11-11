@@ -40,6 +40,7 @@ return array(
 	'PublicFront/View/PanelParts.php',
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
+	'PublicFront/ApplicationExport.php',
 	'PublicFront/View/HomeView.php',
 	'PublicFront/Home.php',
 	'PublicFront/View/ProcedureChrome.php',

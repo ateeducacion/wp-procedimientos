@@ -413,23 +413,7 @@ final class ApplyFormView {
 							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
 						</div>
 						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php $coordinator = (array) ( $v['coordinators'][ $index ] ?? array() ); ?>
-							<fieldset class="prc-seccion-campos">
-								<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
-								<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
-									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
-								</div>
-								<div class="prc-campo prc-campo--cuarto">
-									<?php echo self::label( 'prc-coordinator-dni-' . $index, 'DNI o NIE', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-									<input class="prc-control" type="text" id="prc-coordinator-dni-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][dni]' ); ?>" required autocomplete="off" aria-describedby="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>" value="<?php echo esc_attr( (string) ( $coordinator['dni'] ?? '' ) ); ?>" />
-									<p class="prc-campo__ayuda" id="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>">Escriba el DNI o NIE completo, con la letra.</p>
-								</div>
-								<div class="prc-campo prc-campo--cuarto">
-									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
-								</div>
-							</fieldset>
+							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						<?php endfor; ?>
 					</div>
 				</section>
@@ -624,6 +608,47 @@ final class ApplyFormView {
 	}
 
 	/**
+	 * The fields of one requested coordinator: name, surname, DNI or NIE and email.
+	 *
+	 * Nombre y apellidos van en campos distintos (ADR-0039): el fichero de
+	 * alta de usuarios los pide por separado.
+	 *
+	 * @param int                  $index       Position, from zero.
+	 * @param array<string, mixed> $coordinator What was typed or stored.
+	 * @return string
+	 */
+	private static function coordinator_fields( int $index, array $coordinator ): string {
+		$campos = array(
+			'name'    => array( 'Nombre', 'text', 'prc-campo--cuarto prc-campo--abre-fila', '' ),
+			'surname' => array( 'Apellidos', 'text', 'prc-campo--cuarto', '' ),
+			'dni'     => array( 'DNI o NIE', 'text', 'prc-campo--cuarto', 'Escriba el DNI o NIE completo, con la letra.' ),
+			'email'   => array( 'Correo electrónico', 'email', 'prc-campo--cuarto', '' ),
+		);
+
+		ob_start();
+		?>
+		<fieldset class="prc-seccion-campos">
+			<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
+			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $clases, $ayuda ) ) : ?>
+				<?php $id = 'prc-coordinator-' . $campo . '-' . $index; ?>
+				<div class="prc-campo <?php echo esc_attr( $clases ); ?>">
+					<?php echo self::label( $id, $rotulo, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
+						<?php if ( 'dni' === $campo ) : ?>
+							autocomplete="off" aria-describedby="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"
+						<?php endif; ?>
+						value="<?php echo esc_attr( (string) ( $coordinator[ $campo ] ?? '' ) ); ?>" />
+					<?php if ( '' !== $ayuda ) : ?>
+						<p class="prc-campo__ayuda" id="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"><?php echo esc_html( $ayuda ); ?></p>
+					<?php endif; ?>
+				</div>
+			<?php endforeach; ?>
+		</fieldset>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * What was submitted, read-only, when it can no longer be edited.
 	 *
 	 * @param array<string, mixed> $m Model.
@@ -649,7 +674,7 @@ final class ApplyFormView {
 				<?php foreach ( $coord as $index => $persona ) : ?>
 					<?php if ( '' !== (string) $persona['name'] ) : ?>
 						<dt><?php echo esc_html( sprintf( 1 === count( $coord ) ? 'Persona coordinadora' : 'Persona coordinadora %d', $index + 1 ) ); ?></dt>
-						<dd><?php echo esc_html( implode( ' · ', array_filter( array( $persona['name'], $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
+						<dd><?php echo esc_html( implode( ' · ', array_filter( array( ApplicationMetaRegistration::full_name( $persona ), $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
 					<?php endif; ?>
 				<?php endforeach; ?>
 				<?php foreach ( $preguntas as $pregunta ) : ?>

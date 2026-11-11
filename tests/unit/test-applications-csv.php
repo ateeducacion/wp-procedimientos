@@ -8,6 +8,7 @@
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureEditor;
 
@@ -220,6 +221,80 @@ class Test_Applications_Csv extends WP_UnitTestCase {
 
 		$vacio = Applications::csv( $this->procedure( $this->administrator() ) );
 		$this->assertCount( 1, explode( "\r\n", trim( substr( $vacio, 3 ) ) ), 'sin solicitudes, solo la cabecera' );
+	}
+
+	/**
+	 * Un envío sin los campos del diálogo descarga el CSV de siempre: todas
+	 * las columnas, en el orden de la tabla, una fila por solicitud (ADR-0039).
+	 */
+	public function test_a_post_without_a_choice_downloads_the_csv_of_always() {
+		$area          = $this->area( 'Área de prueba' );
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Tiene huerto',
+						'type'  => ProcedureQuestions::TYPE_YESNO,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+		wp_update_user(
+			array(
+				'ID'           => $direccion,
+				'display_name' => 'Dirección Norte',
+				'user_email'   => 'norte@example.org',
+			)
+		);
+		$id = Applications::save(
+			$procedimiento,
+			$direccion,
+			array(
+				'position'    => ApplicationMetaKeys::POSITION_HEAD,
+				'coordinator' => array(
+					'name'  => 'Ana Pérez',
+					'email' => 'ana@example.org',
+				),
+				'answers'     => array( 'q1' => true ),
+			)
+		);
+
+		$esperado = "\xEF\xBB\xBF"
+			. '"Centro";"Código";"Fecha";"Presentada por";"Correo";"Cargo";"Coordinación";"DNI o NIE de coordinación";"Correo de coordinación";"Estado de revisión";"Nota";"Tiene huerto"' . "\r\n"
+			. '"Centro de prueba Norte";"C0001";"' . get_the_date( 'Y-m-d H:i', $id ) . '";"Dirección Norte";"norte@example.org";"Dirección";"Ana Pérez";"";"ana@example.org";"Presentada";"";"Sí"' . "\r\n";
+
+		$this->assertSame( $esperado, $this->exportar( $this->manager( array( $area ) ), $procedimiento ) );
+		$this->assertSame( $esperado, Applications::csv( $procedimiento ) );
+	}
+
+	/**
+	 * Con columnas elegidas, el formato del fichero es el mismo: BOM, punto y
+	 * coma, CRLF, todo entrecomillado y las fórmulas desactivadas.
+	 */
+	public function test_a_chosen_export_keeps_the_file_format() {
+		list( $procedimiento ) = $this->con_solicitudes();
+		update_post_meta(
+			(int) Applications::find( $procedimiento, 'C0001' ),
+			ApplicationMetaKeys::REVIEW_NOTE,
+			'=1+1'
+		);
+
+		$csv = ApplicationExport::csv( $procedimiento, array( 'code', 'note' ) );
+		$this->assertStringStartsWith( "\xEF\xBB\xBF\"Código\";\"Nota\"\r\n", $csv );
+		$this->assertStringContainsString( "\"C0001\";\"'=1+1\"\r\n", $csv );
+		$this->assertStringEndsWith( "\r\n", $csv );
+	}
+
+	/**
+	 * El fichero de usuarios se llama como el CSV, con «usuarios» delante.
+	 */
+	public function test_the_user_file_name() {
+		$this->assertSame( Applications::filename( 'Red' ), ApplicationExport::filename( 'Red', ApplicationExport::FORMAT_CSV ) );
+		$this->assertSame( 'usuarios-red-' . gmdate( 'Y-m-d' ) . '.csv', ApplicationExport::filename( 'Red', ApplicationExport::FORMAT_MOODLE ) );
 	}
 
 	/**

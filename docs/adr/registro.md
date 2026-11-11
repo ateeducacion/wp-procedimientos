@@ -81,3 +81,4 @@ versión global del aplicativo.
 | [ADR-0036](ADR-0036-codigo-adicional-por-procedimiento.md) | El código adicional se limita a la ficha pública del procedimiento | Propuesta | 2026-11-06 |
 | [ADR-0037](ADR-0037-solicitudes-individuales-del-profesorado.md) | Las solicitudes del profesorado son individuales y usan su cuenta | Propuesta | 2026-11-07 |
 | [ADR-0038](ADR-0038-una-sola-salida-de-correo-en-texto-plano.md) | Una sola salida de correo, en texto plano, que escucha acciones | Propuesta | 2026-11-10 |
+| [ADR-0039](ADR-0039-la-exportacion-a-medida-y-el-fichero-de-usuarios-viven-en-el-aplicativo.md) | La exportación a medida y el fichero de alta de usuarios viven en el aplicativo | Propuesta | 2026-11-10 |

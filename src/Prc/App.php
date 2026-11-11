@@ -16,6 +16,7 @@ use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -68,6 +69,9 @@ final class App {
 		// la limpieza al borrarla. **No son adjuntos de WordPress** y no tocan
 		// la biblioteca de medios (ADR-0028).
 		ApplicationFiles::class,
+		// La exportación a medida: olvida las elecciones guardadas de un
+		// procedimiento borrado para siempre (ADR-0039).
+		ApplicationExport::class,
 		ApplyForm::class,
 		MyCentre::class,
 		Workspace::class,

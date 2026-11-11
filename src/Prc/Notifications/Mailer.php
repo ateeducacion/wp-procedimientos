@@ -475,7 +475,7 @@ final class Mailer {
 			'centre'       => $docente || '' === $codigo ? '' : ( '' !== $nombre ? $nombre . ' (' . $codigo . ')' : $codigo ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => implode( ', ', array_filter( array_column( $coordinacion, 'name' ) ) ),
+			'coordinator'  => ApplicationMetaRegistration::full_names( $coordinacion ),
 			'date'         => (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $application_id, 'modified' ) ),
 			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
 			'url'          => ApplyForm::url( $procedure_id, $args ),

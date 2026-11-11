@@ -370,7 +370,37 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Persona coordinadora 2', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][email]"', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][dni]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][surname]"', $html );
+		$this->assertStringContainsString( 'for="prc-coordinator-surname-1"', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
+	}
+
+	/**
+	 * Una solicitud guardada antes de los apellidos abre con el nombre partido
+	 * por el primer espacio: sin esto, «Nombre» llevaría el nombre entero y
+	 * los apellidos saldrían dos veces al guardar.
+	 */
+	public function test_an_old_coordinator_without_surname_opens_split() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
+		$uid       = $this->school_head( 'C0001' );
+		Applications::save(
+			$procedure,
+			$uid,
+			$this->nucleo(
+				array(
+					'coordinator' => array(
+						'name'  => 'Ana García López',
+						'dni'   => '12345678Z',
+						'email' => 'ana@example.org',
+					),
+				)
+			)
+		);
+		$this->acting_as( $uid );
+		$html = $this->pintar( $procedure );
+
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-name-0"[^>]*value="Ana"/s', $html );
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-surname-0"[^>]*value="García López"/s', $html );
 	}
 
 	/** Multiple coordinator rows are validated and saved together. */
@@ -383,14 +413,16 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array(
 				ApplyForm::FIELD_COORDINATORS => array(
 					array(
-						'name'  => 'Ana Pérez',
-						'dni'   => '12345678Z',
-						'email' => 'ana@example.org',
+						'name'    => 'Ana',
+						'surname' => 'Pérez',
+						'dni'     => '12345678Z',
+						'email'   => 'ana@example.org',
 					),
 					array(
-						'name'  => 'Luis Díaz',
-						'dni'   => 'X0000000T',
-						'email' => 'luis@example.org',
+						'name'    => 'Luis',
+						'surname' => 'Díaz',
+						'dni'     => 'X0000000T',
+						'email'   => 'luis@example.org',
 					),
 				),
 			)
@@ -400,14 +432,16 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertSame(
 			array(
 				array(
-					'name'  => 'Ana Pérez',
-					'dni'   => '12345678Z',
-					'email' => 'ana@example.org',
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
 				),
 				array(
-					'name'  => 'Luis Díaz',
-					'dni'   => 'X0000000T',
-					'email' => 'luis@example.org',
+					'name'    => 'Luis',
+					'surname' => 'Díaz',
+					'dni'     => 'X0000000T',
+					'email'   => 'luis@example.org',
 				),
 			),
 			Applications::meta( (int) $id )[ ApplicationMetaKeys::COORDINATOR ]
@@ -508,10 +542,11 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array_merge(
 				$respuestas,
 				array(
-					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
-					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
-					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
-					ApplyForm::FIELD_ACCEPT      => '1',
+					ApplyForm::FIELD_COORD_NAME    => 'Ana',
+					ApplyForm::FIELD_COORD_SURNAME => 'Pérez',
+					ApplyForm::FIELD_COORD_DNI     => '12345678Z',
+					ApplyForm::FIELD_COORD_EMAIL   => 'ana@example.org',
+					ApplyForm::FIELD_ACCEPT        => '1',
 				)
 			)
 		);
@@ -541,11 +576,12 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			array_merge(
 				$respuestas,
 				array(
-					ApplyForm::FIELD_POSITION    => ApplicationMetaKeys::POSITION_SECRETARY,
-					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
-					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
-					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
-					ApplyForm::FIELD_ACCEPT      => '1',
+					ApplyForm::FIELD_POSITION      => ApplicationMetaKeys::POSITION_SECRETARY,
+					ApplyForm::FIELD_COORD_NAME    => 'Ana',
+					ApplyForm::FIELD_COORD_SURNAME => 'Pérez',
+					ApplyForm::FIELD_COORD_DNI     => '12345678Z',
+					ApplyForm::FIELD_COORD_EMAIL   => 'ana@example.org',
+					ApplyForm::FIELD_ACCEPT        => '1',
 				)
 			)
 		);

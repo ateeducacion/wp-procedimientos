@@ -14,7 +14,7 @@ use Prc\Meta\ApplicationMetaKeys;
  *
  * Pura: ni una llamada a WordPress. Es la parte del formulario que no cambia
  * de un procedimiento a otro (ADR-0019): el cargo de quien solicita, la
- * aceptación de los compromisos, la persona coordinadora si se pide, y las
+ * aceptación de los compromisos, las personas coordinadoras si se piden, y las
  * respuestas a las preguntas, que valida {@see ProcedureQuestions}.
  *
  * Lo que aquí no está, no se teclea: el centro (código y nombre) lo resuelve
@@ -41,34 +41,10 @@ final class ApplicationInput {
 			$position = '';
 		}
 
-		$count            = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
-		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
-		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) || '' !== self::text( $raw, 'coordinator_dni' ) ) ) {
-			$raw_coordinators[] = array(
-				'name'  => $raw['coordinator_name'] ?? '',
-				'dni'   => $raw['coordinator_dni'] ?? '',
-				'email' => $raw['coordinator_email'] ?? '',
-			);
-		}
-		$coordinators = array();
-		for ( $i = 0; $i < $count; ++$i ) {
-			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
-			$coordinator     = array(
-				'name'  => self::text( $raw_coordinator, 'name' ),
-				'dni'   => self::dni( self::text( $raw_coordinator, 'dni' ) ),
-				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
-			);
-			if ( '' === $coordinator['name'] ) {
-				$errors[] = 'coordinator_name';
-			}
-			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
-				$errors[] = 'coordinator_email';
-			}
-			if ( ! self::is_dni( $coordinator['dni'] ) ) {
-				$errors[] = 'coordinator_dni';
-			}
-			$coordinators[] = $coordinator;
-		}
+		$count        = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$coordinacion = self::coordinators( $raw, $count );
+		$errors       = array_merge( $errors, $coordinacion['errors'] );
+		$coordinators = $coordinacion['data'];
 
 		// La casilla de compromisos solo existe cuando hay compromisos que aceptar.
 		$accepted = ! empty( $raw['accept'] );
@@ -95,6 +71,56 @@ final class ApplicationInput {
 	}
 
 	/**
+	 * Validate the requested coordinators: name, surname, DNI or NIE and email each.
+	 *
+	 * Los apellidos van aparte del nombre desde la ADR-0039: el fichero de
+	 * alta de usuarios los pide por separado, y partir un nombre completo por
+	 * un espacio se equivoca con los nombres compuestos.
+	 *
+	 * @param array<string, mixed> $raw   Raw fields: `coordinators`, or the single `coordinator_*` fields.
+	 * @param int                  $count How many the procedure asks for.
+	 * @return array{errors:string[], data:array<int, array{name:string, surname:string, dni:string, email:string}>}
+	 */
+	private static function coordinators( array $raw, int $count ): array {
+		$filas = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
+		if ( array() === $filas ) {
+			$filas[] = array(
+				'name'    => $raw['coordinator_name'] ?? '',
+				'surname' => $raw['coordinator_surname'] ?? '',
+				'dni'     => $raw['coordinator_dni'] ?? '',
+				'email'   => $raw['coordinator_email'] ?? '',
+			);
+		}
+		$errors = array();
+		$data   = array();
+		for ( $i = 0; $i < $count; ++$i ) {
+			$fila        = is_array( $filas[ $i ] ?? null ) ? $filas[ $i ] : array();
+			$coordinator = array(
+				'name'    => self::text( $fila, 'name' ),
+				'surname' => self::text( $fila, 'surname' ),
+				'dni'     => self::dni( self::text( $fila, 'dni' ) ),
+				'email'   => strtolower( self::text( $fila, 'email' ) ),
+			);
+			$checks      = array(
+				'coordinator_name'    => '' !== $coordinator['name'],
+				'coordinator_surname' => '' !== $coordinator['surname'],
+				'coordinator_email'   => ProcedureInput::is_email( $coordinator['email'] ),
+				'coordinator_dni'     => self::is_dni( $coordinator['dni'] ),
+			);
+			foreach ( $checks as $error => $ok ) {
+				if ( ! $ok ) {
+					$errors[] = $error;
+				}
+			}
+			$data[] = $coordinator;
+		}
+		return array(
+			'errors' => $errors,
+			'data'   => $data,
+		);
+	}
+
+	/**
 	 * Why an application was refused, in Spanish.
 	 *
 	 * @param string[]                         $errors    Error codes.
@@ -103,11 +129,12 @@ final class ApplicationInput {
 	 */
 	public static function why( array $errors, array $questions = array() ): string {
 		$textos = array(
-			'position'          => 'el cargo',
-			'coordinator_name'  => 'el nombre de cada persona coordinadora',
-			'coordinator_dni'   => 'el DNI o NIE de cada persona coordinadora',
-			'coordinator_email' => 'el correo de cada persona coordinadora',
-			'accept'            => 'la aceptación de los compromisos',
+			'position'            => 'el cargo',
+			'coordinator_name'    => 'el nombre de cada persona coordinadora',
+			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
+			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
+			'coordinator_email'   => 'el correo de cada persona coordinadora',
+			'accept'              => 'la aceptación de los compromisos',
 		);
 		foreach ( $questions as $pregunta ) {
 			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';

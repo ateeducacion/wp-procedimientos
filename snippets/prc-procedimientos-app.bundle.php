@@ -1674,34 +1674,10 @@ final class ApplicationInput {
 			$position = '';
 		}
 
-		$count            = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
-		$raw_coordinators = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
-		if ( array() === $raw_coordinators && ( '' !== self::text( $raw, 'coordinator_name' ) || '' !== self::text( $raw, 'coordinator_email' ) || '' !== self::text( $raw, 'coordinator_dni' ) ) ) {
-			$raw_coordinators[] = array(
-				'name'  => $raw['coordinator_name'] ?? '',
-				'dni'   => $raw['coordinator_dni'] ?? '',
-				'email' => $raw['coordinator_email'] ?? '',
-			);
-		}
-		$coordinators = array();
-		for ( $i = 0; $i < $count; ++$i ) {
-			$raw_coordinator = is_array( $raw_coordinators[ $i ] ?? null ) ? $raw_coordinators[ $i ] : array();
-			$coordinator     = array(
-				'name'  => self::text( $raw_coordinator, 'name' ),
-				'dni'   => self::dni( self::text( $raw_coordinator, 'dni' ) ),
-				'email' => strtolower( self::text( $raw_coordinator, 'email' ) ),
-			);
-			if ( '' === $coordinator['name'] ) {
-				$errors[] = 'coordinator_name';
-			}
-			if ( ! ProcedureInput::is_email( $coordinator['email'] ) ) {
-				$errors[] = 'coordinator_email';
-			}
-			if ( ! self::is_dni( $coordinator['dni'] ) ) {
-				$errors[] = 'coordinator_dni';
-			}
-			$coordinators[] = $coordinator;
-		}
+		$count        = $teacher ? 0 : (int) ( $procedure['coordinator_count'] ?? ( ! empty( $procedure['requires_coordinator'] ) ? 1 : 0 ) );
+		$coordinacion = self::coordinators( $raw, $count );
+		$errors       = array_merge( $errors, $coordinacion['errors'] );
+		$coordinators = $coordinacion['data'];
 
 
 		$accepted = ! empty( $raw['accept'] );
@@ -1734,13 +1710,64 @@ final class ApplicationInput {
 
 
 
+
+
+
+
+	private static function coordinators( array $raw, int $count ): array {
+		$filas = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
+		if ( array() === $filas ) {
+			$filas[] = array(
+				'name'    => $raw['coordinator_name'] ?? '',
+				'surname' => $raw['coordinator_surname'] ?? '',
+				'dni'     => $raw['coordinator_dni'] ?? '',
+				'email'   => $raw['coordinator_email'] ?? '',
+			);
+		}
+		$errors = array();
+		$data   = array();
+		for ( $i = 0; $i < $count; ++$i ) {
+			$fila        = is_array( $filas[ $i ] ?? null ) ? $filas[ $i ] : array();
+			$coordinator = array(
+				'name'    => self::text( $fila, 'name' ),
+				'surname' => self::text( $fila, 'surname' ),
+				'dni'     => self::dni( self::text( $fila, 'dni' ) ),
+				'email'   => strtolower( self::text( $fila, 'email' ) ),
+			);
+			$checks      = array(
+				'coordinator_name'    => '' !== $coordinator['name'],
+				'coordinator_surname' => '' !== $coordinator['surname'],
+				'coordinator_email'   => ProcedureInput::is_email( $coordinator['email'] ),
+				'coordinator_dni'     => self::is_dni( $coordinator['dni'] ),
+			);
+			foreach ( $checks as $error => $ok ) {
+				if ( ! $ok ) {
+					$errors[] = $error;
+				}
+			}
+			$data[] = $coordinator;
+		}
+		return array(
+			'errors' => $errors,
+			'data'   => $data,
+		);
+	}
+
+
+
+
+
+
+
+
 	public static function why( array $errors, array $questions = array() ): string {
 		$textos = array(
-			'position'          => 'el cargo',
-			'coordinator_name'  => 'el nombre de cada persona coordinadora',
-			'coordinator_dni'   => 'el DNI o NIE de cada persona coordinadora',
-			'coordinator_email' => 'el correo de cada persona coordinadora',
-			'accept'            => 'la aceptación de los compromisos',
+			'position'            => 'el cargo',
+			'coordinator_name'    => 'el nombre de cada persona coordinadora',
+			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
+			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
+			'coordinator_email'   => 'el correo de cada persona coordinadora',
+			'accept'              => 'la aceptación de los compromisos',
 		);
 		foreach ( $questions as $pregunta ) {
 			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
@@ -4194,6 +4221,10 @@ final class ApplicationMetaRegistration {
 
 
 
+
+
+
+
 	public static function sanitize_coordinator( $value ): array {
 		$value = is_array( $value ) ? $value : array();
 		if ( isset( $value['name'] ) || isset( $value['email'] ) ) {
@@ -4206,12 +4237,76 @@ final class ApplicationMetaRegistration {
 			}
 			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
 			$out[] = array(
-				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
-				'dni'   => strtoupper( (string) preg_replace( '/[ -]/', '', sanitize_text_field( isset( $coordinator['dni'] ) && is_scalar( $coordinator['dni'] ) ? (string) $coordinator['dni'] : '' ) ) ),
-				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
+				'name'    => self::text( $coordinator, 'name' ),
+				'surname' => self::text( $coordinator, 'surname' ),
+				'dni'     => strtoupper( (string) preg_replace( '/[ -]/', '', self::text( $coordinator, 'dni' ) ) ),
+				'email'   => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function text( array $person, string $key ): string {
+		return sanitize_text_field( isset( $person[ $key ] ) && is_scalar( $person[ $key ] ) ? (string) $person[ $key ] : '' );
+	}
+
+
+
+
+
+
+
+	public static function full_name( array $coordinator ): string {
+		return trim( (string) ( $coordinator['name'] ?? '' ) . ' ' . (string) ( $coordinator['surname'] ?? '' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function split_name( string $full ): array {
+		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
+		return array( $partes[0], $partes[1] ?? '' );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function with_surname( array $coordinator ): array {
+		if ( '' === (string) ( $coordinator['surname'] ?? '' ) && '' !== (string) ( $coordinator['name'] ?? '' ) ) {
+			list( $coordinator['name'], $coordinator['surname'] ) = self::split_name( (string) $coordinator['name'] );
+		}
+		return $coordinator;
+	}
+
+
+
+
+
+
+
+	public static function full_names( array $coordinators ): string {
+		return implode( ', ', array_filter( array_map( array( self::class, 'full_name' ), $coordinators ) ) );
 	}
 
 
@@ -6695,6 +6790,9 @@ use Prc\PostType\ProcedurePostType;
 
 
 
+
+
+
 if ( ! class_exists( 'Prc\PublicFront\Applications', false ) ) {
 final class Applications {
 
@@ -7259,10 +7357,11 @@ final class Applications {
 
 
 
-	public static function rows( int $procedure_id ): array {
+
+	public static function rows( int $procedure_id, ?array $applications = null ): array {
 		$preguntas   = self::questions( $procedure_id );
 		$filas       = array();
-		$solicitudes = self::for_procedure( $procedure_id );
+		$solicitudes = $applications ?? self::for_procedure( $procedure_id );
 
 		cache_users( array_unique( array_map( 'intval', wp_list_pluck( $solicitudes, 'post_author' ) ) ) );
 		foreach ( $solicitudes as $solicitud ) {
@@ -7297,7 +7396,7 @@ final class Applications {
 			'applicant'         => false !== $autor ? (string) $autor->display_name : '',
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator'       => ApplicationMetaRegistration::full_names( $coord ),
 			'coordinator_dni'   => implode( ', ', array_filter( array_column( $coord, 'dni' ) ) ),
 			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
@@ -7338,8 +7437,11 @@ final class Applications {
 
 
 
+
+
+
 	public static function csv( int $procedure_id ): string {
-		return self::csv_lines( self::columns( self::questions( $procedure_id ) ), self::rows( $procedure_id ) );
+		return ApplicationExport::csv( $procedure_id );
 	}
 
 
@@ -7390,10 +7492,7 @@ final class Applications {
 	private static function csv_line( array $campos ): string {
 		$fuera = array();
 		foreach ( $campos as $campo ) {
-			if ( '' !== $campo && false !== strpos( "=+-@\t\r", $campo[0] ) ) {
-				$campo = "'" . $campo;
-			}
-			$fuera[] = '"' . str_replace( '"', '""', $campo ) . '"';
+			$fuera[] = '"' . str_replace( '"', '""', ApplicationExport::neutralize( $campo ) ) . '"';
 		}
 		return implode( ';', $fuera );
 	}
@@ -8161,6 +8260,690 @@ final class ApplicationFiles {
 			WP_Filesystem();
 		}
 		return $wp_filesystem instanceof \WP_Filesystem_Base ? $wp_filesystem : null;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Domain\ProcedureInput;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
+use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationExport', false ) ) {
+final class ApplicationExport {
+
+
+	public const SHAPE_APPLICATION = 'application';
+
+
+	public const SHAPE_PERSON = 'person';
+
+	public const FORMAT_CSV    = 'csv';
+	public const FORMAT_MOODLE = 'moodle';
+
+
+	public const WHO_COORDINATORS = 'coordinators';
+
+
+	public const WHO_APPLICANT = 'applicant';
+
+
+	public const MOODLE_HEADER = 'username,firstname,lastname,email';
+
+
+
+
+	public const CHOICE_META = 'prc_export_';
+
+
+	private const BATCH = 100;
+
+
+
+
+
+
+	private const GROUPS = array(
+		'application'  => array( 'date' ),
+		'centre'       => array( 'centre', 'code' ),
+		'applicant'    => array( 'applicant', 'email', 'position' ),
+		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
+		'review'       => array( 'state', 'note' ),
+	);
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function on_delete( int $post_id, $post = null ): void {
+		$tipo = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
+		if ( ProcedurePostType::POST_TYPE === $tipo ) {
+			delete_metadata( 'user', 0, self::CHOICE_META . $post_id, '', true );
+		}
+	}
+
+
+
+
+
+
+
+
+	public static function group_labels(): array {
+		return array(
+			'application'  => 'Solicitud',
+			'centre'       => 'Centro',
+			'applicant'    => 'Quien presenta',
+			'coordination' => 'Coordinación',
+			'review'       => 'Revisión',
+			'questions'    => 'Preguntas',
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function groups( int $procedure_id ): array {
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = Applications::columns( $preguntas );
+		$out       = array();
+		foreach ( self::GROUPS as $grupo => $claves ) {
+			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
+		}
+		$out['questions'] = array();
+		foreach ( $preguntas as $pregunta ) {
+			$out['questions'][ (string) $pregunta['key'] ] = (string) $pregunta['label'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function valid_columns( int $procedure_id, array $keys ): array {
+		$todas = Applications::columns( Applications::questions( $procedure_id ) );
+		$out   = array();
+		foreach ( $keys as $clave ) {
+			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
+				$out[ $clave ] = $todas[ $clave ];
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = Applications::columns( $preguntas );
+		$columnas  = self::valid_columns( $procedure_id, $columns );
+
+		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
+			$columnas = $todas;
+		}
+		$claves = array_flip( array_keys( $columnas ) );
+		$filas  = array();
+		foreach ( self::batches( $procedure_id ) as $tanda ) {
+			foreach ( $tanda as $solicitud ) {
+				$fila = Applications::row( $solicitud, $preguntas );
+				foreach ( self::SHAPE_PERSON === $shape ? self::per_person( $solicitud, $fila ) : array( $fila ) as $una ) {
+
+					$filas[] = array_intersect_key( $una, $claves );
+				}
+			}
+		}
+		return Applications::csv_lines( $columnas, $filas );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function per_person( \WP_Post $application, array $row ): array {
+		$out = array();
+		foreach ( self::coordinators( $application ) as $persona ) {
+			$out[] = array_merge(
+				$row,
+				array(
+					'coordinator'       => ApplicationMetaRegistration::full_name( $persona ),
+					'coordinator_dni'   => $persona['dni'],
+					'coordinator_email' => $persona['email'],
+				)
+			);
+		}
+		return array() === $out ? array( $row ) : $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function who(): array {
+		return array(
+			self::WHO_COORDINATORS => 'Coordinación',
+			self::WHO_APPLICANT    => 'Quien presenta la solicitud',
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function people( int $procedure_id, array $who = array() ): array {
+		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
+		return array(
+			'people'   => array_values( $cuenta['people'] ),
+			'left_out' => $cuenta['left_out'],
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function who_counts( array $applications, array $who = array() ): array {
+		$grupos = array();
+		foreach ( self::sources( $who ) as $fuente ) {
+			$grupos[ $fuente ] = array( $fuente );
+		}
+		$out = array();
+		foreach ( self::tally( array( $applications ), $grupos ) as $fuente => $cuenta ) {
+			$out[ $fuente ] = array( 'count' => count( $cuenta['people'] ) ) + $cuenta['left_out'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function sources( array $who ): array {
+		$fuentes = array_values( array_intersect( array_keys( self::who() ), $who ) );
+		return array() === $fuentes ? array_keys( self::who() ) : $fuentes;
+	}
+
+
+
+
+
+
+
+
+	private static function tally( iterable $batches, array $groups ): array {
+		$out = array();
+		foreach ( array_keys( $groups ) as $grupo ) {
+			$out[ $grupo ] = array(
+				'people'   => array(),
+				'left_out' => array(
+					'email'      => 0,
+					'incomplete' => 0,
+					'conflict'   => 0,
+					'invalid'    => 0,
+				),
+			);
+		}
+		foreach ( $batches as $tanda ) {
+			foreach ( $tanda as $solicitud ) {
+
+				$de = array();
+				foreach ( $groups as $grupo => $fuentes ) {
+					foreach ( $fuentes as $fuente ) {
+						$de[ $fuente ] = $de[ $fuente ] ?? self::from_source( $fuente, $solicitud );
+						foreach ( $de[ $fuente ] as $persona ) {
+							self::add( $out[ $grupo ], $persona );
+						}
+					}
+				}
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function add( array &$tally, array $person ): void {
+		if ( ! ProcedureInput::is_email( (string) $person['email'] ) ) {
+			++$tally['left_out']['email'];
+			return;
+		}
+		$person['username'] = self::username( $person );
+		if ( '' === $person['username'] || '' === $person['firstname'] || '' === $person['lastname'] ) {
+			++$tally['left_out']['incomplete'];
+			return;
+		}
+		if ( ! self::is_safe_username( self::lower( $person['username'] ) ) || self::neutralize( (string) $person['email'] ) !== (string) $person['email'] ) {
+			++$tally['left_out']['invalid'];
+			return;
+		}
+		$clave = self::lower( $person['username'] );
+		if ( ! isset( $tally['people'][ $clave ] ) ) {
+			$tally['people'][ $clave ] = $person;
+		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
+			++$tally['left_out']['conflict'];
+		}
+	}
+
+
+
+
+
+
+
+
+
+	private static function is_safe_username( string $username ): bool {
+		return 1 === preg_match( '/^[a-z0-9][a-z0-9_.@-]*$/', $username );
+	}
+
+
+
+
+
+
+
+	private static function lower( string $value ): string {
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value ) : strtolower( $value );
+	}
+
+
+
+
+
+
+
+
+	public static function moodle( int $procedure_id, array $options = array() ): string {
+		$who = is_array( $options['who'] ?? null ) ? $options['who'] : array();
+		return self::moodle_lines( self::people( $procedure_id, $who )['people'] );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function moodle_lines( array $people ): string {
+		$lineas = array( self::MOODLE_HEADER );
+		foreach ( $people as $persona ) {
+			$campos = array();
+			foreach ( array( 'username', 'firstname', 'lastname', 'email' ) as $clave ) {
+				$valor    = (string) ( $persona[ $clave ] ?? '' );
+				$campos[] = self::moodle_cell( 'firstname' === $clave || 'lastname' === $clave ? self::neutralize( $valor ) : $valor );
+			}
+			$lineas[] = implode( ',', $campos );
+		}
+		return implode( "\n", $lineas );
+	}
+
+
+
+
+
+
+
+	private static function moodle_cell( string $value ): string {
+		return false === strpbrk( $value, ",\"\r\n" ) ? $value : '"' . str_replace( '"', '""', $value ) . '"';
+	}
+
+
+
+
+
+
+
+	public static function neutralize( string $value ): string {
+		return '' !== $value && false !== strpos( "=+-@\t\r", $value[0] ) ? "'" . $value : $value;
+	}
+
+
+
+
+
+
+
+
+	private static function from_source( string $source, \WP_Post $application ): array {
+		switch ( $source ) {
+			case self::WHO_APPLICANT:
+				return self::applicant( $application );
+			case self::WHO_COORDINATORS:
+				$out = array();
+				foreach ( self::coordinators( $application ) as $persona ) {
+
+					if ( '' === $persona['name'] . $persona['surname'] . $persona['email'] ) {
+						continue;
+					}
+					$persona = ApplicationMetaRegistration::with_surname( $persona );
+					$out[]   = self::person( self::WHO_COORDINATORS, $application, 0, '', $persona['name'], $persona['surname'], $persona['email'] );
+				}
+				return $out;
+		}
+		return array();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function applicant( \WP_Post $application ): array {
+		$cuenta = get_userdata( (int) $application->post_author );
+		if ( false === $cuenta ) {
+			return array();
+		}
+		$nombre    = trim( (string) $cuenta->first_name );
+		$apellidos = trim( (string) $cuenta->last_name );
+
+
+		$publico = (string) $cuenta->display_name;
+		if ( ( '' === $nombre || '' === $apellidos ) && $publico !== (string) $cuenta->user_login ) {
+			$partido   = ApplicationMetaRegistration::split_name( $publico );
+			$nombre    = '' !== $nombre ? $nombre : $partido[0];
+			$apellidos = '' !== $apellidos ? $apellidos : $partido[1];
+		}
+		return array( self::person( self::WHO_APPLICANT, $application, (int) $cuenta->ID, (string) $cuenta->user_login, $nombre, $apellidos, (string) $cuenta->user_email ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function person( string $source, \WP_Post $application, int $user_id, string $login, string $firstname, string $lastname, string $email ): array {
+		return array(
+			'source'         => $source,
+			'application_id' => (int) $application->ID,
+			'user_id'        => $user_id,
+			'username'       => $login,
+			'firstname'      => $firstname,
+			'lastname'       => $lastname,
+			'email'          => trim( $email ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function username( array $person ): string {
+		$usuario = (string) $person['username'];
+		if ( '' === $usuario ) {
+			$arroba  = strrpos( (string) $person['email'], '@' );
+			$usuario = false === $arroba ? '' : strtolower( substr( (string) $person['email'], 0, $arroba ) );
+		}
+
+
+
+
+
+
+
+		$usuario = apply_filters( 'prc_export_username', $usuario, $person );
+		return is_string( $usuario ) ? trim( $usuario ) : '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize_choice( int $procedure_id, array $raw ): array {
+		$columnas = is_array( $raw['columns'] ?? null ) && empty( $raw['all'] ) ? $raw['columns'] : array();
+		$quienes  = is_array( $raw['who'] ?? null ) ? array_filter( $raw['who'], 'is_string' ) : array();
+		return array(
+			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
+			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
+			'format'  => self::FORMAT_MOODLE === ( $raw['format'] ?? '' ) ? self::FORMAT_MOODLE : self::FORMAT_CSV,
+			'who'     => array_values( array_intersect( array_keys( self::who() ), $quienes ) ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function choice( int $user_id, int $procedure_id ): array {
+		$guardada = get_user_meta( $user_id, self::CHOICE_META . $procedure_id, true );
+		return self::sanitize_choice( $procedure_id, is_array( $guardada ) ? $guardada : array() );
+	}
+
+
+
+
+
+
+
+
+
+	public static function remember( int $user_id, int $procedure_id, array $choice ): void {
+		if ( $user_id > 0 && $procedure_id > 0 ) {
+			update_user_meta( $user_id, self::CHOICE_META . $procedure_id, self::sanitize_choice( $procedure_id, $choice ) );
+		}
+	}
+
+
+
+
+
+
+
+
+	public static function filename( string $title, string $format ): string {
+		$nombre = Applications::filename( $title );
+		return self::FORMAT_MOODLE === $format ? 'usuarios-' . substr( $nombre, strlen( 'solicitudes-' ) ) : $nombre;
+	}
+
+
+
+
+
+
+
+
+
+	private static function coordinators( \WP_Post $application ): array {
+		return ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( (int) $application->ID, ApplicationMetaKeys::COORDINATOR, true ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function batches( int $procedure_id ): \Generator {
+		if ( $procedure_id <= 0 ) {
+			return;
+		}
+		for ( $pagina = 1; ; ++$pagina ) {
+			$tanda = get_posts(
+				array(
+					'post_type'        => ApplicationPostType::POST_TYPE,
+					'post_parent'      => $procedure_id,
+					'post_status'      => 'publish',
+					'posts_per_page'   => self::BATCH,
+					'paged'            => $pagina,
+					'no_found_rows'    => true,
+
+
+					'orderby'          => array(
+						'date' => 'ASC',
+						'ID'   => 'ASC',
+					),
+					'suppress_filters' => false,
+				)
+			);
+			if ( ! is_array( $tanda ) || array() === $tanda ) {
+				return;
+			}
+
+			cache_users( array_unique( array_map( 'intval', wp_list_pluck( $tanda, 'post_author' ) ) ) );
+			yield $tanda;
+			if ( count( $tanda ) < self::BATCH ) {
+				return;
+			}
+		}
 	}
 }
 
@@ -11131,6 +11914,7 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
@@ -12036,7 +12820,7 @@ final class ProcedureEditorView {
 		<div class="prc-banda-tabla">
 			<p class="prc-recuento">
 				<?php echo esc_html( sprintf( 1 === $cuenta ? 'Mostrando %d solicitud.' : 'Mostrando %d solicitudes.', $cuenta ) ); ?>
-				Cada una se revisa desde su fila; la exportación lleva todas las columnas, respuestas incluidas.
+				Cada una se revisa desde su fila; al exportar se eligen las columnas, una fila por solicitud o por persona, o el fichero de alta de usuarios.
 			</p>
 			<?php echo self::export_form( $m );?>
 		</div>
@@ -12187,19 +12971,160 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
+
+
 	private static function export_form( array $m ): string {
-		$op = ProcedureEditor::OP_EXPORT;
+		$op       = ProcedureEditor::OP_EXPORT;
+		$export   = (array) ( $m['export'] ?? array() );
+		$eleccion = (array) ( $export['choice'] ?? array() );
+		$columnas = (array) ( $eleccion['columns'] ?? array() );
+		$quienes  = (array) ( $eleccion['who'] ?? array() );
+		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
+		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
+
+		$radios_formato = self::export_radio(
+			ProcedureEditor::FIELD_EXPORT_FORMAT,
+			array(
+				ApplicationExport::FORMAT_CSV    => 'Hoja de cálculo (CSV)',
+				ApplicationExport::FORMAT_MOODLE => 'Fichero de alta de usuarios de Moodle',
+			),
+			$formato,
+			'data-prc-export-format'
+		);
+		$radios_forma   = self::export_radio(
+			ProcedureEditor::FIELD_EXPORT_SHAPE,
+			array(
+				ApplicationExport::SHAPE_APPLICATION => 'Solicitud',
+				ApplicationExport::SHAPE_PERSON      => 'Persona coordinadora: la solicitud se repite en cada una',
+			),
+			$forma
+		);
 
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action="">
-			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Exportar a CSV</button>
-		</form>
+		<details class="prc-exportar" data-prc-export>
+			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
+			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
+				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+
+				<fieldset class="prc-exportar__grupo">
+					<legend>Formato</legend>
+					<?php echo $radios_formato;?>
+				</fieldset>
+
+				<div class="prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_CSV ); ?>">
+					<fieldset class="prc-exportar__grupo">
+						<legend>Una fila por</legend>
+						<?php echo $radios_forma;?>
+					</fieldset>
+					<fieldset class="prc-exportar__grupo">
+						<legend>Columnas</legend>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
+							Todas las columnas
+						</label>
+						<p class="prc-campo__ayuda">Marcada, se exportan todas y no se miran las de abajo.</p>
+						<?php foreach ( (array) ( $export['groups'] ?? array() ) as $grupo => $de_grupo ) : ?>
+							<?php
+							if ( array() === $de_grupo ) {
+								continue;
+							}
+							?>
+							<fieldset class="prc-exportar__columnas">
+								<legend><?php echo esc_html( (string) ( $export['group_labels'][ $grupo ] ?? $grupo ) ); ?></legend>
+								<?php foreach ( (array) $de_grupo as $clave => $rotulo ) : ?>
+									<label class="prc-casilla">
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" data-prc-export-col <?php checked( array() === $columnas || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<?php echo esc_html( (string) $rotulo ); ?>
+									</label>
+								<?php endforeach; ?>
+							</fieldset>
+						<?php endforeach; ?>
+					</fieldset>
+				</div>
+
+				<fieldset class="prc-exportar__grupo prc-exportar__formato" data-prc-export-for="<?php echo esc_attr( ApplicationExport::FORMAT_MOODLE ); ?>">
+					<legend>Quiénes salen en el fichero de usuarios</legend>
+					<?php foreach ( (array) ( $export['who'] ?? array() ) as $clave => $quien ) : ?>
+						<label class="prc-casilla">
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_WHO ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php checked( array() === $quienes || in_array( (string) $clave, $quienes, true ) ); ?> />
+							<?php echo esc_html( self::who_label( (array) $quien ) ); ?>
+						</label>
+					<?php endforeach; ?>
+					<p class="prc-campo__ayuda">Columnas <code><?php echo esc_html( ApplicationExport::MOODLE_HEADER ); ?></code>, una fila por persona y sin repetir usuario. No salen: quien no tiene un correo válido; las incompletas, sin nombre, apellidos o usuario; y quien comparte usuario con otra persona de distinto correo, que se queda con la primera.</p>
+				</fieldset>
+
+				<div class="prc-acciones">
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+				</div>
+			</form>
+		</details>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function export_radio( string $name, array $options, string $selected, string $marca = '' ): string {
+		$out = '';
+		foreach ( $options as $valor => $rotulo ) {
+			$out .= sprintf(
+				'<label class="prc-casilla"><input type="radio" name="%1$s" value="%2$s"%3$s%4$s /> %5$s</label>',
+				esc_attr( $name ),
+				esc_attr( (string) $valor ),
+				'' !== $marca ? ' ' . esc_attr( $marca ) : '',
+				checked( (string) $valor, $selected, false ),
+				esc_html( $rotulo )
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function who_label( array $quien ): string {
+		$cuenta  = (int) ( $quien['count'] ?? 0 );
+		$motivos = array(
+			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
+			'incomplete' => array( '%d incompleta', '%d incompletas' ),
+			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
+		);
+		$fuera   = array();
+		foreach ( $motivos as $clave => list( $una, $varias ) ) {
+			$n = (int) ( $quien[ $clave ] ?? 0 );
+			if ( $n > 0 ) {
+				$fuera[] = sprintf( 1 === $n ? $una : $varias, $n );
+			}
+		}
+		$texto = (string) ( $quien['label'] ?? '' ) . ' (' . sprintf( 1 === $cuenta ? '%d persona' : '%d personas', $cuenta );
+		if ( array() !== $fuera ) {
+			$texto .= '. No saldrán: ' . implode( ', ', $fuera );
+		}
+		return $texto . ')';
 	}
 
 
@@ -12663,6 +13588,19 @@ final class ProcedureEditor {
 
 
 
+
+
+	public const FIELD_EXPORT_ALL     = 'prc_export_all';
+	public const FIELD_EXPORT_COLUMNS = 'prc_export_columns';
+	public const FIELD_EXPORT_SHAPE   = 'prc_export_shape';
+	public const FIELD_EXPORT_FORMAT  = 'prc_export_format';
+	public const FIELD_EXPORT_WHO     = 'prc_export_who';
+
+
+
+
+
+
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
@@ -12931,7 +13869,7 @@ final class ProcedureEditor {
 				return;
 			}
 			if ( self::OP_EXPORT === $op ) {
-				self::export( $procedure_id );
+				self::export( $procedure_id, $user_id );
 				return;
 			}
 			self::review( $procedure_id, $row_id );
@@ -13574,9 +14512,20 @@ final class ProcedureEditor {
 
 
 
-	private static function export( int $procedure_id ): void {
-		$cuerpo = Applications::csv( $procedure_id );
-		$nombre = Applications::filename( (string) get_post_field( 'post_title', $procedure_id ) );
+
+
+
+
+
+
+	private static function export( int $procedure_id, int $user_id ): void {
+		$eleccion = ApplicationExport::sanitize_choice( $procedure_id, self::export_request() );
+		ApplicationExport::remember( $user_id, $procedure_id, $eleccion );
+
+		$cuerpo = ApplicationExport::FORMAT_MOODLE === $eleccion['format']
+			? ApplicationExport::moodle( $procedure_id, array( 'who' => $eleccion['who'] ) )
+			: ApplicationExport::csv( $procedure_id, $eleccion['columns'], $eleccion['shape'] );
+		$nombre = ApplicationExport::filename( (string) get_post_field( 'post_title', $procedure_id ), $eleccion['format'] );
 
 		Shell::send_header( 'Content-Type: text/csv; charset=utf-8' );
 		Shell::send_header( 'Content-Disposition: attachment; filename="' . $nombre . '"' );
@@ -13584,6 +14533,55 @@ final class ProcedureEditor {
 		Shell::send_header( 'Cache-Control: no-store, no-cache, must-revalidate' );
 		echo $cuerpo;
 		Shell::leave();
+	}
+
+
+
+
+
+
+	private static function export_request(): array {
+
+		$listas = array();
+		foreach ( array( self::FIELD_EXPORT_COLUMNS, self::FIELD_EXPORT_WHO ) as $campo ) {
+			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array();
+			$listas[ $campo ] = is_array( $valor ) ? array_map( 'sanitize_key', array_filter( $valor, 'is_string' ) ) : array();
+		}
+		$todas = ! empty( $_POST[ self::FIELD_EXPORT_ALL ] );
+
+		return array(
+			'all'     => $todas,
+			'columns' => $listas[ self::FIELD_EXPORT_COLUMNS ],
+			'shape'   => sanitize_key( self::field( self::FIELD_EXPORT_SHAPE ) ),
+			'format'  => sanitize_key( self::field( self::FIELD_EXPORT_FORMAT ) ),
+			'who'     => $listas[ self::FIELD_EXPORT_WHO ],
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function export_model( int $procedure_id, int $user_id, array $applications ): array {
+		$quienes = array();
+		foreach ( ApplicationExport::who_counts( $applications ) as $clave => $cuenta ) {
+			$quienes[ $clave ] = array( 'label' => ApplicationExport::who()[ $clave ] ) + $cuenta;
+		}
+		return array(
+			'groups'       => ApplicationExport::groups( $procedure_id ),
+			'group_labels' => ApplicationExport::group_labels(),
+			'choice'       => ApplicationExport::choice( $user_id, $procedure_id ),
+			'who'          => $quienes,
+		);
 	}
 
 
@@ -13709,6 +14707,7 @@ final class ProcedureEditor {
 			'q_max'                   => ProcedureQuestions::MAX,
 			'applications'            => array(),
 			'app_cols'                => array(),
+			'export'                  => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
 			'notify_events'           => ProcedureMetaKeys::notify_events(),
 		);
@@ -13827,8 +14826,12 @@ final class ProcedureEditor {
 		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
+
+
+			$solicitudes       = Applications::for_procedure( $procedure_id );
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
-			$m['applications'] = Applications::rows( $procedure_id );
+			$m['applications'] = Applications::rows( $procedure_id, $solicitudes );
+			$m['export']       = self::export_model( $procedure_id, $user_id, $solicitudes );
 		}
 		return $m;
 	}
@@ -14529,23 +15532,7 @@ final class ApplyFormView {
 							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
 						</div>
 						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php $coordinator = (array) ( $v['coordinators'][ $index ] ?? array() ); ?>
-							<fieldset class="prc-seccion-campos">
-								<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
-								<div class="prc-campo prc-campo--medio prc-campo--abre-fila">
-									<?php echo self::label( 'prc-coordinator-name-' . $index, 'Nombre y apellidos', true );?>
-									<input class="prc-control" type="text" id="prc-coordinator-name-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][name]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['name'] ?? '' ) ); ?>" />
-								</div>
-								<div class="prc-campo prc-campo--cuarto">
-									<?php echo self::label( 'prc-coordinator-dni-' . $index, 'DNI o NIE', true );?>
-									<input class="prc-control" type="text" id="prc-coordinator-dni-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][dni]' ); ?>" required autocomplete="off" aria-describedby="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>" value="<?php echo esc_attr( (string) ( $coordinator['dni'] ?? '' ) ); ?>" />
-									<p class="prc-campo__ayuda" id="prc-coordinator-dni-ayuda-<?php echo esc_attr( (string) $index ); ?>">Escriba el DNI o NIE completo, con la letra.</p>
-								</div>
-								<div class="prc-campo prc-campo--cuarto">
-									<?php echo self::label( 'prc-coordinator-email-' . $index, 'Correo electrónico', true );?>
-									<input class="prc-control" type="email" id="prc-coordinator-email-<?php echo esc_attr( (string) $index ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][email]' ); ?>" required value="<?php echo esc_attr( (string) ( $coordinator['email'] ?? '' ) ); ?>" />
-								</div>
-							</fieldset>
+							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) );?>
 						<?php endfor; ?>
 					</div>
 				</section>
@@ -14745,6 +15732,47 @@ final class ApplyFormView {
 
 
 
+
+
+
+
+	private static function coordinator_fields( int $index, array $coordinator ): string {
+		$campos = array(
+			'name'    => array( 'Nombre', 'text', 'prc-campo--cuarto prc-campo--abre-fila', '' ),
+			'surname' => array( 'Apellidos', 'text', 'prc-campo--cuarto', '' ),
+			'dni'     => array( 'DNI o NIE', 'text', 'prc-campo--cuarto', 'Escriba el DNI o NIE completo, con la letra.' ),
+			'email'   => array( 'Correo electrónico', 'email', 'prc-campo--cuarto', '' ),
+		);
+
+		ob_start();
+		?>
+		<fieldset class="prc-seccion-campos">
+			<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
+			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $clases, $ayuda ) ) : ?>
+				<?php $id = 'prc-coordinator-' . $campo . '-' . $index; ?>
+				<div class="prc-campo <?php echo esc_attr( $clases ); ?>">
+					<?php echo self::label( $id, $rotulo, true );?>
+					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
+						<?php if ( 'dni' === $campo ) : ?>
+							autocomplete="off" aria-describedby="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"
+						<?php endif; ?>
+						value="<?php echo esc_attr( (string) ( $coordinator[ $campo ] ?? '' ) ); ?>" />
+					<?php if ( '' !== $ayuda ) : ?>
+						<p class="prc-campo__ayuda" id="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"><?php echo esc_html( $ayuda ); ?></p>
+					<?php endif; ?>
+				</div>
+			<?php endforeach; ?>
+		</fieldset>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
 	private static function summary( array $m ): string {
 		$s = (array) $m['application'];
 		if ( array() === $s ) {
@@ -14765,7 +15793,7 @@ final class ApplyFormView {
 				<?php foreach ( $coord as $index => $persona ) : ?>
 					<?php if ( '' !== (string) $persona['name'] ) : ?>
 						<dt><?php echo esc_html( sprintf( 1 === count( $coord ) ? 'Persona coordinadora' : 'Persona coordinadora %d', $index + 1 ) ); ?></dt>
-						<dd><?php echo esc_html( implode( ' · ', array_filter( array( $persona['name'], $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
+						<dd><?php echo esc_html( implode( ' · ', array_filter( array( ApplicationMetaRegistration::full_name( $persona ), $persona['dni'], $persona['email'] ) ) ) ); ?></dd>
 					<?php endif; ?>
 				<?php endforeach; ?>
 				<?php foreach ( $preguntas as $pregunta ) : ?>
@@ -14871,15 +15899,16 @@ final class ApplyForm {
 	public const OP_DELIVER     = 'deliver';
 	public const FIELD_DELIVERY = 'prc_delivery';
 
-	public const FIELD_PROCEDURE    = 'prc_apply_procedure';
-	public const FIELD_CENTRE       = 'prc_apply_centre';
-	public const FIELD_POSITION     = 'prc_position';
-	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
-	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
-	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
-	public const FIELD_COORDINATORS = 'prc_coordinators';
-	public const FIELD_ACCEPT       = 'prc_accept';
-	public const FIELD_ANSWERS      = 'prc_q';
+	public const FIELD_PROCEDURE     = 'prc_apply_procedure';
+	public const FIELD_CENTRE        = 'prc_apply_centre';
+	public const FIELD_POSITION      = 'prc_position';
+	public const FIELD_COORD_NAME    = 'prc_coordinator_name';
+	public const FIELD_COORD_SURNAME = 'prc_coordinator_surname';
+	public const FIELD_COORD_DNI     = 'prc_coordinator_dni';
+	public const FIELD_COORD_EMAIL   = 'prc_coordinator_email';
+	public const FIELD_COORDINATORS  = 'prc_coordinators';
+	public const FIELD_ACCEPT        = 'prc_accept';
+	public const FIELD_ANSWERS       = 'prc_q';
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
@@ -15088,13 +16117,14 @@ final class ApplyForm {
 		$coordinators = is_array( $coordinators ) ? self::clean_coordinators( $coordinators ) : array();
 
 		return array(
-			'position'          => self::field( self::FIELD_POSITION ),
-			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
-			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
-			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
-			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
-			'accept'            => $acepta,
-			'answers'           => self::clean_answers( $respuestas ),
+			'position'            => self::field( self::FIELD_POSITION ),
+			'coordinators'        => is_array( $coordinators ) ? $coordinators : array(),
+			'coordinator_name'    => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_surname' => self::field( self::FIELD_COORD_SURNAME ),
+			'coordinator_dni'     => self::field( self::FIELD_COORD_DNI ),
+			'coordinator_email'   => self::field( self::FIELD_COORD_EMAIL ),
+			'accept'              => $acepta,
+			'answers'             => self::clean_answers( $respuestas ),
 		);
 	}
 
@@ -15125,15 +16155,12 @@ final class ApplyForm {
 	private static function clean_coordinators( array $raw ): array {
 		$out = array();
 		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
-			$row   = is_array( $row ) ? $row : array();
-			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
-			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
-			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
-			$out[] = array(
-				'name'  => $name,
-				'dni'   => $dni,
-				'email' => $email,
-			);
+			$row  = is_array( $row ) ? $row : array();
+			$fila = array();
+			foreach ( array( 'name', 'surname', 'dni', 'email' ) as $campo ) {
+				$fila[ $campo ] = is_scalar( $row[ $campo ] ?? null ) ? sanitize_text_field( (string) $row[ $campo ] ) : '';
+			}
+			$out[] = $fila;
 		}
 		return $out;
 	}
@@ -15419,7 +16446,12 @@ final class ApplyForm {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+
+
+		$coordinators = array_map(
+			array( ApplicationMetaRegistration::class, 'with_surname' ),
+			ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() )
+		);
 		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
@@ -15878,7 +16910,7 @@ final class MyCentre {
 			'date_label'   => (string) get_the_date( 'd-m-Y', $application ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator'  => ApplicationMetaRegistration::full_names( $coord ),
 			'options'      => $opciones,
 			'options_text' => implode( ' ', $opciones ),
 			'state'        => $estado,
@@ -16792,7 +17824,7 @@ final class Mailer {
 			'centre'       => $docente || '' === $codigo ? '' : ( '' !== $nombre ? $nombre . ' (' . $codigo . ')' : $codigo ),
 			'applicant'    => false !== $autor ? (string) $autor->display_name : '',
 			'position'     => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'  => implode( ', ', array_filter( array_column( $coordinacion, 'name' ) ) ),
+			'coordinator'  => ApplicationMetaRegistration::full_names( $coordinacion ),
 			'date'         => (string) wp_date( 'd-m-Y H:i', (int) get_post_timestamp( $application_id, 'modified' ) ),
 			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
 			'url'          => ApplyForm::url( $procedure_id, $args ),
@@ -17541,6 +18573,7 @@ use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationExport;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
@@ -17594,6 +18627,9 @@ final class App {
 
 
 		ApplicationFiles::class,
+
+
+		ApplicationExport::class,
 		ApplyForm::class,
 		MyCentre::class,
 		Workspace::class,
@@ -18043,6 +19079,29 @@ final class App {
 .prc-revision[open] .prc-revision__abrir { margin-bottom: 8px; }
 
 .prc-revision__form { min-width: 16rem; }
+
+/* El diálogo de exportar (ADR-0039). Sin guion es un desplegable con el
+   formulario dentro; con guion, `prc-app.js` mete el formulario en un
+   `.prc-dialogo` y estas reglas valen igual en los dos sitios. */
+.prc-exportar { margin: 0; }
+.prc-exportar > summary { list-style: none; cursor: pointer; }
+.prc-exportar > summary::-webkit-details-marker { display: none; }
+.prc-exportar[open] > .prc-exportar__form {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--prc-linea);
+  border-radius: var(--prc-r);
+  background: var(--prc-sup);
+}
+.prc-exportar__titulo { margin: 0 0 12px; font-size: 18px; }
+.prc-exportar__grupo,
+.prc-exportar__columnas { margin: 0 0 12px; padding: 0; border: 0; min-width: 0; }
+.prc-exportar__grupo > legend,
+.prc-exportar__columnas > legend { margin-bottom: 4px; font-weight: 700; font-size: 14px; }
+.prc-exportar__columnas { display: flex; flex-wrap: wrap; gap: 2px 16px; }
+.prc-exportar__columnas > legend { flex-basis: 100%; font-weight: 600; color: var(--prc-c-medio); }
+.prc-exportar .prc-casilla { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; font-size: 14px; }
+.prc-dialogo--exportar[open] { width: min(720px, calc(100vw - 32px)); }
 .prc-revision__form .prc-btn.prc-envio { margin: 10px 0 0; }
 
 .prc-respuestas {
@@ -20575,10 +21634,10 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   'js/prc-app.js' => '/*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.
  *
- * Cuatro cosas, y las cuatro son mejora sobre algo que ya funciona sin ellas:
- * si el guion no llega, el formulario se envía igual, el aviso del bloqueo ya
- * viene pintado desde el servidor, el `title` del botón sigue ahí y el botón
- * de publicar hace lo mismo que el interruptor. Nada aquí valida ni autoriza:
+ * Todo es mejora sobre algo que ya funciona sin ellas: si el guion no llega,
+ * el formulario se envía igual, el aviso del bloqueo ya viene pintado desde
+ * el servidor, el `title` del botón sigue ahí, el botón de publicar hace lo
+ * mismo que el interruptor y el diálogo de exportar es un desplegable. Nada aquí valida ni autoriza:
  * eso está en el servidor, con su nonce y su comprobación de ProcedureAccess.
  *
  * Delegado en `document`: las pantallas repintan trozos y un `addEventListener`
@@ -20867,6 +21926,126 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 		Array.prototype.forEach.call( botones, function ( boton ) {
 			boton.hidden = true;
 		} );
+	} );
+
+	/* --- 6. El diálogo de exportar --------------------------------------- */
+
+	/*
+	 * `data-prc-export` en un `<details>` con el formulario dentro: sin guion
+	 * se despliega y se envía igual, y «Todas las columnas» es un campo que
+	 * lee el servidor. Con guion, el formulario pasa a un `<dialog>` modal y
+	 * el `<summary>` se cambia por un `<button>` con `aria-haspopup="dialog"`:
+	 * un desplegable que abre un diálogo se anunciaría como lo que no es.
+	 * «Todas» marca y desmarca las casillas, y solo se ve lo del formato elegido. Nada se desactiva: lo escondido viaja igual y
+	 * el servidor recuerda la elección entera (ADR-0039).
+	 */
+	function abrirDialogo( dialogo ) {
+		if ( dialogo.showModal ) {
+			dialogo.showModal();
+		} else {
+			dialogo.setAttribute( \'open\', \'\' );
+		}
+	}
+
+	function cerrarDialogo( dialogo ) {
+		if ( dialogo.close ) {
+			dialogo.close();
+		} else {
+			dialogo.removeAttribute( \'open\' );
+		}
+	}
+
+	function formatoElegido( form ) {
+		var marcado = form.querySelector( \'[data-prc-export-format]:checked\' );
+		Array.prototype.forEach.call( form.querySelectorAll( \'[data-prc-export-for]\' ), function ( caja ) {
+			caja.hidden = !! marcado && caja.getAttribute( \'data-prc-export-for\' ) !== marcado.value;
+		} );
+	}
+
+	function prepararExportar( caja ) {
+		var form = caja.querySelector( \'form\' );
+		var resumen = caja.querySelector( \'summary\' );
+		if ( ! form || ! resumen || caja.dataset.prcDialog ) {
+			return;
+		}
+		var dialogo = document.createElement( \'dialog\' );
+		dialogo.className = \'prc-dialogo prc-dialogo--exportar\';
+		dialogo.id = \'prc-exportar-dialogo-\' + document.querySelectorAll( \'.prc-dialogo--exportar\' ).length;
+		var titulo = form.getAttribute( \'aria-labelledby\' );
+		if ( titulo ) {
+			dialogo.setAttribute( \'aria-labelledby\', titulo );
+		}
+		var cancelar = document.createElement( \'button\' );
+		cancelar.type = \'button\';
+		cancelar.className = \'prc-btn btn btn-light\';
+		cancelar.textContent = \'Cancelar\';
+		cancelar.setAttribute( \'data-prc-export-close\', \'\' );
+		var acciones = form.querySelector( \'.prc-acciones\' ) || form;
+		acciones.appendChild( cancelar );
+
+		var abrir = document.createElement( \'button\' );
+		abrir.type = \'button\';
+		abrir.className = resumen.className;
+		abrir.textContent = resumen.textContent;
+		abrir.setAttribute( \'aria-haspopup\', \'dialog\' );
+		abrir.setAttribute( \'aria-controls\', dialogo.id );
+		abrir.setAttribute( \'data-prc-export-open\', dialogo.id );
+
+		dialogo.appendChild( form );
+		caja.parentNode.insertBefore( abrir, caja );
+		caja.parentNode.insertBefore( dialogo, caja.nextSibling );
+		caja.open = false;
+		caja.hidden = true;
+		caja.dataset.prcDialog = dialogo.id;
+		formatoElegido( form );
+	}
+
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-export]\' ), prepararExportar );
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		var abrir = e.target.closest ? e.target.closest( \'[data-prc-export-open]\' ) : null;
+		var dialogo = abrir ? document.getElementById( abrir.getAttribute( \'data-prc-export-open\' ) ) : null;
+		if ( dialogo ) {
+			abrirDialogo( dialogo );
+			return;
+		}
+		var cerrar = e.target.closest ? e.target.closest( \'[data-prc-export-close]\' ) : null;
+		if ( cerrar && cerrar.closest( \'dialog\' ) ) {
+			cerrarDialogo( cerrar.closest( \'dialog\' ) );
+		}
+	} );
+
+	document.addEventListener( \'change\', function ( e ) {
+		var form = e.target.closest ? e.target.closest( \'.prc-exportar__form\' ) : null;
+		if ( ! form ) {
+			return;
+		}
+		var columnas = form.querySelectorAll( \'[data-prc-export-col]\' );
+		var todas = form.querySelector( \'[data-prc-export-all]\' );
+		if ( e.target.hasAttribute( \'data-prc-export-all\' ) ) {
+			Array.prototype.forEach.call( columnas, function ( casilla ) {
+				casilla.checked = e.target.checked;
+			} );
+		} else if ( e.target.hasAttribute( \'data-prc-export-col\' ) && todas ) {
+			todas.checked = Array.prototype.every.call( columnas, function ( casilla ) {
+				return casilla.checked;
+			} );
+		} else if ( e.target.hasAttribute( \'data-prc-export-format\' ) ) {
+			formatoElegido( form );
+		}
+	} );
+
+	// La descarga es la respuesta del envío: la página no cambia, así que el
+	// diálogo se cierra a mano, después de que el envío haya salido.
+	document.addEventListener( \'submit\', function ( e ) {
+		var dialogo = e.target.closest ? e.target.closest( \'.prc-dialogo--exportar\' ) : null;
+		if ( dialogo && ! e.defaultPrevented ) {
+			window.setTimeout( function () {
+				cerrarDialogo( dialogo );
+			}, 0 );
+		}
 	} );
 }() );
 ',

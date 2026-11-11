@@ -1,10 +1,10 @@
 /*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.
  *
- * Cuatro cosas, y las cuatro son mejora sobre algo que ya funciona sin ellas:
- * si el guion no llega, el formulario se envía igual, el aviso del bloqueo ya
- * viene pintado desde el servidor, el `title` del botón sigue ahí y el botón
- * de publicar hace lo mismo que el interruptor. Nada aquí valida ni autoriza:
+ * Todo es mejora sobre algo que ya funciona sin ellas: si el guion no llega,
+ * el formulario se envía igual, el aviso del bloqueo ya viene pintado desde
+ * el servidor, el `title` del botón sigue ahí, el botón de publicar hace lo
+ * mismo que el interruptor y el diálogo de exportar es un desplegable. Nada aquí valida ni autoriza:
  * eso está en el servidor, con su nonce y su comprobación de ProcedureAccess.
  *
  * Delegado en `document`: las pantallas repintan trozos y un `addEventListener`
@@ -293,5 +293,125 @@
 		Array.prototype.forEach.call( botones, function ( boton ) {
 			boton.hidden = true;
 		} );
+	} );
+
+	/* --- 6. El diálogo de exportar --------------------------------------- */
+
+	/*
+	 * `data-prc-export` en un `<details>` con el formulario dentro: sin guion
+	 * se despliega y se envía igual, y «Todas las columnas» es un campo que
+	 * lee el servidor. Con guion, el formulario pasa a un `<dialog>` modal y
+	 * el `<summary>` se cambia por un `<button>` con `aria-haspopup="dialog"`:
+	 * un desplegable que abre un diálogo se anunciaría como lo que no es.
+	 * «Todas» marca y desmarca las casillas, y solo se ve lo del formato elegido. Nada se desactiva: lo escondido viaja igual y
+	 * el servidor recuerda la elección entera (ADR-0039).
+	 */
+	function abrirDialogo( dialogo ) {
+		if ( dialogo.showModal ) {
+			dialogo.showModal();
+		} else {
+			dialogo.setAttribute( 'open', '' );
+		}
+	}
+
+	function cerrarDialogo( dialogo ) {
+		if ( dialogo.close ) {
+			dialogo.close();
+		} else {
+			dialogo.removeAttribute( 'open' );
+		}
+	}
+
+	function formatoElegido( form ) {
+		var marcado = form.querySelector( '[data-prc-export-format]:checked' );
+		Array.prototype.forEach.call( form.querySelectorAll( '[data-prc-export-for]' ), function ( caja ) {
+			caja.hidden = !! marcado && caja.getAttribute( 'data-prc-export-for' ) !== marcado.value;
+		} );
+	}
+
+	function prepararExportar( caja ) {
+		var form = caja.querySelector( 'form' );
+		var resumen = caja.querySelector( 'summary' );
+		if ( ! form || ! resumen || caja.dataset.prcDialog ) {
+			return;
+		}
+		var dialogo = document.createElement( 'dialog' );
+		dialogo.className = 'prc-dialogo prc-dialogo--exportar';
+		dialogo.id = 'prc-exportar-dialogo-' + document.querySelectorAll( '.prc-dialogo--exportar' ).length;
+		var titulo = form.getAttribute( 'aria-labelledby' );
+		if ( titulo ) {
+			dialogo.setAttribute( 'aria-labelledby', titulo );
+		}
+		var cancelar = document.createElement( 'button' );
+		cancelar.type = 'button';
+		cancelar.className = 'prc-btn btn btn-light';
+		cancelar.textContent = 'Cancelar';
+		cancelar.setAttribute( 'data-prc-export-close', '' );
+		var acciones = form.querySelector( '.prc-acciones' ) || form;
+		acciones.appendChild( cancelar );
+
+		var abrir = document.createElement( 'button' );
+		abrir.type = 'button';
+		abrir.className = resumen.className;
+		abrir.textContent = resumen.textContent;
+		abrir.setAttribute( 'aria-haspopup', 'dialog' );
+		abrir.setAttribute( 'aria-controls', dialogo.id );
+		abrir.setAttribute( 'data-prc-export-open', dialogo.id );
+
+		dialogo.appendChild( form );
+		caja.parentNode.insertBefore( abrir, caja );
+		caja.parentNode.insertBefore( dialogo, caja.nextSibling );
+		caja.open = false;
+		caja.hidden = true;
+		caja.dataset.prcDialog = dialogo.id;
+		formatoElegido( form );
+	}
+
+	document.addEventListener( 'DOMContentLoaded', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-export]' ), prepararExportar );
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		var abrir = e.target.closest ? e.target.closest( '[data-prc-export-open]' ) : null;
+		var dialogo = abrir ? document.getElementById( abrir.getAttribute( 'data-prc-export-open' ) ) : null;
+		if ( dialogo ) {
+			abrirDialogo( dialogo );
+			return;
+		}
+		var cerrar = e.target.closest ? e.target.closest( '[data-prc-export-close]' ) : null;
+		if ( cerrar && cerrar.closest( 'dialog' ) ) {
+			cerrarDialogo( cerrar.closest( 'dialog' ) );
+		}
+	} );
+
+	document.addEventListener( 'change', function ( e ) {
+		var form = e.target.closest ? e.target.closest( '.prc-exportar__form' ) : null;
+		if ( ! form ) {
+			return;
+		}
+		var columnas = form.querySelectorAll( '[data-prc-export-col]' );
+		var todas = form.querySelector( '[data-prc-export-all]' );
+		if ( e.target.hasAttribute( 'data-prc-export-all' ) ) {
+			Array.prototype.forEach.call( columnas, function ( casilla ) {
+				casilla.checked = e.target.checked;
+			} );
+		} else if ( e.target.hasAttribute( 'data-prc-export-col' ) && todas ) {
+			todas.checked = Array.prototype.every.call( columnas, function ( casilla ) {
+				return casilla.checked;
+			} );
+		} else if ( e.target.hasAttribute( 'data-prc-export-format' ) ) {
+			formatoElegido( form );
+		}
+	} );
+
+	// La descarga es la respuesta del envío: la página no cambia, así que el
+	// diálogo se cierra a mano, después de que el envío haya salido.
+	document.addEventListener( 'submit', function ( e ) {
+		var dialogo = e.target.closest ? e.target.closest( '.prc-dialogo--exportar' ) : null;
+		if ( dialogo && ! e.defaultPrevented ) {
+			window.setTimeout( function () {
+				cerrarDialogo( dialogo );
+			}, 0 );
+		}
 	} );
 }() );

@@ -835,6 +835,38 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con la lista de «Personas» recogiendo la coordinación, «Datos» no la
+	 * pide también: se rechaza y lo dice. «No se piden» se guarda, y la ayuda
+	 * remite a «Personas» para varios papeles o ejes.
+	 */
+	public function test_datos_does_not_ask_for_coordination_the_list_collects() {
+		list( $area, $uid, $id ) = $this->mio(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación general',
+						),
+					),
+					'min'     => 1,
+				),
+			)
+		);
+		$curso                   = $this->course( '2027-2028' );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) ) );
+		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+		$m = $this->modelo( $id );
+		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Personas»', $m['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'none' ) ) ) );
+		$this->assertStringContainsString( 'Si necesita varios papeles o ejes', ProcedureEditorView::html( $this->modelo( $id ) ) );
+	}
+
+	/**
 	 * El radio manda sobre el número: «ninguna» y «una» no dependen de lo que
 	 * quede en el desplegable, y «varias» nunca guarda menos de dos.
 	 */

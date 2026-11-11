@@ -243,7 +243,16 @@ class Test_People_List extends WP_UnitTestCase {
 
 		$this->enviados = array();
 		update_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, array( 'people_changed' ) );
-		People::add( $solicitud, $director, $this->persona( array( 'group' => 'g2' ) ) );
+		People::add(
+			$solicitud,
+			$director,
+			$this->persona(
+				array(
+					'group' => 'g2',
+					'dni'   => '00000000T',
+				)
+			)
+		);
 		$this->assertSame( array(), $this->enviados );
 		$this->assertCount( 2, People::of( $solicitud ), 'apagar el correo no apaga el alta' );
 		delete_option( 'prc_mail_copy' );
@@ -410,7 +419,18 @@ class Test_People_List extends WP_UnitTestCase {
 		$solicitud     = $this->application( $procedimiento, $una );
 
 		People::add( $solicitud, $una, $this->persona() );
-		$this->assertTrue( People::add( $solicitud, $otra, $this->persona( array( 'group' => 'g2' ) ) )['ok'] );
+		$this->assertTrue(
+			People::add(
+				$solicitud,
+				$otra,
+				$this->persona(
+					array(
+						'group' => 'g2',
+						'dni'   => '00000000T',
+					)
+				)
+			)['ok']
+		);
 		$this->assertCount( 2, People::of( $solicitud ), 'las dos altas quedan' );
 
 		$pintada = People::of( $solicitud )[0];
@@ -448,7 +468,16 @@ class Test_People_List extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'group', $sin_grupo['errors'] );
 
 		$this->assertTrue( People::add( $solicitud, $director, $this->persona() )['ok'] );
-		$tope = People::add( $solicitud, $director, $this->persona( array( 'group' => 'g2' ) ) );
+		$tope = People::add(
+			$solicitud,
+			$director,
+			$this->persona(
+				array(
+					'group' => 'g2',
+					'dni'   => '00000000T',
+				)
+			)
+		);
 		$this->assertArrayHasKey( 'max', $tope['errors'] );
 		$this->assertCount( 1, People::of( $solicitud ) );
 		$this->assertCount( 1, ApplicationLog::all( $solicitud ), 'lo rechazado no deja historial' );
@@ -578,7 +607,18 @@ class Test_People_List extends WP_UnitTestCase {
 		remove_all_filters( 'add_post_metadata' );
 		$segunda = $this->application( $procedimiento, $this->school_head( 'C0002' ), 'C0002' );
 		$uid     = (int) get_post_field( 'post_author', $segunda );
-		$this->assertTrue( People::add( $segunda, $uid, $this->persona( array( 'group' => 'g2' ) ) )['ok'] );
+		$this->assertTrue(
+			People::add(
+				$segunda,
+				$uid,
+				$this->persona(
+					array(
+						'group' => 'g2',
+						'dni'   => 'X1234567L',
+					)
+				)
+			)['ok']
+		);
 		$ya = People::of( $segunda );
 		$this->otra_escribe_entremedias( $segunda, array_merge( $ya, array( $otra ) ), 1 );
 		$this->assertTrue( People::add( $segunda, $uid, $this->persona() )['ok'] );

@@ -271,11 +271,17 @@ final class PeopleForm {
 		// El último día solo se dice cuando la lista se puede escribir, o se
 		// podrá nada más presentar: con ella cerrada, lo que se dice es el motivo.
 		$abierta = $solicitud > 0 ? $puede : '' === $despues;
+		// Rechazado por la misma persona o por un papel ocupado, el aviso
+		// lleva a la fila con la que choca: sustituir es editar esa fila.
+		$tecleado = '' !== self::$rejected && ! self::$stale ? self::person() : array();
+		$choque   = array() === $tecleado ? '' : ApplicationPeople::clash( $spec, $filas, array( 'id' => self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row ) + $tecleado );
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
 			'roles'          => array_column( $spec['roles'], 'label', 'key' ),
 			'groups'         => array_column( $spec['groups'], 'label', 'key' ),
+			// Los papeles que exigen grupo, para decirlo en la etiqueta del grupo.
+			'group_roles'    => array_column( wp_list_filter( $spec['roles'], array( 'needs_group' => true ) ), 'label' ),
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
@@ -290,8 +296,9 @@ final class PeopleForm {
 			// Rechazado por la huella, el formulario de esa fila se repinta con
 			// lo guardado ahora y su huella nueva, no con lo tecleado: así un
 			// segundo envío no pisa a ciegas el cambio de la otra cuenta.
-			'typed'          => '' !== self::$rejected && ! self::$stale ? self::person() : array(),
+			'typed'          => $tecleado,
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
+			'clash_row'      => $choque,
 		);
 	}
 

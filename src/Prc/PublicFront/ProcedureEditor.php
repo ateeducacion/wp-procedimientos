@@ -11,6 +11,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -632,6 +633,13 @@ final class ProcedureEditor {
 		$revisado = self::validate_data( $user_id, $crudo, $procedure_id );
 		if ( ! $revisado['ok'] ) {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
+			return;
+		}
+		// La coordinación, en un solo sitio: si la lista de «Personas» ya la
+		// recoge, «Datos» no la pide también.
+		$lista          = People::spec( $procedure_id );
+		self::$rejected = PeopleSpec::coordination_clash( $lista, $lista, Applications::coordinator_count( $procedure_id ), (int) $revisado['data']['coordinator_count'] );
+		if ( '' !== self::$rejected ) {
 			return;
 		}
 		wp_update_post(

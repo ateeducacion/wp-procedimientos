@@ -44,6 +44,9 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
+					<p class="prc-campo--completo"><a href="<?php echo esc_attr( '#' . self::row_anchor( (string) $p['clash_row'] ) ); ?>">Ir a su fila</a></p>
+				<?php endif; ?>
 				<?php echo self::until( $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
@@ -56,6 +59,9 @@ final class PeopleView {
 				<?php if ( ! empty( $p['can_edit'] ) && $lleno ) : ?>
 					<p class="prc-campo--completo">La lista ha llegado al máximo de personas que admite este procedimiento. Para añadir a alguien, dé antes de baja a otra persona o cámbiela.</p>
 				<?php elseif ( ! empty( $p['can_edit'] ) ) : ?>
+					<?php if ( array() !== $filas ) : ?>
+						<p class="prc-campo__ayuda prc-campo--completo">¿Viene a sustituir a alguien de la lista? Use «Sustituir o corregir» en su fila: así queda en el historial como sustitución y no se duplica.</p>
+					<?php endif; ?>
 					<details class="prc-personas__alta prc-campo--completo"<?php echo PeopleForm::NEW_ROW === (string) $p['typed_row'] ? ' open' : ''; ?>>
 						<summary>Dar de alta a una persona</summary>
 						<?php echo self::form( $p, PeopleForm::OP_ADD, PeopleForm::NEW_ROW === (string) $p['typed_row'] ? (array) $p['typed'] : array() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -131,13 +137,13 @@ final class PeopleView {
 				</thead>
 				<tbody>
 					<?php foreach ( $filas as $fila ) : ?>
-						<tr>
+						<tr id="<?php echo esc_attr( self::row_anchor( (string) $fila['id'] ) ); ?>">
 							<?php echo self::cells( $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 							<?php if ( $editable ) : ?>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
-									<details class="prc-personas__cambio"<?php echo (string) $p['typed_row'] === $fila['id'] ? ' open' : ''; ?>>
-										<summary>Cambiar o sustituir</summary>
+									<details class="prc-personas__cambio"<?php echo in_array( $fila['id'], array( (string) $p['typed_row'], (string) ( $p['clash_row'] ?? '' ) ), true ) ? ' open' : ''; ?>>
+										<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Sustituir o corregir</summary>
 										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 									</details>
 									<?php echo self::remove_form( $p, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -150,6 +156,16 @@ final class PeopleView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The anchor of one person's row: where a clash takes.
+	 *
+	 * @param string $id Row id.
+	 * @return string
+	 */
+	private static function row_anchor( string $id ): string {
+		return 'prc-persona-' . $id;
 	}
 
 	/**
@@ -233,7 +249,8 @@ final class PeopleView {
 			<?php endforeach; ?>
 			<?php echo self::select( $base . 'role', 'role', 'Papel', (array) $p['roles'], (string) ( $valores['role'] ?? '' ), true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php if ( array() !== (array) $p['groups'] ) : ?>
-				<?php echo self::select( $base . 'group', 'group', 'Grupo', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php $exigen = (array) ( $p['group_roles'] ?? array() ); ?>
+				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
 				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
@@ -337,11 +354,7 @@ final class PeopleView {
 				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
 				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-people-roles">Papeles</label>
-					<textarea class="prc-control" id="prc-people-roles" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_ROLES ); ?>" rows="5" aria-describedby="prc-people-roles-ayuda"><?php echo esc_textarea( (string) ( $v['roles'] ?? '' ) ); ?></textarea>
-					<p class="prc-campo__ayuda" id="prc-people-roles-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Coordinación». Escriba «| grupo» detrás del que exija grupo: «Participante | grupo». Para quitar uno, deje su línea en blanco; cambiarle el nombre no cambia a nadie de papel.', (int) ( $p['max_roles'] ?? 0 ) ) ); ?></p>
-				</div>
+				<?php echo self::role_rows( $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
 					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
@@ -353,12 +366,42 @@ final class PeopleView {
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_UNIQUE, 'Una sola persona por papel y grupo', $v, 'unique_per_group' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_MULTI_ROLE, 'Una persona puede tener varios papeles (sin marcar, la misma persona no entra dos veces en la lista)', $v, 'multi_role' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar la lista de personas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The roles of the workshop panel: one row each, with «Exige indicar el
+	 * grupo», and two blank rows to add more.
+	 *
+	 * @param array<string, mixed> $p The panel model.
+	 * @return string
+	 */
+	private static function role_rows( array $p ): string {
+		$max   = (int) ( $p['max_roles'] ?? 0 );
+		$filas = array_slice( (array) ( $p['role_rows'] ?? array() ), 0, $max );
+		$vacia = array(
+			'label'       => '',
+			'needs_group' => false,
+		);
+		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
+		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+		foreach ( $filas as $i => $fila ) {
+			$id   = 'prc-people-role-' . $i;
+			$out .= '<div class="prc-papel">'
+				. '<label class="screen-reader-text" for="' . esc_attr( $id ) . '">' . esc_html( 'Papel ' . ( $i + 1 ) ) . '</label>'
+				. '<input class="prc-control" type="text" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLES . '[' . $i . ']' ) . '" value="' . esc_attr( (string) $fila['label'] ) . '" aria-describedby="prc-people-roles-ayuda" />'
+				. '<span class="prc-opcion"><input type="checkbox" id="' . esc_attr( $id . '-grupo' ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLE_GROUP . '[' . $i . ']' ) . '" value="1"' . checked( ! empty( $fila['needs_group'] ), true, false ) . ' />'
+				. '<label for="' . esc_attr( $id . '-grupo' ) . '">Exige indicar el grupo</label></span>'
+				. '</div>';
+		}
+		return $out . '</fieldset>';
 	}
 
 	/**

@@ -3057,6 +3057,7 @@ final class PeopleSpec {
 			'min'              => null === $min ? 0 : max( 0, min( $min, self::MAX_PEOPLE ) ),
 			'max'              => null === $max || $max <= 0 ? self::MAX_PEOPLE : min( $max, self::MAX_PEOPLE ),
 			'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+			'multi_role'       => ! empty( $raw['multi_role'] ),
 			'opens_at'         => self::date( $raw['opens_at'] ?? '' ),
 			'closes_at'        => self::date( $raw['closes_at'] ?? '' ),
 			'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -3134,6 +3135,7 @@ final class PeopleSpec {
 				'min'              => $min,
 				'max'              => $max,
 				'unique_per_group' => ! empty( $raw['unique_per_group'] ),
+				'multi_role'       => ! empty( $raw['multi_role'] ),
 				'opens_at'         => self::text( $raw, 'opens_at' ),
 				'closes_at'        => self::text( $raw, 'closes_at' ),
 				'admitted_only'    => ! empty( $raw['admitted_only'] ),
@@ -3159,15 +3161,8 @@ final class PeopleSpec {
 		$marcas = array();
 		$lineas = array();
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
-			$partes = array_map( 'trim', explode( '|', (string) $linea ) );
-			$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
-			if ( $marca ) {
-				array_pop( $partes );
-			}
-
-
-			$rotulo   = trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) );
-			$lineas[] = $rotulo;
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			$lineas[]               = $rotulo;
 			if ( '' !== $rotulo ) {
 				$marcas[] = $marca;
 			}
@@ -3179,6 +3174,68 @@ final class PeopleSpec {
 			$out[] = $role + array( 'needs_group' => ! empty( $marcas[ $i ] ) );
 		}
 		return $out;
+	}
+
+
+
+
+
+
+
+	private static function split_role( string $linea ): array {
+		$partes = array_map( 'trim', explode( '|', $linea ) );
+		$marca  = count( $partes ) > 1 && self::GROUP_MARK === strtolower( (string) end( $partes ) );
+		if ( $marca ) {
+			array_pop( $partes );
+		}
+
+
+		return array( trim( implode( ' | ', array_filter( $partes, 'strlen' ) ) ), $marca );
+	}
+
+
+
+
+
+
+
+
+	public static function role_lines( string $text ): array {
+		$out = array();
+		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
+			list( $rotulo, $marca ) = self::split_role( (string) $linea );
+			if ( '' !== $rotulo ) {
+				$out[] = array(
+					'label'       => $rotulo,
+					'needs_group' => $marca,
+				);
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function coordination_clash( array $before, array $after, int $count_before, int $count_after ): string {
+		$ya_estaba = $count_before > 0 && self::collects_coordination( $before );
+		if ( $ya_estaba || $count_after <= 0 || ! self::collects_coordination( $after ) ) {
+			return '';
+		}
+		return $count_after !== $count_before
+			? 'La coordinación ya se da de alta en la lista de la pestaña «Personas»: deje aquí «No se piden». No se ha guardado nada.'
+			: 'En «Datos» se piden personas coordinadoras: para recogerlas en esta lista, deje antes «No se piden» en «Datos». No se ha guardado nada.';
 	}
 
 
@@ -3821,19 +3878,27 @@ final class ApplicationPeople {
 	public static function validate( array $spec, array $people, array $row ): array {
 		$spec   = PeopleSpec::sanitize( $spec );
 		$row    = self::row( $row );
-		$otras  = array_values(
-			array_filter(
-				self::rows( $people ),
-				static function ( array $otra ) use ( $row ): bool {
-					return '' === $row['id'] || $otra['id'] !== $row['id'];
-				}
-			)
-		);
 		$errors = self::fields( $spec, $row );
 		if ( array() !== $errors ) {
 			return $errors;
 		}
-		return self::against( $spec, $otras, $row );
+		return self::against( $spec, self::rows( $people ), $row );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function clash( array $spec, array $people, array $row ): string {
+		$choque = self::conflict( PeopleSpec::sanitize( $spec ), self::rows( $people ), self::row( $row ) );
+		return null === $choque ? '' : (string) $choque['row']['id'];
 	}
 
 
@@ -3855,7 +3920,7 @@ final class ApplicationPeople {
 		);
 		if ( array() !== $papel ) {
 			$grupo           = '' === $row['group'] || array() !== self::find( $spec['groups'], $row['group'] );
-			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que este papel exige' );
+			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que el papel «' . $papel['label'] . '» exige (por ejemplo, el eje)' );
 		}
 		$out = array();
 		foreach ( $checks as $clave => list( $bien, $texto ) ) {
@@ -3874,20 +3939,95 @@ final class ApplicationPeople {
 
 
 
-	private static function against( array $spec, array $otras, array $row ): array {
-		foreach ( $otras as $otra ) {
-			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
-			if ( $mismo_sitio && $otra['dni'] === $row['dni'] ) {
-				return array( 'duplicate' => 'Esa persona ya está en la lista con el mismo papel y grupo.' );
-			}
-			if ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
-				return array( 'unique_group' => 'Ese papel ya lo tiene otra persona en ese grupo: solo cabe una por papel y grupo.' );
-			}
+	private static function against( array $spec, array $people, array $row ): array {
+		$choque = self::conflict( $spec, $people, $row );
+		if ( null !== $choque ) {
+			$quien  = trim( $choque['row']['name'] . ' ' . $choque['row']['surname'] );
+			$donde  = 'use «Sustituir o corregir» en su fila.';
+			$textos = array(
+				'duplicate'    => 'Esa persona ya está en la lista con el mismo papel y grupo.',
+				'same_person'  => $quien . ' ya está en la lista como «' . self::place( $spec, $choque['row'] ) . '». Para cambiarle el papel o sustituirla, ' . $donde,
+				'unique_group' => 'Ese papel ya lo tiene ' . $quien . ' en ese grupo, y solo cabe una persona por papel y grupo. Para sustituirla, ' . $donde,
+			);
+			return array( $choque['error'] => $textos[ $choque['error'] ] );
 		}
-		if ( '' === $row['id'] && count( $otras ) + 1 > (int) $spec['max'] ) {
-			return array( 'max' => 'La lista ya tiene ' . count( $otras ) . ' personas, que es el máximo que admite este procedimiento.' );
+		$otras = count( self::others( $people, $row ) );
+		if ( '' === $row['id'] && $otras + 1 > (int) $spec['max'] ) {
+			return array( 'max' => 'La lista ya tiene ' . $otras . ' personas, que es el máximo que admite este procedimiento.' );
 		}
 		return array();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function conflict( array $spec, array $people, array $row ): ?array {
+		$antes = array();
+		foreach ( $people as $fila ) {
+			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
+				$antes = $fila;
+			}
+		}
+		$ya_era = array() !== $antes && $antes['dni'] === $row['dni'] && $antes['role'] === $row['role'] && $antes['group'] === $row['group'];
+		foreach ( self::others( $people, $row ) as $otra ) {
+			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+			$misma       = $otra['dni'] === $row['dni'];
+			$error       = '';
+			if ( $mismo_sitio && $misma ) {
+				$error = 'duplicate';
+			} elseif ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
+				$error = 'same_person';
+			} elseif ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
+				$error = 'unique_group';
+			}
+			if ( '' !== $error ) {
+				return array(
+					'error' => $error,
+					'row'   => $otra,
+				);
+			}
+		}
+		return null;
+	}
+
+
+
+
+
+
+
+
+	private static function others( array $people, array $row ): array {
+		return array_values(
+			array_filter(
+				$people,
+				static function ( array $otra ) use ( $row ): bool {
+					return '' === $row['id'] || $otra['id'] !== $row['id'];
+				}
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+	private static function place( array $spec, array $row ): string {
+		return implode( ' · ', array_filter( array( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ), PeopleSpec::label( $spec, 'groups', (string) $row['group'] ) ), 'strlen' ) );
 	}
 
 
@@ -16228,6 +16368,12 @@ final class PeopleSpecPanel {
 	public const FIELD_ADMITTED = 'prc_people_admitted_only';
 
 
+	public const FIELD_MULTI_ROLE = 'prc_people_multi_role';
+
+
+	public const FIELD_ROLE_GROUP = 'prc_people_role_group';
+
+
 
 
 	public const ARG_HISTORY = 'historial';
@@ -16244,6 +16390,7 @@ final class PeopleSpecPanel {
 		'min'              => self::FIELD_MIN,
 		'max'              => self::FIELD_MAX,
 		'unique_per_group' => self::FIELD_UNIQUE,
+		'multi_role'       => self::FIELD_MULTI_ROLE,
 		'opens_at'         => self::FIELD_OPENS,
 		'closes_at'        => self::FIELD_CLOSES,
 		'admitted_only'    => self::FIELD_ADMITTED,
@@ -16268,9 +16415,18 @@ final class PeopleSpecPanel {
 		if ( '' !== $porque ) {
 			return $porque;
 		}
+		$coordina = Applications::coordinator_count( $procedure_id );
+		$porque   = PeopleSpec::coordination_clash( $antes, $res['spec'], $coordina, $coordina );
+		if ( '' !== $porque ) {
+			return $porque;
+		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC, wp_slash( $res['spec'] ) );
 		return '';
 	}
+
+
+
+
 
 
 
@@ -16284,6 +16440,18 @@ final class PeopleSpecPanel {
 			$valor         = isset( $_POST[ $campo ] ) && is_string( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : '';
 			$out[ $clave ] = in_array( $clave, array( 'roles', 'groups' ), true ) ? sanitize_textarea_field( $valor ) : sanitize_text_field( $valor );
 		}
+
+		if ( isset( $_POST[ self::FIELD_ROLES ] ) && is_array( $_POST[ self::FIELD_ROLES ] ) ) {
+			$filas  = wp_unslash( $_POST[ self::FIELD_ROLES ] );
+			$grupos = (array) wp_unslash( $_POST[ self::FIELD_ROLE_GROUP ] ?? array() );
+			$lineas = array();
+			foreach ( $filas as $i => $rotulo ) {
+				$rotulo   = is_string( $rotulo ) ? sanitize_text_field( $rotulo ) : '';
+				$lineas[] = '' !== $rotulo && ! empty( $grupos[ $i ] ) ? $rotulo . ' | ' . PeopleSpec::GROUP_MARK : $rotulo;
+			}
+			$out['roles'] = implode( "\n", $lineas );
+		}
+
 		return $out;
 	}
 
@@ -16303,7 +16471,10 @@ final class PeopleSpecPanel {
 			'groups'           => PeopleSpec::groups_text( $spec ),
 			'min'              => (string) $spec['min'],
 			'max'              => (string) $spec['max'],
-			'unique_per_group' => $spec['unique_per_group'] ? '1' : '',
+
+
+			'unique_per_group' => $spec['unique_per_group'] || ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::PEOPLE_SPEC ) ? '1' : '',
+			'multi_role'       => $spec['multi_role'] ? '1' : '',
 			'opens_at'         => (string) $spec['opens_at'],
 			'closes_at'        => (string) $spec['closes_at'],
 			'admitted_only'    => $spec['admitted_only'] ? '1' : '',
@@ -16311,9 +16482,11 @@ final class PeopleSpecPanel {
 
 
 		$de_aqui = $rejected && isset( $_POST[ self::FIELD_ROLES ] );
+		$valores = $de_aqui ? self::typed() : $valores;
 		return array(
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),
-			'values'     => $de_aqui ? self::typed() : $valores,
+			'values'     => $valores,
+			'role_rows'  => PeopleSpec::role_lines( (string) $valores['roles'] ),
 			'max_people' => PeopleSpec::MAX_PEOPLE,
 			'max_roles'  => PeopleSpec::MAX_ROLES,
 			'max_groups' => PeopleSpec::MAX_GROUPS,
@@ -18051,14 +18224,14 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
 				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
-						'caption' => 'lista con dos personas, papel y grupo, y los botones «Cambiar o sustituir» y «Dar de baja»',
+						'caption' => 'lista con dos personas, papel y grupo, y los botones «Sustituir o corregir» y «Dar de baja»',
 						'image'   => '',
 					),
 				),
@@ -18210,8 +18383,8 @@ final class HelpContent {
 				'level' => 3,
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
+					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -18363,21 +18536,21 @@ final class HelpContent {
 				'id'    => 'coordino-un-eje',
 				'level' => 3,
 				'title' => 'Coordino un eje: ¿dónde digo cuál?',
-				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. Si el papel exige grupo, no se puede guardar sin él.</p>',
+				'html'  => '<p>Al dar de alta a la persona, elija su papel y, en el grupo, el eje. La etiqueta del grupo dice qué papeles lo exigen («Grupo (obligatorio para: …)»): con uno de ellos, no se puede guardar sin él.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'persona-dada-de-alta-dos-veces',
 				'level' => 3,
 				'title' => 'He dado de alta dos veces a la misma persona',
-				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja a …». Si el procedimiento solo admite una persona por papel y grupo, el aplicativo se lo indicará.</p>',
+				'html'  => '<p>Dé de baja la fila que sobra con «Dar de baja». El aplicativo ya no deja dar de alta a la misma persona dos veces, salvo que el procedimiento admita varios papeles por persona: si lo intenta, le dice con qué papel está y le lleva a su fila para cambiarla.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'sustituir-a-una-persona',
 				'level' => 3,
 				'title' => 'Tengo que sustituir a una persona',
-				'html'  => '<p>Pulse «Cambiar o sustituir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
+				'html'  => '<p>Pulse «Sustituir o corregir» en su fila y cambie sus datos. No dé de alta a otra persona nueva: quedarían las dos.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -23133,7 +23306,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo.</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Personas».</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -23918,6 +24091,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
@@ -24540,6 +24714,13 @@ final class ProcedureEditor {
 		$revisado = self::validate_data( $user_id, $crudo, $procedure_id );
 		if ( ! $revisado['ok'] ) {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
+			return;
+		}
+
+
+		$lista          = People::spec( $procedure_id );
+		self::$rejected = PeopleSpec::coordination_clash( $lista, $lista, Applications::coordinator_count( $procedure_id ), (int) $revisado['data']['coordinator_count'] );
+		if ( '' !== self::$rejected ) {
 			return;
 		}
 		wp_update_post(
@@ -26179,6 +26360,9 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
+				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
+					<p class="prc-campo--completo"><a href="<?php echo esc_attr( '#' . self::row_anchor( (string) $p['clash_row'] ) ); ?>">Ir a su fila</a></p>
+				<?php endif; ?>
 				<?php echo self::until( $p );?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
@@ -26191,6 +26375,9 @@ final class PeopleView {
 				<?php if ( ! empty( $p['can_edit'] ) && $lleno ) : ?>
 					<p class="prc-campo--completo">La lista ha llegado al máximo de personas que admite este procedimiento. Para añadir a alguien, dé antes de baja a otra persona o cámbiela.</p>
 				<?php elseif ( ! empty( $p['can_edit'] ) ) : ?>
+					<?php if ( array() !== $filas ) : ?>
+						<p class="prc-campo__ayuda prc-campo--completo">¿Viene a sustituir a alguien de la lista? Use «Sustituir o corregir» en su fila: así queda en el historial como sustitución y no se duplica.</p>
+					<?php endif; ?>
 					<details class="prc-personas__alta prc-campo--completo"<?php echo PeopleForm::NEW_ROW === (string) $p['typed_row'] ? ' open' : ''; ?>>
 						<summary>Dar de alta a una persona</summary>
 						<?php echo self::form( $p, PeopleForm::OP_ADD, PeopleForm::NEW_ROW === (string) $p['typed_row'] ? (array) $p['typed'] : array() );?>
@@ -26266,13 +26453,13 @@ final class PeopleView {
 				</thead>
 				<tbody>
 					<?php foreach ( $filas as $fila ) : ?>
-						<tr>
+						<tr id="<?php echo esc_attr( self::row_anchor( (string) $fila['id'] ) ); ?>">
 							<?php echo self::cells( $fila );?>
 							<?php if ( $editable ) : ?>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php $tecleado = (string) $p['typed_row'] === $fila['id'] ? (array) $p['typed'] : array(); ?>
-									<details class="prc-personas__cambio"<?php echo (string) $p['typed_row'] === $fila['id'] ? ' open' : ''; ?>>
-										<summary>Cambiar o sustituir</summary>
+									<details class="prc-personas__cambio"<?php echo in_array( $fila['id'], array( (string) $p['typed_row'], (string) ( $p['clash_row'] ?? '' ) ), true ) ? ' open' : ''; ?>>
+										<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Sustituir o corregir</summary>
 										<?php echo self::form( $p, PeopleForm::OP_CHANGE, array() !== $tecleado ? $tecleado : $fila, $fila );?>
 									</details>
 									<?php echo self::remove_form( $p, $fila );?>
@@ -26285,6 +26472,16 @@ final class PeopleView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function row_anchor( string $id ): string {
+		return 'prc-persona-' . $id;
 	}
 
 
@@ -26368,7 +26565,8 @@ final class PeopleView {
 			<?php endforeach; ?>
 			<?php echo self::select( $base . 'role', 'role', 'Papel', (array) $p['roles'], (string) ( $valores['role'] ?? '' ), true );?>
 			<?php if ( array() !== (array) $p['groups'] ) : ?>
-				<?php echo self::select( $base . 'group', 'group', 'Grupo', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
+				<?php $exigen = (array) ( $p['group_roles'] ?? array() ); ?>
+				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
 				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
@@ -26472,11 +26670,7 @@ final class PeopleView {
 				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
 				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' );?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-people-roles">Papeles</label>
-					<textarea class="prc-control" id="prc-people-roles" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_ROLES ); ?>" rows="5" aria-describedby="prc-people-roles-ayuda"><?php echo esc_textarea( (string) ( $v['roles'] ?? '' ) ); ?></textarea>
-					<p class="prc-campo__ayuda" id="prc-people-roles-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Coordinación». Escriba «| grupo» detrás del que exija grupo: «Participante | grupo». Para quitar uno, deje su línea en blanco; cambiarle el nombre no cambia a nadie de papel.', (int) ( $p['max_roles'] ?? 0 ) ) ); ?></p>
-				</div>
+				<?php echo self::role_rows( $p );?>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
 					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
@@ -26488,12 +26682,42 @@ final class PeopleView {
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' );?>
 				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
 				<?php echo self::check( PeopleSpecPanel::FIELD_UNIQUE, 'Una sola persona por papel y grupo', $v, 'unique_per_group' );?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_MULTI_ROLE, 'Una persona puede tener varios papeles (sin marcar, la misma persona no entra dos veces en la lista)', $v, 'multi_role' );?>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' );?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar la lista de personas' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function role_rows( array $p ): string {
+		$max   = (int) ( $p['max_roles'] ?? 0 );
+		$filas = array_slice( (array) ( $p['role_rows'] ?? array() ), 0, $max );
+		$vacia = array(
+			'label'       => '',
+			'needs_group' => false,
+		);
+		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
+		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+		foreach ( $filas as $i => $fila ) {
+			$id   = 'prc-people-role-' . $i;
+			$out .= '<div class="prc-papel">'
+				. '<label class="screen-reader-text" for="' . esc_attr( $id ) . '">' . esc_html( 'Papel ' . ( $i + 1 ) ) . '</label>'
+				. '<input class="prc-control" type="text" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLES . '[' . $i . ']' ) . '" value="' . esc_attr( (string) $fila['label'] ) . '" aria-describedby="prc-people-roles-ayuda" />'
+				. '<span class="prc-opcion"><input type="checkbox" id="' . esc_attr( $id . '-grupo' ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLE_GROUP . '[' . $i . ']' ) . '" value="1"' . checked( ! empty( $fila['needs_group'] ), true, false ) . ' />'
+				. '<label for="' . esc_attr( $id . '-grupo' ) . '">Exige indicar el grupo</label></span>'
+				. '</div>';
+		}
+		return $out . '</fieldset>';
 	}
 
 
@@ -28574,11 +28798,17 @@ final class PeopleForm {
 
 
 		$abierta = $solicitud > 0 ? $puede : '' === $despues;
+
+
+		$tecleado = '' !== self::$rejected && ! self::$stale ? self::person() : array();
+		$choque   = array() === $tecleado ? '' : ApplicationPeople::clash( $spec, $filas, array( 'id' => self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row ) + $tecleado );
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
 			'roles'          => array_column( $spec['roles'], 'label', 'key' ),
 			'groups'         => array_column( $spec['groups'], 'label', 'key' ),
+
+			'group_roles'    => array_column( wp_list_filter( $spec['roles'], array( 'needs_group' => true ) ), 'label' ),
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
@@ -28593,8 +28823,9 @@ final class PeopleForm {
 
 
 
-			'typed'          => '' !== self::$rejected && ! self::$stale ? self::person() : array(),
+			'typed'          => $tecleado,
 			'typed_row'      => '' !== self::$rejected ? self::$rejected_row : '',
+			'clash_row'      => $choque,
 		);
 	}
 
@@ -36018,6 +36249,12 @@ body.prc-app .prc-btn-borrar {
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
+
+/* --- «Personas» ----------------------------------------------------------- */
+
+/* Un papel por fila: el rótulo y, al lado, si exige indicar el grupo. */
+.prc-papel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }
+.prc-papel .prc-control { flex: 1 1 18rem; max-width: 32rem; }
 ',
   'js/prc-app.js' => '/*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.

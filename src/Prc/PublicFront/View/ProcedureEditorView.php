@@ -299,8 +299,8 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function tabs( array $m ): string {
-		$activa  = (string) $m['panel'];
-		$grupos  = array();
+		$activa = (string) $m['panel'];
+		$grupos = array();
 		foreach ( (array) $m['panels'] as $clave => $panel ) {
 			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
 		}

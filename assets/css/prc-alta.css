@@ -52,8 +52,8 @@
 .prc-form.prc-form--taller .prc-campo__ayuda {
   margin: 6px 0 0;
   padding: 0;
-  font: 400 12px/1.5 var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem/1.5 var(--prc-fuente);
+  color: var(--prc-c-medio);
   max-width: 60ch;
 }
 
@@ -311,7 +311,19 @@
    42,5px de alto con 30px de aire arriba y abajo. Lo que no se copia es el
    `outline: none` del foco: allí el botón de crear no se ve al enfocarlo. */
 
-.prc-acciones--pie { margin: 0; padding: 0; }
+/* El pie con «Guardar …» se queda pegado abajo mientras se baja por el
+   panel: en «Datos» el botón queda a más de una pantalla del título. Solo
+   CSS; donde no hay `sticky`, el pie se queda en su sitio, como antes. */
+.prc-acciones--pie {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 12px 0;
+  background: var(--prc-c-fondo);
+  border-top: 1px solid var(--prc-c-linea);
+}
+.prc-acciones--pie .prc-btn.prc-envio { margin: 0; }
 
 .prc-btn.prc-envio {
   display: inline-block;

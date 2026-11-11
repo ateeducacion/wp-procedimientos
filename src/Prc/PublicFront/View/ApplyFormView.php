@@ -412,9 +412,11 @@ final class ApplyFormView {
 	private static function coordination( array $m, array $coordinators ): string {
 		$spec = (array) $m['spec'];
 		if ( ! empty( $spec['coordinators_in_list'] ) ) {
-			$hasta = (string) ( $m['people']['until'] ?? '' );
+			$hasta   = (string) ( $m['people']['until'] ?? '' );
+			$despues = (string) ( $m['people']['after_submit'] ?? '' );
+			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
 			return '<div class="prc-nota prc-campo--completo"><p>'
-				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '' ) )
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
 				. '</p></div>';
 		}
 		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );

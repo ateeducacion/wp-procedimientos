@@ -895,6 +895,8 @@ body.prc-app .prc-hoja {
 .prc-opciones.is-invalid,
 .prc-opciones[aria-invalid="true"] { border-color: var(--prc-mal-texto); }
 .prc-opciones[aria-invalid="true"] { border-left: 3px solid var(--prc-mal-texto); padding-left: 8px; }
+/* Una casilla no tiene borde que pintar: se marca con su contorno. */
+input[type="checkbox"].is-invalid { outline: 2px solid var(--prc-mal-texto); outline-offset: 1px; }
 .invalid-feedback.d-block { display: block; margin: 4px 0 0; color: var(--prc-mal-texto); font-size: .875rem; }
 
 /* La misma geometría sin color: la caja neutra que envuelve un bloque. */

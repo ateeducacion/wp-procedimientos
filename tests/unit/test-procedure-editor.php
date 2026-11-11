@@ -2436,4 +2436,32 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertArrayNotHasKey( 'q2', \Prc\PublicFront\Applications::answered_keys( $procedimiento ) );
 		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( 1 => ProcedureQuestions::TYPE_TEXT ) ) ) ) );
 	}
+
+	/**
+	 * Un envío rechazado no redirige: vuelve a pintar el taller en la misma
+	 * petición. Cada formulario apunta al aviso, para que el navegador lleve
+	 * allí el foco y el lector de pantalla empiece por él.
+	 */
+	public function test_every_workshop_form_comes_back_to_the_notice() {
+		list( , , $procedimiento ) = $this->mio();
+		$this->application( $procedimiento, $this->school_head( 'C0001' ) );
+		$this->acting_as( $this->administrator() );
+		$paneles = array(
+			ProcedureEditor::PANEL_DATA,
+			ProcedureEditor::PANEL_QUESTIONS,
+			ProcedureEditor::PANEL_LINKS,
+			ProcedureEditor::PANEL_APPLICATIONS,
+			ProcedureEditor::PANEL_DELIVERIES,
+			ProcedureEditor::PANEL_PEOPLE,
+			ProcedureEditor::PANEL_PUBLISH,
+			ProcedureEditor::PANEL_NOTICES,
+			ProcedureEditor::PANEL_OBSERVE,
+			ProcedureEditor::PANEL_CODE,
+		);
+		foreach ( $paneles as $panel ) {
+			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
+			$this->assertStringNotContainsString( 'method="post" action=""', $html, $panel );
+		}
+		$this->assertStringContainsString( 'method="post" action="#prc-aviso"', $html );
+	}
 }

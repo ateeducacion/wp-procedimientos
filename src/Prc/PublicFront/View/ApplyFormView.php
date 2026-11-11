@@ -327,7 +327,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<?php // `multipart/form-data` solo porque ahora puede llevar un documento (ADR-0028): sube como fichero HTTP normal, sin Base64 y sin JavaScript. ?>
-		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="" enctype="multipart/form-data">
+		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -553,7 +553,7 @@ final class ApplyFormView {
 				<div class="prc-opciones prc-opciones--vertical">
 					<div class="prc-opcion">
 						<label for="<?php echo esc_attr( $id ); ?>">
-							<input type="checkbox" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" value="1"
+							<input type="checkbox"<?php echo '' !== FieldErrorView::css( $invalid, $codigo ) ? ' class="is-invalid"' : ''; ?> id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" value="1"
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
 								<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>

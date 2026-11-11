@@ -1347,4 +1347,54 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$docentes = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
 		$this->assertStringContainsString( '&larr; Solicitudes de mi centro</a>', $this->pintar( $docentes ) );
 	}
+
+	/**
+	 * El número, la fecha y el sí/no que fallan se ven marcados, como los demás.
+	 */
+	public function test_number_date_and_yesno_look_invalid_too() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_NUMBER,
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Fecha del claustro',
+						'type'  => ProcedureQuestions::TYPE_DATE,
+					),
+					array(
+						'key'      => 'q3',
+						'label'    => 'Acepta la visita',
+						'type'     => ProcedureQuestions::TYPE_YESNO,
+						'required' => true,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+		$respuestas    = array(
+			'q1' => '1,5',
+			'q2' => '2026-02-30',
+		);
+		$this->assertNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => $respuestas ) ) );
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+
+		$this->assertMatchesRegularExpression( '/<input type="number" class="prc-control is-invalid"[^>]*id="prc-q-q1"/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="date" class="prc-control is-invalid"[^>]*id="prc-q-q2"/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="checkbox" class="is-invalid" id="prc-q-q3"/', $html );
+	}
+
+	/**
+	 * Un envío rechazado no redirige: la página vuelve a pintarse con el
+	 * formulario apuntando al aviso, y el navegador lleva allí el foco.
+	 */
+	public function test_the_form_comes_back_to_the_notice() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--solicitud"[^>]*action="#' . Shell::NOTICE_ANCHOR . '"/', $this->pintar( $procedimiento ) );
+	}
 }

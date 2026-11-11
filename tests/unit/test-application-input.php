@@ -287,4 +287,52 @@ class Test_Application_Input extends WP_UnitTestCase {
 		$this->assertSame( 'No se ha podido presentar la solicitud.', ApplicationInput::why( array( 'answer:q1' ) ), 'sin las preguntas no se sabe cuál es' );
 		$this->assertSame( 'Revise los apellidos de cada persona coordinadora.', ApplicationInput::why( array( 'coordinator_surname' ) ) );
 	}
+
+	/**
+	 * Lo que falla se sabe también por campo, para marcarlo en su sitio: la
+	 * coordinación con su fila, y cada código con el rótulo que lo nombra.
+	 */
+	public function test_the_failing_fields_are_known_one_by_one() {
+		$r = ApplicationInput::validate(
+			array(
+				'position'     => 'conserje',
+				'coordinators' => array(
+					array(
+						'name'    => 'Ana',
+						'surname' => 'Pérez',
+						'dni'     => '12345678Z',
+						'email'   => 'ana@example.org',
+					),
+					array(
+						'name'    => 'Luis',
+						'surname' => '',
+						'dni'     => '12345678A',
+						'email'   => 'luis@example.org',
+					),
+				),
+				'answers'      => array(),
+			),
+			$this->procedimiento( array( 'coordinator_count' => 2 ) )
+		);
+
+		$this->assertFalse( $r['ok'] );
+		$this->assertSame(
+			array( 'position', 'accept', 'answer:q1', 'coordinator_surname:1', 'coordinator_dni:1' ),
+			$r['fields'],
+			'la coordinación dice la fila; lo demás, su código'
+		);
+		$this->assertContains( 'coordinator_dni', $r['errors'], 'los códigos de siempre no cambian' );
+
+		$this->assertSame(
+			array(
+				'position'              => 'el cargo',
+				'accept'                => 'la aceptación de los compromisos',
+				'answer:q1'             => 'la respuesta a «Modalidad»',
+				'coordinator_surname:1' => 'los apellidos de la persona coordinadora 2',
+				'coordinator_dni:1'     => 'el DNI o NIE de la persona coordinadora 2',
+			),
+			ApplicationInput::labels( $r['fields'], $this->procedimiento()['questions'] )
+		);
+		$this->assertSame( array(), ApplicationInput::labels( array( 'answer:q9' ) ), 'lo que no se sabe nombrar no se enlaza' );
+	}
 }

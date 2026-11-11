@@ -66,7 +66,7 @@ final class ApplyFormView {
 
 		ob_start();
 		echo self::head( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ), (array) ( $m['invalid'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::choices( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo ApplicationProgressView::card( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		// La prórroga de esta solicitud, si la tiene (PLAN-0003, PR 9).
@@ -284,6 +284,7 @@ final class ApplyFormView {
 		$quien   = (array) ( $m['applicant'] ?? array() );
 		$nueva   = array() === (array) $m['application'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
+		$falla   = (array) ( $m['invalid'] ?? array() );
 
 		// Los campos bloqueados se arman antes: dentro del `echo` de la
 		// plantilla, el escape ya no se ve desde fuera.
@@ -350,12 +351,13 @@ final class ApplyFormView {
 					<?php if ( ! $docente ) : ?>
 						<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
 							<?php echo self::label( 'prc-position', 'Cargo en el centro', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-							<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
+							<select class="prc-control<?php echo esc_attr( FieldErrorView::css( $falla, 'position' ) ); ?>" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required<?php echo FieldErrorView::attrs( $falla, 'position' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>>
 								<option value="">— Elija —</option>
 								<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
 									<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 								<?php endforeach; ?>
 							</select>
+							<?php echo FieldErrorView::feedback( $falla, 'position' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						</div>
 					<?php endif; ?>
 				</div>
@@ -373,11 +375,12 @@ final class ApplyFormView {
 							<div class="prc-opciones prc-opciones--vertical">
 								<div class="prc-opcion">
 									<label for="prc-accept">
-										<input type="checkbox" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?> />
+										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
 									</label>
 								</div>
 							</div>
+							<?php echo FieldErrorView::feedback( $falla, 'accept' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						</div>
 					</div>
 				</section>
@@ -388,7 +391,7 @@ final class ApplyFormView {
 					<h3 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h3>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
-							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						<?php endforeach; ?>
 					</div>
 				</section>
@@ -425,7 +428,7 @@ final class ApplyFormView {
 		}
 		$campos = '';
 		for ( $index = 0; $index < $cuantas; ++$index ) {
-			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ), (array) ( $m['invalid'] ?? array() ) );
 		}
 		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
 			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
@@ -490,14 +493,15 @@ final class ApplyFormView {
 	 * preguntas de verdad (ADR-0019), pero se pintan igual que allí: enunciado
 	 * a ancho completo, explicación debajo y caja de tres filas.
 	 *
-	 * @param array<string, mixed> $p       Normalised question.
-	 * @param array<string, mixed> $answers Stored or typed answers, keyed by question key.
-	 * @param array<string, mixed> $files   Documents already attached, keyed by question key.
+	 * @param array<string, mixed>  $p       Normalised question.
+	 * @param array<string, mixed>  $answers Stored or typed answers, keyed by question key.
+	 * @param array<string, mixed>  $files   Documents already attached, keyed by question key.
+	 * @param array<string, string> $invalid Failing field code => what names it.
 	 * @return string
 	 */
-	private static function question( array $p, array $answers, array $files = array() ): string {
+	private static function question( array $p, array $answers, array $files = array(), array $invalid = array() ): string {
 		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
-			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '', $invalid );
 		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
@@ -507,7 +511,9 @@ final class ApplyFormView {
 		$obliga = ! empty( $p['required'] );
 		$ayuda  = (string) $p['help'];
 		$id     = 'prc-q-' . $key;
-		$pie    = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo = 'answer:' . $key;
+		$pie    = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
+		$clase  = 'prc-control' . FieldErrorView::css( $invalid, $codigo );
 		$ancho  = in_array( $tipo, array( ProcedureQuestions::TYPE_TEXT, ProcedureQuestions::TYPE_FILE ), true )
 			? self::ANCHO[12]
 			: self::ANCHO[6];
@@ -522,7 +528,7 @@ final class ApplyFormView {
 						<span class="prc-campo__obligatorio" aria-hidden="true">*</span>
 					<?php endif; ?>
 				</label>
-				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="prc-control" rows="3"
+				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="<?php echo esc_attr( $clase ); ?>" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
@@ -536,7 +542,7 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="prc-control" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 				<div class="prc-campo__ayuda">
@@ -560,7 +566,7 @@ final class ApplyFormView {
 				$unica  = is_scalar( $valor ) ? (string) $valor : '';
 				echo self::label( $id . '-rotulo', (string) $p['label'], $obliga, 'p' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 				?>
-				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>"
+				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>" id="<?php echo esc_attr( $id ); ?>"
 					aria-labelledby="<?php echo esc_attr( $id . '-rotulo' ); ?>"
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>>
 					<?php foreach ( (array) $p['choices'] as $i => $opcion ) : ?>
@@ -581,6 +587,7 @@ final class ApplyFormView {
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
+			<?php echo FieldErrorView::feedback( $invalid, $codigo ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php if ( '' !== $ayuda ) : ?>
 				<div class="prc-campo__ayuda" id="<?php echo esc_attr( $id . '-ayuda' ); ?>"><?php echo esc_html( $ayuda ); ?></div>
 			<?php endif; ?>
@@ -618,11 +625,12 @@ final class ApplyFormView {
 	 * Nombre y apellidos van en campos distintos (ADR-0039): el fichero de
 	 * alta de usuarios los pide por separado.
 	 *
-	 * @param int                  $index       Position, from zero.
-	 * @param array<string, mixed> $coordinator What was typed or stored.
+	 * @param int                   $index       Position, from zero.
+	 * @param array<string, mixed>  $coordinator What was typed or stored.
+	 * @param array<string, string> $invalid     Failing field code => what names it.
 	 * @return string
 	 */
-	private static function coordinator_fields( int $index, array $coordinator ): string {
+	private static function coordinator_fields( int $index, array $coordinator, array $invalid = array() ): string {
 		$campos = array(
 			'name'    => array( 'Nombre', 'text', 'prc-campo--cuarto prc-campo--abre-fila', '' ),
 			'surname' => array( 'Apellidos', 'text', 'prc-campo--cuarto', '' ),
@@ -635,14 +643,19 @@ final class ApplyFormView {
 		<fieldset class="prc-seccion-campos">
 			<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
 			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $clases, $ayuda ) ) : ?>
-				<?php $id = 'prc-coordinator-' . $campo . '-' . $index; ?>
+				<?php
+				$id     = 'prc-coordinator-' . $campo . '-' . $index;
+				$codigo = 'coordinator_' . $campo . ':' . $index;
+				?>
 				<div class="prc-campo <?php echo esc_attr( $clases ); ?>">
 					<?php echo self::label( $id, $rotulo, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
+					<input class="prc-control<?php echo esc_attr( FieldErrorView::css( $invalid, $codigo ) ); ?>" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
 						<?php if ( 'dni' === $campo ) : ?>
-							autocomplete="off" aria-describedby="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"
+							autocomplete="off"
 						<?php endif; ?>
+						<?php echo FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? 'prc-coordinator-dni-ayuda-' . $index : '' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 						value="<?php echo esc_attr( (string) ( $coordinator[ $campo ] ?? '' ) ); ?>" />
+					<?php echo FieldErrorView::feedback( $invalid, $codigo ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<?php if ( '' !== $ayuda ) : ?>
 						<p class="prc-campo__ayuda" id="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"><?php echo esc_html( $ayuda ); ?></p>
 					<?php endif; ?>

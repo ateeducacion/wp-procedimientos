@@ -861,6 +861,17 @@ body.prc-app .prc-hoja {
 .prc-aviso-success { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
 .prc-aviso-warning { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
 .prc-aviso-danger { background: var(--prc-mal-fondo); border-color: var(--prc-mal-borde); color: var(--prc-mal-texto); }
+.prc-aviso:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.prc-aviso p { margin: 0; }
+.prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
+.prc-aviso__campos a { color: inherit; text-decoration: underline; }
+
+/* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
+.prc-control.is-invalid,
+.prc-opciones.is-invalid,
+.prc-opciones[aria-invalid="true"] { border-color: var(--prc-mal-texto); }
+.prc-opciones[aria-invalid="true"] { border-left: 3px solid var(--prc-mal-texto); padding-left: 8px; }
+.invalid-feedback.d-block { display: block; margin: 4px 0 0; color: var(--prc-mal-texto); font-size: .875rem; }
 
 /* La misma geometría sin color: la caja neutra que envuelve un bloque. */
 .prc-caja {

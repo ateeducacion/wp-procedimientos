@@ -49,7 +49,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		add_filter( 'pre_wp_mail', '__return_true' );
 		foreach ( array(
 			ApplyForm::class  => array( 'rejected' ),
-			PeopleForm::class => array( 'rejected', 'rejected_row', 'stale' ),
+			PeopleForm::class => array( 'rejected', 'rejected_row', 'stale', 'clash' ),
 		) as $clase => $estaticas ) {
 			\Closure::bind(
 				static function () use ( $estaticas ): void {
@@ -464,5 +464,32 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'href="#prc-persona-' . $fila['id'] . '">Ir a su fila</a>', $html );
 		$this->assertMatchesRegularExpression( '/<tr id="prc-persona-' . $fila['id'] . '">.*<details class="prc-personas__cambio" open>/sU', $html );
 		$this->assertCount( 1, People::of( $solicitud ) );
+	}
+
+	/**
+	 * Rechazado por otro motivo —aquí, un papel que exige grupo y llega sin
+	 * él—, no se lleva a la fila de quien tiene el mismo DNI: el aviso no
+	 * habla de ella.
+	 */
+	public function test_a_refusal_that_is_not_a_clash_does_not_take_to_a_row() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		$this->acting_as( $director );
+
+		$url = $this->enviar(
+			array(
+				PeopleForm::FIELD_OP          => PeopleForm::OP_ADD,
+				PeopleForm::FIELD_APPLICATION => (string) $solicitud,
+				PeopleForm::FIELD_PERSON      => $this->persona( array( 'group' => '' ) ),
+			)
+		);
+		$this->assertNull( $url );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( 'el grupo, que el papel «Participante» exige', $html );
+		$this->assertStringNotContainsString( 'Ir a su fila', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<tr id="prc-persona-' . $fila['id'] . '">.*<details class="prc-personas__cambio" open>/sU', $html );
 	}
 }

@@ -112,6 +112,13 @@ final class PeopleForm {
 	private static $stale = false;
 
 	/**
+	 * Whether the last refusal was because the person clashes with another row.
+	 *
+	 * @var bool
+	 */
+	private static $clash = false;
+
+	/**
 	 * Register the POST handler.
 	 *
 	 * @return void
@@ -178,6 +185,7 @@ final class PeopleForm {
 		if ( ! $res['ok'] ) {
 			self::$rejected = $res['error'];
 			self::$stale    = $res['stale'];
+			self::$clash    = array() !== array_intersect_key( $res['errors'], array_flip( ApplicationPeople::CLASHES ) );
 			return;
 		}
 		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => $res['changed'] ? self::NOTICE[ $op ] : 'persona-sin-cambios' ) ) );
@@ -303,7 +311,9 @@ final class PeopleForm {
 	 * The row a refused person clashes with: the same person, or the taken role.
 	 *
 	 * Rechazado por la misma persona o por un papel ocupado, el aviso lleva a
-	 * la fila con la que choca: sustituir es editar esa fila.
+	 * la fila con la que choca: sustituir es editar esa fila. Rechazado por
+	 * otro motivo —un campo, la lista cerrada, el permiso—, no lleva a ninguna:
+	 * el aviso no habla de otra persona.
 	 *
 	 * @param array<string, mixed>              $spec     Specification.
 	 * @param array<int, array<string, string>> $filas    The list.
@@ -311,7 +321,7 @@ final class PeopleForm {
 	 * @return string Row id; empty when there is none.
 	 */
 	private static function clash_row( array $spec, array $filas, array $tecleado ): string {
-		if ( array() === $tecleado ) {
+		if ( array() === $tecleado || ! self::$clash ) {
 			return '';
 		}
 		$id = self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row;

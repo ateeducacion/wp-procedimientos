@@ -3849,6 +3849,15 @@ final class ApplicationPeople {
 
 
 
+
+	public const CLASHES = array( 'duplicate', 'same_person', 'unique_group' );
+
+
+
+
+
+
+
 	public static function row( $raw ): array {
 		$raw = is_array( $raw ) ? $raw : array();
 		$out = array();
@@ -29069,6 +29078,13 @@ final class PeopleForm {
 
 
 
+	private static $clash = false;
+
+
+
+
+
+
 	public static function register(): void {
 		add_action( 'init', array( self::class, 'handle' ), 20 );
 	}
@@ -29131,6 +29147,7 @@ final class PeopleForm {
 		if ( ! $res['ok'] ) {
 			self::$rejected = $res['error'];
 			self::$stale    = $res['stale'];
+			self::$clash    = array() !== array_intersect_key( $res['errors'], array_flip( ApplicationPeople::CLASHES ) );
 			return;
 		}
 		Shell::leave( self::url( $solicitud, array( ApplyForm::ARG_NOTICE => $res['changed'] ? self::NOTICE[ $op ] : 'persona-sin-cambios' ) ) );
@@ -29263,8 +29280,10 @@ final class PeopleForm {
 
 
 
+
+
 	private static function clash_row( array $spec, array $filas, array $tecleado ): string {
-		if ( array() === $tecleado ) {
+		if ( array() === $tecleado || ! self::$clash ) {
 			return '';
 		}
 		$id = self::NEW_ROW === self::$rejected_row ? '' : self::$rejected_row;

@@ -224,17 +224,6 @@ final class ProcedureEditor {
 	);
 
 	/**
-	 * Why nobody without capability and ámbito gets to create a procedure.
-	 *
-	 * La misma condición —`can_manage_procedures()`, que pide la capacidad y
-	 * al menos un ámbito— se cuenta con las mismas palabras la pinte quien la
-	 * pinte: el envío rechazado y la pantalla de «nuevo procedimiento».
-	 *
-	 * @var string
-	 */
-	private const CANNOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
-
-	/**
 	 * Why the last submit did not go through.
 	 *
 	 * Un envío rechazado no redirige: la misma petición vuelve a pintar la
@@ -582,7 +571,7 @@ final class ProcedureEditor {
 	 */
 	private static function create( int $user_id ): void {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			self::$rejected = self::CANNOT_CREATE;
+			self::$rejected = ProcedureAccess::WHY_NOT_CREATE;
 			return;
 		}
 		$revisado = self::validate_data( $user_id, self::submitted_data() );
@@ -1528,7 +1517,7 @@ final class ProcedureEditor {
 	 */
 	private static function blank_procedure( array $m, int $user_id ): array {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			$m['aviso']      = self::CANNOT_CREATE;
+			$m['aviso']      = ProcedureAccess::WHY_NOT_CREATE;
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}

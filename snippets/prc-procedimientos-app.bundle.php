@@ -6488,6 +6488,14 @@ final class ProcedureAccess {
 
 
 
+
+
+	public const WHY_NOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
+
+
+
+
+
 	public const VIEW_OWN      = 'own';
 	public const VIEW_DOCUMENT = 'document';
 
@@ -20588,6 +20596,7 @@ use Prc\PublicFront\Workspace;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\View\WorkspaceView', false ) ) {
 final class WorkspaceView {
 
@@ -20600,17 +20609,14 @@ final class WorkspaceView {
 
 
 
-
-
-
 	private const LEGEND = array(
-		ProcedureMetaKeys::STATE_OPEN      => 'Procedimiento <strong>abierto</strong>. Plazo de solicitud <strong>abierto</strong>.',
-		ProcedureMetaKeys::STATE_AMENDMENT => 'Procedimiento en <strong>subsanación</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_UPCOMING  => 'Procedimiento <strong>próximo</strong>. El plazo de solicitud todavía no ha empezado.',
-		ProcedureMetaKeys::STATE_CLOSED    => 'Procedimiento <strong>cerrado</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_RESOLVED  => 'Procedimiento <strong>resuelto</strong>, con su listado definitivo publicado.',
-		ProcedureMetaKeys::STATE_DRAFT     => 'Procedimiento <strong>en borrador</strong>: todavía no se ve en la portada.',
-		ProcedureMetaKeys::STATE_ARCHIVED  => 'Procedimiento <strong>histórico</strong>: se consulta y se exporta, pero ya no se edita.',
+		ProcedureMetaKeys::STATE_OPEN      => 'Plazo de solicitud <strong>abierto</strong>.',
+		ProcedureMetaKeys::STATE_AMENDMENT => 'Plazo de solicitud <strong>finalizado</strong>; el de subsanación, abierto.',
+		ProcedureMetaKeys::STATE_UPCOMING  => 'El plazo de solicitud todavía no ha empezado.',
+		ProcedureMetaKeys::STATE_CLOSED    => 'Plazo de solicitud <strong>finalizado</strong>.',
+		ProcedureMetaKeys::STATE_RESOLVED  => 'Con su listado definitivo publicado.',
+		ProcedureMetaKeys::STATE_DRAFT     => 'Todavía no se ve en la portada.',
+		ProcedureMetaKeys::STATE_ARCHIVED  => 'Se consulta y se exporta, pero ya no se edita.',
 	);
 
 
@@ -20631,6 +20637,7 @@ final class WorkspaceView {
 
 		ob_start();
 		?>
+		<?php self::heading( $m ); ?>
 		<div class="prc-taller">
 			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'], true );?>
 			<?php self::band( $m ); ?>
@@ -20641,7 +20648,32 @@ final class WorkspaceView {
 		<?php
 
 
-		return Shell::render( 'Gestión de procedimientos', '', (string) ob_get_clean(), true );
+		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+	private static function heading( array $m ): void {
+		?>
+		<div class="prc-h1-fila">
+			<h1 class="prc-h1">Gestión de procedimientos</h1>
+			<?php if ( ! empty( $m['can_create'] ) ) : ?>
+				<p class="prc-acciones">
+					<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
+						<?php echo Shell::icon_plus();?>
+						Nuevo procedimiento
+					</a>
+				</p>
+			<?php elseif ( '' !== (string) ( $m['create_reason'] ?? '' ) ) : ?>
+				<p class="prc-acciones prc-taller__sin-alta"><?php echo esc_html( (string) $m['create_reason'] ); ?></p>
+			<?php endif; ?>
+		</div>
+		<p class="prc-sub"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
+		<?php
 	}
 
 
@@ -20653,21 +20685,8 @@ final class WorkspaceView {
 	private static function band( array $m ): void {
 		?>
 		<div class="prc-taller__banda">
-			<div class="prc-taller__izq">
-				<?php self::search( $m ); ?>
-				<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
-				<?php if ( ! empty( $m['can_create'] ) ) : ?>
-					<p class="prc-acciones">
-						<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
-							<?php echo Shell::icon_plus();?>
-							Nuevo procedimiento
-						</a>
-					</p>
-				<?php endif; ?>
-			</div>
-			<div class="prc-taller__der">
-				<?php self::legend(); ?>
-			</div>
+			<?php self::search( $m ); ?>
+			<?php self::legend(); ?>
 		</div>
 		<?php
 	}
@@ -20692,19 +20711,21 @@ final class WorkspaceView {
 			<?php if ( (int) $s['course'] > 0 ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( Workspace::VAR_COURSE ); ?>" value="<?php echo esc_attr( (string) $s['course'] ); ?>" />
 			<?php endif; ?>
-			<label class="screen-reader-text" for="prc-buscar">Buscar en la tabla</label>
-			<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
-				name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
-				value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
-			<label class="screen-reader-text" for="prc-estado">Estado</label>
-			<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
-				<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
-					<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
-						<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
-					</option>
-				<?php endforeach; ?>
-			</select>
-			<button class="prc-buscador__boton" type="submit">Buscar en la tabla</button>
+			<label class="prc-buscador__rotulo" for="prc-buscar">Buscar por título, número o ámbito</label>
+			<span class="prc-buscador__fila">
+				<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
+					name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
+					value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
+				<label class="screen-reader-text" for="prc-estado">Estado</label>
+				<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
+					<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
+						<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
+							<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Buscar</button>
+			</span>
 			<?php if ( '' !== (string) $m['reset_url'] ) : ?>
 				<a class="prc-buscador__quitar" href="<?php echo esc_url( (string) $m['reset_url'] ); ?>">Quitar los filtros</a>
 			<?php endif; ?>
@@ -20718,13 +20739,13 @@ final class WorkspaceView {
 
 
 	private static function legend(): void {
-		$iconos = Workspace::state_icons();
+		$rotulos = Workspace::state_filters();
 		?>
-		<div class="prc-leyenda">
+		<details class="prc-leyenda"><summary>¿Qué significa cada estado?</summary>
 			<ul class="prc-leyenda__lista">
 				<?php foreach ( self::LEGEND as $estado => $frase ) : ?>
 					<li class="prc-leyenda__item">
-						<?php self::icon( (string) ( $iconos[ $estado ] ?? '' ), $estado ); ?>
+						<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) ( $rotulos[ $estado ] ?? $estado ) ); ?></span>
 						<span><?php echo wp_kses( $frase, array( 'strong' => array() ) ); ?></span>
 					</li>
 				<?php endforeach; ?>
@@ -20733,7 +20754,7 @@ final class WorkspaceView {
 					<span><?php echo wp_kses( self::LEGEND_WARNING, array( 'strong' => array() ) ); ?></span>
 				</li>
 			</ul>
-		</div>
+		</details>
 		<?php
 	}
 
@@ -20750,9 +20771,6 @@ final class WorkspaceView {
 
 
 	private static function icon( string $glifo, string $estado, string $rotulo = '' ): void {
-		if ( '' === $glifo ) {
-			return;
-		}
 		$clases = 'material-symbols-outlined prc-icono-estado prc-icono-estado--' . sanitize_html_class( $estado );
 		if ( '' === $rotulo ) {
 			printf( '<span class="%s" aria-hidden="true">%s</span>', esc_attr( $clases ), esc_html( $glifo ) );
@@ -20854,26 +20872,13 @@ final class WorkspaceView {
 					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos' ); ?>
 				</caption>
 				<thead>
-					<tr class="prc-tabla__grupos">
-						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
-						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
-					</tr>
 					<tr>
-						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
-							<span class="material-symbols-outlined" aria-hidden="true">image</span>
-							<span class="screen-reader-text">Color de cabecera</span>
-						</th>
-						<th scope="col" class="prc-th--a prc-th--centro">#</th>
-						<th scope="col" class="prc-th--a">Título</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Dirigido a</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Estado</th>
-						<th scope="col" class="prc-th--a">Creado</th>
-						<th scope="col" class="prc-th--b">Límite<br />solicitud</th>
-						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
+						<th scope="col" class="prc-th--titulo">Título</th>
+						<th scope="col">Estado</th>
+						<th scope="col">Plazo</th>
+						<th scope="col">Dirigido a</th>
+						<th scope="col">Solicitudes</th>
+						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -20892,37 +20897,23 @@ final class WorkspaceView {
 
 
 
+
+
+
 	private static function row( array $row ): void {
 		$estado = (string) $row['state'];
 		$aviso  = (string) $row['warning'];
-		$mirar  = 'publish' === (string) $row['status']
-			? 'Ver la ficha pública'
-			: 'Previsualizar la ficha, que está en borrador';
+		$meta   = implode( ' · ', array_merge( array( 'N.º ' . (string) $row['id'] ), array_map( 'strval', (array) $row['areas'] ) ) );
 		?>
 		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>">
-			<td class="prc-celda-color" data-rotulo="Color">
-				<span class="prc-mini-color" style="background-color:<?php echo esc_attr( (string) $row['color'] ); ?>"></span>
-			</td>
-			<th scope="row" class="prc-celda-num" data-rotulo="Número">
-				<?php self::icon( (string) ( Workspace::state_icons()[ $estado ] ?? '' ), $estado, (string) $row['state_label'] ); ?>
-				<br /><?php echo esc_html( (string) $row['id'] ); ?>
-			</th>
-			<td class="prc-celda-titulo" data-rotulo="Título">
+			<th scope="row" class="prc-celda-titulo" data-rotulo="Título">
 				<?php if ( '' !== (string) $row['url'] ) : ?>
-					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento">
-						<?php echo esc_html( (string) $row['title'] ); ?>
-					</a>
+					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento"><?php echo esc_html( (string) $row['title'] ); ?></a>
 				<?php else : ?>
 					<?php echo esc_html( (string) $row['title'] ); ?>
 				<?php endif; ?>
-			</td>
-			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
-				<span class="material-symbols-outlined prc-icono-azul" aria-hidden="true"><?php echo esc_html( ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) $row['audience'] ? 'group' : 'home_work' ); ?></span>
-				<br /><?php echo esc_html( (string) $row['audience_label'] ); ?>
-				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
-					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
-				<?php endif; ?>
-			</td>
+				<span class="prc-celda-titulo__meta"><?php echo esc_html( $meta ); ?></span>
+			</th>
 			<td class="prc-celda-estado" data-rotulo="Estado">
 				<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span>
 				<?php if ( ! empty( $row['archived'] ) && ProcedureMetaKeys::STATE_ARCHIVED !== $estado ) : ?>
@@ -20936,30 +20927,46 @@ final class WorkspaceView {
 					<br /><em class="prc-state__curso"><?php echo esc_html( implode( ' · ', (array) $row['courses'] ) ); ?></em>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-fecha" data-rotulo="Creado"><?php echo esc_html( (string) $row['created'] ); ?></td>
-			<td class="prc-celda-fecha" data-rotulo="Límite de solicitud"><?php echo esc_html( (string) $row['closes'] ); ?></td>
-			<td class="prc-celda-ambitos" data-rotulo="Gestiona">
-				<?php if ( array() !== (array) $row['areas'] ) : ?>
-					<ol class="prc-ambitos">
-						<?php foreach ( (array) $row['areas'] as $nombre ) : ?>
-							<li><?php echo esc_html( (string) $nombre ); ?></li>
-						<?php endforeach; ?>
-					</ol>
+			<td class="prc-celda-fecha" data-rotulo="Plazo"><?php echo esc_html( '' !== (string) $row['dates'] ? (string) $row['dates'] : 'Sin plazo' ); ?></td>
+			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
+				<?php echo esc_html( (string) $row['audience_label'] ); ?>
+				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
+					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Detalles">
-				<?php self::action( (string) $row['view_url'], 'visibility', $mirar ); ?>
+			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
+				<?php self::applications( $row ); ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Solicitudes">
-				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
-				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
-			</td>
-			<td class="prc-celda-accion" data-rotulo="Duplicar">
-				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
-					<?php self::duplicate( $row ); ?>
-				<?php endif; ?>
+			<td class="prc-celda-accion" data-rotulo="Acciones">
+				<p class="prc-acciones">
+					<?php if ( '' !== (string) $row['view_url'] ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
+							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
+					<?php endif; ?>
+					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+						<?php self::duplicate( $row ); ?>
+					<?php endif; ?>
+				</p>
 			</td>
 		</tr>
+		<?php
+	}
+
+
+
+
+
+
+
+	private static function applications( array $row ): void {
+		$n     = (int) $row['applications'];
+		$texto = 1 === $n ? '1 solicitud' : $n . ' solicitudes';
+		if ( '' === (string) $row['applications_url'] ) {
+			echo esc_html( $texto );
+			return;
+		}
+		?>
+		<a href="<?php echo esc_url( (string) $row['applications_url'] ); ?>"><?php echo esc_html( $texto ); ?></a>
 		<?php
 	}
 
@@ -20982,31 +20989,8 @@ final class WorkspaceView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
-				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-				<span class="screen-reader-text">Duplicar este procedimiento</span>
-			</button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" title="Duplicar este procedimiento">Duplicar</button>
 		</form>
-		<?php
-	}
-
-
-
-
-
-
-
-
-
-	private static function action( string $url, string $glifo, string $rotulo ): void {
-		if ( '' === $url ) {
-			return;
-		}
-		?>
-		<a class="prc-accion" href="<?php echo esc_url( $url ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
-			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $glifo ); ?></span>
-			<span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
-		</a>
 		<?php
 	}
 }
@@ -21209,15 +21193,17 @@ final class Workspace {
 		$m       = array_merge(
 			$m,
 			array(
-				'can_use'    => true,
-				'notice'     => self::flash(),
-				'page_id'    => '' === (string) get_option( 'permalink_structure' ) ? (int) get_queried_object_id() : 0,
-				'scoped'     => ! $todas,
-				'subtitle'   => $todas
+				'can_use'       => true,
+				'notice'        => self::flash(),
+				'page_id'       => '' === (string) get_option( 'permalink_structure' ) ? (int) get_queried_object_id() : 0,
+				'scoped'        => ! $todas,
+				'subtitle'      => $todas
 					? 'Todos los procedimientos, de todos los ámbitos.'
 					: 'Solo los procedimientos de su ámbito: los que convocan otros ámbitos no salen aquí.',
-				'can_create' => '' !== $crear,
-				'create_url' => $crear,
+				'can_create'    => '' !== $crear && ProcedureAccess::can_manage_procedures( $user_id ),
+				'create_url'    => $crear,
+
+				'create_reason' => ProcedureAccess::can_manage_procedures( $user_id ) ? '' : ProcedureAccess::WHY_NOT_CREATE,
 			)
 		);
 
@@ -21269,25 +21255,26 @@ final class Workspace {
 
 	private static function blank(): array {
 		return array(
-			'can_use'      => false,
-			'reason'       => '',
-			'notice'       => array(
+			'can_use'       => false,
+			'reason'        => '',
+			'notice'        => array(
 				'type' => '',
 				'text' => '',
 			),
-			'subtitle'     => '',
-			'selection'    => self::selection(),
-			'courses'      => array(),
-			'scoped'       => false,
-			'counts'       => array_fill_keys( array_keys( self::state_filters() ), 0 ),
-			'total'        => 0,
-			'rows'         => array(),
-			'can_create'   => false,
-			'create_url'   => '',
-			'empty_text'   => '',
-			'reset_url'    => '',
-			'page_id'      => 0,
-			'course_label' => '',
+			'subtitle'      => '',
+			'selection'     => self::selection(),
+			'courses'       => array(),
+			'scoped'        => false,
+			'counts'        => array_fill_keys( array_keys( self::state_filters() ), 0 ),
+			'total'         => 0,
+			'rows'          => array(),
+			'can_create'    => false,
+			'create_url'    => '',
+			'create_reason' => '',
+			'empty_text'    => '',
+			'reset_url'     => '',
+			'page_id'       => 0,
+			'course_label'  => '',
 		);
 	}
 
@@ -24605,17 +24592,6 @@ final class ProcedureEditor {
 
 
 
-
-	private const CANNOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
-
-
-
-
-
-
-
-
-
 	private static $rejected = '';
 
 
@@ -24956,7 +24932,7 @@ final class ProcedureEditor {
 
 	private static function create( int $user_id ): void {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			self::$rejected = self::CANNOT_CREATE;
+			self::$rejected = ProcedureAccess::WHY_NOT_CREATE;
 			return;
 		}
 		$revisado = self::validate_data( $user_id, self::submitted_data() );
@@ -25902,7 +25878,7 @@ final class ProcedureEditor {
 
 	private static function blank_procedure( array $m, int $user_id ): array {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			$m['aviso']      = self::CANNOT_CREATE;
+			$m['aviso']      = ProcedureAccess::WHY_NOT_CREATE;
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}
@@ -36295,50 +36271,28 @@ body.prc-app .prc-btn-borrar {
 ',
   'css/prc-taller.css' => '/* El taller del gestor: la pantalla «Gestión de procedimientos».
 
-   Calco de la pantalla que se sustituye: título grande, banda de dos mitades
-   con el buscador a la izquierda y la leyenda de estados a la derecha, una
-   pestaña por curso, la línea de recuento y la tabla de dos niveles con su
-   paleta granate. Los tokens y los componentes comunes —fila, héroe, tabla
-   base, pastilla de estado, botón de icono, estado vacío— están en
-   `prc-app.css` y aquí no se repiten: esto es solo lo que esta pantalla
-   tiene y ninguna otra.
-
-   La paleta de la cabecera de dos niveles se declara aquí, en el ámbito de la
-   pantalla, porque hoy no la usa nadie más. Si el editor acaba pintando la
-   misma cabecera, sube a `prc-app.css` sin cambiar de nombre. */
-
-.prc-taller {
-  --prc-g1: #9a031e;      /* grupo «Detalles del procedimiento» */
-  --prc-g2: #5f0f40;      /* grupo «Fecha límite» */
-  --prc-g3: #321325;      /* grupo «Gestión» */
-  --prc-g1-sub: #daa3ad;  /* segunda fila de cabecera, bajo cada grupo */
-  --prc-g2-sub: #c4a7b9;
-  --prc-g3-sub: #b4a9af;
-  --prc-g-texto: #fff;
-}
+   Nació como calco de la pantalla que se sustituye y se ha quedado con lo
+   que se usa: el título corriente con «Nuevo procedimiento» al lado, el
+   buscador con su rótulo, la leyenda plegada, una pestaña por curso, la línea
+   de recuento y una tabla de seis columnas. Los tokens y los componentes
+   comunes —fila, tabla base, pastilla de estado, botón, estado vacío— están
+   en `prc-app.css` y aquí no se repiten: esto es solo lo que esta pantalla
+   tiene y ninguna otra. */
 
 /* --- la banda de cabecera ------------------------------------------------ */
 
-/* Dos mitades con el hueco del 5,5 % de la fila. La ilustración del original
-   no se calca: es una imagen del sitio que se sustituye, no diseño. */
+/* El buscador a la izquierda y la leyenda plegada a su lado: la tabla, que
+   es lo que se viene a mirar, queda arriba. */
 .prc-taller__banda {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: var(--prc-hueco-px);
-  align-items: start;
-  padding: var(--prc-fila-relleno);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 12px;
 }
 
-.prc-taller__izq { text-align: center; }
-.prc-taller__izq .prc-acciones { justify-content: center; }
-
-.prc-taller__nota {
-  font-size: var(--prc-t-base);
-  line-height: var(--prc-i-base);
-  color: var(--prc-c-texto);
-  margin: 0;
-  padding: 10px 0;
-}
+.prc-taller__sin-alta { max-width: 40ch; font-size: .875rem; color: var(--prc-c-medio); }
 
 /* El estado del procedimiento se presenta como etapas ordenadas, con texto además de color. */
 .prc-ciclo-publicacion { list-style: none; margin: 0 0 24px; padding: 0 0 0 12px; }
@@ -36366,62 +36320,52 @@ body.prc-app .prc-btn-borrar {
 /* La consecuencia de una acción de peligro, al lado del botón. */
 .prc-consecuencia { align-self: center; margin-left: 8px; font-size: .875rem; color: var(--prc-c-texto); }
 
-@media (max-width: 991.98px) {
-  .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
-}
 
 /* --- el buscador de la tabla --------------------------------------------- */
 
-/* Los controles van en bloque y centrados, como en el original: el campo con
-   su ancho de siempre y el botón debajo. Filtra el servidor. */
+/* El rótulo se ve, encima; el campo, el estado y el botón en una fila.
+   Filtra el servidor. */
 .prc-buscador { margin: 0; }
+.prc-buscador__rotulo { display: block; margin: 0 0 4px; font-size: .875rem; font-weight: 600; color: var(--prc-c-titulo); }
+.prc-buscador__fila { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 .prc-buscador__campo,
 .prc-buscador__estado {
-  display: block;
-  margin: 0 auto 6px;
-  width: 177px;
+  width: 220px;
   max-width: 100%;
+  min-height: var(--prc-alto-boton, 38px);
   padding: 6px 10px;
   font: 400 var(--prc-t-base)/normal var(--prc-fuente);
-  color: var(--prc-c-texto);
+  color: var(--prc-c-tabla);
   background: var(--prc-c-fondo);
-  border: 1px solid var(--prc-c-linea);
+  border: 1px solid var(--prc-c-borde-campo, #ced4da);
   border-radius: var(--prc-radio-campo);
 }
+.prc-buscador__estado { width: auto; }
 
-.prc-buscador__boton {
-  display: block;
-  margin: 0 auto;
-  padding: 6px 12px;
-  font: 400 var(--prc-t-base)/1.4 var(--prc-fuente);
-  color: var(--prc-c-fuerte);
-  background: #e6e6e6;
-  border: 0;
-  border-radius: var(--prc-radio);
-  cursor: pointer;
-}
-
-.prc-buscador__boton:hover { filter: brightness(.95); }
 .prc-buscador__campo:focus-visible,
-.prc-buscador__estado:focus-visible,
-.prc-buscador__boton:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
-.prc-buscador__quitar { display: inline-block; margin: 8px 0 0; font-size: var(--prc-t-menudo); }
+.prc-buscador__estado:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
+.prc-buscador__quitar { display: inline-block; margin: 8px 0 0; font-size: .875rem; }
 
 /* --- la leyenda de estados ----------------------------------------------- */
 
+/* Plegada: se abre cuando hace falta, sin JavaScript. */
 .prc-leyenda {
   border: 1px solid var(--prc-c-linea);
   background: var(--prc-c-fondo-leyenda);
-  padding: 10px 14px;
+  padding: 8px 14px;
+  max-width: 560px;
 }
+.prc-leyenda > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: var(--prc-c-titulo); }
+.prc-leyenda[open] > summary { margin-bottom: 8px; }
 
 .prc-leyenda__lista { list-style: none; margin: 0; padding: 0; }
 
 .prc-leyenda__item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin: 0 0 4px;
   font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
 }
@@ -36491,73 +36435,42 @@ body.prc-app .prc-btn-borrar {
 
 .prc-recuento strong { font-weight: var(--prc-p-fuerte); }
 
-/* --- la tabla de dos niveles --------------------------------------------- */
+/* --- la tabla ------------------------------------------------------------ */
 
-/* Quince columnas apretadas no caben en un móvil: por debajo de 1000px la
-   caja se desplaza en horizontal, y por debajo de 720px `prc-app.css` la
-   convierte en tarjetas. */
-.prc-tabla--taller { min-width: 1000px; table-layout: fixed; }
+/* Seis columnas: por debajo de 720px `prc-app.css` y la regla de abajo la
+   convierten en tarjetas. */
+.prc-tabla--taller { width: 100%; }
 
 .prc-tabla--taller thead th {
-  font-size: var(--prc-t-tabla);
-  line-height: var(--prc-i-tabla);
+  font-size: var(--prc-t-base);
   font-weight: var(--prc-p-fuerte);
-  padding: 3px;
+  padding: 8px 6px;
   vertical-align: bottom;
-  white-space: normal;
-  border-color: rgba(255, 255, 255, .25);
+  white-space: nowrap;
+  color: var(--prc-c-titulo);
+  background: var(--prc-c-fondo-barra);
+  border: 1px solid var(--prc-c-linea-celda);
 }
-
-/* Las seis van acotadas a la tabla del taller, y no sueltas por su clase, por
-   una razón de peso: el armazón pinta `.prc-tabla th { background: transparent }`,
-   que con su elemento pesa más que una clase suelta y dejaba la cabecera en
-   blanco. Con la tabla delante pesan más que él y la banda granate sale. */
-.prc-tabla--taller .prc-tabla__grupo { color: var(--prc-g-texto); }
-.prc-tabla--taller .prc-tabla__grupo--1 { background: var(--prc-g1); }
-.prc-tabla--taller .prc-tabla__grupo--2 { background: var(--prc-g2); }
-.prc-tabla--taller .prc-tabla__grupo--3 { background: var(--prc-g3); }
-
-/* La segunda fila lleva el texto en el granate oscuro del tercer grupo y no
-   en blanco: sobre el rosa del original, el blanco da 1,99:1 y este 8,39:1,
-   sin tocar la paleta que la gente reconoce. */
-.prc-tabla--taller .prc-th--a { background: var(--prc-g1-sub); color: var(--prc-g3); }
-.prc-tabla--taller .prc-th--b { background: var(--prc-g2-sub); color: var(--prc-g3); }
-.prc-tabla--taller .prc-th--c { background: var(--prc-g3-sub); color: var(--prc-g3); }
-.prc-th--centro { text-align: center; }
-.prc-th--color { width: 64px; }
-.prc-th--gestiona { width: 200px; }
 
 .prc-tabla--taller tbody th,
 .prc-tabla--taller tbody td {
-  font-size: var(--prc-t-tabla);
-  line-height: var(--prc-i-tabla);
+  font-size: var(--prc-t-base);
+  line-height: 1.4;
   font-weight: 400;
   color: var(--prc-c-tabla);
   border: 1px solid var(--prc-c-linea-celda);
-  /* 6px de alto en vez de los 3px del original: con filas de dos renglones,
-     3px hace que los de filas contiguas se toquen. */
-  padding: 6px 4px;
+  padding: 8px 6px;
   vertical-align: middle;
   text-align: left;
   white-space: normal;
 }
 
-.prc-tabla--taller .prc-celda-color,
-.prc-tabla--taller .prc-celda-num,
-.prc-tabla--taller .prc-celda-destinatario,
-.prc-tabla--taller .prc-celda-estado,
-.prc-tabla--taller .prc-celda-accion { text-align: center; }
-
-.prc-mini-color { display: block; width: 40px; height: 40px; margin: 0 auto; }
-
-/* Acotadas igual que las de la cabecera, y por lo mismo: sueltas las pisan
-   las reglas por elemento de `.prc-tabla--taller tbody td`, que van ahí
-   arriba y pesan más. */
-.prc-tabla--taller .prc-celda-num { font-weight: 500; }
-.prc-celda-titulo a { color: var(--prc-c-azul-tabla); }
+.prc-celda-titulo a { color: var(--prc-c-azul-tabla); font-weight: 600; }
+.prc-celda-titulo__meta { display: block; margin-top: 2px; font-size: .875rem; color: var(--prc-c-medio); font-weight: 400; }
 .prc-celda-estado .prc-state { white-space: normal; }
 .prc-celda-estado .prc-state__curso { display: inline-block; padding-top: 2px; }
-.prc-tabla--taller .prc-celda-fecha { white-space: nowrap; }
+.prc-tabla--taller .prc-celda-accion .prc-acciones { gap: 6px; margin: 0; flex-wrap: nowrap; }
+.prc-tabla--taller .prc-celda-accion form { margin: 0; }
 
 .prc-ambitos { margin: 0; padding-left: 1.1em; }
 .prc-ambitos li { line-height: var(--prc-i-tabla); }
@@ -36592,22 +36505,8 @@ body.prc-app .prc-btn-borrar {
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller { min-width: 0; table-layout: auto; }
-  .prc-tabla--taller tbody th { display: flex; gap: 12px; padding: 6px 0; border: 0; text-align: left; }
-  .prc-tabla--taller tbody th::before {
-    content: attr(data-rotulo);
-    flex: 0 0 8rem;
-    font-size: var(--prc-t-menudo);
-    font-weight: var(--prc-p-fuerte);
-    color: var(--prc-c-tenue);
-  }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0; border: 0; text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
-  .prc-tabla--taller .prc-celda-color,
-  .prc-tabla--taller .prc-celda-num,
-  .prc-tabla--taller .prc-celda-destinatario,
-  .prc-tabla--taller .prc-celda-estado,
-  .prc-tabla--taller .prc-celda-accion { text-align: left; }
-  .prc-mini-color { width: 100%; height: 10px; }
 }
 
 /* --- «Preguntas» ---------------------------------------------------------- */

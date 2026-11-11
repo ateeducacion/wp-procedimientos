@@ -33,6 +33,15 @@ final class ApplicationPeople {
 	public const FIELDS = array( 'id', 'name', 'surname', 'dni', 'email', 'phone', 'role', 'group' );
 
 	/**
+	 * The error keys of a row refused because it clashes with another one.
+	 *
+	 * Solo con estos motivos el aviso habla de otra fila y lleva a ella.
+	 *
+	 * @var string[]
+	 */
+	public const CLASHES = array( 'duplicate', 'same_person', 'unique_group' );
+
+	/**
 	 * One row, normalised: texts trimmed, DNI and email as they are compared.
 	 *
 	 * @param mixed $raw Raw row.

@@ -566,6 +566,8 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-c-tenue);
 }
 
+/* El contador de una pestaña: texto oscuro sobre el amarillo claro, que
+   pasa de 4,5:1. Sin la clase `badge`, que con Bootstrap lo pinta en blanco. */
 .prc-tab-n {
   padding: .05em .5em;
   border-radius: 999px;
@@ -573,6 +575,21 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-esp);
   font-size: var(--prc-t-menudo);
   font-weight: 700;
+}
+
+/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
+   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
+.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
+.prc-tabs-grupo__rotulo {
+  position: absolute;
+  top: 0;
+  font-size: var(--prc-t-menudo);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--prc-c-medio);
 }
 
 /* --- lienzo -------------------------------------------------------------- */

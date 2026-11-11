@@ -292,25 +292,37 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The inner tabs, each with its count where there is something to count.
+	 * The inner tabs, in their groups, each with its count where there is something to count.
+	 *
+	 * Cada grupo —Preparar, Gestionar, Más ajustes— lleva su rótulo pequeño
+	 * encima y un `role="group"` con su nombre para quien no lo ve.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function tabs( array $m ): string {
-		$activa = (string) $m['panel'];
+		$activa  = (string) $m['panel'];
+		$grupos  = array();
+		foreach ( (array) $m['panels'] as $clave => $panel ) {
+			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
+		}
 
 		ob_start();
 		?>
-		<nav class="prc-tabs" aria-label="Paneles del procedimiento">
+		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
-					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-							<span class="prc-tab-n badge"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-						<?php endif; ?></a>
+				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
+					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
+						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
+						<?php foreach ( $paneles as $clave => $panel ) : ?>
+							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+								<?php endif; ?></a>
+						<?php endforeach; ?>
+					</div>
 				<?php endforeach; ?>
 			</div>
 		</nav>

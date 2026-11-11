@@ -305,12 +305,21 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * The five inner tabs, with where each one goes.
+	 * The inner tabs, in three groups, with where each one goes.
+	 *
+	 * En el orden en que se trabaja: lo que se prepara antes de publicar, lo
+	 * que se gestiona con el plazo abierto y el resto. «Acceso de consulta» y
+	 * no «Consulta», que es como se llama la entrada del menú de arriba.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array<string, array{label:string, url:string, count:?int}>
+	 * @return array<string, array{label:string, url:string, count:?int, group:string}>
 	 */
 	public static function panels( int $procedure_id ): array {
+		$grupos  = array(
+			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Más ajustes' => array( self::PANEL_NOTICES, self::PANEL_OBSERVE, self::PANEL_CODE ),
+		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Preguntas',
@@ -320,7 +329,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
-			self::PANEL_OBSERVE      => 'Consulta',
+			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -330,12 +339,15 @@ final class ProcedureEditor {
 		);
 
 		$out = array();
-		foreach ( $rotulos as $slug => $rotulo ) {
-			$out[ $slug ] = array(
-				'label' => $rotulo,
-				'url'   => self::url( $procedure_id, $slug ),
-				'count' => $cuentas[ $slug ] ?? null,
-			);
+		foreach ( $grupos as $grupo => $slugs ) {
+			foreach ( $slugs as $slug ) {
+				$out[ $slug ] = array(
+					'label' => $rotulos[ $slug ],
+					'url'   => self::url( $procedure_id, $slug ),
+					'count' => $cuentas[ $slug ] ?? null,
+					'group' => $grupo,
+				);
+			}
 		}
 		return $out;
 	}

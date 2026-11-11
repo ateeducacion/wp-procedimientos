@@ -26778,7 +26778,8 @@ final class PeopleView {
 				. '<label class="screen-reader-text" for="' . esc_attr( $id ) . '">' . esc_html( 'Papel ' . ( $i + 1 ) ) . '</label>'
 				. '<input class="prc-control" type="text" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLES . '[' . $i . ']' ) . '" value="' . esc_attr( (string) $fila['label'] ) . '" aria-describedby="prc-people-roles-ayuda" />'
 				. '<span class="prc-opcion"><input type="checkbox" id="' . esc_attr( $id . '-grupo' ) . '" name="' . esc_attr( PeopleSpecPanel::FIELD_ROLE_GROUP . '[' . $i . ']' ) . '" value="1"' . checked( ! empty( $fila['needs_group'] ), true, false ) . ' />'
-				. '<label for="' . esc_attr( $id . '-grupo' ) . '">Exige indicar el grupo</label></span>'
+
+				. '<label for="' . esc_attr( $id . '-grupo' ) . '"><span class="screen-reader-text">' . esc_html( 'Papel ' . ( $i + 1 ) . ': ' ) . '</span>Exige indicar el grupo</label></span>'
 				. '</div>';
 		}
 		return $out . '</fieldset>';

@@ -276,6 +276,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[3]" value=""', $html, 'dos filas en blanco' );
 		$this->assertStringNotContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[4]"', $html );
 		$this->assertStringContainsString( 'Exige indicar el grupo', $html );
+		$this->assertStringContainsString( '<label for="prc-people-role-1-grupo"><span class="screen-reader-text">Papel 2: </span>Exige indicar el grupo</label>', $html, 'cada casilla dice de qué papel es' );
 		$this->assertStringContainsString( 'Coordinación de eje', $html, 'el ejemplo de la ayuda' );
 	}
 

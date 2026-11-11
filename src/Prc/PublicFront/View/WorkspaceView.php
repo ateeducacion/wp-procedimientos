@@ -92,8 +92,6 @@ final class WorkspaceView {
 						Nuevo procedimiento
 					</a>
 				</p>
-			<?php elseif ( '' !== (string) ( $m['create_reason'] ?? '' ) ) : ?>
-				<p class="prc-acciones prc-taller__sin-alta"><?php echo esc_html( (string) $m['create_reason'] ); ?></p>
 			<?php endif; ?>
 		</div>
 		<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>

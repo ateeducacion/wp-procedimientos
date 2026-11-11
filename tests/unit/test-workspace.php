@@ -624,21 +624,20 @@ class Test_Workspace extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Quien no puede crear lee por qué en el sitio del botón, no después de pulsarlo.
+	 * Quien llega al listado puede crear: el botón sale siempre que haya taller.
+	 * Quien no puede crear no llega aquí; lee el motivo en la pantalla sin uso.
 	 */
-	public function test_who_cannot_create_reads_why_where_the_button_goes() {
+	public function test_whoever_reaches_the_list_can_create() {
 		$area  = $this->area( 'Área de prueba' );
 		$quien = $this->manager( array( $area ) );
 		$this->acting_as( $quien );
 
 		$m = Workspace::model();
 		$this->assertTrue( $m['can_create'] );
-		$this->assertSame( '', $m['create_reason'] );
+		$this->assertArrayNotHasKey( 'create_reason', $m );
+		$this->assertStringContainsString( '<a class="' . Assets::button_class( true ) . '"', WorkspaceView::html( $m ) );
 
-		$m['can_create']    = false;
-		$m['create_reason'] = ProcedureAccess::WHY_NOT_CREATE;
-		$html               = WorkspaceView::html( $m );
-		$this->assertStringNotContainsString( '<a class="' . Assets::button_class( true ) . '"', $html, 'sin el botón' );
-		$this->assertStringContainsString( esc_html( ProcedureAccess::WHY_NOT_CREATE ), $html );
+		$this->acting_as( $this->manager() );
+		$this->assertFalse( Workspace::model()['can_use'] );
 	}
 }

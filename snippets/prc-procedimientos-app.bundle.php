@@ -20688,8 +20688,6 @@ final class WorkspaceView {
 						Nuevo procedimiento
 					</a>
 				</p>
-			<?php elseif ( '' !== (string) ( $m['create_reason'] ?? '' ) ) : ?>
-				<p class="prc-acciones prc-taller__sin-alta"><?php echo esc_html( (string) $m['create_reason'] ); ?></p>
 			<?php endif; ?>
 		</div>
 		<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
@@ -21213,17 +21211,17 @@ final class Workspace {
 		$m       = array_merge(
 			$m,
 			array(
-				'can_use'       => true,
-				'notice'        => self::flash(),
-				'page_id'       => '' === (string) get_option( 'permalink_structure' ) ? (int) get_queried_object_id() : 0,
-				'scoped'        => ! $todas,
-				'subtitle'      => $todas
+				'can_use'    => true,
+				'notice'     => self::flash(),
+				'page_id'    => '' === (string) get_option( 'permalink_structure' ) ? (int) get_queried_object_id() : 0,
+				'scoped'     => ! $todas,
+				'subtitle'   => $todas
 					? 'Todos los procedimientos, de todos los ámbitos.'
 					: 'Solo los procedimientos de su ámbito: los que convocan otros ámbitos no salen aquí.',
-				'can_create'    => '' !== $crear && ProcedureAccess::can_manage_procedures( $user_id ),
-				'create_url'    => $crear,
 
-				'create_reason' => ProcedureAccess::can_manage_procedures( $user_id ) ? '' : ProcedureAccess::WHY_NOT_CREATE,
+
+				'can_create' => '' !== $crear,
+				'create_url' => $crear,
 			)
 		);
 
@@ -21275,26 +21273,25 @@ final class Workspace {
 
 	private static function blank(): array {
 		return array(
-			'can_use'       => false,
-			'reason'        => '',
-			'notice'        => array(
+			'can_use'      => false,
+			'reason'       => '',
+			'notice'       => array(
 				'type' => '',
 				'text' => '',
 			),
-			'subtitle'      => '',
-			'selection'     => self::selection(),
-			'courses'       => array(),
-			'scoped'        => false,
-			'counts'        => array_fill_keys( array_keys( self::state_filters() ), 0 ),
-			'total'         => 0,
-			'rows'          => array(),
-			'can_create'    => false,
-			'create_url'    => '',
-			'create_reason' => '',
-			'empty_text'    => '',
-			'reset_url'     => '',
-			'page_id'       => 0,
-			'course_label'  => '',
+			'subtitle'     => '',
+			'selection'    => self::selection(),
+			'courses'      => array(),
+			'scoped'       => false,
+			'counts'       => array_fill_keys( array_keys( self::state_filters() ), 0 ),
+			'total'        => 0,
+			'rows'         => array(),
+			'can_create'   => false,
+			'create_url'   => '',
+			'empty_text'   => '',
+			'reset_url'    => '',
+			'page_id'      => 0,
+			'course_label' => '',
 		);
 	}
 
@@ -36330,7 +36327,6 @@ body.prc-app .prc-btn-borrar {
 }
 
 .prc-taller__nota { margin: 0 0 12px; font-size: .875rem; color: var(--prc-c-medio); }
-.prc-taller__sin-alta { max-width: 40ch; font-size: .875rem; color: var(--prc-c-medio); }
 
 /* El estado del procedimiento se presenta como etapas ordenadas, con texto además de color. */
 .prc-ciclo-publicacion { list-style: none; margin: 0 0 24px; padding: 0 0 0 12px; }

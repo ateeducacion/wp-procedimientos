@@ -44,6 +44,7 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::until( $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
 				</p>
@@ -64,6 +65,25 @@ final class PeopleView {
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Until when the people can be changed: the first thing, in bold.
+	 *
+	 * Solo cuando se puede, o cuando todavía no hay solicitud: con la lista
+	 * cerrada, lo que se dice es el motivo.
+	 *
+	 * @param array<string, mixed> $p Model.
+	 * @return string
+	 */
+	private static function until( array $p ): string {
+		$dia = (string) ( $p['until'] ?? '' );
+		if ( '' === $dia || ( empty( $p['can_edit'] ) && (int) $p['application_id'] > 0 ) ) {
+			return '';
+		}
+		return '<p class="prc-personas__plazo prc-campo--completo"><strong>'
+			. esc_html( 'Puede dar de alta, cambiar o sustituir personas hasta el ' . $dia . ', incluido.' )
+			. '</strong></p>';
 	}
 
 	/**

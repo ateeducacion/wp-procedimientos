@@ -65,6 +65,65 @@ class Test_Messages extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El acuse es un justificante: número, fecha y hora, quién y para qué
+	 * centro, si está completa y, con lista de personas, hasta cuándo se
+	 * cambian y dónde.
+	 */
+	public function test_the_acknowledgement_is_a_receipt() {
+		$correo = Messages::render(
+			Mailer::EVENT_APPLICATION_SUBMITTED,
+			$this->solicitud(
+				array(
+					'number'       => '123',
+					'submitted'    => '10-11-2026 a las 09:30',
+					'missing'      => array( 'Faltan 2 personas' ),
+					'people_until' => '20-11-2026',
+					'people_url'   => 'https://example.org/solicitud/#prc-personas',
+					'receipt_url'  => 'https://example.org/solicitud/?justificante=1',
+				)
+			)
+		);
+
+		$this->assertSame( '[Procedimientos] Solicitud presentada n.º 123: Red de huertos escolares', $correo['subject'] );
+		$this->assertStringContainsString( 'Se ha presentado la solicitud n.º 123 al procedimiento «Red de huertos escolares» el 10-11-2026 a las 09:30, por Persona de prueba, para Centro de prueba Norte (C0001). Guarde este correo: es su justificante.', $correo['message'] );
+		$this->assertStringContainsString( "Estado: presentada, pero incompleta: faltan 2 personas.\n", $correo['message'] );
+		$this->assertStringContainsString( "Puede dar de alta, cambiar o sustituir a las personas que participan hasta el 20-11-2026, incluido, en:\nhttps://example.org/solicitud/#prc-personas\n", $correo['message'] );
+		$this->assertStringContainsString( "Justificante para imprimir o guardar en PDF:\nhttps://example.org/solicitud/?justificante=1\n", $correo['message'] );
+
+		$completa = Messages::render(
+			Mailer::EVENT_APPLICATION_SUBMITTED,
+			$this->solicitud(
+				array(
+					'number'    => '124',
+					'submitted' => '10-11-2026 a las 09:30',
+				)
+			)
+		);
+		$this->assertStringContainsString( "Estado: completa.\n", $completa['message'] );
+		$this->assertStringNotContainsString( 'personas que participan', $completa['message'], 'sin lista, nada de personas' );
+	}
+
+	/**
+	 * Con la lista cerrada para la solicitud, el justificante da el motivo en
+	 * vez del plazo y el enlace.
+	 */
+	public function test_the_receipt_gives_the_reason_when_the_list_is_closed() {
+		$correo = Messages::render(
+			Mailer::EVENT_APPLICATION_SUBMITTED,
+			$this->solicitud(
+				array(
+					'number'     => '125',
+					'submitted'  => '10-11-2026 a las 09:30',
+					'missing'    => array( 'Faltan 2 personas' ),
+					'people_why' => 'La lista de personas se abre el 20-11-2026.',
+				)
+			)
+		);
+		$this->assertStringContainsString( "Estado: presentada, pero incompleta: faltan 2 personas.\nLa lista de personas se abre el 20-11-2026.\n", $correo['message'] );
+		$this->assertStringNotContainsString( 'Puede dar de alta', $correo['message'] );
+	}
+
+	/**
 	 * Una respuesta vacía se dice, en vez de dejar la línea colgando.
 	 */
 	public function test_an_empty_answer_says_so() {

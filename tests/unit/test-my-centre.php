@@ -11,6 +11,8 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\MyCentre;
+use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\View\MyCentreView;
 
 /**
@@ -346,6 +348,159 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertStringContainsString( gmdate( 'd-m-Y', (int) strtotime( $this->dia( 5 ) ) ), $html );
 		$this->assertStringContainsString( 'prc-subsanar', $html );
 		$this->assertStringContainsString( '#fila-' . $uno, $html );
+	}
+
+	/**
+	 * Un procedimiento abierto que pide una lista de entre dos y cuatro personas.
+	 *
+	 * @param array<string, mixed> $lista What changes in the list.
+	 * @return int
+	 */
+	private function con_lista( array $lista = array() ): int {
+		return $this->procedimiento(
+			'Red con personas',
+			array(
+				ProcedureMetaKeys::OPENS_AT    => $this->dia( -1 ),
+				ProcedureMetaKeys::CLOSES_AT   => $this->dia( 5 ),
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación',
+						),
+					),
+					'min'     => 2,
+					'max'     => 4,
+				) + $lista,
+			)
+		);
+	}
+
+	/**
+	 * La columna «Personas» dice cuántas hay y cuántas pide, y la que no
+	 * llega se marca, se anuncia arriba y lleva a completar la lista.
+	 */
+	public function test_the_people_column_says_which_lists_are_incomplete() {
+		$lista = $this->con_lista();
+		$norte = $this->school_head( 'C0001' );
+		$suya  = Applications::save( $lista, $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertTrue( $m['has_people'] );
+		$this->assertFalse( $m['rows'][0]['people_complete'] );
+		$this->assertSame( 1, $m['incomplete']['count'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringContainsString( '>Personas</a></th>', $html );
+		$this->assertStringContainsString( 'Faltan 2 personas', $html );
+		$this->assertMatchesRegularExpression( '/href="[^"]*#' . PeopleForm::ANCHOR . '">Completar</', $html );
+		$this->assertStringContainsString( '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.', $html );
+		$this->assertStringContainsString( 'href="#fila-' . $lista . '">Ir a la solicitud</a>', $html );
+
+		foreach ( array( '12345678Z', 'X0000000T' ) as $dni ) {
+			People::add(
+				$suya,
+				$norte,
+				array(
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => $dni,
+					'email'   => 'ana@example.org',
+					'role'    => 'r1',
+				)
+			);
+		}
+		$m    = MyCentre::model();
+		$html = MyCentreView::html( $m );
+		$this->assertSame( 0, $m['incomplete']['count'] );
+		$this->assertStringContainsString( '2 de 2 a 4', $html );
+		$this->assertMatchesRegularExpression( '/href="[^"]*#' . PeopleForm::ANCHOR . '">Cambiar</', $html );
+		$this->assertStringNotContainsString( 'está incompleta', $html );
+	}
+
+	/**
+	 * Una lista que todavía no se abre no «ya no se puede cambiar»: la celda
+	 * da el motivo, y el aviso de arriba no la cuenta, porque el centro no
+	 * puede completarla ahora.
+	 */
+	public function test_a_list_not_open_yet_says_why_and_is_not_announced() {
+		$lista = $this->con_lista( array( 'admitted_only' => true ) );
+		$norte = $this->school_head( 'C0001' );
+		Applications::save( $lista, $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertFalse( $m['rows'][0]['people_complete'] );
+		$this->assertSame( 0, $m['incomplete']['count'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringNotContainsString( 'ya no se puede cambiar', $html );
+		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
+		$this->assertStringNotContainsString( 'está incompleta', $html );
+	}
+
+	/**
+	 * Ni una excluida ni una con la lista ya cerrada entran en el aviso:
+	 * no hay nada que el centro pueda completar.
+	 */
+	public function test_excluded_or_closed_lists_are_not_announced() {
+		$norte    = $this->school_head( 'C0001' );
+		$excluida = Applications::save( $this->con_lista(), $norte, $this->nucleo() );
+		update_post_meta( $excluida, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_EXCLUDED );
+		$cerrada = $this->con_lista(
+			array(
+				'opens_at'  => $this->dia( -5 ),
+				'closes_at' => $this->dia( -1 ),
+			)
+		);
+		Applications::save( $cerrada, $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertCount( 2, $m['rows'] );
+		$this->assertSame( 0, $m['incomplete']['count'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringContainsString( 'La solicitud está excluida: su lista de personas ya no se cambia.', $html );
+		$this->assertStringContainsString( 'El plazo de la lista de personas terminó el', $html );
+	}
+
+	/**
+	 * Sin ningún procedimiento con lista, la columna no sale.
+	 */
+	public function test_without_lists_there_is_no_people_column() {
+		$norte = $this->school_head( 'C0001' );
+		Applications::save( $this->procedimiento( 'Red de prueba' ), $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertFalse( $m['has_people'] );
+		$this->assertStringNotContainsString( '>Personas</a></th>', MyCentreView::html( $m ) );
+	}
+
+	/**
+	 * Retirar no está en la tabla, pegado a «Ver la solicitud»: está al
+	 * final de la solicitud, con su confirmación. Y ordenar se explica en
+	 * una línea.
+	 */
+	public function test_the_table_has_no_withdraw_and_one_line_of_help() {
+		$norte = $this->school_head( 'C0001' );
+		Applications::save(
+			$this->procedimiento(
+				'Red de prueba',
+				array(
+					ProcedureMetaKeys::OPENS_AT  => $this->dia( -1 ),
+					ProcedureMetaKeys::CLOSES_AT => $this->dia( 5 ),
+				)
+			),
+			$norte,
+			$this->nucleo()
+		);
+		$this->acting_as( $norte );
+
+		$html = MyCentreView::html( MyCentre::model() );
+		$this->assertStringNotContainsString( 'Retirar la solicitud', $html );
+		$this->assertStringContainsString( 'Ver la solicitud', $html );
+		$this->assertStringContainsString( '<p class="prc-ayuda-orden">Pulse una cabecera para ordenar la tabla; otra vez, al revés.</p>', $html );
 	}
 
 	/**

@@ -11,8 +11,10 @@ use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
@@ -20,11 +22,13 @@ use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationOperations;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
 use Prc\PublicFront\ObserveSettings;
 use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
@@ -341,6 +345,9 @@ final class Mailer {
 					return;
 				}
 				$ctx['created'] = (bool) $created;
+				if ( $created ) {
+					$ctx = self::receipt( (int) $application_id, $ctx, (int) $user_id );
+				}
 
 				self::send(
 					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
@@ -659,6 +666,40 @@ final class Mailer {
 			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
 			'url'          => ApplyForm::url( $procedure_id, $args ),
 		);
+	}
+
+	/**
+	 * What makes the acknowledgement a receipt.
+	 *
+	 * El número es el de la solicitud, que es su número de registro y el que
+	 * enseña el justificante de la pantalla (ADR-0038, adenda). Lo que falta
+	 * es lo mismo que ve quien revisa, y el último día de la lista solo se
+	 * dice si el procedimiento la pide, todavía no ha pasado y la cuenta que
+	 * presenta puede escribirla ya. Si no puede —solo admitidas, una ventana
+	 * que se abre más adelante—, se dice por qué, lo mismo que la pantalla.
+	 *
+	 * @param int                  $application_id Application ID.
+	 * @param array<string, mixed> $ctx            Context of the application.
+	 * @param int                  $user_id        Account that submitted it.
+	 * @return array<string, mixed>
+	 */
+	private static function receipt( int $application_id, array $ctx, int $user_id ): array {
+		$procedure_id = (int) $ctx['procedure_id'];
+		$lista        = People::enabled( $procedure_id )
+			&& ApplicationMetaKeys::TYPE_TEACHER !== get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$porque       = $lista ? ProcedureAccess::why_not_people( $user_id, $application_id ) : '';
+		$hasta        = $lista && '' === $porque
+			? PeopleSpec::until( People::spec( $procedure_id ), (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() )
+			: '';
+		return array(
+			'number'       => (string) $application_id,
+			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
+			'missing'      => ApplicationProgress::missing( $application_id ),
+			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',
+			'people_url'   => (string) $ctx['url'] . '#' . PeopleForm::ANCHOR,
+			'people_why'   => $porque,
+			'receipt_url'  => add_query_arg( ApplicationProgress::ARG_RECEIPT, '1', (string) $ctx['url'] ),
+		) + $ctx;
 	}
 
 	/**

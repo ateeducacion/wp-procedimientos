@@ -14,8 +14,9 @@ namespace Prc\Notifications;
  * respuestas como texto y enlaces— y no consulta nada: así se lee y se prueba
  * sin base de datos, y lo que llega a la persona es exactamente lo que se ve
  * aquí. **No se vuelcan claves internas ni identificadores**: el contexto ya
- * viene con rótulos, y el único número de la base de datos que viaja es el
- * que va dentro de un enlace (ADR-0038).
+ * viene con rótulos, y los únicos números de la base de datos que viajan son
+ * el que va dentro de un enlace y el de la solicitud en su acuse, que es su
+ * número de registro (ADR-0038 y su adenda).
  *
  * Claves del contexto que se usan, todas opcionales:
  *
@@ -28,7 +29,12 @@ namespace Prc\Notifications;
  * - `change`, `before`, `after`: el cambio en la lista de personas y la
  *   persona antes y después, ya escrita en una línea y sin DNI;
  * - `ack`: en una retirada, si es el acuse a quien la retira;
- * - `until`: el último día de una prórroga, ya escrito como se lee.
+ * - `until`: el último día de una prórroga, ya escrito como se lee;
+ * - `number`, `submitted`, `missing`, `people_until`, `people_url`,
+ *   `people_why`, `receipt_url`: el justificante del acuse —número, fecha
+ *   y hora, lo que falta, hasta cuándo se cambian las personas y dónde, o
+ *   por qué todavía no se pueden cambiar, y el enlace al justificante
+ *   imprimible—.
  */
 final class Messages {
 
@@ -66,15 +72,7 @@ final class Messages {
 
 		switch ( $event ) {
 			case Mailer::EVENT_APPLICATION_SUBMITTED:
-				return array(
-					'Solicitud presentada: ' . $titulo,
-					array_merge(
-						array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.', '' ),
-						self::summary( $ctx ),
-						self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
-						array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
-					),
-				);
+				return self::submitted( $titulo, $ctx );
 
 			case Mailer::EVENT_APPLICATION_UPDATED:
 				return array(
@@ -151,6 +149,53 @@ final class Messages {
 				);
 		}
 		return null;
+	}
+
+	/**
+	 * Subject and body of the acknowledgement: a receipt of what was submitted.
+	 *
+	 * Con el número de la solicitud, la fecha y la hora, quién y para qué
+	 * centro, si está completa y, cuando hay lista de personas, hasta cuándo
+	 * se cambian y dónde: lo que hace falta para no preguntar «¿ha quedado
+	 * presentada?». Sin número —un contexto de antes— dice lo de siempre.
+	 *
+	 * @param string               $titulo Procedure title.
+	 * @param array<string, mixed> $ctx    Context.
+	 * @return array{0:string, 1:array<int, string>}
+	 */
+	private static function submitted( string $titulo, array $ctx ): array {
+		$numero = self::text( $ctx, 'number' );
+		if ( '' === $numero ) {
+			$cabeza = array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.' );
+		} else {
+			$quien  = self::text( $ctx, 'applicant' );
+			$centro = self::text( $ctx, 'centre' );
+			$falta  = self::lines( $ctx, 'missing' );
+			$cabeza = array(
+				'Se ha presentado la solicitud n.º ' . $numero . ' al procedimiento «' . $titulo . '» el ' . self::text( $ctx, 'submitted' )
+					. ( '' !== $quien ? ', por ' . $quien : '' ) . ( '' !== $centro ? ', para ' . $centro : '' ) . '. Guarde este correo: es su justificante.',
+				'',
+				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
+			);
+			$hasta  = self::text( $ctx, 'people_until' );
+			$porque = self::text( $ctx, 'people_why' );
+			if ( '' !== $porque ) {
+				$cabeza[] = $porque;
+			} elseif ( '' !== $hasta ) {
+				$cabeza = array_merge( $cabeza, self::link( 'Puede dar de alta, cambiar o sustituir a las personas que participan hasta el ' . $hasta . ', incluido, en:', $ctx, 'people_url' ) );
+			}
+		}
+		return array(
+			'Solicitud presentada' . ( '' !== $numero ? ' n.º ' . $numero : '' ) . ': ' . $titulo,
+			array_merge(
+				$cabeza,
+				array( '' ),
+				self::summary( $ctx ),
+				self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
+				self::link( 'Justificante para imprimir o guardar en PDF:', $ctx, 'receipt_url' ),
+				array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+			),
+		);
 	}
 
 	/**

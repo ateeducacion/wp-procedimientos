@@ -12,6 +12,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
@@ -48,30 +49,6 @@ final class ApplyFormView {
 	);
 
 	/**
-	 * Tone of the notice strip, by review state.
-	 *
-	 * @var array<string, string>
-	 */
-	private const REVISION_TONO = array(
-		ApplicationMetaKeys::REVIEW_SUBMITTED => 'info',
-		ApplicationMetaKeys::REVIEW_AMEND     => 'warning',
-		ApplicationMetaKeys::REVIEW_ADMITTED  => 'success',
-		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'danger',
-	);
-
-	/**
-	 * Icon of the notice strip, by review state.
-	 *
-	 * @var array<string, string>
-	 */
-	private const REVISION_ICONO = array(
-		ApplicationMetaKeys::REVIEW_SUBMITTED => 'description',
-		ApplicationMetaKeys::REVIEW_AMEND     => 'edit_note',
-		ApplicationMetaKeys::REVIEW_ADMITTED  => 'task_alt',
-		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'error',
-	);
-
-	/**
 	 * Paint the screen.
 	 *
 	 * @param array<string, mixed> $m What ApplyForm::model() returned.
@@ -82,15 +59,19 @@ final class ApplyFormView {
 			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::next_steps( $m ) . self::mine_link( $m ) );
 		}
 
-		$flash = (array) $m['flash'];
+		$progreso = (array) ( $m['progress'] ?? array() );
+		if ( ! empty( $progreso['receipt'] ) ) {
+			return ApplicationProgressView::receipt( $m );
+		}
 
 		ob_start();
 		echo self::head( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::choices( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		echo self::status_card( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		echo ApplicationProgressView::card( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		// La prórroga de esta solicitud, si la tiene (PLAN-0003, PR 9).
 		echo Shell::notice( 'info', (string) ( $m['withdraw']['late'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		echo ApplicationProgressView::steps( $progreso ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 
 		if ( true === $m['can_submit'] ) {
 			echo self::form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
@@ -99,10 +80,15 @@ final class ApplyFormView {
 			echo array() === (array) $m['application'] ? self::next_steps( $m ) : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo self::summary( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
-		self::deliveries( $m );
 		// La lista de personas, con su propia ventana: fuera del formulario de
-		// la solicitud, que puede estar cerrado mientras ella sigue abierta.
+		// la solicitud, que puede estar cerrado mientras ella sigue abierta. Va
+		// antes de las entregas: es el paso que más se olvida.
 		echo PeopleView::section( (array) ( $m['people'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		if ( array() !== (array) ( $m['deliveries'] ?? array() ) ) {
+			echo '<div id="' . esc_attr( ApplicationProgress::ANCHOR_DELIVERIES ) . '">';
+			self::deliveries( $m );
+			echo '</div>';
+		}
 		// Retirar la solicitud, al final: es lo último que se busca.
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -268,50 +254,6 @@ final class ApplyFormView {
 	}
 
 	/**
-	 * The application as it stands: when, in what review state, and the note.
-	 *
-	 * Una tira sobre el formulario, con el tono y el icono del estado de
-	 * revisión: quien tiene que subsanar lee el motivo encima del formulario
-	 * que tiene que corregir, y no en un correo.
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return string
-	 */
-	private static function status_card( array $m ): string {
-		$s = (array) $m['application'];
-		if ( array() === $s ) {
-			return '';
-		}
-
-		$estado = (string) $s['state'];
-		$tono   = self::REVISION_TONO[ $estado ] ?? 'info';
-		$icono  = self::REVISION_ICONO[ $estado ] ?? 'description';
-		$rotulo = (string) $s['state_label'];
-
-		if ( ApplicationMetaKeys::REVIEW_AMEND === $estado && '' !== (string) $m['amend_closes_at'] ) {
-			$rotulo .= ' · hasta el ' . PanelParts::day( (string) $m['amend_closes_at'] );
-		}
-
-		ob_start();
-		?>
-		<div class="prc-solicitud-estado <?php echo esc_attr( Assets::alert_class( $tono ) ); ?>" role="status">
-			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $icono ); ?></span>
-			<span class="prc-solicitud-estado__cuerpo">
-				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
-				<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
-				<?php if ( '' !== (string) $s['note'] ) : ?>
-					<span class="prc-solicitud-estado__nota"><?php echo esc_html( (string) $s['note'] ); ?></span>
-				<?php endif; ?>
-				<?php if ( '' !== (string) $m['final_list_url'] ) : ?>
-					<span class="prc-solicitud-estado__enlace"><a href="<?php echo esc_url( (string) $m['final_list_url'] ); ?>" rel="noopener">Listado definitivo de admitidos</a></span>
-				<?php endif; ?>
-			</span>
-		</div>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
 	 * The data protection notice of whoever deploys, when there is one.
 	 *
 	 * **Aquí no hay ni una línea de texto legal**: el órgano responsable, el
@@ -384,7 +326,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<?php // `multipart/form-data` solo porque ahora puede llevar un documento (ADR-0028): sube como fichero HTTP normal, sin Base64 y sin JavaScript. ?>
-		<form class="prc-form prc-form--solicitud" method="post" action="" enctype="multipart/form-data">
+		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -452,29 +394,42 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
-				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
-					<div class="prc-seccion__cuerpo">
-						<div class="prc-nota prc-campo--completo">
-							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
-						</div>
-						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-						<?php endfor; ?>
-					</div>
-				</section>
-			<?php endif; ?>
+			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<div class="prc-form__envio">
-				<button class="prc-boton-enviar" type="submit">
-					<span class="material-symbols-outlined" aria-hidden="true">send</span>
-					<?php echo esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ); ?>
-				</button>
-			</div>
+			<?php echo ApplicationProgressView::submit( $m, $nueva ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The coordinators the form asks for, or where they are asked when it is the list.
+	 *
+	 * @param array<string, mixed>             $m            Model.
+	 * @param array<int, array<string, mixed>> $coordinators What was typed or stored.
+	 * @return string
+	 */
+	private static function coordination( array $m, array $coordinators ): string {
+		$spec = (array) $m['spec'];
+		if ( ! empty( $spec['coordinators_in_list'] ) ) {
+			$hasta   = (string) ( $m['people']['until'] ?? '' );
+			$despues = (string) ( $m['people']['after_submit'] ?? '' );
+			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
+			return '<div class="prc-nota prc-campo--completo"><p>'
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
+				. '</p></div>';
+		}
+		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$campos = '';
+		for ( $index = 0; $index < $cuantas; ++$index ) {
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+		}
+		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
+			. $campos . '</div></section>';
 	}
 
 	/**
@@ -704,7 +659,7 @@ final class ApplyFormView {
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
-	private static function summary( array $m ): string {
+	public static function summary( array $m ): string {
 		$s = (array) $m['application'];
 		if ( array() === $s ) {
 			return '';
@@ -714,7 +669,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<section class="prc-seccion prc-solicitud-resumen">
+		<section class="prc-seccion prc-solicitud-resumen" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>">
 			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
 			<dl class="prc-respuestas">
 				<?php if ( '' !== (string) $s['position'] ) : ?>

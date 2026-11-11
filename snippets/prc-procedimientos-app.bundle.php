@@ -3179,6 +3179,30 @@ final class PeopleSpec {
 
 
 
+	public static function collects_coordination( array $spec ): bool {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] || (int) $spec['min'] < 1 ) {
+			return false;
+		}
+		foreach ( (array) $spec['roles'] as $papel ) {
+			if ( false !== strpos( strtolower( (string) $papel['label'] ), 'coordina' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	public static function why_closed( array $spec, array $ctx ): string {
@@ -3223,6 +3247,30 @@ final class PeopleSpec {
 			return 'El plazo de la lista de personas terminó el ' . self::day( $cierra ) . '.';
 		}
 		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function until( array $spec, string $closes_at, string $today ): string {
+		$spec = self::sanitize( $spec );
+		if ( true !== $spec['enabled'] ) {
+			return '';
+		}
+		$propia = '' !== (string) $spec['opens_at'] || '' !== (string) $spec['closes_at'];
+		$ultimo = $propia ? (string) $spec['closes_at'] : self::date( $closes_at );
+		return '' !== $ultimo && $ultimo >= $today ? $ultimo : '';
 	}
 
 
@@ -11594,6 +11642,7 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\Domain\QuestionPoints;
@@ -11867,10 +11916,16 @@ final class Applications {
 
 	public static function spec( int $procedure_id ): array {
 		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
+
+
+
+		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ) );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
-			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
-			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
+			'coordinator_count'    => $en_lista ? 0 : $pide,
+			'requires_coordinator' => ! $en_lista && $pide > 0,
+			'coordinators_in_list' => $en_lista,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
 			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
@@ -11970,6 +12025,11 @@ final class Applications {
 			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
 			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
 		);
+
+
+		if ( array() === (array) $data['coordinator'] && self::spec( $procedure_id )['coordinators_in_list'] ) {
+			unset( $metas[ ApplicationMetaKeys::COORDINATOR ] );
+		}
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
@@ -17809,8 +17869,9 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'Rellene la solicitud',
 				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
+					. '<p>Si el procedimiento pide una lista de personas o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Personas que participan», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
 					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
-					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora.</li></ol>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
 					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -17831,7 +17892,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Verá el aviso <strong>«Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.»</strong> y, en la solicitud, <strong>«Presentada el …»</strong>.</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada: …»</strong>, en la dirección de su cuenta.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -17848,11 +17909,11 @@ final class HelpContent {
 				'id'    => 'personas-participantes',
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
-				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas de la solicitud»</strong>. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: pide al menos …»). No se rechaza, pero quien revisa lo verá.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>El plazo para gestionar la lista aparece encima («Plazo para gestionar la lista: …»). Puede ser distinto del plazo de solicitud.</li></ul>',
+				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Cambiar o sustituir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'bloque «Personas de la solicitud» vacío, con «Dar de alta a una persona»',
+						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
@@ -17896,14 +17957,14 @@ final class HelpContent {
 				'id'    => 'retirar-la-solicitud',
 				'level' => 2,
 				'title' => 'Retire la solicitud si ya no quiere participar',
-				'html'  => '<p>Mientras el plazo siga abierto, pulse <strong>«Retirar la solicitud»</strong> (en «Mi centro» o al final de la solicitud) y confirme. Deja de contar y recibirá un correo de acuse. Mientras haya plazo, puede presentar otra nueva.</p>',
+				'html'  => '<p>Mientras el plazo siga abierto, pulse <strong>«Retirar la solicitud»</strong>, al final de la solicitud, y confirme. Deja de contar y recibirá un correo de acuse. Mientras haya plazo, puede presentar otra nueva.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -18008,7 +18069,8 @@ final class HelpContent {
 				'level' => 3,
 				'title' => 'Personas',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>',
+					. '<ul><li>Los <strong>papeles</strong>, uno por línea (por ejemplo, «Coordinación» o «Participante»). Escriba «| grupo» detrás del que exija grupo: «Participante | grupo».</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Personas» con papeles y grupos',
@@ -18132,14 +18194,14 @@ final class HelpContent {
 				'id'    => 'como-se-que-esta-presentada',
 				'level' => 3,
 				'title' => '¿Cómo sé que mi solicitud ha quedado presentada?',
-				'html'  => '<p>Tiene tres pruebas: el aviso «Solicitud presentada» y la línea «Presentada el …» en la propia solicitud; el correo «Solicitud presentada: …»; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada.</p>',
+				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'inscripcion-incompleta',
 				'level' => 3,
 				'title' => 'Me dicen que la inscripción no está completa, pero lo rellené todo',
-				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas de la solicitud», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: pide al menos …». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
+				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas que participan», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -18153,7 +18215,7 @@ final class HelpContent {
 				'id'    => 'cambiar-personas-coordinadoras',
 				'level' => 3,
 				'title' => '¿Dónde añado o cambio a las personas después de presentar? ¿Hasta cuándo?',
-				'html'  => '<p>En la misma solicitud, en el bloque «Personas de la solicitud». El plazo aparece encima («Plazo para gestionar la lista: …») y puede durar más que el plazo de solicitud. La persona coordinadora de los datos de la solicitud se cambia mientras se pueda modificar la solicitud.</p>',
+				'html'  => '<p>En la misma solicitud, en el bloque «Personas que participan». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -18188,7 +18250,7 @@ final class HelpContent {
 				'id'    => 'me-equivoque-de-procedimiento',
 				'level' => 3,
 				'title' => 'Me equivoqué de procedimiento. ¿Puedo deshacerlo?',
-				'html'  => '<p>Sí: pulse «Retirar la solicitud» mientras el plazo siga abierto.</p>',
+				'html'  => '<p>Sí: pulse «Retirar la solicitud», al final de la solicitud, mientras el plazo siga abierto.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -25873,6 +25935,7 @@ final class PeopleView {
 			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
+				<?php echo self::until( $p );?>
 				<p class="prc-campo__ayuda prc-campo--completo">
 					<?php echo esc_html( (string) $p['window'] . ' ' . self::limits( (int) $p['min'], (int) $p['max'], count( $filas ) ) ); ?>
 				</p>
@@ -25893,6 +25956,25 @@ final class PeopleView {
 		</section>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function until( array $p ): string {
+		$dia = (string) ( $p['until'] ?? '' );
+		if ( '' === $dia || ( empty( $p['can_edit'] ) && (int) $p['application_id'] > 0 ) ) {
+			return '';
+		}
+		return '<p class="prc-personas__plazo prc-campo--completo"><strong>'
+			. esc_html( 'Puede dar de alta, cambiar o sustituir personas hasta el ' . $dia . ', incluido.' )
+			. '</strong></p>';
 	}
 
 
@@ -26229,11 +26311,260 @@ final class PeopleView {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ApplicationProgressView', false ) ) {
+final class ApplicationProgressView {
+
+
+
+
+
+
+	private const REVISION_TONO = array(
+		ApplicationMetaKeys::REVIEW_SUBMITTED => 'info',
+		ApplicationMetaKeys::REVIEW_AMEND     => 'warning',
+		ApplicationMetaKeys::REVIEW_ADMITTED  => 'success',
+		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'danger',
+	);
+
+
+
+
+
+
+	private const REVISION_ICONO = array(
+		ApplicationMetaKeys::REVIEW_SUBMITTED => 'description',
+		ApplicationMetaKeys::REVIEW_AMEND     => 'edit_note',
+		ApplicationMetaKeys::REVIEW_ADMITTED  => 'task_alt',
+		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'error',
+	);
+
+
+
+
+
+
+
+	public static function steps( array $p ): string {
+		$pasos = (array) ( $p['steps'] ?? array() );
+		if ( array() === $pasos ) {
+			return '';
+		}
+		$actual = false;
+		$out    = '<nav class="prc-pasos-caja" aria-label="Pasos de la solicitud"><ol class="prc-pasos">';
+		foreach ( $pasos as $paso ) {
+			$hecho  = ! empty( $paso['done'] );
+			$marca  = ! $hecho && ! $actual;
+			$actual = $actual || $marca;
+			$out   .= '<li class="prc-paso prc-paso--' . ( $hecho ? 'hecho' : 'falta' ) . '"' . ( $marca ? ' aria-current="step"' : '' ) . '>'
+				. '<a href="' . esc_url( '#' . (string) $paso['anchor'] ) . '">' . esc_html( (string) $paso['label'] ) . '</a> '
+				. '<span class="prc-paso__estado">' . esc_html( $hecho ? 'Hecho' : 'Falta' ) . '</span></li>';
+		}
+		return $out . '</ol></nav>';
+	}
+
+
+
+
+
+
+
+	public static function notice( array $flash ): string {
+		$texto = (string) ( $flash['texto'] ?? '' );
+		$link  = (string) ( $flash['link'] ?? '' );
+		if ( '' === $texto || '' === $link ) {
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+		}
+		$tonos = array(
+			'ok'    => 'success',
+			'aviso' => 'warning',
+			'error' => 'danger',
+		);
+		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function card( array $m ): string {
+		$s = (array) $m['application'];
+		if ( array() === $s ) {
+			return '';
+		}
+
+		$estado = (string) $s['state'];
+		$tono   = self::REVISION_TONO[ $estado ] ?? 'info';
+		$icono  = self::REVISION_ICONO[ $estado ] ?? 'description';
+		$rotulo = (string) $s['state_label'];
+
+		if ( ApplicationMetaKeys::REVIEW_AMEND === $estado && '' !== (string) $m['amend_closes_at'] ) {
+			$rotulo .= ' · hasta el ' . PanelParts::day( (string) $m['amend_closes_at'] );
+		}
+
+		ob_start();
+		?>
+		<div class="prc-solicitud-estado <?php echo esc_attr( Assets::alert_class( $tono ) ); ?>" role="status">
+			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $icono ); ?></span>
+			<span class="prc-solicitud-estado__cuerpo">
+				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
+				<?php if ( array() !== (array) ( $m['progress'] ?? array() ) ) : ?>
+					<?php echo self::status( (array) $m['progress'] );?>
+				<?php else : ?>
+					<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) $s['note'] ) : ?>
+					<span class="prc-solicitud-estado__nota"><?php echo esc_html( (string) $s['note'] ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) $m['final_list_url'] ) : ?>
+					<span class="prc-solicitud-estado__enlace"><a href="<?php echo esc_url( (string) $m['final_list_url'] ); ?>" rel="noopener">Listado definitivo de admitidos</a></span>
+				<?php endif; ?>
+			</span>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	public static function submit( array $m, bool $nueva ): string {
+		$personas = (array) ( $m['people'] ?? array() );
+		$despues  = (string) ( $personas['after_submit'] ?? '' );
+		$texto    = '' === $despues
+			? sprintf( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos %d). Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ) )
+			: sprintf( 'Después de presentar tendrá que dar de alta a las personas que participan (al menos %d), pero no enseguida: %s Hasta entonces, la solicitud queda incompleta.', (int) ( $personas['min'] ?? 0 ), lcfirst( $despues ) );
+		$aviso    = $nueva && ! empty( $personas['show'] )
+			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
+			: '';
+		return '<div class="prc-form__envio">' . $aviso
+			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
+	}
+
+
+
+
+
+
+
+	public static function status( array $p ): string {
+		$out = '<span class="prc-solicitud-estado__fecha">' . esc_html( 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.' ) . '</span>';
+		if ( ! empty( $p['show_complete'] ) ) {
+			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
+		}
+		$enlaces = array();
+		if ( ! empty( $p['people_missing'] ) ) {
+			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de personas</a>';
+		}
+		if ( '' !== (string) ( $p['receipt_url'] ?? '' ) ) {
+			$enlaces[] = '<a href="' . esc_url( (string) $p['receipt_url'] ) . '">Ver e imprimir el justificante</a>';
+		}
+		if ( array() !== $enlaces ) {
+			$out .= '<span class="prc-solicitud-estado__enlace">' . implode( ' · ', $enlaces ) . '</span>';
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function completeness( array $p ): string {
+		$falta = (array) ( $p['missing'] ?? array() );
+		return array() === $falta ? 'Completa: no le falta nada.' : 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function receipt( array $m ): string {
+		$p       = (array) $m['progress'];
+		$s       = (array) $m['application'];
+		$centro  = (array) $m['centre'];
+		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
+		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
+		$datos   = array(
+			'N.º de solicitud'    => (string) (int) $p['application'],
+			'Procedimiento'       => (string) $m['title'],
+			'Centro'              => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Presentada'          => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
+			'Última modificación' => (string) $p['modified'],
+			'Estado de revisión'  => (string) ( $s['state_label'] ?? '' ),
+			'Estado'              => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+		);
+
+		ob_start();
+		?>
+		<div class="prc-justificante">
+			<p class="prc-sub prc-no-imprimir"><a href="<?php echo esc_url( (string) $p['apply_url'] ); ?>">&larr; Volver a la solicitud</a></p>
+			<h1 class="prc-h1">Justificante de presentación</h1>
+			<dl class="prc-respuestas prc-justificante__datos">
+				<?php foreach ( $datos as $rotulo => $valor ) : ?>
+					<?php if ( '' !== $valor ) : ?>
+						<dt><?php echo esc_html( $rotulo ); ?></dt>
+						<dd><?php echo esc_html( $valor ); ?></dd>
+					<?php endif; ?>
+				<?php endforeach; ?>
+			</dl>
+			<?php echo ApplyFormView::summary( $m );?>
+			<?php echo PeopleView::review( (array) ( $m['people'] ?? array() ) );?>
+			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
+		</div>
+		<?php
+		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
@@ -26275,45 +26606,25 @@ final class ApplyFormView {
 
 
 
-	private const REVISION_TONO = array(
-		ApplicationMetaKeys::REVIEW_SUBMITTED => 'info',
-		ApplicationMetaKeys::REVIEW_AMEND     => 'warning',
-		ApplicationMetaKeys::REVIEW_ADMITTED  => 'success',
-		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'danger',
-	);
-
-
-
-
-
-
-	private const REVISION_ICONO = array(
-		ApplicationMetaKeys::REVIEW_SUBMITTED => 'description',
-		ApplicationMetaKeys::REVIEW_AMEND     => 'edit_note',
-		ApplicationMetaKeys::REVIEW_ADMITTED  => 'task_alt',
-		ApplicationMetaKeys::REVIEW_EXCLUDED  => 'error',
-	);
-
-
-
-
-
-
 
 	public static function html( array $m ): string {
 		if ( '' !== (string) $m['aviso'] ) {
 			return Shell::render( 'Solicitud', '', Shell::notice( 'aviso', (string) $m['aviso'] ) . self::next_steps( $m ) . self::mine_link( $m ) );
 		}
 
-		$flash = (array) $m['flash'];
+		$progreso = (array) ( $m['progress'] ?? array() );
+		if ( ! empty( $progreso['receipt'] ) ) {
+			return ApplicationProgressView::receipt( $m );
+		}
 
 		ob_start();
 		echo self::head( $m );
-		echo Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) );
 		echo self::choices( $m );
-		echo self::status_card( $m );
+		echo ApplicationProgressView::card( $m );
 
 		echo Shell::notice( 'info', (string) ( $m['withdraw']['late'] ?? '' ) );
+		echo ApplicationProgressView::steps( $progreso );
 
 		if ( true === $m['can_submit'] ) {
 			echo self::form( $m );
@@ -26322,10 +26633,15 @@ final class ApplyFormView {
 			echo array() === (array) $m['application'] ? self::next_steps( $m ) : '';
 			echo self::summary( $m );
 		}
-		self::deliveries( $m );
+
 
 
 		echo PeopleView::section( (array) ( $m['people'] ?? array() ) );
+		if ( array() !== (array) ( $m['deliveries'] ?? array() ) ) {
+			echo '<div id="' . esc_attr( ApplicationProgress::ANCHOR_DELIVERIES ) . '">';
+			self::deliveries( $m );
+			echo '</div>';
+		}
 
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -26500,50 +26816,6 @@ final class ApplyFormView {
 
 
 
-	private static function status_card( array $m ): string {
-		$s = (array) $m['application'];
-		if ( array() === $s ) {
-			return '';
-		}
-
-		$estado = (string) $s['state'];
-		$tono   = self::REVISION_TONO[ $estado ] ?? 'info';
-		$icono  = self::REVISION_ICONO[ $estado ] ?? 'description';
-		$rotulo = (string) $s['state_label'];
-
-		if ( ApplicationMetaKeys::REVIEW_AMEND === $estado && '' !== (string) $m['amend_closes_at'] ) {
-			$rotulo .= ' · hasta el ' . PanelParts::day( (string) $m['amend_closes_at'] );
-		}
-
-		ob_start();
-		?>
-		<div class="prc-solicitud-estado <?php echo esc_attr( Assets::alert_class( $tono ) ); ?>" role="status">
-			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $icono ); ?></span>
-			<span class="prc-solicitud-estado__cuerpo">
-				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
-				<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
-				<?php if ( '' !== (string) $s['note'] ) : ?>
-					<span class="prc-solicitud-estado__nota"><?php echo esc_html( (string) $s['note'] ); ?></span>
-				<?php endif; ?>
-				<?php if ( '' !== (string) $m['final_list_url'] ) : ?>
-					<span class="prc-solicitud-estado__enlace"><a href="<?php echo esc_url( (string) $m['final_list_url'] ); ?>" rel="noopener">Listado definitivo de admitidos</a></span>
-				<?php endif; ?>
-			</span>
-		</div>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-
-
-
 	private static function privacy(): string {
 		$texto = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
 		if ( '' === $texto ) {
@@ -26607,7 +26879,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<?php ?>
-		<form class="prc-form prc-form--solicitud" method="post" action="" enctype="multipart/form-data">
+		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26675,29 +26947,42 @@ final class ApplyFormView {
 				</section>
 			<?php endif; ?>
 
-			<?php if ( (int) ( $spec['coordinator_count'] ?? 0 ) > 0 ) : ?>
-				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3>
-					<div class="prc-seccion__cuerpo">
-						<div class="prc-nota prc-campo--completo">
-							<p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p>
-						</div>
-						<?php for ( $index = 0; $index < (int) $spec['coordinator_count']; ++$index ) : ?>
-							<?php echo self::coordinator_fields( $index, (array) ( $v['coordinators'][ $index ] ?? array() ) );?>
-						<?php endfor; ?>
-					</div>
-				</section>
-			<?php endif; ?>
+			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
 
-			<div class="prc-form__envio">
-				<button class="prc-boton-enviar" type="submit">
-					<span class="material-symbols-outlined" aria-hidden="true">send</span>
-					<?php echo esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ); ?>
-				</button>
-			</div>
+			<?php echo ApplicationProgressView::submit( $m, $nueva );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+	private static function coordination( array $m, array $coordinators ): string {
+		$spec = (array) $m['spec'];
+		if ( ! empty( $spec['coordinators_in_list'] ) ) {
+			$hasta   = (string) ( $m['people']['until'] ?? '' );
+			$despues = (string) ( $m['people']['after_submit'] ?? '' );
+			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
+			return '<div class="prc-nota prc-campo--completo"><p>'
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
+				. '</p></div>';
+		}
+		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$campos = '';
+		for ( $index = 0; $index < $cuantas; ++$index ) {
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+		}
+		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
+			. $campos . '</div></section>';
 	}
 
 
@@ -26927,7 +27212,7 @@ final class ApplyFormView {
 
 
 
-	private static function summary( array $m ): string {
+	public static function summary( array $m ): string {
 		$s = (array) $m['application'];
 		if ( array() === $s ) {
 			return '';
@@ -26937,7 +27222,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<section class="prc-seccion prc-solicitud-resumen">
+		<section class="prc-seccion prc-solicitud-resumen" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>">
 			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
 			<dl class="prc-respuestas">
 				<?php if ( '' !== (string) $s['position'] ) : ?>
@@ -27623,6 +27908,8 @@ final class ApplyForm {
 		$m['people'] = PeopleForm::model( $m );
 
 		$m['withdraw'] = WithdrawForm::model( $m );
+
+		$m['progress'] = ApplicationProgress::model( $m );
 		return ApplyFormView::html( $m );
 	}
 }
@@ -27765,17 +28052,6 @@ final class WithdrawForm {
 			'nonce_action' => self::nonce_action( $id ),
 		);
 	}
-
-
-
-
-
-
-
-
-	public static function link( int $application_id, string $url ): string {
-		return '' !== $url && ApplicationActions::can_withdraw( get_current_user_id(), $application_id ) ? $url . '#' . self::ANCHOR : '';
-	}
 }
 
 }
@@ -27793,6 +28069,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
 use Prc\Domain\DateRange;
 use Prc\Domain\PeopleSpec;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -28049,6 +28326,10 @@ final class PeopleForm {
 		$user_id   = get_current_user_id();
 		$filas     = $solicitud > 0 ? self::rows( $spec, People::of( $solicitud ) ) : array();
 		$puede     = $solicitud > 0 && ProcedureAccess::can_edit_people( $user_id, $solicitud );
+		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
+
+
+		$abierta = $solicitud > 0 ? $puede : '' === $despues;
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
@@ -28057,10 +28338,13 @@ final class PeopleForm {
 			'min'            => (int) $spec['min'],
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
+
+			'until'          => $abierta ? self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ) : '',
+			'after_submit'   => $despues,
 			'rows'           => $filas,
 			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
 			'can_edit'       => $puede,
-			'why'            => self::why( $solicitud, $user_id, $puede ),
+			'why'            => '' !== $despues ? $despues : self::why( $solicitud, $user_id, $puede ),
 			'flash'          => self::flash(),
 
 
@@ -28106,6 +28390,30 @@ final class PeopleForm {
 		return '' !== (string) $spec['opens_at']
 			? 'La lista se puede gestionar desde el ' . self::day( (string) $spec['opens_at'] ) . '.'
 			: 'La lista se puede gestionar hasta el ' . self::day( (string) $spec['closes_at'] ) . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function after_submit( array $spec, int $procedure_id ): string {
+		return PeopleSpec::why_closed(
+			$spec,
+			array(
+				'today'    => ProcedureState::today(),
+				'archived' => ProcedureAccess::is_archived( $procedure_id ),
+				'review'   => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'state'    => ProcedureState::of_post( $procedure_id ),
+			)
+		);
 	}
 
 
@@ -28198,6 +28506,230 @@ final class PeopleForm {
 
 
 
+namespace Prc\PublicFront;
+
+use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ApplicationMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ApplicationProgress', false ) ) {
+final class ApplicationProgress {
+
+
+
+
+	public const ARG_RECEIPT = 'justificante';
+
+
+
+
+	public const ANCHOR_FORM = 'prc-solicitud-datos';
+
+
+
+
+	public const ANCHOR_DELIVERIES = 'prc-entregas';
+
+
+
+
+
+
+	private const VERB = array(
+		'presentada' => 'presentada',
+		'guardada'   => 'guardada',
+	);
+
+
+
+
+
+
+
+	public static function model( array $m ): array {
+		$app      = (array) ( $m['application'] ?? array() );
+		$id       = (int) ( $app['id'] ?? 0 );
+		$people   = (array) ( $m['people'] ?? array() );
+		$excluida = ApplicationMetaKeys::REVIEW_EXCLUDED === (string) ( $app['state'] ?? '' );
+		$falta    = $id > 0 ? self::missing( $id ) : array();
+		$autor    = $id > 0 ? get_userdata( (int) get_post_field( 'post_author', $id ) ) : false;
+		$out      = array(
+			'steps'          => self::steps( $m, $people ),
+			'application'    => $id,
+			'missing'        => $falta,
+			'show_complete'  => $id > 0 && ! $excluida,
+			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
+			'people_min'     => (int) ( $people['min'] ?? 0 ),
+			'people_until'   => (string) ( $people['until'] ?? '' ),
+			'people_open'    => ! empty( $people['can_edit'] ),
+			'people_why'     => (string) ( $people['why'] ?? '' ),
+			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
+			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
+			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'receipt_url'    => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
+			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
+
+			'receipt'        => $id > 0 && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
+		);
+		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function missing( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		return ApplicationCompleteness::reasons(
+			People::enabled( $procedure_id ) ? People::spec( $procedure_id ) : array( 'enabled' => false ),
+			get_post_meta( $application_id, ApplicationMetaKeys::PEOPLE, true ),
+			Applications::questions( $procedure_id ),
+			get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ),
+			ProcedureState::today(),
+			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
+			ApplicationOperations::pending_for_school( $application_id )
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function steps( array $m, array $people ): array {
+		$app = (array) ( $m['application'] ?? array() );
+		$hay = array() !== $app;
+		if ( ! $hay && empty( $m['can_submit'] ) ) {
+			return array();
+		}
+		$pasos = array(
+			array(
+				'label'  => 'Datos de la solicitud',
+				'anchor' => self::ANCHOR_FORM,
+				'done'   => $hay,
+			),
+		);
+		if ( ! empty( $people['show'] ) ) {
+			$pasos[] = array(
+				'label'  => 'Personas que participan',
+				'anchor' => PeopleForm::ANCHOR,
+				'done'   => $hay && ! empty( $people['complete'] ),
+			);
+		}
+		$entregas = (array) ( $m['deliveries'] ?? array() );
+		if ( array() !== $entregas ) {
+			$ficheros = (array) ( $app['files'] ?? array() );
+			$hechas   = true;
+			foreach ( $entregas as $pregunta ) {
+				$hechas = $hechas && ( empty( $pregunta['required'] ) || isset( $ficheros[ (string) $pregunta['key'] ] ) );
+			}
+			$pasos[] = array(
+				'label'  => 'Documentos con plazo propio',
+				'anchor' => self::ANCHOR_DELIVERIES,
+				'done'   => $hay && $hechas,
+			);
+		}
+		return count( $pasos ) > 1 ? $pasos : array();
+	}
+
+
+
+
+
+
+
+
+	private static function flash( array $flash, array $p ): array {
+		$flash += array(
+			'tipo'  => '',
+			'texto' => '',
+		);
+
+		$hecho = sanitize_key( wp_unslash( (string) ( $_GET[ ApplyForm::ARG_NOTICE ] ?? '' ) ) );
+		$out   = array(
+			'tipo'      => (string) $flash['tipo'],
+			'texto'     => (string) $flash['texto'],
+			'link'      => '',
+			'link_text' => '',
+		);
+		if ( 'ok' !== $out['tipo'] || ! isset( self::VERB[ $hecho ] ) || ! $p['show_complete'] ) {
+			return $out;
+		}
+		$verbo = 'Solicitud ' . self::VERB[ $hecho ];
+		if ( array() === (array) $p['missing'] ) {
+			$out['texto'] = ( 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo )
+				. '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.';
+			return $out;
+		}
+		$out['tipo'] = 'aviso';
+		if ( $p['people_missing'] ) {
+			$falta = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . ').';
+
+
+
+			if ( ! $p['people_open'] ) {
+				$out['texto'] = $falta . ( '' !== (string) $p['people_why'] ? ' ' . (string) $p['people_why'] : '' );
+				return $out;
+			}
+			$hasta            = (string) $p['people_until'];
+			$out['texto']     = $falta . ' Hágalo abajo, en «Personas que participan»'
+				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
+			$out['link']      = '#' . PeopleForm::ANCHOR;
+			$out['link_text'] = 'Ir a la lista de personas';
+			return $out;
+		}
+		$out['texto'] = $verbo . ', pero todavía no está completa. Le falta: ' . lcfirst( implode( '; ', (array) $p['missing'] ) ) . '.';
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function when( int $timestamp ): string {
+		return $timestamp > 0 ? (string) wp_date( 'd-m-Y', $timestamp ) . ' a las ' . (string) wp_date( 'H:i', $timestamp ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
@@ -28250,14 +28782,11 @@ final class MyCentreView {
 		ob_start();
 		?>
 		<div class="prc-mi-centro">
-			<p class="prc-ayuda-orden">
-				<strong>Pulse en las cabeceras</strong> de las columnas de la tabla <strong>para ordenarla</strong>:<br>
-				la primera vez ordenará de menor a mayor (de la A a la Z, o de la más antigua a la más reciente);<br>
-				la segunda vez, al revés.
-			</p>
+			<p class="prc-ayuda-orden">Pulse una cabecera para ordenar la tabla; otra vez, al revés.</p>
 			<?php
 			echo self::count( count( $filas ), $docente );
 			echo self::amendment( (array) $m['amend'] );
+			echo self::incomplete( (array) ( $m['incomplete'] ?? array() ) );
 			?>
 			<div class="prc-tabla-caja">
 				<table class="prc-tabla prc-tabla--densa prc-mi-tabla">
@@ -28266,7 +28795,7 @@ final class MyCentreView {
 						<tr>
 							<?php foreach ( (array) $m['headers'] as $clave => $columna ) : ?>
 								<?php
-								if ( $docente && 'coordinador' === (string) $clave ) {
+								if ( ( $docente && 'coordinador' === (string) $clave ) || ( empty( $m['has_people'] ) && 'personas' === (string) $clave ) ) {
 									continue; }
 								?>
 								<?php echo self::heading( (array) $columna );?>
@@ -28275,7 +28804,7 @@ final class MyCentreView {
 					</thead>
 					<tbody>
 						<?php foreach ( $filas as $fila ) : ?>
-							<?php echo self::row( (array) $fila, $docente );?>
+							<?php echo self::row( (array) $fila, $docente, ! empty( $m['has_people'] ) );?>
 						<?php endforeach; ?>
 					</tbody>
 				</table>
@@ -28333,6 +28862,60 @@ final class MyCentreView {
 
 
 
+	private static function incomplete( array $incomplete ): string {
+		$cuantas = (int) ( $incomplete['count'] ?? 0 );
+		if ( $cuantas < 1 ) {
+			return '';
+		}
+		$texto = 1 === $cuantas
+			? '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.'
+			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan personas en la lista.';
+		if ( '' !== (string) ( $incomplete['id'] ?? '' ) ) {
+			$texto .= ' <a href="#fila-' . esc_attr( (string) $incomplete['id'] ) . '">' . ( 1 === $cuantas ? 'Ir a la solicitud' : 'Ir a la primera' ) . '</a>';
+		}
+		return '<p class="' . esc_attr( Assets::alert_class( 'warning' ) ) . '" role="status">' . $texto . '</p>';
+	}
+
+
+
+
+
+
+
+	private static function people_cell( array $fila ): string {
+		if ( empty( $fila['people'] ) ) {
+			return '<td class="prc-celda" data-rotulo="Personas">' . self::value( '' ) . '</td>';
+		}
+		$hay = (int) $fila['people_count'];
+		$min = (int) $fila['people_min'];
+		$max = (int) $fila['people_max'];
+		if ( empty( $fila['people_complete'] ) ) {
+			$faltan = $min - $hay;
+			$dato   = '<span class="' . esc_attr( Assets::state_class( 'amend' ) ) . '">' . esc_html( 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan ) ) . '</span>';
+		} else {
+			$dato = esc_html( $min > 0 ? sprintf( $min === $max ? '%1$d de %3$d' : '%1$d de %2$d a %3$d', $hay, $min, $max ) : sprintf( '%1$d, hasta %2$d', $hay, $max ) );
+		}
+		$out = $dato;
+		if ( ! empty( $fila['people_open'] ) ) {
+			$out .= ' <a class="prc-ver-solicitud" href="' . esc_url( (string) $fila['people_url'] ) . '">' . ( empty( $fila['people_complete'] ) ? 'Completar' : 'Cambiar' ) . '</a>';
+			if ( '' !== (string) ( $fila['people_until'] ?? '' ) ) {
+				$out .= '<span class="prc-nota-revision">' . esc_html( 'Hasta el ' . (string) $fila['people_until'] . ', incluido.' ) . '</span>';
+			}
+		} else {
+			$porque = (string) ( $fila['people_why'] ?? '' );
+			$out   .= '<span class="prc-nota-revision">' . esc_html( '' !== $porque ? $porque : 'La lista ya no se puede cambiar.' ) . '</span>';
+		}
+		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
+	}
+
+
+
+
+
+
+
+
+
 
 	private static function heading( array $columna ): string {
 		$rotulo = esc_html( (string) $columna['label'] );
@@ -28350,7 +28933,8 @@ final class MyCentreView {
 
 
 
-	private static function row( array $fila, bool $docente = false ): string {
+
+	private static function row( array $fila, bool $docente = false, bool $personas = false ): string {
 		$cargo    = (string) $fila['position'];
 		$quien    = (string) $fila['applicant'];
 		$quien    = '' !== $quien && '' !== $cargo ? $quien . ' (' . $cargo . ')' : $quien;
@@ -28381,16 +28965,11 @@ final class MyCentreView {
 				<?php if ( '' !== (string) $fila['url'] ) : ?>
 					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['url'] ); ?>">Ver la solicitud</a>
 				<?php endif; ?>
-				<?php if ( '' !== (string) ( $fila['people_url'] ?? '' ) ) : ?>
-					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['people_url'] ); ?>"><?php echo esc_html( sprintf( 'Personas (%d)', (int) $fila['people_count'] ) ); ?></a>
-				<?php endif; ?>
 				<?php if ( '' !== (string) ( $fila['late'] ?? '' ) ) : ?>
 					<span class="prc-nota-revision"><?php echo esc_html( (string) $fila['late'] ); ?></span>
 				<?php endif; ?>
-				<?php if ( '' !== (string) ( $fila['withdraw_url'] ?? '' ) ) : ?>
-					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['withdraw_url'] ); ?>">Retirar la solicitud</a>
-				<?php endif; ?>
 			</td>
+			<?php echo $personas ? self::people_cell( $fila ) : '';?>
 		</tr>
 		<?php
 		return (string) ob_get_clean();
@@ -28425,6 +29004,8 @@ namespace Prc\PublicFront;
 use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -28509,6 +29090,11 @@ final class MyCentre {
 				'label' => 'Revisión',
 				'field' => 'review_label',
 			),
+
+			'personas'      => array(
+				'label' => 'Personas',
+				'field' => 'people_sort',
+			),
 		);
 	}
 
@@ -28557,6 +29143,11 @@ final class MyCentre {
 				'closes' => '',
 				'id'     => '',
 			),
+			'has_people'     => false,
+			'incomplete'     => array(
+				'count' => 0,
+				'id'    => '',
+			),
 		);
 
 		if ( ! is_user_logged_in() ) {
@@ -28578,7 +29169,7 @@ final class MyCentre {
 			}
 			$m['rows']  = self::ordered( $m['rows'], $orden );
 			$m['amend'] = self::amendment( $m['rows'] );
-			return $m;
+			return self::with_people( $m );
 		}
 		$m['centre'] = Applications::centre_of( $user_id );
 		if ( '' === $m['centre']['code'] ) {
@@ -28596,7 +29187,72 @@ final class MyCentre {
 		}
 		$m['rows']  = self::ordered( $m['rows'], $orden );
 		$m['amend'] = self::amendment( $m['rows'] );
+		return self::with_people( $m );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function with_people( array $m ): array {
+		$cortas = array();
+		foreach ( (array) $m['rows'] as $fila ) {
+			$m['has_people'] = $m['has_people'] || ! empty( $fila['people'] );
+			if ( empty( $fila['people_complete'] ) && ! empty( $fila['people_open'] ) ) {
+				$cortas[] = (string) $fila['procedure_id'];
+			}
+		}
+		$m['incomplete'] = array(
+			'count' => count( $cortas ),
+			'id'    => (string) ( $cortas[0] ?? '' ),
+		);
 		return $m;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function people( int $application_id, int $procedure_id, bool $personas ): array {
+		if ( ! $personas ) {
+			return array(
+				'people'          => false,
+				'people_url'      => '',
+				'people_count'    => 0,
+				'people_complete' => true,
+				'people_sort'     => '',
+			);
+		}
+		$spec    = People::spec( $procedure_id );
+		$filas   = People::of( $application_id );
+		$porque  = ProcedureAccess::why_not_people( get_current_user_id(), $application_id );
+		$abierta = '' === $porque;
+		return array(
+			'people'          => true,
+			'people_url'      => PeopleForm::url( $application_id ),
+			'people_count'    => count( $filas ),
+			'people_min'      => (int) $spec['min'],
+			'people_max'      => (int) $spec['max'],
+			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
+			'people_open'     => $abierta,
+			'people_why'      => $porque,
+			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
+			'people_sort'     => (string) count( $filas ),
+		);
 	}
 
 
@@ -28626,7 +29282,7 @@ final class MyCentre {
 			? ApplyForm::url( $procedure_id )
 			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
 
-		return array(
+		return self::people( (int) $application->ID, $procedure_id, $personas ) + array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
 			'url'          => $url,
@@ -28649,11 +29305,9 @@ final class MyCentre {
 			'amend'        => $subsanar,
 			'amend_closes' => $cierre,
 
-			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
-			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
+
 
 			'late'         => ApplicationActions::late_notice( (int) $application->ID ),
-			'withdraw_url' => WithdrawForm::link( (int) $application->ID, $url ),
 		);
 	}
 
@@ -29755,6 +30409,12 @@ namespace Prc\Notifications;
 
 
 
+
+
+
+
+
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -29792,15 +30452,7 @@ final class Messages {
 
 		switch ( $event ) {
 			case Mailer::EVENT_APPLICATION_SUBMITTED:
-				return array(
-					'Solicitud presentada: ' . $titulo,
-					array_merge(
-						array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.', '' ),
-						self::summary( $ctx ),
-						self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
-						array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
-					),
-				);
+				return self::submitted( $titulo, $ctx );
 
 			case Mailer::EVENT_APPLICATION_UPDATED:
 				return array(
@@ -29877,6 +30529,53 @@ final class Messages {
 				);
 		}
 		return null;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function submitted( string $titulo, array $ctx ): array {
+		$numero = self::text( $ctx, 'number' );
+		if ( '' === $numero ) {
+			$cabeza = array( 'Se ha presentado la solicitud al procedimiento «' . $titulo . '». Este es el resumen de lo presentado.' );
+		} else {
+			$quien  = self::text( $ctx, 'applicant' );
+			$centro = self::text( $ctx, 'centre' );
+			$falta  = self::lines( $ctx, 'missing' );
+			$cabeza = array(
+				'Se ha presentado la solicitud n.º ' . $numero . ' al procedimiento «' . $titulo . '» el ' . self::text( $ctx, 'submitted' )
+					. ( '' !== $quien ? ', por ' . $quien : '' ) . ( '' !== $centro ? ', para ' . $centro : '' ) . '. Guarde este correo: es su justificante.',
+				'',
+				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
+			);
+			$hasta  = self::text( $ctx, 'people_until' );
+			$porque = self::text( $ctx, 'people_why' );
+			if ( '' !== $porque ) {
+				$cabeza[] = $porque;
+			} elseif ( '' !== $hasta ) {
+				$cabeza = array_merge( $cabeza, self::link( 'Puede dar de alta, cambiar o sustituir a las personas que participan hasta el ' . $hasta . ', incluido, en:', $ctx, 'people_url' ) );
+			}
+		}
+		return array(
+			'Solicitud presentada' . ( '' !== $numero ? ' n.º ' . $numero : '' ) . ': ' . $titulo,
+			array_merge(
+				$cabeza,
+				array( '' ),
+				self::summary( $ctx ),
+				self::link( 'Puede consultarla, y modificarla mientras el plazo siga abierto, en:', $ctx, 'url' ),
+				self::link( 'Justificante para imprimir o guardar en PDF:', $ctx, 'receipt_url' ),
+				array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
+			),
+		);
 	}
 
 
@@ -30113,8 +30812,10 @@ use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
@@ -30122,11 +30823,13 @@ use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationOperations;
+use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Observe;
 use Prc\PublicFront\ObserveSettings;
 use Prc\PublicFront\People;
+use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
@@ -30444,6 +31147,9 @@ final class Mailer {
 					return;
 				}
 				$ctx['created'] = (bool) $created;
+				if ( $created ) {
+					$ctx = self::receipt( (int) $application_id, $ctx, (int) $user_id );
+				}
 
 				self::send(
 					$created ? self::EVENT_APPLICATION_SUBMITTED : self::EVENT_APPLICATION_UPDATED,
@@ -30762,6 +31468,40 @@ final class Mailer {
 			'answers'      => self::answers( $procedure_id, $application_id, (array) $meta[ ApplicationMetaKeys::ANSWERS ] ),
 			'url'          => ApplyForm::url( $procedure_id, $args ),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function receipt( int $application_id, array $ctx, int $user_id ): array {
+		$procedure_id = (int) $ctx['procedure_id'];
+		$lista        = People::enabled( $procedure_id )
+			&& ApplicationMetaKeys::TYPE_TEACHER !== get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$porque       = $lista ? ProcedureAccess::why_not_people( $user_id, $application_id ) : '';
+		$hasta        = $lista && '' === $porque
+			? PeopleSpec::until( People::spec( $procedure_id ), (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() )
+			: '';
+		return array(
+			'number'       => (string) $application_id,
+			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
+			'missing'      => ApplicationProgress::missing( $application_id ),
+			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',
+			'people_url'   => (string) $ctx['url'] . '#' . PeopleForm::ANCHOR,
+			'people_why'   => $porque,
+			'receipt_url'  => add_query_arg( ApplicationProgress::ARG_RECEIPT, '1', (string) $ctx['url'] ),
+		) + $ctx;
 	}
 
 
@@ -34289,12 +35029,77 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 .prc-solicitud-estado__fecha,
 .prc-solicitud-estado__nota,
 .prc-solicitud-estado__enlace { display: block; margin-top: 4px; }
+
+.prc-solicitud-estado__completa { display: block; margin-top: 4px; font-weight: var(--prc-p-fuerte); }
+
+/* --- los pasos de la solicitud -------------------------------------------
+   Datos, personas y documentos, cada uno con «Hecho» o «Falta» escrito: el
+   color acompaña al texto, nunca lo sustituye. El primero que falta lleva
+   `aria-current="step"` y un filete. */
+.prc-pasos-caja { margin: 0 0 20px; }
+
+.prc-pasos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  counter-reset: prc-paso;
+}
+
+.prc-paso {
+  counter-increment: prc-paso;
+  padding: 6px 10px;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso::before { content: counter(prc-paso) ". "; font-weight: var(--prc-p-fuerte); }
+.prc-paso[aria-current="step"] { box-shadow: inset 3px 0 0 var(--prc-avi-texto); }
+
+.prc-paso__estado {
+  display: inline-block;
+  padding: 0 6px;
+  margin-left: 4px;
+  font-weight: var(--prc-p-fuerte);
+  border-radius: var(--prc-radio-caja);
+}
+
+.prc-paso--hecho .prc-paso__estado { color: var(--prc-ok-texto); background: var(--prc-ok-fondo); }
+.prc-paso--falta .prc-paso__estado { color: var(--prc-avi-texto); background: var(--prc-avi-fondo); }
+
+/* El paso 2 anunciado encima del botón que cierra el paso 1. */
+.prc-form__siguiente {
+  margin: 20px 0 0;
+  font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-titulo);
+}
+
+.prc-personas__plazo { margin: 0 0 8px; color: var(--prc-c-titulo); }
+
+/* --- el justificante -----------------------------------------------------
+   Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
+   solo sirve en pantalla. Sin JavaScript. */
+.prc-justificante__datos { margin-bottom: 20px; }
+
+@media print {
+  body:has(.prc-justificante) .prc-top,
+  body:has(.prc-justificante) .prc-tabs,
+  body:has(.prc-justificante) .prc-pie,
+  body:has(.prc-justificante) #wpadminbar,
+  .prc-justificante .prc-no-imprimir { display: none !important; }
+
+  .prc-justificante { color: #000; }
+}
 ',
   'css/prc-mi-centro.css' => '/* «Mis solicitudes» del centro.
    ==========================================================================
 
    Lo propio de esta pantalla y nada más: la ayuda de ordenación, el
-   recuento, las cabeceras ordenables con su flecha y el convenio de celda
+   recuento, la columna «Personas», las cabeceras ordenables con su flecha y el convenio de celda
    sin dato. La tabla, la cebra, los bordes y la piel densa vienen de
    `prc-app.css` y no se tocan.
 
@@ -34312,8 +35117,7 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 
 /* --- la ayuda de ordenación y el recuento -------------------------------- */
 
-/* Las tres líneas van con `<br>`, no en párrafos: el hueco entre ellas es el
-   del interlineado, no el de párrafo. */
+/* La ayuda de ordenación es una sola línea: lo que importa es la tabla. */
 .prc-mi-centro .prc-ayuda-orden,
 .prc-mi-centro .prc-recuento {
   margin: 0;
@@ -34346,7 +35150,7 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
   top: 50%;
   right: 0;
   transform: translateY(-50%);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1;
   color: var(--prc-c-tenue);
 }

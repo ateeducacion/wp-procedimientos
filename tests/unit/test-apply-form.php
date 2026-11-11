@@ -640,6 +640,138 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una lista de personas mínima, abierta mientras lo esté la solicitud.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function lista_de_personas(): array {
+		return array(
+			'enabled' => true,
+			'roles'   => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Coordinación',
+				),
+			),
+			'min'     => 2,
+			'max'     => 4,
+		);
+	}
+
+	/**
+	 * Con la lista de personas encendida, la coordinación está en un solo
+	 * sitio: el formulario no la pide y dice dónde se da de alta y hasta
+	 * cuándo; y presentar sin ella no se rechaza.
+	 */
+	public function test_with_the_people_list_coordinators_are_only_in_the_list() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 1,
+				ProcedureMetaKeys::PEOPLE_SPEC       => $this->lista_de_personas(),
+			)
+		);
+		$uid       = $this->school_head( 'C0001' );
+		$this->acting_as( $uid );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+		$html                             = ApplyForm::render();
+
+		$this->assertStringNotContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+		$this->assertStringNotContainsString( ApplyForm::FIELD_COORDINATORS, $html );
+		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. Allí podrá cambiarlas hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido.', $html );
+
+		$this->assertNotNull( $this->enviar( $uid, $procedure ), 'sin coordinación en el formulario, se presenta' );
+		$this->assertNotNull( Applications::find( $procedure, 'C0001' ) );
+	}
+
+	/**
+	 * Una lista que no puede recoger la coordinación —ningún papel de
+	 * coordinación, o sin mínimo— no se la lleva: el formulario la sigue
+	 * pidiendo y exigiendo, como antes de la lista.
+	 */
+	public function test_a_list_without_a_coordination_role_leaves_coordination_in_the_form() {
+		$sin_papel  = array(
+			'enabled' => true,
+			'roles'   => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Participante',
+				),
+			),
+			'min'     => 2,
+			'max'     => 4,
+		);
+		$sin_minimo = array( 'min' => 0 ) + $this->lista_de_personas();
+		foreach ( array( $sin_papel, $sin_minimo ) as $lista ) {
+			$procedure = $this->procedimiento(
+				array(
+					ProcedureMetaKeys::COORDINATOR_COUNT => 2,
+					ProcedureMetaKeys::PEOPLE_SPEC       => $lista,
+				)
+			);
+			$spec      = Applications::spec( $procedure );
+			$this->assertFalse( $spec['coordinators_in_list'] );
+			$this->assertSame( 2, $spec['coordinator_count'] );
+			$this->assertTrue( $spec['requires_coordinator'] );
+
+			$this->acting_as( $this->school_head( 'C0001' ) );
+			$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+			$html                             = ApplyForm::render();
+			$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+			$this->assertStringNotContainsString( 'se dan de alta en la lista de personas', $html );
+		}
+	}
+
+	/**
+	 * Con la lista que solo gestionan las admitidas, la nota de la
+	 * coordinación no promete un plazo que todavía no corre.
+	 */
+	public function test_coordination_in_a_list_for_admitted_ones_says_when() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 1,
+				ProcedureMetaKeys::PEOPLE_SPEC       => array( 'admitted_only' => true ) + $this->lista_de_personas(),
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+		$html                             = ApplyForm::render();
+		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. La lista de personas se gestiona cuando la solicitud esté admitida', $html );
+		$this->assertStringNotContainsString( 'Allí podrá cambiarlas hasta el', $html );
+	}
+
+	/**
+	 * Una solicitud de antes, con su coordinación guardada en el formulario,
+	 * no la pierde al volver a guardarse con la lista encendida, y se sigue
+	 * viendo en lo presentado.
+	 */
+	public function test_an_old_coordinator_survives_saving_with_the_people_list() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
+		$uid       = $this->school_head( 'C0001' );
+		$this->assertNotNull(
+			$this->enviar(
+				$uid,
+				$procedure,
+				array(
+					ApplyForm::FIELD_COORD_NAME    => 'Ana',
+					ApplyForm::FIELD_COORD_SURNAME => 'Pérez',
+					ApplyForm::FIELD_COORD_DNI     => '12345678Z',
+					ApplyForm::FIELD_COORD_EMAIL   => 'ana@example.org',
+				)
+			)
+		);
+		update_post_meta( $procedure, ProcedureMetaKeys::PEOPLE_SPEC, $this->lista_de_personas() );
+
+		$this->assertNotNull( $this->enviar( $uid, $procedure ), 'se guarda sin pedir la coordinación' );
+		$id = (int) Applications::find( $procedure, 'C0001' );
+		$this->assertSame( 'ana@example.org', Applications::meta( $id )[ ApplicationMetaKeys::COORDINATOR ][0]['email'], 'y la de antes se queda' );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, $this->dia( -1 ) );
+		$this->olvidar_rechazo();
+		$this->acting_as( $uid );
+		$this->assertStringContainsString( 'Ana Pérez', $this->pintar( $procedure ), 'y se ve en lo presentado' );
+	}
+
+	/**
 	 * Un campo bloqueado sin valor escribe un guion: así no se confunde «este
 	 * centro no consta en el catálogo» con «esto no ha cargado».
 	 */

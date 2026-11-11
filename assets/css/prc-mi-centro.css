@@ -2,7 +2,7 @@
    ==========================================================================
 
    Lo propio de esta pantalla y nada más: la ayuda de ordenación, el
-   recuento, las cabeceras ordenables con su flecha y el convenio de celda
+   recuento, la columna «Personas», las cabeceras ordenables con su flecha y el convenio de celda
    sin dato. La tabla, la cebra, los bordes y la piel densa vienen de
    `prc-app.css` y no se tocan.
 
@@ -20,8 +20,7 @@
 
 /* --- la ayuda de ordenación y el recuento -------------------------------- */
 
-/* Las tres líneas van con `<br>`, no en párrafos: el hueco entre ellas es el
-   del interlineado, no el de párrafo. */
+/* La ayuda de ordenación es una sola línea: lo que importa es la tabla. */
 .prc-mi-centro .prc-ayuda-orden,
 .prc-mi-centro .prc-recuento {
   margin: 0;
@@ -54,7 +53,7 @@
   top: 50%;
   right: 0;
   transform: translateY(-50%);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1;
   color: var(--prc-c-tenue);
 }

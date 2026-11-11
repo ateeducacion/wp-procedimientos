@@ -10,6 +10,8 @@ namespace Prc\PublicFront;
 use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\ApplicationPeople;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -93,6 +95,11 @@ final class MyCentre {
 				'label' => 'Revisión',
 				'field' => 'review_label',
 			),
+			// Solo se pinta si alguna solicitud tiene lista (ADR-0041).
+			'personas'      => array(
+				'label' => 'Personas',
+				'field' => 'people_sort',
+			),
 		);
 	}
 
@@ -120,7 +127,7 @@ final class MyCentre {
 	/**
 	 * Everything the screen decides before painting.
 	 *
-	 * @return array{aviso:string, centre:array{code:string, name:string, ownership:string}, rows:array<int, array<string, mixed>>, sort:array{col:string, dir:string}, headers:array<string, array{label:string, sort:string, url:string}>, amend:array{count:int, closes:string, id:string}}
+	 * @return array{aviso:string, centre:array{code:string, name:string, ownership:string}, rows:array<int, array<string, mixed>>, sort:array{col:string, dir:string}, headers:array<string, array{label:string, sort:string, url:string}>, amend:array{count:int, closes:string, id:string}, has_people:bool, incomplete:array{count:int, id:string}}
 	 */
 	public static function model(): array {
 		$orden = self::sort();
@@ -140,6 +147,11 @@ final class MyCentre {
 				'count'  => 0,
 				'closes' => '',
 				'id'     => '',
+			),
+			'has_people'     => false,
+			'incomplete'     => array(
+				'count' => 0,
+				'id'    => '',
 			),
 		);
 
@@ -162,7 +174,7 @@ final class MyCentre {
 			}
 			$m['rows']  = self::ordered( $m['rows'], $orden );
 			$m['amend'] = self::amendment( $m['rows'] );
-			return $m;
+			return self::with_people( $m );
 		}
 		$m['centre'] = Applications::centre_of( $user_id );
 		if ( '' === $m['centre']['code'] ) {
@@ -180,7 +192,72 @@ final class MyCentre {
 		}
 		$m['rows']  = self::ordered( $m['rows'], $orden );
 		$m['amend'] = self::amendment( $m['rows'] );
+		return self::with_people( $m );
+	}
+
+	/**
+	 * Whether any row has a list of people, and how many lists are short.
+	 *
+	 * Solo cuentan las que el centro puede completar ahora: una excluida no
+	 * está incompleta para quien revisa, y una con la lista cerrada —ya, o
+	 * todavía— lleva a una fila donde no hay nada que hacer.
+	 *
+	 * @param array<string, mixed> $m Model with its rows.
+	 * @return array<string, mixed>
+	 */
+	private static function with_people( array $m ): array {
+		$cortas = array();
+		foreach ( (array) $m['rows'] as $fila ) {
+			$m['has_people'] = $m['has_people'] || ! empty( $fila['people'] );
+			if ( empty( $fila['people_complete'] ) && ! empty( $fila['people_open'] ) ) {
+				$cortas[] = (string) $fila['procedure_id'];
+			}
+		}
+		$m['incomplete'] = array(
+			'count' => count( $cortas ),
+			'id'    => (string) ( $cortas[0] ?? '' ),
+		);
 		return $m;
+	}
+
+	/**
+	 * What the «Personas» column says of one application.
+	 *
+	 * Cuántas hay y cuántas pide, si llega al mínimo y, mientras se pueda
+	 * cambiar, hasta cuándo (ADR-0041); si no se puede, por qué: no es lo
+	 * mismo «todavía no» que «ya no».
+	 *
+	 * @param int  $application_id Application ID.
+	 * @param int  $procedure_id   Procedure ID.
+	 * @param bool $personas      Whether the procedure asks this application for a list.
+	 * @return array<string, mixed>
+	 */
+	private static function people( int $application_id, int $procedure_id, bool $personas ): array {
+		if ( ! $personas ) {
+			return array(
+				'people'          => false,
+				'people_url'      => '',
+				'people_count'    => 0,
+				'people_complete' => true,
+				'people_sort'     => '',
+			);
+		}
+		$spec    = People::spec( $procedure_id );
+		$filas   = People::of( $application_id );
+		$porque  = ProcedureAccess::why_not_people( get_current_user_id(), $application_id );
+		$abierta = '' === $porque;
+		return array(
+			'people'          => true,
+			'people_url'      => PeopleForm::url( $application_id ),
+			'people_count'    => count( $filas ),
+			'people_min'      => (int) $spec['min'],
+			'people_max'      => (int) $spec['max'],
+			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
+			'people_open'     => $abierta,
+			'people_why'      => $porque,
+			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
+			'people_sort'     => (string) count( $filas ),
+		);
 	}
 
 	/**
@@ -210,7 +287,7 @@ final class MyCentre {
 			? ApplyForm::url( $procedure_id )
 			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
 
-		return array(
+		return self::people( (int) $application->ID, $procedure_id, $personas ) + array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
 			'url'          => $url,
@@ -232,12 +309,10 @@ final class MyCentre {
 			'note'         => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 			'amend'        => $subsanar,
 			'amend_closes' => $cierre,
-			// La lista de personas se gestiona en la solicitud (ADR-0041).
-			'people_url'   => $personas ? PeopleForm::url( (int) $application->ID ) : '',
-			'people_count' => $personas ? count( People::of( (int) $application->ID ) ) : 0,
-			// La prórroga de esta solicitud y retirarla (PLAN-0003, PR 9).
+			// La prórroga de esta solicitud (PLAN-0003, PR 9). Retirarla no
+			// está en la tabla: está al final de la solicitud, con su
+			// confirmación, lejos de «Ver la solicitud».
 			'late'         => ApplicationActions::late_notice( (int) $application->ID ),
-			'withdraw_url' => WithdrawForm::link( (int) $application->ID, $url ),
 		);
 	}
 

@@ -213,3 +213,33 @@ todos no es gestionar este.
   métodos estáticos, como `PublicFront/` o `Access/`; nadie depende de ellas
   y se pueden quitar del orden de carga sin que nada más se rompa: las
   acciones se emitirían sin nadie escuchando.
+
+## Adenda — 2026-11-10
+
+**El acuse de presentación lleva el número de la solicitud.** La regla 2
+decía que el único identificador que viaja es el que va dentro de un enlace.
+Se mantiene para todo lo demás —ni claves de pregunta, ni el número del
+procedimiento, ni el de la cuenta—, con una excepción: el acuse
+(`application_submitted`) escribe «solicitud n.º N» en el asunto y en la
+primera línea.
+
+Por qué: el acuse tiene que servir de justificante. Sin número, fecha y hora
+no hay forma de citar una solicitud concreta cuando llega el aviso de «no ha
+finalizado la inscripción», y la pregunta «¿ha quedado presentada?» se
+contesta por correo a mano. El número es el identificador de la solicitud, el
+mismo que enseña el justificante imprimible de la pantalla
+(`PublicFront/ApplicationProgress`, `?justificante=1`): no es una clave
+interna que haya que traducir, es su número de registro.
+
+Lo que cuesta: el número dice cuántas entradas tiene la base de datos, más o
+menos, a quien recibe el acuse. No abre nada: ver la solicitud sigue pasando
+por `ProcedureAccess`, y el número ya viajaba en el enlace de descarga de un
+documento. El acuse añade, además, la fecha y la hora de presentación, si
+está completa (lo mismo que ve quien revisa, `ApplicationCompleteness`), hasta
+cuándo se cambian las personas cuando el procedimiento pide la lista y el
+enlace al justificante. La prueba que vigilaba que el número no saliera
+(`tests/unit/test-mailer.php`,
+`test_submitting_sends_the_acknowledgement_and_the_copy`) ahora comprueba que
+sale solo como «n.º N».
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

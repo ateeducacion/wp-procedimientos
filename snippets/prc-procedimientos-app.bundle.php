@@ -33678,6 +33678,10 @@ final class App {
   border-top: 1px solid var(--prc-c-linea);
 }
 .prc-acciones--pie .prc-btn.prc-envio { margin: 0; }
+/* Al tabular hacia abajo, el navegador deja el campo enfocado en el borde de
+   la ventana, que es donde está el pie: sin este hueco, lo tapa entero
+   (WCAG 2.2, 2.4.11). El pie mide unos 62 px; se reservan 80. */
+html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
 
 .prc-btn.prc-envio {
   display: inline-block;

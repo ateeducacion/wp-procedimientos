@@ -327,6 +327,36 @@ class Test_Mailer extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con una lista que solo gestionan las admitidas, el justificante no
+	 * promete lo que la pantalla rechaza: dice por qué todavía no.
+	 */
+	public function test_the_acknowledgement_does_not_promise_a_closed_list() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled'       => true,
+					'roles'         => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación',
+						),
+					),
+					'min'           => 2,
+					'max'           => 4,
+					'admitted_only' => true,
+				),
+			)
+		);
+		Applications::save( $procedimiento, $this->direccion(), $this->nucleo() );
+
+		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
+		$this->assertStringContainsString( 'Estado: presentada, pero incompleta: faltan 2 personas.', $cuerpo );
+		$this->assertStringNotContainsString( 'Puede dar de alta, cambiar o sustituir', $cuerpo );
+		$this->assertStringNotContainsString( '#' . PeopleForm::ANCHOR, $cuerpo );
+		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $cuerpo );
+	}
+
+	/**
 	 * La coordinación sale en el acuse con nombre y apellidos (ADR-0039).
 	 */
 	public function test_the_acknowledgement_names_the_coordination_with_surname() {

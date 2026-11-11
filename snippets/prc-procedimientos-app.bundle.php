@@ -30378,6 +30378,7 @@ namespace Prc\Notifications;
 
 
 
+
 if ( ! class_exists( 'Prc\Notifications\Messages', false ) ) {
 final class Messages {
 
@@ -30521,7 +30522,10 @@ final class Messages {
 				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
 			);
 			$hasta  = self::text( $ctx, 'people_until' );
-			if ( '' !== $hasta ) {
+			$porque = self::text( $ctx, 'people_why' );
+			if ( '' !== $porque ) {
+				$cabeza[] = $porque;
+			} elseif ( '' !== $hasta ) {
 				$cabeza = array_merge( $cabeza, self::link( 'Puede dar de alta, cambiar o sustituir a las personas que participan hasta el ' . $hasta . ', incluido, en:', $ctx, 'people_url' ) );
 			}
 		}
@@ -31108,7 +31112,7 @@ final class Mailer {
 				}
 				$ctx['created'] = (bool) $created;
 				if ( $created ) {
-					$ctx = self::receipt( (int) $application_id, $ctx );
+					$ctx = self::receipt( (int) $application_id, $ctx, (int) $user_id );
 				}
 
 				self::send(
@@ -31442,9 +31446,15 @@ final class Mailer {
 
 
 
-	private static function receipt( int $application_id, array $ctx ): array {
+
+
+
+	private static function receipt( int $application_id, array $ctx, int $user_id ): array {
 		$procedure_id = (int) $ctx['procedure_id'];
-		$hasta        = People::enabled( $procedure_id )
+		$lista        = People::enabled( $procedure_id )
+			&& ApplicationMetaKeys::TYPE_TEACHER !== get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$porque       = $lista ? ProcedureAccess::why_not_people( $user_id, $application_id ) : '';
+		$hasta        = $lista && '' === $porque
 			? PeopleSpec::until( People::spec( $procedure_id ), (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() )
 			: '';
 		return array(
@@ -31453,6 +31463,7 @@ final class Mailer {
 			'missing'      => ApplicationProgress::missing( $application_id ),
 			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',
 			'people_url'   => (string) $ctx['url'] . '#' . PeopleForm::ANCHOR,
+			'people_why'   => $porque,
 			'receipt_url'  => add_query_arg( ApplicationProgress::ARG_RECEIPT, '1', (string) $ctx['url'] ),
 		) + $ctx;
 	}

@@ -14195,7 +14195,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<?php?>
+		<?php ?>
 		<form class="prc-form prc-form--solicitud" method="post" action="" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />

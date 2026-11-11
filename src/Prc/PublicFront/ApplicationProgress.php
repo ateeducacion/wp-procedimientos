@@ -77,6 +77,8 @@ final class ApplicationProgress {
 			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
 			'people_min'     => (int) ( $people['min'] ?? 0 ),
 			'people_until'   => (string) ( $people['until'] ?? '' ),
+			'people_open'    => ! empty( $people['can_edit'] ),
+			'people_why'     => (string) ( $people['why'] ?? '' ),
 			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
@@ -187,8 +189,16 @@ final class ApplicationProgress {
 		}
 		$out['tipo'] = 'aviso';
 		if ( $p['people_missing'] ) {
+			$falta = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . ').';
+			// Con la lista cerrada para esta solicitud —solo admitidas, una
+			// ventana que todavía no se abre— no se manda a darla de alta: se
+			// dice por qué todavía no, lo mismo que la sección de abajo.
+			if ( ! $p['people_open'] ) {
+				$out['texto'] = $falta . ( '' !== (string) $p['people_why'] ? ' ' . (string) $p['people_why'] : '' );
+				return $out;
+			}
 			$hasta            = (string) $p['people_until'];
-			$out['texto']     = $verbo . ', pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos ' . (int) $p['people_min'] . '). Hágalo abajo, en «Personas que participan»'
+			$out['texto']     = $falta . ' Hágalo abajo, en «Personas que participan»'
 				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
 			$out['link']      = '#' . PeopleForm::ANCHOR;
 			$out['link_text'] = 'Ir a la lista de personas';

@@ -267,6 +267,10 @@ final class PeopleForm {
 		$user_id   = get_current_user_id();
 		$filas     = $solicitud > 0 ? self::rows( $spec, People::of( $solicitud ) ) : array();
 		$puede     = $solicitud > 0 && ProcedureAccess::can_edit_people( $user_id, $solicitud );
+		$despues   = $solicitud > 0 || empty( $apply['can_submit'] ) ? '' : self::after_submit( $spec, $procedure_id );
+		// El último día solo se dice cuando la lista se puede escribir, o se
+		// podrá nada más presentar: con ella cerrada, lo que se dice es el motivo.
+		$abierta = $solicitud > 0 ? $puede : '' === $despues;
 		return array(
 			'show'           => true,
 			'application_id' => $solicitud,
@@ -276,11 +280,12 @@ final class PeopleForm {
 			'max'            => (int) $spec['max'],
 			'window'         => self::window( $spec ),
 			// El último día, dicho siempre: es lo que se pregunta después de presentar.
-			'until'          => self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ),
+			'until'          => $abierta ? self::day( PeopleSpec::until( $spec, (string) ( $apply['closes_at'] ?? '' ), ProcedureState::today() ) ) : '',
+			'after_submit'   => $despues,
 			'rows'           => $filas,
 			'complete'       => ApplicationPeople::is_complete( $spec, $filas ),
 			'can_edit'       => $puede,
-			'why'            => self::why( $solicitud, $user_id, $puede ),
+			'why'            => '' !== $despues ? $despues : self::why( $solicitud, $user_id, $puede ),
 			'flash'          => self::flash(),
 			// Rechazado por la huella, el formulario de esa fila se repinta con
 			// lo guardado ahora y su huella nueva, no con lo tecleado: así un
@@ -326,6 +331,30 @@ final class PeopleForm {
 		return '' !== (string) $spec['opens_at']
 			? 'La lista se puede gestionar desde el ' . self::day( (string) $spec['opens_at'] ) . '.'
 			: 'La lista se puede gestionar hasta el ' . self::day( (string) $spec['closes_at'] ) . '.';
+	}
+
+	/**
+	 * Why the list will still be closed right after submitting, in words.
+	 *
+	 * Lo que diría {@see ProcedureAccess::why_not_people()} de la solicitud
+	 * recién presentada: «solo admitidas», una ventana propia que todavía
+	 * no se ha abierto o que ya terminó, o un procedimiento histórico. Sin
+	 * eso, el anuncio de antes de presentar promete lo que la lista rechaza.
+	 *
+	 * @param array<string, mixed> $spec         Specification.
+	 * @param int                  $procedure_id Procedure post ID.
+	 * @return string Empty when the list opens as soon as it is submitted.
+	 */
+	private static function after_submit( array $spec, int $procedure_id ): string {
+		return PeopleSpec::why_closed(
+			$spec,
+			array(
+				'today'    => ProcedureState::today(),
+				'archived' => ProcedureAccess::is_archived( $procedure_id ),
+				'review'   => ApplicationMetaKeys::REVIEW_SUBMITTED,
+				'state'    => ProcedureState::of_post( $procedure_id ),
+			)
+		);
 	}
 
 	/**

@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -110,7 +110,7 @@ permisos y pantallas que se lean en código y se prueben.
 - Subida de documentación por parte del centro (proyecto, memoria, aceptación
   firmada): fase 2, con su propia ADR.
 - Convocatorias dirigidas al profesorado individual o al alumnado: el modelo
-  deja el hueco (`prc_audience`) pero la fase 1 solo implementa centros.
+  dispone de solicitudes individuales para docentes además de solicitudes de centros (ADR-0037).
 - Certificaciones del profesorado participante.
 - Correos y recordatorios automáticos: fase 1, después del esqueleto.
 - Conservar las URL públicas de las convocatorias de hoy: decisión pendiente,
@@ -152,6 +152,7 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_questions` | array | Preguntas del procedimiento (ver más abajo) |
 | `prc_commitments` | string | Texto de compromiso que el centro acepta al solicitar |
 | `prc_archived` | boolean | Histórico: cierra la edición (ADR-0023) |
+| `prc_applications_closed` | boolean | Pausa manual de solicitudes, sin modificar fechas ni plazos documentales (ADR-0035) |
 
 **`prc_application` — Solicitud.** `public => false`, `show_ui => true` (solo
 para diagnóstico en el escritorio), `post_parent` = el procedimiento,
@@ -164,7 +165,7 @@ en `Meta/ApplicationMetaKeys`:
 | `prc_centre_code` | string | Código del centro que solicita (viene de la persona, ADR-0016) |
 | `prc_centre_name` | string | Nombre del centro en el momento de solicitar (foto, no referencia) |
 | `prc_applicant_position` | string | Cargo: `head`, `deputy_head`, `head_of_studies`, `secretary`, `other`; lista cerrada `ApplicationMetaKeys::positions()` |
-| `prc_coordinator` | array `{name, email}` | Persona coordinadora, si el procedimiento la pide |
+| `prc_coordinator` | lista `{name, dni, email}` | Ninguna, una o varias personas coordinadoras, según el procedimiento; DNI/NIE validado en servidor |
 | `prc_answers` | array | Respuestas, indexadas por la `key` de cada pregunta; **sin ficheros** |
 | `prc_files` | array | Descriptores de los documentos privados, indexados por la `key` de su pregunta: `{id, name, mime, size, sha256, stored}`, con `stored` **relativo** a la raíz privada. Ni ruta absoluta, ni URL, ni identificador de adjunto (ADR-0028) |
 | `prc_review_state` | string | `submitted` (presentada), `amend` (a subsanar), `admitted`, `excluded`; lista cerrada `ApplicationMetaKeys::review_states()` |
@@ -188,7 +189,9 @@ El estado **no** es un término (ADR-0012, ADR-0013). «Dirigido a» y
 
 Función pura `ProcedureState::of( array $meta, string $today, bool $published )`
 que devuelve una de las constantes de `ProcedureMetaKeys::states()`, en este
-orden de prioridad:
+orden de prioridad. Tras borrador, histórico, resolución y subsanación,
+`prc_applications_closed` fuerza «Cerrado»; si no está activa, se evalúa el
+calendario de solicitudes:
 
 | Estado | Etiqueta | Condición |
 |---|---|---|
@@ -196,6 +199,7 @@ orden de prioridad:
 | `archived` | Histórico | `prc_archived` |
 | `resolved` | Resuelto | `prc_final_list_url` no vacía |
 | `amendment` | En subsanación | `prc_amend_opens_at <= hoy <= prc_amend_closes_at` |
+| `closed` | Cerrado | `prc_applications_closed` |
 | `open` | Abierto | `prc_opens_at <= hoy <= prc_closes_at` |
 | `upcoming` | Próximo | `hoy < prc_opens_at` o sin fecha de apertura |
 | `closed` | Cerrado | El resto (plazo pasado, sin subsanación en curso ni listado definitivo) |
@@ -251,6 +255,7 @@ Capacidades del aplicativo:
 | Capacidad | Quién la tiene en local | Permite |
 |---|---|---|
 | `prc_apply` | `prc_school_head` | Presentar y editar la solicitud **de su centro** |
+| `prc_apply_as_teacher` | `prc_teacher` | Presentar y editar solicitudes individuales en procedimientos para docentes |
 | `prc_manage_procedures` | `prc_manager` | Crear, editar, publicar y archivar procedimientos **de sus ámbitos** |
 | `prc_review_applications` | `prc_manager` | Ver, admitir, excluir, pedir subsanar y exportar solicitudes de esos procedimientos |
 | `prc_manage_all_areas` | `administrator` | Lo anterior en todos los ámbitos |
@@ -298,7 +303,7 @@ confirmaciones, con degradación a `confirm()` y a formulario sin JavaScript).
 | `home` | `procedimientos` | `[prc_home]` | Público | Listado por curso: abiertos, en subsanación, próximos, cerrados y resueltos; filtro por ámbito; tarjeta con estado, fechas y ámbito |
 | `procedure` | (single de `prc_procedure`) | — | Público | Ficha: descripción, fechas, estado, ámbito, contacto, enlaces a resolución y listados; botón «Solicitar» / «Mi solicitud» / «Gestionar» según quién mira |
 | `workspace` | `gestion-de-procedimientos` | `[prc_workspace]` | `prc_manage_procedures` | Mis procedimientos por curso, con estado y nº de solicitudes; «Nuevo procedimiento» |
-| `editor` | `editar-procedimiento` | `[prc_editor]` | `prc_manage_procedures` | El taller del procedimiento, una pantalla con paneles: **Datos** (título, descripción, ámbito, curso, dirigido a, fechas, contacto, compromisos, coordinación), **Preguntas** (constructor), **Enlaces** (resolución, listados), **Solicitudes** (tabla con centro, código, fecha, cargo, coordinación, estado de revisión; acciones admitir / subsanar / excluir con nota; exportar CSV), **Publicación** (publicar, archivar) |
+| `editor` | `editar-procedimiento` | `[prc_editor]` | `prc_manage_procedures` | El taller del procedimiento, una pantalla con paneles: **Datos** (título, descripción, ámbito, curso, dirigido a, fechas, contacto, compromisos, coordinación), **Preguntas** (constructor), **Enlaces** (resolución, listados), **Solicitudes** (tabla con centro, código, fecha, cargo, coordinación, estado de revisión; acciones admitir / subsanar / excluir con nota; exportar CSV), **Publicación** (publicar, devolver a borrador, cerrar solicitudes, histórico) |
 | `apply` | `solicitud` | `[prc_apply]` | `prc_apply` | Formulario de solicitud del centro para `?procedimiento=ID`, o la solicitud presentada con su estado y la nota de revisión |
 | `mine` | `mi-centro` | `[prc_mine]` | `prc_apply` | Las solicitudes del centro: procedimiento, fecha, estado del procedimiento, estado de revisión |
 
@@ -431,6 +436,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
 | El procedimiento es un tipo de contenido | ADR-0011 | Propuesta |
 | Una taxonomía por dimensión; el estado no es un término | ADR-0012 | Propuesta |
 | El estado del procedimiento se deriva de las fechas | ADR-0013 | Propuesta |
+| Cierre manual de solicitudes sin cambiar los plazos | ADR-0035 | Propuesta |
 | El ámbito es un alcance de la persona, no un rol | ADR-0014 | Propuesta |
 | El aplicativo comprueba capacidades; los roles del sitio no se nombran | ADR-0015 | Propuesta |
 | El centro de la persona es una meta con clave configurable | ADR-0016 | Propuesta |
@@ -449,7 +455,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
       cambiar el estado de revisión (a quien solicita). Fase 1.
 - [ ] Documentación adjunta del centro (aceptación firmada, proyecto,
       memoria) con ficheros privados fuera del alcance del servidor web. Fase 2.
-- [ ] Audiencia `teachers`. Fase 3.
+- [x] Audiencia `teachers`: solicitud individual, pantalla personal y control por capacidad (ADR-0037).
 - [ ] Migración del histórico y conservación de las URL. Fase 4, con ADR.
 - [ ] Recordatorios de cierre de plazo.
 - [ ] Estadísticas de participación por curso y ámbito.
@@ -555,3 +561,49 @@ Mientras el taller siga pintando un solo campo de correo, `ProcedureEditor`
 acepta también el nombre anterior, `prc_contact_email`, y lo mete como el
 primero de la lista; `ProcedureView::model()` sigue ofreciendo `contact_email`
 con el primero de los tres. Las dos costuras se van con la pantalla del calco.
+
+## Adenda — 2026-11-06: entregas documentales independientes
+
+La ADR-0033 amplía las preguntas de tipo `file` con una marca opcional `delivery`
+y los días `opens_at` y `closes_at`. No crea otro tipo de contenido ni otro
+almacén. El formulario inicial excluye esas preguntas; un POST independiente
+por documento las recibe para una solicitud existente, sin alterar su núcleo
+ni su revisión. `ProcedureAccess::can_deliver()` comprueba centro, publicación,
+exclusión, archivo y plazo propio en la zona del sitio.
+
+El estado derivado del procedimiento no cambia. Las entregas pueden seguir
+abiertas tras el definitivo. Se conserva el límite de veinte preguntas y un
+fichero por pregunta; no incluye migración histórica, participantes docentes,
+reclamaciones ni versiones de documentos. Los plazos propios se configuran
+mientras «Preguntas» siga editable.
+
+Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0033 y pruebas en
+`tests/unit/test-procedure-questions.php`, `test-procedure-editor.php` y
+`test-application-files.php`.
+
+## Adenda — 2026-11-06: ampliación del cierre de una entrega
+
+El panel «Entregas» permite mantener o ampliar el cierre de las preguntas de
+archivo configuradas como entregas independientes, aun cuando «Preguntas» ya
+esté bloqueado. No permite cambiar la apertura, acortar el cierre ni modificar
+preguntas. El POST conserva las comprobaciones del editor y guarda la misma
+lista de preguntas con solo el cierre autorizado cambiado (ADR-0034).
+
+Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0034 y pruebas en
+`tests/unit/test-procedure-editor.php`.
+
+## Adenda — 2026-11-07: cierre manual de solicitudes
+
+El panel «Publicación» puede devolver una ficha publicada a borrador, cerrar
+solicitudes antes de la fecha prevista o volver al calendario automático. El
+cierre manual no modifica fechas ni plazos propios de documentos; el periodo
+de subsanación conserva su prioridad. Cuando las solicitudes están cerradas,
+hay al menos una solicitud registrada y sigue vigente una entrega documental,
+la línea de etapas muestra «Pendiente de documentación». La ficha y el
+formulario indican cuando la inscripción se cerró manualmente antes de la fecha
+prevista (ADR-0035).
+
+Asistencia de IA: Codex, GPT-6. Evidencia y comprobación: ADR-0035,
+`tests/unit/test-procedure-state.php` y `tests/unit/test-procedure-editor.php`.
+El bundle pasa `php -l`; PHPUnit y PHPCS no se pudieron ejecutar porque Docker y
+`vendor/bin/phpcs` no están disponibles en este entorno.

@@ -8,9 +8,12 @@
 namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
+use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
@@ -74,6 +77,57 @@ final class Applications {
 			)
 		);
 		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+	/**
+	 * Find one teacher's application to a procedure.
+	 *
+	 * @param int $procedure_id Procedure ID.
+	 * @param int $user_id      Teacher account ID.
+	 * @return int|null
+	 */
+	public static function find_for_teacher( int $procedure_id, int $user_id ): ?int {
+		if ( $procedure_id <= 0 || $user_id <= 0 ) {
+			return null;
+		}
+		$ids = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_parent' => $procedure_id,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => 1,
+				'fields'      => 'ids',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- la solicitud individual se identifica por su autor y tipo.
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+	/**
+	 * The individual applications made by one teacher.
+	 *
+	 * @param int $user_id Teacher account ID.
+	 * @return array<int, \WP_Post>
+	 */
+	public static function for_teacher( int $user_id ): array {
+		if ( $user_id <= 0 ) {
+			return array();
+		}
+		$posts = get_posts(
+			array(
+				'post_type'   => ApplicationPostType::POST_TYPE,
+				'post_status' => 'publish',
+				'author'      => $user_id,
+				'numberposts' => -1,
+				'orderby'     => 'date',
+				'order'       => 'DESC',
+				'meta_key'    => ApplicationMetaKeys::APPLICANT_TYPE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- filtra las solicitudes individuales del perfil.
+				'meta_value'  => ApplicationMetaKeys::TYPE_TEACHER, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		return is_array( $posts ) ? $posts : array();
 	}
 
 	/**
@@ -188,14 +242,33 @@ final class Applications {
 	 * What a procedure asks of a school, in the shape ApplicationInput wants.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
+	 * @return array{coordinator_count:int, requires_coordinator:bool, commitments:string, questions:array<int, array<string, mixed>>}
 	 */
 	public static function spec( int $procedure_id ): array {
+		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
 		return array(
-			'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
+			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
+			'coordinator_count'    => $teacher ? 0 : self::coordinator_count( $procedure_id ),
+			'requires_coordinator' => ! $teacher && self::coordinator_count( $procedure_id ) > 0,
 			'commitments'          => (string) get_post_meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS, true ),
-			'questions'            => self::questions( $procedure_id ),
+			'questions'            => ProcedureQuestions::application_questions( self::questions( $procedure_id ) ),
 		);
+	}
+
+	/**
+	 * Number of coordinators requested, including procedures saved before the count field existed.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return int
+	 */
+	public static function coordinator_count( int $procedure_id ): int {
+		if ( $procedure_id <= 0 ) {
+			return 0;
+		}
+		$count = metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT )
+			? get_post_meta( $procedure_id, ProcedureMetaKeys::COORDINATOR_COUNT, true )
+			: ( ! empty( get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ) ? 1 : 0 );
+		return ProcedureMetaRegistration::sanitize_coordinator_count( $count );
 	}
 
 	/**
@@ -236,13 +309,14 @@ final class Applications {
 	 * volver a mirarla (ADR-0020). La nota se conserva, para que se sepa qué
 	 * se pidió.
 	 *
-	 * @param int                  $procedure_id Procedure post ID.
-	 * @param int                  $user_id      Who submits.
-	 * @param array<string, mixed> $data         Validated core: position, coordinator, answers.
-	 * @param string               $code         One of the person's codes; empty for the school.
+	 * @param int                                 $procedure_id Procedure post ID.
+	 * @param int                                 $user_id      Who submits.
+	 * @param array<string, mixed>                $data         Validated core: position, coordinator, answers.
+	 * @param string                              $code         One of the person's codes; empty for the school.
+	 * @param array<string, array<string, mixed>> $files Validated uploads.
 	 * @return int Application post ID, 0 on failure.
 	 */
-	public static function save( int $procedure_id, int $user_id, array $data, string $code = '' ): int {
+	public static function save( int $procedure_id, int $user_id, array $data, string $code = '', array $files = array() ): int {
 		if ( $procedure_id <= 0 || $user_id <= 0 || ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			return 0;
 		}
@@ -251,8 +325,94 @@ final class Applications {
 			return 0;
 		}
 
-		$titulo = self::title( $centro, $procedure_id );
-		$id     = self::find( $procedure_id, $centro['code'] );
+		$id = self::save_post( $procedure_id, $user_id, $centro, $files );
+		if ( 0 === $id ) {
+			return 0;
+		}
+
+		// `wp_slash()` porque `update_post_meta()` desescapa lo que le llega:
+		// sin esto una respuesta con una comilla llegaría rota a la base de datos.
+		$data += array(
+			'position'    => '',
+			'coordinator' => array(),
+			'answers'     => array(),
+		);
+		$metas = array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
+			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
+			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
+			ApplicationMetaKeys::APPLICANT_POSITION => (string) $data['position'],
+			ApplicationMetaKeys::COORDINATOR        => (array) $data['coordinator'],
+			ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+		);
+		foreach ( $metas as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+		return $id;
+	}
+
+	/**
+	 * Save the application made by a teacher as an individual.
+	 *
+	 * @param int                                 $procedure_id Procedure ID.
+	 * @param int                                 $user_id      Teacher account ID.
+	 * @param array<string, mixed>                $data         Validated answers.
+	 * @param array<string, array<string, mixed>> $files        Validated uploads.
+	 * @return int Application post ID, or zero on failure.
+	 */
+	public static function save_teacher( int $procedure_id, int $user_id, array $data, array $files = array() ): int {
+		$user = get_userdata( $user_id );
+		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 0;
+		}
+		$id = self::save_post(
+			$procedure_id,
+			$user_id,
+			array(
+				'code'      => '',
+				'name'      => '',
+				'ownership' => '',
+			),
+			$files,
+			ApplicationMetaKeys::TYPE_TEACHER,
+			'Solicitud individual'
+		);
+		if ( 0 === $id ) {
+			return 0;
+		}
+		$data += array( 'answers' => array() );
+		foreach (
+			array(
+				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
+				ApplicationMetaKeys::CENTRE_CODE        => '',
+				ApplicationMetaKeys::CENTRE_NAME        => '',
+				ApplicationMetaKeys::APPLICANT_POSITION => '',
+				ApplicationMetaKeys::COORDINATOR        => array(),
+				ApplicationMetaKeys::ANSWERS            => (array) $data['answers'],
+				ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
+			) as $key => $value
+		) {
+			update_post_meta( $id, $key, wp_slash( $value ) );
+		}
+		return $id;
+	}
+
+	/**
+	 * Store the post and documents before changing the application core.
+	 *
+	 * @param int                                 $procedure_id Procedure ID.
+	 * @param int                                 $user_id    Applicant ID.
+	 * @param array<string, string>               $centro School snapshot.
+	 * @param array<string, array<string, mixed>> $files     Validated uploads.
+	 * @param string                              $type      Applicant type.
+	 * @param string                              $applicant Applicant title.
+	 * @return int Post ID, or zero on failure.
+	 */
+	private static function save_post( int $procedure_id, int $user_id, array $centro, array $files, string $type = ApplicationMetaKeys::TYPE_CENTRE, string $applicant = '' ): int {
+		$titulo = ApplicationMetaKeys::TYPE_TEACHER === $type ? $applicant . ' — ' . (string) get_post_field( 'post_title', $procedure_id ) : self::title( $centro, $procedure_id );
+		$id     = ApplicationMetaKeys::TYPE_TEACHER === $type ? self::find_for_teacher( $procedure_id, $user_id ) : self::find( $procedure_id, $centro['code'] );
+		$is_new = null === $id;
 		if ( null === $id ) {
 			$id = wp_insert_post(
 				array(
@@ -264,7 +424,18 @@ final class Applications {
 				),
 				true
 			);
-		} else {
+		}
+		if ( is_wp_error( $id ) || ! $id ) {
+			return 0;
+		}
+		$id = (int) $id;
+		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
+			if ( $is_new ) {
+				wp_delete_post( $id, true );
+			}
+			return 0;
+		}
+		if ( ! $is_new ) {
 			$id = wp_update_post(
 				array(
 					'ID'         => $id,
@@ -272,25 +443,11 @@ final class Applications {
 				),
 				true
 			);
+			if ( is_wp_error( $id ) || ! $id ) {
+				return 0;
+			}
 		}
-		if ( is_wp_error( $id ) || ! $id ) {
-			return 0;
-		}
-		$id = (int) $id;
 
-		// `wp_slash()` porque `update_post_meta()` desescapa lo que le llega:
-		// sin esto una respuesta con una comilla llegaría rota a la base de datos.
-		$metas = array(
-			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
-			ApplicationMetaKeys::CENTRE_NAME        => $centro['name'],
-			ApplicationMetaKeys::APPLICANT_POSITION => (string) ( $data['position'] ?? '' ),
-			ApplicationMetaKeys::COORDINATOR        => (array) ( $data['coordinator'] ?? array() ),
-			ApplicationMetaKeys::ANSWERS            => (array) ( $data['answers'] ?? array() ),
-			ApplicationMetaKeys::REVIEW_STATE       => ApplicationMetaKeys::REVIEW_SUBMITTED,
-		);
-		foreach ( $metas as $clave => $valor ) {
-			update_post_meta( $id, $clave, wp_slash( $valor ) );
-		}
 		return $id;
 	}
 
@@ -372,6 +529,7 @@ final class Applications {
 			'email'             => 'Correo',
 			'position'          => 'Cargo',
 			'coordinator'       => 'Coordinación',
+			'coordinator_dni'   => 'DNI o NIE de coordinación',
 			'coordinator_email' => 'Correo de coordinación',
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
@@ -410,13 +568,13 @@ final class Applications {
 	public static function row( \WP_Post $application, array $questions ): array {
 		$meta   = self::meta( (int) $application->ID );
 		$autor  = get_userdata( (int) $application->post_author );
-		$coord  = (array) $meta[ ApplicationMetaKeys::COORDINATOR ];
+		$coord  = ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] );
 		$estado = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
 
 		$fila = array(
 			'id'                => (string) $application->ID,
 			'state_key'         => $estado,
-			'centre'            => (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
+			'centre'            => ApplicationMetaKeys::TYPE_TEACHER === ApplicationMetaRegistration::sanitize_applicant_type( $meta[ ApplicationMetaKeys::APPLICANT_TYPE ] ) ? 'Profesorado' : (string) $meta[ ApplicationMetaKeys::CENTRE_NAME ],
 			'code'              => (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ],
 			// Dos valores de la misma fecha: `date` es la columna del CSV —en ISO,
 			// que es lo que ordena bien en una hoja de cálculo— y `date_label` es
@@ -426,8 +584,9 @@ final class Applications {
 			'applicant'         => false !== $autor ? (string) $autor->display_name : '',
 			'email'             => false !== $autor ? (string) $autor->user_email : '',
 			'position'          => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-			'coordinator'       => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinator'       => implode( ', ', array_filter( array_column( $coord, 'name' ) ) ),
+			'coordinator_dni'   => implode( ', ', array_filter( array_column( $coord, 'dni' ) ) ),
+			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 		);

@@ -10,6 +10,7 @@ namespace Prc\Access;
 
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -41,7 +42,8 @@ final class ProcedureAccess {
 	/**
 	 * Presentar y editar la solicitud del propio centro.
 	 */
-	public const CAP_APPLY = 'prc_apply';
+	public const CAP_APPLY            = 'prc_apply';
+	public const CAP_APPLY_AS_TEACHER = 'prc_apply_as_teacher';
 
 	/**
 	 * Crear, editar, publicar y archivar procedimientos de sus ámbitos.
@@ -284,6 +286,20 @@ final class ProcedureAccess {
 			$user_id = get_current_user_id();
 		}
 		return user_can( $user_id, self::CAP_MANAGE ) || user_can( $user_id, 'manage_options' );
+	}
+
+	/**
+	 * Whether a user may save JavaScript for a procedure.
+	 *
+	 * `unfiltered_html` stays required because the snippet executes on a public page;
+	 * WordPress removes it from site administrators on multisite installations.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return bool
+	 */
+	public static function can_edit_custom_js( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && user_can( $user_id, 'unfiltered_html' ) && self::can_edit( $user_id, $post_id );
 	}
 
 	/**
@@ -637,6 +653,15 @@ final class ProcedureAccess {
 		if ( $user_id <= 0 || ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( $post_id <= 0 ) {
+			return user_can( $user_id, self::CAP_APPLY_AS_TEACHER ) || array() !== CentreScope::codes_for( $user_id );
+		}
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
+			return false;
+		}
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return '' === $code && user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$codes = $post_id > 0 ? self::apply_codes( $user_id, $post_id ) : CentreScope::codes_for( $user_id );
 		return '' === $code ? array() !== $codes : isset( $codes[ $code ] );
 	}
@@ -658,6 +683,9 @@ final class ProcedureAccess {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'publish' !== get_post_status( $post_id ) ) {
 			return array();
 		}
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== ProcedureMetaKeys::in_list( get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS ) ) {
+			return array();
+		}
 		$kinds     = self::centre_kinds( $post_id );
 		$ownership = get_post_meta( $post_id, ProcedureMetaKeys::OWNERSHIP, true );
 		$ownership = is_array( $ownership ) ? $ownership : array();
@@ -668,7 +696,7 @@ final class ProcedureAccess {
 			if ( ! in_array( $kind, $kinds, true ) ) {
 				continue;
 			}
-			if ( array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
+			if ( ProcedureMetaKeys::KIND_SCHOOL === $kind && array() !== $centro && array() !== $ownership && ! in_array( $centro['ownership'], $ownership, true ) ) {
 				continue;
 			}
 			$out[ $code ] = $kind;
@@ -704,8 +732,37 @@ final class ProcedureAccess {
 		if ( ! user_can( $user_id, self::CAP_APPLY ) ) {
 			return false;
 		}
+		if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+			return (int) get_post_field( 'post_author', $application_id ) === $user_id
+				&& user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
+		}
 		$owner = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
 		return '' !== $owner && isset( CentreScope::codes_for( $user_id )[ $owner ] );
+	}
+
+	/**
+	 * Whether a school may deliver this document for its existing application.
+	 *
+	 * @param int                  $user_id Current user.
+	 * @param int                  $application_id Application ID.
+	 * @param array<string, mixed> $question Stored question, never request data.
+	 * @return bool
+	 */
+	public static function can_deliver( int $user_id, int $application_id, array $question ): bool {
+		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) ) {
+			return false;
+		}
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$teacher      = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true );
+		$code         = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( ( $teacher ? ( ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) || ! self::can_apply( $user_id, $procedure_id ) ) : ! isset( CentreScope::codes_for( $user_id )[ $code ] ) )
+			|| 'publish' !== get_post_status( $application_id )
+			|| ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id )
+			|| 'publish' !== get_post_status( $procedure_id ) || self::is_archived( $procedure_id ) ) {
+			return false;
+		}
+		return ApplicationMetaKeys::REVIEW_EXCLUDED !== get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
+			&& ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() );
 	}
 
 	/**

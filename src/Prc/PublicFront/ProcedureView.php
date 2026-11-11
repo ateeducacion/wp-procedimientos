@@ -46,7 +46,31 @@ final class ProcedureView {
 	 * @return void
 	 */
 	public static function register(): void {
+		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_custom_code' ) );
 		add_action( 'template_redirect', array( self::class, 'render' ), self::PRIORITY );
+	}
+
+	/** Enqueue a procedure's saved code only on its public single page. */
+	public static function enqueue_custom_code(): void {
+		if ( ! is_singular( ProcedurePostType::POST_TYPE ) ) {
+			return;
+		}
+		$post_id = (int) get_queried_object_id();
+		if ( $post_id <= 0 || 'publish' !== get_post_status( $post_id ) ) {
+			return;
+		}
+		$css = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_CSS, true );
+		$js  = (string) get_post_meta( $post_id, ProcedureMetaKeys::CUSTOM_JS, true );
+		if ( '' === $css && '' === $js ) {
+			return;
+		}
+		Assets::enqueue();
+		if ( '' !== $css ) {
+			wp_add_inline_style( 'prc-app', str_replace( '<', '\\3C ', $css ) );
+		}
+		if ( '' !== $js ) {
+			wp_add_inline_script( 'prc-app', str_ireplace( '</script', '<\\/script', $js ), 'after' );
+		}
 	}
 
 	/**
@@ -113,7 +137,10 @@ final class ProcedureView {
 				'tabs'                 => self::tabs( $contenido ),
 				'excerpt'              => trim( wp_strip_all_tags( (string) get_post_field( 'post_excerpt', $post_id ) ) ),
 				'state'                => $state,
-				'state_label'          => ProcedureState::label( $state ),
+				'state_label'          => ProcedureState::label(
+					$state,
+					(bool) $meta[ ProcedureMetaKeys::APPLICATIONS_CLOSED ]
+				),
 				'state_icon'           => self::state_icon( $state ),
 				'dates'                => DateRange::of( (string) $meta[ ProcedureMetaKeys::OPENS_AT ], (string) $meta[ ProcedureMetaKeys::CLOSES_AT ] ),
 				'amend_dates'          => DateRange::of( (string) $meta[ ProcedureMetaKeys::AMEND_OPENS_AT ], (string) $meta[ ProcedureMetaKeys::AMEND_CLOSES_AT ] ),
@@ -133,12 +160,14 @@ final class ProcedureView {
 				'courses'              => self::terms( $post_id, ProcedureTaxonomies::COURSE ),
 				'audience'             => (string) ( ProcedureMetaKeys::audiences()[ $audiencia ] ?? '' ),
 				'ownership'            => ProcedureChrome::ownership_label( $ownership ),
-				'requires_coordinator' => (bool) $meta[ ProcedureMetaKeys::REQUIRES_COORDINATOR ],
+				'coordinator_count'    => Applications::coordinator_count( $post_id ),
+				'requires_coordinator' => Applications::coordinator_count( $post_id ) > 0,
 				// `contact_email` es el primero de la lista: la caja resumen
 				// pinta uno solo, el que atiende.
 				'contact_emails'       => $correos,
 				'contact_email'        => (string) ( $correos[0] ?? '' ),
 				'header_color'         => ProcedureMetaKeys::header_hex( $meta[ ProcedureMetaKeys::HEADER_COLOR ] ),
+				'deliveries'           => array_values( array_filter( Applications::questions( $post_id ), array( \Prc\Domain\ProcedureQuestions::class, 'is_delivery' ) ) ),
 				'links'                => self::links( $meta ),
 				'resolution_url'       => trim( (string) $meta[ ProcedureMetaKeys::RESOLUTION_URL ] ),
 				'image'                => $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'large' ) : '',
@@ -178,9 +207,11 @@ final class ProcedureView {
 			'audience'             => '',
 			'ownership'            => '',
 			'requires_coordinator' => false,
+			'coordinator_count'    => 0,
 			'contact_emails'       => array(),
 			'contact_email'        => '',
 			'header_color'         => ProcedureMetaKeys::header_hex( '' ),
+			'deliveries'           => array(),
 			'links'                => array(),
 			'resolution_url'       => '',
 			'image'                => '',
@@ -304,6 +335,32 @@ final class ProcedureView {
 	private static function mine( int $post_id, int $user_id ): array {
 		if ( $user_id <= 0 || ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) || ! class_exists( Applications::class ) ) {
 			return array();
+		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			$solicitud = Applications::find_for_teacher( $post_id, $user_id );
+			$url       = ApplyForm::url( $post_id );
+			$vacia     = array(
+				'has'   => false,
+				'state' => '',
+				'label' => '',
+				'date'  => '',
+				'iso'   => '',
+				'url'   => $url,
+			);
+			if ( null === $solicitud ) {
+				return $vacia;
+			}
+			$estado = (string) get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true );
+			return array_merge(
+				$vacia,
+				array(
+					'has'   => true,
+					'state' => $estado,
+					'label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
+					'date'  => (string) get_the_date( 'd-m-Y', $solicitud ),
+					'iso'   => (string) get_post_time( 'Y-m-d', false, $solicitud ),
+				)
+			);
 		}
 		// El primer código con el que el procedimiento deja solicitar: el de
 		// la agrupación de escuelas rurales solo si no admite el del centro.

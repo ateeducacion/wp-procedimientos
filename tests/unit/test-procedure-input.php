@@ -66,8 +66,47 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$this->assertSame( 'verde', $r['data']['header_color'] );
 		$this->assertSame( 'schools', $r['data']['audience'] );
 		$this->assertSame( array( 'public', 'private' ), $r['data']['ownership'] );
+		$this->assertSame( array( 'school' ), $r['data']['centre_kinds'] );
 		$this->assertTrue( $r['data']['requires_coordinator'] );
 		$this->assertSame( 'El centro se compromete a…', $r['data']['commitments'] );
+	}
+
+	/** El procedimiento puede admitir centros, CER o ambas vías, pero nunca ninguna. */
+	public function test_school_applications_must_allow_at_least_one_kind() {
+		$none = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => array() ) ) );
+		$this->assertContains( 'centre_kinds', $none['errors'] );
+
+		$centres = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => array( 'school' ) ) ) );
+		$this->assertTrue( $centres['ok'] );
+		$this->assertSame( array( 'school' ), $centres['data']['centre_kinds'] );
+
+		$cer = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => array( 'rural_group' ) ) ) );
+		$this->assertTrue( $cer['ok'] );
+		$this->assertSame( array( 'rural_group' ), $cer['data']['centre_kinds'] );
+		$this->assertSame( array(), $cer['data']['ownership'] );
+
+		$both = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => array( 'school', 'rural_group' ) ) ) );
+		$this->assertSame( array( 'school', 'rural_group' ), $both['data']['centre_kinds'] );
+
+		$radio = ProcedureInput::validate( $this->valido( array( 'centre_kinds' => 'both' ) ) );
+		$this->assertSame( array( 'school', 'rural_group' ), $radio['data']['centre_kinds'] );
+	}
+
+	/** El público individual no usa la configuración ni las solicitudes de centros. */
+	public function test_teacher_audience_does_not_require_or_store_centre_options() {
+		$result = ProcedureInput::validate(
+			$this->valido(
+				array(
+					'audience'     => 'teachers',
+					'ownership'    => array(),
+					'centre_kinds' => array(),
+				)
+			)
+		);
+
+		$this->assertTrue( $result['ok'] );
+		$this->assertSame( array(), $result['data']['ownership'] );
+		$this->assertSame( array(), $result['data']['centre_kinds'] );
 	}
 
 	/**
@@ -78,7 +117,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$r = ProcedureInput::validate( array() );
 
 		$this->assertFalse( $r['ok'] );
-		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'ownership', 'centre_kinds' ), $r['errors'] );
+		$this->assertSame( array( 'title', 'areas', 'course', 'contact_emails', 'centre_kinds' ), $r['errors'] );
 
 		$r = ProcedureInput::validate(
 			array(
@@ -283,6 +322,7 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$this->assertSame( '', $r['data']['opens_at'] );
 		$this->assertSame( '', $r['data']['resolution_url'] );
 		$this->assertFalse( $r['data']['requires_coordinator'] );
+		$this->assertSame( 0, $r['data']['coordinator_count'] );
 	}
 
 	/**

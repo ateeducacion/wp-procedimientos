@@ -59,6 +59,21 @@ class Test_Procedure_State extends WP_UnitTestCase {
 		}
 	}
 
+	/** El cierre manual prevalece sobre fechas futuras, pero no sobre borrador ni histórico. */
+	public function test_manual_application_closure_is_an_explicit_override() {
+		$meta = $this->meta( array( ProcedureMetaKeys::APPLICATIONS_CLOSED => true ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_CLOSED, ProcedureState::of( $meta, '2026-10-08', true ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_DRAFT, ProcedureState::of( $meta, '2026-10-08', false ) );
+		$meta[ ProcedureMetaKeys::FINAL_LIST_URL ] = 'https://example.org/final.pdf';
+		$this->assertSame( ProcedureMetaKeys::STATE_RESOLVED, ProcedureState::of( $meta, '2026-10-08', true ) );
+		unset( $meta[ ProcedureMetaKeys::FINAL_LIST_URL ] );
+		$meta[ ProcedureMetaKeys::AMEND_OPENS_AT ]  = '2026-10-08';
+		$meta[ ProcedureMetaKeys::AMEND_CLOSES_AT ] = '2026-10-09';
+		$this->assertSame( ProcedureMetaKeys::STATE_AMENDMENT, ProcedureState::of( $meta, '2026-10-08', true ) );
+		$meta[ ProcedureMetaKeys::ARCHIVED ] = true;
+		$this->assertSame( ProcedureMetaKeys::STATE_ARCHIVED, ProcedureState::of( $meta, '2026-10-08', true ) );
+	}
+
 	/**
 	 * El orden de prioridad de la tabla: borrador, histórico, resuelto,
 	 * subsanación, abierto, próximo, cerrado.
@@ -176,7 +191,10 @@ class Test_Procedure_State extends WP_UnitTestCase {
 	 * Y por qué, con las mismas palabras lo cuente quien lo cuente.
 	 */
 	public function test_why_locked_only_explains_the_states_that_close_something() {
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', ProcedureState::why_locked( ProcedureMetaKeys::STATE_CLOSED ) );
+		$this->assertStringContainsString(
+			'Las solicitudes están cerradas',
+			ProcedureState::why_locked( ProcedureMetaKeys::STATE_CLOSED )
+		);
 		$this->assertStringContainsString( 'subsanación', ProcedureState::why_locked( ProcedureMetaKeys::STATE_AMENDMENT ) );
 		$this->assertStringContainsString( 'resuelto', ProcedureState::why_locked( ProcedureMetaKeys::STATE_RESOLVED ) );
 
@@ -206,6 +224,7 @@ class Test_Procedure_State extends WP_UnitTestCase {
 		$this->assertSame( 'Abierto', ProcedureState::label( ProcedureMetaKeys::STATE_OPEN ) );
 		$this->assertSame( 'Próximo', ProcedureState::label( ProcedureMetaKeys::STATE_UPCOMING ) );
 		$this->assertSame( 'Cerrado', ProcedureState::label( ProcedureMetaKeys::STATE_CLOSED ) );
+		$this->assertSame( 'Cerrado manualmente', ProcedureState::label( ProcedureMetaKeys::STATE_CLOSED, true ) );
 		$this->assertSame( '', ProcedureState::label( 'convocatoria-abierta' ) );
 		$this->assertSame( '', ProcedureState::label( '' ) );
 

@@ -10,8 +10,10 @@ namespace Prc\PublicFront;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
+use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
@@ -60,13 +62,18 @@ final class ApplyForm {
 
 	public const OP_APPLY = 'apply';
 
-	public const FIELD_PROCEDURE   = 'prc_apply_procedure';
-	public const FIELD_CENTRE      = 'prc_apply_centre';
-	public const FIELD_POSITION    = 'prc_position';
-	public const FIELD_COORD_NAME  = 'prc_coordinator_name';
-	public const FIELD_COORD_EMAIL = 'prc_coordinator_email';
-	public const FIELD_ACCEPT      = 'prc_accept';
-	public const FIELD_ANSWERS     = 'prc_q';
+	public const OP_DELIVER     = 'deliver';
+	public const FIELD_DELIVERY = 'prc_delivery';
+
+	public const FIELD_PROCEDURE    = 'prc_apply_procedure';
+	public const FIELD_CENTRE       = 'prc_apply_centre';
+	public const FIELD_POSITION     = 'prc_position';
+	public const FIELD_COORD_NAME   = 'prc_coordinator_name';
+	public const FIELD_COORD_DNI    = 'prc_coordinator_dni';
+	public const FIELD_COORD_EMAIL  = 'prc_coordinator_email';
+	public const FIELD_COORDINATORS = 'prc_coordinators';
+	public const FIELD_ACCEPT       = 'prc_accept';
+	public const FIELD_ANSWERS      = 'prc_q';
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
@@ -79,6 +86,7 @@ final class ApplyForm {
 	private const DONE = array(
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
+		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
 	);
 
 	/**
@@ -162,9 +170,10 @@ final class ApplyForm {
 	 *
 	 * @param string $state        One of ProcedureMetaKeys::states().
 	 * @param string $review_state Review state of the existing application, '' when there is none.
+	 * @param bool   $manually_closed Whether new applications were closed manually.
 	 * @return string Empty when the form is open; otherwise why it is not.
 	 */
-	public static function window( string $state, string $review_state ): string {
+	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
 		if ( ProcedureState::accepts_applications( $state ) ) {
 			return '';
 		}
@@ -176,7 +185,10 @@ final class ApplyForm {
 		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
 			return 'El plazo de solicitud todavía no está abierto.';
 		}
-		return 'El plazo de solicitud está cerrado.';
+		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
+			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
+		}
+		return 'Las solicitudes están cerradas.';
 	}
 
 	/**
@@ -186,10 +198,10 @@ final class ApplyForm {
 	 */
 	public static function handle(): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- se comprueba justo debajo.
-		$op    = sanitize_key( wp_unslash( (string) ( $_POST[ self::FIELD_OP ] ?? '' ) ) );
-		$nonce = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::NONCE_FIELD ] ?? '' ) ) );
+		$op    = isset( $_POST[ self::FIELD_OP ] ) && is_string( $_POST[ self::FIELD_OP ] ) ? sanitize_key( wp_unslash( $_POST[ self::FIELD_OP ] ) ) : '';
+		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) && is_string( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
-		if ( self::OP_APPLY !== $op || ! is_user_logged_in() ) {
+		if ( ! in_array( $op, array( self::OP_APPLY, self::OP_DELIVER ), true ) || ! is_user_logged_in() ) {
 			return;
 		}
 		if ( false === wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
@@ -203,16 +215,23 @@ final class ApplyForm {
 
 		// Un código que no llega se elige como en la pantalla; uno que llega
 		// tiene que ser de la cuenta y admitido, o no se guarda nada.
-		$pedido = self::field( self::FIELD_CENTRE );
+		$docente = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER )
+			&& ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pedido  = $docente ? '' : self::field( self::FIELD_CENTRE );
+		if ( self::OP_DELIVER === $op ) {
+			self::deliver( $procedure_id, $user_id, $pedido );
+			return;
+		}
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $pedido ) ) {
 			self::$rejected = self::why_not_allowed( $user_id, $procedure_id, $pedido );
 			return;
 		}
-		$code      = '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' );
-		$existente = Applications::find( $procedure_id, $code );
+		$code      = $docente ? '' : ( '' !== $pedido ? $pedido : self::chosen( $user_id, $procedure_id, '' ) );
+		$existente = $docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $code );
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
-			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : ''
+			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -238,23 +257,14 @@ final class ApplyForm {
 			return;
 		}
 
-		$id = Applications::save( $procedure_id, $user_id, $revisado['data'], $code );
+		$id = $docente
+			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
+			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = 'No se ha podido guardar la solicitud. Vuelva a intentarlo.';
+			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
 			return;
 		}
 
-		// Y si guardar un documento falla, la solicitud no puede quedarse a
-		// medias: una que acababa de nacer se borra entera; una que ya existía
-		// se queda **exactamente como estaba** —`store_all()` no ha tocado ni
-		// un descriptor anterior— y se dice que no.
-		if ( ! ApplicationFiles::store_all( $id, $ficheros['files'] ) ) {
-			if ( null === $existente ) {
-				wp_delete_post( $id, true );
-			}
-			self::$rejected = 'No se ha podido guardar el documento que adjuntó, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
-			return;
-		}
 		Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => null === $existente ? 'presentada' : 'guardada' ) ) );
 	}
 
@@ -264,15 +274,18 @@ final class ApplyForm {
 	 * @return array<string, mixed>
 	 */
 	private static function submitted(): array {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- el nonce lo comprobó handle(); ApplicationInput valida cada fila.
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- las respuestas las valida ProcedureQuestions contra las preguntas, y el sanitize de la meta las limpia al guardar.
-		$respuestas = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
-		$acepta     = ! empty( $_POST[ self::FIELD_ACCEPT ] );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
-
+		$respuestas   = (array) wp_unslash( $_POST[ self::FIELD_ANSWERS ] ?? array() );
+		$acepta       = ! empty( $_POST[ self::FIELD_ACCEPT ] );
+		$coordinators = wp_unslash( $_POST[ self::FIELD_COORDINATORS ] ?? array() );
+		$coordinators = is_array( $coordinators ) ? self::clean_coordinators( $coordinators ) : array();
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		return array(
 			'position'          => self::field( self::FIELD_POSITION ),
+			'coordinators'      => is_array( $coordinators ) ? $coordinators : array(),
 			'coordinator_name'  => self::field( self::FIELD_COORD_NAME ),
+			'coordinator_dni'   => self::field( self::FIELD_COORD_DNI ),
 			'coordinator_email' => self::field( self::FIELD_COORD_EMAIL ),
 			'accept'            => $acepta,
 			'answers'           => self::clean_answers( $respuestas ),
@@ -298,14 +311,40 @@ final class ApplyForm {
 	}
 
 	/**
+	 * Clean coordinator fields before they are shown again after a rejected submit.
+	 *
+	 * @param array<mixed> $raw Submitted rows.
+	 * @return array<int, array{name:string, dni:string, email:string}>
+	 */
+	private static function clean_coordinators( array $raw ): array {
+		$out = array();
+		foreach ( array_slice( $raw, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $row ) {
+			$row   = is_array( $row ) ? $row : array();
+			$name  = is_scalar( $row['name'] ?? null ) ? sanitize_text_field( (string) $row['name'] ) : '';
+			$dni   = is_scalar( $row['dni'] ?? null ) ? sanitize_text_field( (string) $row['dni'] ) : '';
+			$email = is_scalar( $row['email'] ?? null ) ? sanitize_text_field( (string) $row['email'] ) : '';
+			$out[] = array(
+				'name'  => $name,
+				'dni'   => $dni,
+				'email' => $email,
+			);
+		}
+		return $out;
+	}
+
+	/**
 	 * One submitted field, trimmed and sanitised.
 	 *
 	 * @param string $nombre Field name.
 	 * @return string
 	 */
 	private static function field( string $nombre ): string {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle() antes de llamar aquí.
-		return trim( sanitize_text_field( wp_unslash( (string) ( $_POST[ $nombre ] ?? '' ) ) ) );
+		if ( ! isset( $_POST[ self::NONCE_FIELD ] ) || ! is_string( $_POST[ self::NONCE_FIELD ] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION ) ) {
+			return '';
+		}
+		return isset( $_POST[ $nombre ] ) && is_string( $_POST[ $nombre ] )
+			? trim( sanitize_text_field( wp_unslash( $_POST[ $nombre ] ) ) ) : '';
 	}
 
 	/**
@@ -319,6 +358,9 @@ final class ApplyForm {
 	private static function why_not_allowed( int $user_id, int $procedure_id, string $code = '' ): string {
 		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
 			return 'Su perfil no presenta solicitudes de centro. Si forma parte del equipo directivo de un centro, pídalo a quien administre el aplicativo.';
+		}
+		if ( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
+			return 'El plazo está cerrado o este procedimiento no está disponible para su cuenta.';
 		}
 		$suyos = CentreScope::codes_for( $user_id );
 		if ( array() === $suyos ) {
@@ -354,6 +396,7 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			'applicant_type'  => '',
 			'state'           => '',
 			'state_label'     => '',
 			'opens_at'        => '',
@@ -378,12 +421,13 @@ final class ApplyForm {
 			'application'     => array(),
 			'max_file_size'   => ApplicationFiles::max_bytes(),
 			'file_mimes'      => ApplicationFiles::mimes(),
+			'deliveries'      => array(),
 			'can_submit'      => false,
 			'why'             => '',
 			'spec'            => array(
-				'requires_coordinator' => false,
-				'commitments'          => '',
-				'questions'            => array(),
+				'coordinator_count' => 0,
+				'commitments'       => '',
+				'questions'         => array(),
 			),
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
@@ -391,7 +435,7 @@ final class ApplyForm {
 		);
 
 		if ( ! is_user_logged_in() ) {
-			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud de su centro.';
+			$m['aviso'] = 'Debe iniciar sesión con su usuario para presentar la solicitud.';
 			return $m;
 		}
 		$user_id = get_current_user_id();
@@ -399,16 +443,14 @@ final class ApplyForm {
 			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
 			return $m;
 		}
-		$quien          = wp_get_current_user();
-		$m['applicant'] = array(
+		$quien               = wp_get_current_user();
+		$m['applicant']      = array(
 			'name'  => (string) $quien->display_name,
 			'email' => (string) $quien->user_email,
 		);
-		$m['centre']    = Applications::centre_of( $user_id );
-		if ( array() === CentreScope::codes_for( $user_id ) ) {
-			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
-			return $m;
-		}
+		$es_docente          = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		$m['applicant_type'] = $es_docente ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
+		$m['centre']         = Applications::centre_of( $user_id );
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- lectura del procedimiento y del aviso; mutar lleva su nonce.
 		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
@@ -418,7 +460,7 @@ final class ApplyForm {
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) || 'publish' !== get_post_status( $procedure_id ) ) {
 			$m['aviso'] = $procedure_id > 0
 				? 'Ese procedimiento no existe o todavía no está publicado.'
-				: 'Abra la solicitud desde la ficha del procedimiento, o desde las solicitudes de su centro.';
+				: 'Abra la solicitud desde la ficha del procedimiento, o desde sus solicitudes.';
 			return $m;
 		}
 
@@ -426,20 +468,30 @@ final class ApplyForm {
 		$m['title']           = (string) get_post_field( 'post_title', $procedure_id );
 		$m['view_url']        = (string) get_permalink( $procedure_id );
 		$m['state']           = ProcedureState::of_post( $procedure_id );
-		$m['state_label']     = ProcedureState::label( (string) $m['state'] );
+		$m['state_label']     = ProcedureState::label(
+			(string) $m['state'],
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+		);
 		$m['opens_at']        = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::OPENS_AT, true );
 		$m['closes_at']       = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true );
 		$m['amend_opens_at']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_OPENS_AT, true );
 		$m['amend_closes_at'] = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AMEND_CLOSES_AT, true );
 		$m['final_list_url']  = (string) get_post_meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL, true );
 		$m['spec']            = Applications::spec( $procedure_id );
+		$m['applicant_type']  = (string) $m['spec']['applicant_type'];
+		$es_docente           = ApplicationMetaKeys::TYPE_TEACHER === $m['applicant_type'] && user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER );
+		if ( ! $es_docente && array() === CentreScope::codes_for( $user_id ) ) {
+			$m['aviso'] = self::why_not_allowed( $user_id, 0 );
+			return $m;
+		}
 
-		// Sin ningún código admitido se queda el del centro, para decir por qué.
-		$code         = self::chosen( $user_id, $procedure_id, self::wanted() );
-		$m['centre']  = Applications::centre_of( $user_id, $code );
-		$m['choices'] = self::choices( $user_id, $procedure_id );
+		$code = $es_docente ? '' : self::chosen( $user_id, $procedure_id, self::wanted() );
+		if ( ! $es_docente ) {
+			$m['centre']  = Applications::centre_of( $user_id, $code );
+			$m['choices'] = self::choices( $user_id, $procedure_id );
+		}
 
-		$existente = Applications::find( $procedure_id, $m['centre']['code'] );
+		$existente = $es_docente ? Applications::find_for_teacher( $procedure_id, $user_id ) : Applications::find( $procedure_id, $m['centre']['code'] );
 		if ( null !== $existente ) {
 			$meta             = Applications::meta( $existente );
 			$estado           = (string) $meta[ ApplicationMetaKeys::REVIEW_STATE ];
@@ -450,10 +502,17 @@ final class ApplyForm {
 				'state_label' => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 				'note'        => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 				'position'    => (string) ( ApplicationMetaKeys::positions()[ $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ] ?? '' ),
-				'coordinator' => (array) $meta[ ApplicationMetaKeys::COORDINATOR ],
+				'coordinator' => ApplicationMetaRegistration::sanitize_coordinator( $meta[ ApplicationMetaKeys::COORDINATOR ] ),
 				'answers'     => (array) $meta[ ApplicationMetaKeys::ANSWERS ],
 				'files'       => ApplicationFiles::descriptors( $existente ),
 			);
+		}
+
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) ) {
+				$question['can_submit'] = ProcedureAccess::can_deliver( $user_id, (int) $existente, $question );
+				$m['deliveries'][]      = $question;
+			}
 		}
 
 		// Primero quién, luego cuándo: la titularidad cierra la puerta aunque el
@@ -461,7 +520,11 @@ final class ApplyForm {
 		if ( ! ProcedureAccess::can_apply( $user_id, $procedure_id, $code ) ) {
 			$m['why'] = self::why_not_allowed( $user_id, $procedure_id );
 		} else {
-			$m['why'] = self::window( (string) $m['state'], (string) ( $m['application']['state'] ?? '' ) );
+			$m['why'] = self::window(
+				(string) $m['state'],
+				(string) ( $m['application']['state'] ?? '' ),
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			);
 		}
 		$m['can_submit'] = '' === $m['why'];
 		$m['values']     = self::values( (array) $m['application'] );
@@ -476,6 +539,38 @@ final class ApplyForm {
 			);
 
 		return $m;
+	}
+
+	/**
+	 * Store one delivery without changing the application or its review.
+	 *
+	 * @param int    $procedure_id Procedure ID.
+	 * @param int    $user_id Current user.
+	 * @param string $code One of the account's centre codes.
+	 * @return void
+	 */
+	private static function deliver( int $procedure_id, int $user_id, string $code ): void {
+		$key = self::field( self::FIELD_DELIVERY );
+		$id  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true )
+			? Applications::find_for_teacher( $procedure_id, $user_id )
+			: Applications::find( $procedure_id, $code );
+		foreach ( Applications::questions( $procedure_id ) as $question ) {
+			if ( $key !== $question['key'] || ! ProcedureAccess::can_deliver( $user_id, (int) $id, $question ) ) {
+				continue;
+			}
+			$question['required'] = true;
+			$files                = ApplicationFiles::submitted( array( $question ) );
+			if ( ! $files['ok'] ) {
+				self::$rejected = ApplicationFiles::why( $files['errors'] );
+				return;
+			}
+			if ( ! ApplicationFiles::store_all( (int) $id, $files['files'] ) ) {
+				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
+				return;
+			}
+			Shell::leave( self::url_for_code( $procedure_id, $code, array( self::ARG_NOTICE => 'entregado' ) ) );
+		}
+		self::$rejected = 'No puede entregar este documento: compruebe el centro, su solicitud y el plazo de entrega.';
 	}
 
 	/**
@@ -512,18 +607,20 @@ final class ApplyForm {
 	 * What every form field shows: what was typed on a refused submit, or what is stored.
 	 *
 	 * @param array<string, mixed> $application The existing application, empty for none.
-	 * @return array{position:string, coordinator_name:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
+	 * @return array{position:string, coordinators:array<int, array<string, mixed>>, coordinator_name:string, coordinator_dni:string, coordinator_email:string, accept:bool, answers:array<string, mixed>}
 	 */
 	private static function values( array $application ): array {
 		if ( '' !== self::$rejected ) {
 			return self::submitted();
 		}
-		$coord = (array) ( $application['coordinator'] ?? array() );
-		$meta  = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
+		$coordinators = ApplicationMetaRegistration::sanitize_coordinator( $application['coordinator'] ?? array() );
+		$meta         = array() !== $application ? Applications::meta( (int) $application['id'] ) : array();
 		return array(
 			'position'          => (string) ( $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] ?? '' ),
-			'coordinator_name'  => (string) ( $coord['name'] ?? '' ),
-			'coordinator_email' => (string) ( $coord['email'] ?? '' ),
+			'coordinators'      => $coordinators,
+			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
+			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
+			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
 			// Una solicitud ya presentada ya aceptó los compromisos.
 			'accept'            => array() !== $application,
 			'answers'           => (array) ( $application['answers'] ?? array() ),

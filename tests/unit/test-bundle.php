@@ -209,4 +209,23 @@ class Test_Bundle extends WP_UnitTestCase {
 			'los docblocks de los ficheros de src/Prc no se han quitado'
 		);
 	}
+
+	/**
+	 * Quitar el comentario de un `<?php // … ?>` deja la etiqueta abierta con
+	 * su espacio: `<?php?>` es, con `short_open_tag`, `<?` seguido de la
+	 * constante `php`, y la pantalla muere con un 500.
+	 */
+	public function test_stripping_a_comment_keeps_the_open_tag_whole() {
+		$this->assertStringNotContainsString( '<?php?>', $this->bundle() );
+	}
+	/** The generated classes remain safe when evaluated after the modular source. */
+	public function test_the_bundle_can_be_evaluated_twice_after_the_sources() {
+		$code = preg_replace( '/^<\?php\s*/', '', $this->bundle() );
+		// phpcs:ignore Squiz.PHP.Eval.Discouraged -- evalúa el artefacto propio, igual que Code Snippets.
+		eval( $code );
+		// phpcs:ignore Squiz.PHP.Eval.Discouraged -- la segunda pasada comprueba las guardas generadas.
+		eval( $code );
+		$this->assertTrue( defined( 'PRC_BUNDLE_LOADED' ) );
+		$this->assertTrue( class_exists( '\Prc\App', false ) );
+	}
 }

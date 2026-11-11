@@ -395,7 +395,10 @@ final class Workspace {
 			'audience'         => $publico,
 			'audience_label'   => (string) $publicos[ $publico ],
 			'state'            => $state,
-			'state_label'      => ProcedureState::label( $state ),
+			'state_label'      => ProcedureState::label(
+				$state,
+				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			),
 			'warning'          => self::mismatch( $id, $opens, $closes ),
 			'archived'         => ProcedureAccess::is_archived( $id ),
 			'status'           => (string) $post->post_status,
@@ -413,15 +416,14 @@ final class Workspace {
 	 *
 	 * @param int                $pedido What the URL asked for.
 	 * @param array<int, string> $cursos The courses in scope, newest first.
-	 * @return int 0 = todos los cursos.
+	 * @return int 0 when there are no available courses.
 	 */
 	private static function course_shown( int $pedido, array $cursos ): int {
 		if ( isset( $cursos[ $pedido ] ) ) {
 			return $pedido;
 		}
-		// Un curso que no está deja de acotar; sin pedir ninguno se enseña el
-		// más reciente, que es el que se trabaja.
-		return $pedido > 0 || array() === $cursos ? 0 : (int) array_key_first( $cursos );
+		// Un curso que no está no debe mezclar convocatorias: se vuelve al más reciente.
+		return array() === $cursos ? 0 : (int) array_key_first( $cursos );
 	}
 
 	/**

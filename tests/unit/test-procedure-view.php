@@ -6,6 +6,8 @@
  */
 
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -82,6 +84,23 @@ class Test_Procedure_View extends WP_UnitTestCase {
 		$this->go_to( (string) get_permalink( $procedimiento ) );
 		add_filter( 'prc_standalone_page', '__return_false' );
 		$this->assertFalse( ProcedureView::takes_over() );
+	}
+
+	/** Stored code is attached to the public assets on its published single. */
+	public function test_custom_code_is_added_only_to_the_published_procedure_page() {
+		$area = $this->area( 'Área de prueba' );
+		$id   = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array(
+				ProcedureMetaKeys::CUSTOM_CSS => 'body::before { content: "<ok>"; }',
+				ProcedureMetaKeys::CUSTOM_JS  => 'window.prcCustomCode = true;',
+			)
+		);
+		$this->go_to( (string) get_permalink( $id ) );
+		ProcedureView::enqueue_custom_code();
+		$this->assertStringContainsString( '\\3C ok>', implode( '', wp_styles()->registered['prc-app']->extra['after'] ) );
+		$this->assertStringContainsString( 'window.prcCustomCode = true;', implode( '', wp_scripts()->registered['prc-app']->extra['after'] ) );
 	}
 
 	/**
@@ -249,6 +268,26 @@ class Test_Procedure_View extends WP_UnitTestCase {
 			ProcedureView::model( $procedimiento )['action'],
 			'con el plazo cerrado ya no se edita: se consulta, y deja de ser el botón principal'
 		);
+	}
+
+	/** A teacher sees the status of their own individual application. */
+	public function test_a_teacher_sees_their_individual_application() {
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array_merge( $this->abierto(), array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) )
+		);
+		$teacher   = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$this->acting_as( $teacher );
+
+		$this->assertFalse( ProcedureView::model( $procedure )['mine']['has'] );
+		$id = Applications::save_teacher( $procedure, $teacher, array() );
+		update_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		$mine = ProcedureView::model( $procedure )['mine'];
+		$this->assertTrue( $mine['has'] );
+		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, $mine['state'] );
+		$this->assertSame( 'Admitida', $mine['label'] );
+		$this->assertSame( Shell::url( 'apply', array( Shell::ARG_PROCEDURE => $procedure ) ), $mine['url'] );
 	}
 
 	/**

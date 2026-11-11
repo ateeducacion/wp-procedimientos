@@ -32,8 +32,8 @@ use Prc\PostType\ApplicationPostType;
  *   guardián del aplicativo.
  *
  * La política —qué tipos y qué tamaño— es **del aplicativo entero y no de cada
- * pregunta**: una pregunta de tipo `file` acepta un fichero y no configura
- * nada más. Está en {@see mimes()} y {@see max_bytes()}, en un solo sitio. Una
+ * pregunta**: una pregunta de tipo `file` acepta un fichero; su plazo propio
+ * no cambia formatos ni tamaños. La política está en {@see mimes()} y {@see max_bytes()}, en un solo sitio. Una
  * solicitud puede llevar varios documentos, uno por cada pregunta de ese tipo.
  */
 final class ApplicationFiles {
@@ -340,7 +340,12 @@ final class ApplicationFiles {
 		}
 
 		$antes = self::descriptors( $application_id );
-		update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) );
+		if ( ! update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) ) ) {
+			foreach ( $nuevos as $descriptor ) {
+				self::erase( $descriptor );
+			}
+			return false;
+		}
 
 		// Y ahora, con el descriptor nuevo ya guardado, el fichero al que
 		// ninguno apunta.

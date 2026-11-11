@@ -185,9 +185,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Las cinco pestañas, la que se pide en la URL y sus recuentos.
+	 * Las seis pestañas, la que se pide en la URL y sus recuentos.
 	 */
-	public function test_the_five_panels_and_the_one_asked_for() {
+	public function test_the_workshop_panels_and_the_one_asked_for() {
 		list( , $uid, $procedimiento ) = $this->mio(
 			array(
 				ProcedureMetaKeys::QUESTIONS => array(
@@ -208,13 +208,16 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_QUESTIONS,
 				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_APPLICATIONS,
+				ProcedureEditor::PANEL_DELIVERIES,
 				ProcedureEditor::PANEL_PUBLISH,
+				ProcedureEditor::PANEL_CODE,
 			),
 			array_keys( $m['panels'] )
 		);
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
+		$this->assertSame( 0, $m['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
 		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_LINKS ]['count'] );
 		$this->assertSame( $procedimiento, $m['procedure_id'] );
 		$this->assertSame( (string) get_permalink( $procedimiento ), $m['view_url'] );
@@ -231,6 +234,58 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'Modalidad', $m['app_cols']['q1'] );
 
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $this->modelo( $procedimiento, 'inventado' )['panel'] );
+	}
+
+	/** A manager's forged JavaScript is ignored while CSS is saved. */
+	public function test_managers_can_save_css_but_cannot_save_javascript() {
+		list( , $uid, $procedure ) = $this->mio();
+		$this->submit(
+			$uid,
+			ProcedureEditor::OP_CUSTOM_CODE,
+			$procedure,
+			0,
+			array(
+				'prc_custom_css' => 'body { color: red; }',
+				'prc_custom_js'  => 'alert("forged");',
+			)
+		);
+		$this->assertSame( 'body { color: red; }', get_post_meta( $procedure, ProcedureMetaKeys::CUSTOM_CSS, true ) );
+		$this->assertSame( '', get_post_meta( $procedure, ProcedureMetaKeys::CUSTOM_JS, true ) );
+	}
+
+	/** Managers see CSS only; JavaScript is entirely hidden from their screen. */
+	public function test_custom_code_panel_explains_and_limits_javascript_access() {
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::CUSTOM_CSS => 'h1 { color: red; }' ) );
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
+		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
+		$this->assertStringNotContainsString( 'JavaScript', $html );
+	}
+
+	/** Administrators see the executable editor and its yellow public-impact warning. */
+	public function test_administrators_see_the_javascript_warning_and_editor() {
+		list( , , $procedure ) = $this->mio();
+		$this->acting_as( $this->administrator() );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$this->assertStringContainsString( 'name="prc_custom_js"', $html );
+		$this->assertStringContainsString( 'class="prc-aviso prc-aviso-warning prc-codigo-admin"', $html );
+		$this->assertStringContainsString( 'Solo para administración', $html );
+	}
+
+	/** The CSS manager gets no JavaScript editor assets or initializer. */
+	public function test_code_editor_enqueues_only_the_css_field_for_managers() {
+		list( , $uid, $procedure ) = $this->mio();
+		update_user_option( $uid, 'syntax_highlighting', 'true', true );
+		$this->acting_as( $uid );
+		$this->go_to( ProcedureEditor::url( $procedure, ProcedureEditor::PANEL_CODE ) );
+
+		ProcedureEditor::enqueue_code_editor();
+		$scripts = wp_scripts();
+		$inline  = implode( '', (array) ( $scripts->registered['code-editor']->extra['after'] ?? array() ) );
+		$this->assertTrue( $scripts->query( 'code-editor', 'enqueued' ) );
+		$this->assertStringContainsString( 'prc-custom-css', $inline );
+		$this->assertStringNotContainsString( 'prc-custom-js', $inline );
 	}
 
 	/**
@@ -341,13 +396,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				$area,
 				$curso,
 				array(
-					ProcedureEditor::FIELD_TITLE       => 'Red de prueba 2027',
-					ProcedureMetaKeys::AMEND_OPENS_AT  => $this->dia( '+29 days' ),
-					ProcedureMetaKeys::AMEND_CLOSES_AT => $this->dia( '+34 days' ),
-					ProcedureMetaKeys::CONTACT_EMAILS  => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
-					ProcedureMetaKeys::REQUIRES_COORDINATOR => '1',
-					ProcedureMetaKeys::COMMITMENTS     => 'El centro se compromete.',
-					ProcedureMetaKeys::OWNERSHIP       => array( 'public', 'private', 'inventada' ),
+					ProcedureEditor::FIELD_TITLE         => 'Red de prueba 2027',
+					ProcedureMetaKeys::AMEND_OPENS_AT    => $this->dia( '+29 days' ),
+					ProcedureMetaKeys::AMEND_CLOSES_AT   => $this->dia( '+34 days' ),
+					ProcedureMetaKeys::CONTACT_EMAILS    => array( 'Ambito@Example.org', 'Segundo@Example.org', '' ),
+					ProcedureMetaKeys::COORDINATOR_COUNT => '2',
+					ProcedureMetaKeys::COMMITMENTS       => 'El centro se compromete.',
+					ProcedureMetaKeys::OWNERSHIP         => array( 'public', 'private', 'inventada' ),
 				)
 			)
 		);
@@ -364,7 +419,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			get_post_meta( $procedimiento, ProcedureMetaKeys::CONTACT_EMAILS, true ),
 			'tres campos, dos escritos'
 		);
-		$this->assertTrue( (bool) get_post_meta( $procedimiento, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) );
+		$this->assertSame( 2, (int) get_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 		$this->assertSame( 'El centro se compromete.', get_post_meta( $procedimiento, ProcedureMetaKeys::COMMITMENTS, true ) );
 		$this->assertSame( array( 'public', 'private' ), get_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP, true ), 'solo la lista cerrada' );
 	}
@@ -439,8 +494,16 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		// El rótulo dice a quién se dirige el procedimiento, que no es lo que
 		// significaba «Tipología» en el sistema que se sustituye.
 		$this->assertStringContainsString( 'for="prc-audience">Quién solicita ', $html );
+		$this->assertStringContainsString( 'Modalidad para centros CER ', $html );
+		$this->assertSame( 3, substr_count( $html, 'name="' . ProcedureMetaKeys::CENTRE_KINDS . '" value="' ) );
+		$this->assertStringContainsString( 'data-prc-schools-only', $html );
+		$this->assertStringContainsString( 'value="school"', $html );
+		$this->assertStringContainsString( 'value="rural_group"', $html );
+		$this->assertStringContainsString( 'value="both"', $html );
+		$this->assertStringContainsString( '>Ambos</label>', $html );
 		$this->assertStringNotContainsString( 'Tipología', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
+		$this->assertStringNotContainsString( '¿Pide la solicitud personas coordinadoras?', $html, 'la configuración de la solicitud aparece en el taller después del alta' );
 		foreach ( ProcedureMetaKeys::audiences() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
@@ -498,6 +561,106 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureMetaKeys::AUDIENCE_TEACHERS, get_post_meta( $id, ProcedureMetaKeys::AUDIENCE, true ) );
 		$this->assertSame( array( 'uno@example.org', 'tres@example.org' ), get_post_meta( $id, ProcedureMetaKeys::CONTACT_EMAILS, true ) );
 		$this->assertSame( 'granate', get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) );
+	}
+
+	/**
+	 * La coordinación se pregunta en tres casos —ninguna, una o varias— y el
+	 * número va dentro de la opción «varias».
+	 *
+	 * Es la misma meta de siempre: el formulario no guarda el caso, guarda
+	 * cuántas. Así lo que ya estaba escrito como cero o uno se sigue leyendo.
+	 */
+	public function test_the_coordinator_question_offers_none_one_or_several() {
+		list( , $uid, $id ) = $this->mio( array( ProcedureMetaKeys::COORDINATOR_COUNT => 5 ) );
+		$this->acting_as( $uid );
+
+		$html = ProcedureEditorView::html( $this->modelo( $id ) );
+
+		$this->assertStringContainsString( '¿Pide la solicitud personas coordinadoras?', $html );
+		$this->assertStringContainsString( 'No se piden', $html );
+		$this->assertStringContainsString( 'Sí, una persona', $html );
+		$this->assertStringContainsString( 'Sí, varias personas:', $html );
+		foreach ( array( 'none', 'one', 'several' ) as $tipo ) {
+			$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_COORDINATOR_KIND . '" value="' . $tipo . '"', $html );
+		}
+		$this->assertMatchesRegularExpression( '/value="several"\s+checked/', $html );
+		$this->assertStringContainsString( 'id="prc-coordinator-count"', $html );
+		$this->assertMatchesRegularExpression( '/value="5"\s+selected/', $html );
+	}
+
+	/**
+	 * El radio manda sobre el número: «ninguna» y «una» no dependen de lo que
+	 * quede en el desplegable, y «varias» nunca guarda menos de dos.
+	 */
+	public function test_the_coordinator_radio_decides_the_number_that_is_saved() {
+		list( $area, $uid, $id ) = $this->mio();
+		$curso                   = $this->course( '2027-2028' );
+
+		$this->assertNotNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_DATA,
+				$id,
+				0,
+				$this->datos(
+					$area,
+					$curso,
+					array(
+						ProcedureEditor::FIELD_COORDINATOR_KIND => 'several',
+						ProcedureMetaKeys::COORDINATOR_COUNT    => '6',
+					)
+				)
+			)
+		);
+		$this->assertSame( 6, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'one',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '6',
+				)
+			)
+		);
+		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'none',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '6',
+				)
+			)
+		);
+		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		$this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$id,
+			0,
+			$this->datos(
+				$area,
+				$curso,
+				array(
+					ProcedureEditor::FIELD_COORDINATOR_KIND => 'several',
+					ProcedureMetaKeys::COORDINATOR_COUNT => '1',
+				)
+			)
+		);
+		$this->assertSame( 2, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ), 'varias no puede quedarse en una' );
 	}
 
 	/**
@@ -759,6 +922,46 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'desarchivado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 	}
 
+	/** A manager may pause applications, keep delivery dates, resume by calendar, and return a procedure to draft. */
+	public function test_close_pause_keeps_delivery_windows_and_unpublish_returns_to_draft() {
+		list( , $uid, $procedure ) = $this->mio();
+		$closes_at                 = get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true );
+		$before                    = ProcedureState::of_post( $procedure );
+		$questions                 = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'label'     => 'Memoria',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-1 day' ),
+					'closes_at' => $this->dia( '+1 day' ),
+				),
+			)
+		);
+		update_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, $questions );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertTrue( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $closes_at, get_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, true ) );
+		$this->assertSame( $questions, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertTrue( ProcedureQuestions::delivery_is_open( $questions[0], ProcedureState::today() ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_CLOSED, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'cerradas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertFalse( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
+		$this->assertTrue( $this->modelo( $procedure, ProcedureEditor::PANEL_PUBLISH )['pending_documentation'] );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_TOGGLE_APPLICATIONS, $procedure );
+		$this->assertFalse( (bool) get_post_meta( $procedure, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) );
+		$this->assertSame( $before, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'reabiertas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+
+		$url = $this->submit( $uid, ProcedureEditor::OP_UNPUBLISH, $procedure );
+		$this->assertSame( 'draft', get_post_status( $procedure ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_DRAFT, ProcedureState::of_post( $procedure ) );
+		$this->assertSame( 'borrador', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+	}
+
 	// ─── Solicitudes ───────────────────────────────────────────────────────
 
 	/**
@@ -801,6 +1004,31 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$this->submit( $this->school_head( 'C0001' ), ProcedureEditor::OP_REVIEW, $procedimiento, $solicitud, array( ProcedureEditor::FIELD_STATE => ApplicationMetaKeys::REVIEW_ADMITTED ) )
 		);
 		$this->assertSame( ApplicationMetaKeys::REVIEW_AMEND, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
+	}
+
+	/** The review table for teacher calls shows the applicant, not centre data. */
+	public function test_teacher_applications_panel_shows_teacher_identity() {
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$teacher                   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$application               = $this->application(
+			$procedure,
+			$teacher,
+			'',
+			array( ApplicationMetaKeys::APPLICANT_TYPE => ApplicationMetaKeys::TYPE_TEACHER )
+		);
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertStringContainsString( '<th class="prc-th" scope="col">Docente</th>', $html );
+		$this->assertStringContainsString( 'Docente de prueba', $html );
+		$this->assertStringContainsString( 'docente de prueba', strtolower( $html ) );
+		$this->assertStringNotContainsString( '>Código</th>', $html );
+		$this->assertStringNotContainsString( '>Cargo</th>', $html );
+		$this->assertStringContainsString( 'value="' . $application . '"', $html );
 	}
 
 	// ─── permisos, nonces y bloqueo ────────────────────────────────────────
@@ -982,7 +1210,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS );
 		$this->assertSame( 'error', $m['flash']['tipo'] );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $m['flash']['texto'] );
 	}
 
 	/**
@@ -1079,10 +1307,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			),
 			(array) $m['groups']
 		);
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', (string) $m['state_notice'] );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', (string) $m['state_notice'] );
 
 		$html = ProcedureEditorView::html( $m );
-		$this->assertStringContainsString( 'plazo de solicitud está cerrado', $html );
+		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
 		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan' );
 		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
@@ -1111,11 +1339,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				),
 			)
 		);
+		$this->acting_as( $uid );
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'B' ) ) );
 		$this->acting_as( $uid );
 
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		foreach ( array( 'Datos', 'Preguntas', 'Enlaces', 'Solicitudes', 'Publicación', 'Ver la ficha pública', 'Guardar los datos' ) as $rotulo ) {
+		$html   = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$labels = array(
+			'Datos',
+			'Preguntas',
+			'Entregas',
+			'Enlaces',
+			'Solicitudes',
+			'Publicación',
+			'Ver la ficha pública',
+			'Guardar los datos',
+		);
+		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -1142,7 +1387,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Centro de prueba', $html );
 		$this->assertStringContainsString( '<dd>B</dd>', $html, 'la respuesta sale en la revisión' );
 		// En pantalla, el día se escribe como en el resto del aplicativo.
-		$this->assertStringContainsString( 'data-rotulo="Fecha">' . gmdate( 'd-m-Y' ) . '</td>', $html );
+		$this->assertStringContainsString( 'data-rotulo="Fecha">' . current_time( 'd-m-Y' ) . '</td>', $html );
 		$this->assertStringContainsString( 'Guardar la revisión', $html );
 		$this->assertStringContainsString( 'Exportar a CSV', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_EXPORT . '"', $html );
@@ -1153,8 +1398,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'Marcar como histórico', $html );
+		$this->assertStringContainsString( 'Cerrar solicitudes ahora', $html );
+		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', $html );
 	}
 
 	/**
@@ -1166,24 +1415,76 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 
 		$this->assertStringContainsString( 'Todavía no hay solicitudes', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_APPLICATIONS ) ) );
-		$this->assertStringContainsString( 'Publicar el procedimiento', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
+		$this->assertStringContainsString( 'Publicar el procedimiento', $html );
+		$this->assertStringContainsString( 'aria-current="step"', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Borrador\s*<span[^>]*>Etapa actual/s', $html );
 
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'Crear un procedimiento', $html );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
+		// El sistema no marca como histórico un borrador: primero se publica.
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'publish',
+			)
+		);
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'prc-solo-lectura', $html );
 		$this->assertStringContainsString( 'histórico', $html );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
 
 		$this->acting_as( $this->administrator() );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringContainsString( 'Solo administración', $html );
 		$this->assertStringContainsString( 'Volver a abrir el procedimiento', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_UNARCHIVE . '"', $html );
+	}
+
+	/** The publication timeline follows the derived procedure lifecycle. */
+	public function test_the_publication_timeline_marks_each_derived_stage() {
+		list( , $uid, $procedure ) = $this->mio();
+		$this->acting_as( $uid );
+		wp_update_post(
+			array(
+				'ID'          => $procedure,
+				'post_status' => 'publish',
+			)
+		);
+		$panel = ProcedureEditor::PANEL_PUBLISH;
+		update_post_meta(
+			$procedure,
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array(
+					'key'       => 'documento',
+					'label'     => 'Documento',
+					'type'      => ProcedureQuestions::TYPE_FILE,
+					'delivery'  => true,
+					'opens_at'  => $this->dia( '-2 days' ),
+					'closes_at' => $this->dia( '+2 days' ),
+				),
+			)
+		);
+		$this->application( $procedure, $this->school_head( 'C0001' ) );
+		$this->assertMatchesRegularExpression( '/<h3>Publicado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::OPENS_AT, $this->dia( '-10 days' ) );
+		update_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, $this->dia( '-1 day' ) );
+		$this->assertMatchesRegularExpression( '/<h3>Pendiente de documentación\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::FINAL_LIST_URL, 'https://example.org/listado.pdf' );
+		$this->assertMatchesRegularExpression( '/<h3>Cerrado\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
+
+		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );
+		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', ProcedureEditorView::html( $this->modelo( $procedure, $panel ) ) );
 	}
 
 	/**
@@ -1194,5 +1495,120 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->assertTrue( shortcode_exists( ProcedureEditor::SHORTCODE ) );
 		$this->assertSame( 20, has_action( 'init', array( ProcedureEditor::class, 'handle' ) ) );
+	}
+	/** The editor persists complete delivery windows and rejects malformed dates without replacing them. */
+	public function test_the_editor_saves_and_validates_delivery_dates() {
+		list( , $uid, $procedure ) = $this->mio();
+		$q                         = ProcedureEditor::FIELD_Q;
+		$fields                    = array(
+			$q . 'label'     => array( 'Memoria' ),
+			$q . 'type'      => array( 'file' ),
+			$q . 'delivery'  => array( '1' ),
+			$q . 'opens_at'  => array( '2027-06-01' ),
+			$q . 'closes_at' => array( '2027-06-30' ),
+		);
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
+		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertTrue( $before[0]['delivery'] );
+		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
+		$this->assertSame( 1, $this->modelo( $procedure )['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
+		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A scoped manager may only extend an existing delivery close after questions lock. */
+	public function test_delivery_closes_can_be_extended_without_reopening_questions() {
+		$procedure_close           = $this->dia( '-1 day' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria final',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-30 days' ),
+			'closes_at' => $procedure_close,
+		);
+		list( , $uid, $procedure ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array( $question ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( '-30 days' ),
+				ProcedureMetaKeys::CLOSES_AT => $procedure_close,
+			)
+		);
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedure, ProcedureState::GROUP_QUESTIONS ) );
+		$new_close = $this->dia( '+30 days' );
+		$redirect  = $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $new_close ) ) );
+
+		$this->assertNotNull( $redirect );
+		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertStringContainsString( 'Guardar nuevos cierres', $html );
+		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
+		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertSame( $new_close, $after[0]['closes_at'] );
+		$after[0]['closes_at'] = $before[0]['closes_at'];
+		$this->assertSame( $before, $after, 'no cambió rótulo, apertura, obligatoriedad ni respuesta' );
+	}
+
+	/** Invalid or shorter dates reject the entire update; arbitrary keys are ignored. */
+	public function test_delivery_close_updates_reject_shorten_and_invalid_dates() {
+		$current_close             = $this->dia( '+10 days' );
+		$question                  = array(
+			'key'       => 'q1',
+			'label'     => 'Memoria',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'required'  => true,
+			'choices'   => array(),
+			'delivery'  => true,
+			'opens_at'  => $this->dia( '-1 day' ),
+			'closes_at' => $current_close,
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+		foreach ( array( $this->dia( '+9 days' ), '2026-02-30' ) as $date ) {
+			$this->assertNull(
+				$this->submit(
+					$uid,
+					ProcedureEditor::OP_DELIVERY_DATES,
+					$procedure,
+					0,
+					array(
+						ProcedureEditor::FIELD_DELIVERY_CLOSES => array(
+							'q1'   => $date,
+							'q999' => '2027-01-01',
+						),
+					)
+				)
+			);
+			$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		}
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => array( '2027-01-01' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => 'not-an-array' ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/** A submission without a delivery key cannot update unrelated questions. */
+	public function test_delivery_dates_reject_submissions_without_existing_deliveries() {
+		$question                  = array(
+			'key'      => 'q1',
+			'label'    => 'Texto',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
+		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
+		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $this->dia( '+30 days' ) ) ) ) );
+		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->acting_as( $uid );
+		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES );
+		$this->assertSame( 'error', $model['flash']['tipo'] );
+		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
+		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', ProcedureEditorView::html( $model ) );
 	}
 }

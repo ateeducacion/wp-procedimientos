@@ -14,6 +14,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -56,13 +57,20 @@ final class ProcedureEditor {
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
+	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
+	public const PANEL_CODE         = 'codigo';
 
-	public const OP_REVIEW    = 'review';
-	public const OP_EXPORT    = 'export';
-	public const OP_PUBLISH   = 'publish';
-	public const OP_ARCHIVE   = 'archive';
-	public const OP_UNARCHIVE = 'unarchive';
+	public const OP_REVIEW              = 'review';
+	public const OP_EXPORT              = 'export';
+	public const OP_PUBLISH             = 'publish';
+	public const OP_UNPUBLISH           = 'unpublish';
+	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
+	public const OP_ARCHIVE             = 'archive';
+	public const OP_UNARCHIVE           = 'unarchive';
+	public const OP_DELIVERY_DATES      = 'delivery_dates';
+	public const OP_CUSTOM_CODE         = 'custom_code';
+	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
 	 * Hidden field naming the operation a POST asks for.
@@ -95,6 +103,13 @@ final class ProcedureEditor {
 	public const FIELD_COURSE      = 'prc_course_term';
 
 	/**
+	 * Radio that says whether the application asks for none, one or several coordinators.
+	 *
+	 * No se guarda: lo que se guarda es cuántas, en `prc_coordinator_count`.
+	 */
+	public const FIELD_COORDINATOR_KIND = 'prc_coordinator_kind';
+
+	/**
 	 * Prefix of the parallel fields of the question rows.
 	 */
 	public const FIELD_Q = 'prc_q_';
@@ -107,10 +122,14 @@ final class ProcedureEditor {
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
+		self::OP_DELIVERY_DATES,
+		self::OP_CUSTOM_CODE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
 		self::OP_PUBLISH,
+		self::OP_UNPUBLISH,
+		self::OP_TOGGLE_APPLICATIONS,
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 	);
@@ -124,9 +143,15 @@ final class ProcedureEditor {
 		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Preguntas guardadas.',
+		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
+		'codigo'       => 'Código adicional guardado.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
+		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
+		'cerradas'     => 'Inscripción cerrada. Los plazos de subsanación y de entrega documental '
+			. 'se mantienen como estaban.',
+		'reabiertas'   => 'La inscripción vuelve a regirse por las fechas configuradas.',
 		'archivado'    => 'Procedimiento marcado como histórico. Ya no se edita ni se gestionan sus solicitudes; la ficha pública se sigue viendo igual. Para volver a abrirlo hay que pedírselo a quien administre el aplicativo.',
 		'desarchivado' => 'Procedimiento desmarcado: su ámbito vuelve a poder editarlo.',
 	);
@@ -159,9 +184,33 @@ final class ProcedureEditor {
 	 */
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_code_editor' ), 20 );
 		// Después de que el CPT y sus capacidades estén registrados (init 10 y
 		// 11), y antes de que se pinte nada: aquí todavía se puede redirigir.
 		add_action( 'init', array( self::class, 'handle' ), 20 );
+	}
+
+	/** Enqueue WordPress CodeMirror before the page head, only on this tab. */
+	public static function enqueue_code_editor(): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- lectura de la pestaña; mutar lleva su nonce.
+		if ( 'editor' !== Shell::current_section() || self::PANEL_CODE !== sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_PANEL ] ?? '' ) ) ) ) {
+			return;
+		}
+		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		$user_id = get_current_user_id();
+		if ( ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-css",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
+		if ( ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/javascript' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-js",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
 	}
 
 	/*
@@ -200,11 +249,14 @@ final class ProcedureEditor {
 			self::PANEL_QUESTIONS    => 'Preguntas',
 			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
+			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PUBLISH      => 'Publicación',
+			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
+			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
 		);
 
 		$out = array();
@@ -281,6 +333,39 @@ final class ProcedureEditor {
 			self::$rejected = 'Ese procedimiento ya no existe.';
 			return;
 		}
+		if ( self::OP_CUSTOM_CODE === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+			// phpcs:disable WordPress.Security.NonceVerification.Missing -- verify() ya comprobó el nonce.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_custom_code() procesa el valor tras wp_unslash().
+			$css = isset( $_POST['prc_custom_css'] ) && is_string( $_POST['prc_custom_css'] ) ? ProcedureMetaRegistration::sanitize_custom_code( wp_unslash( $_POST['prc_custom_css'] ) ) : null;
+			if ( ! is_string( $css ) ) {
+				self::$rejected = 'El CSS no tiene un formato válido.';
+				return;
+			}
+			update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS, $css );
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se escribe con capability.
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_custom_code() procesa el valor tras wp_unslash().
+			$js = isset( $_POST['prc_custom_js'] ) && is_string( $_POST['prc_custom_js'] ) ? ProcedureMetaRegistration::sanitize_custom_code( wp_unslash( $_POST['prc_custom_js'] ) ) : null;
+			// phpcs:enable WordPress.Security.NonceVerification.Missing
+			if ( is_string( $js ) && ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
+				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
+			}
+			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
+			return;
+		}
+		if ( self::OP_DELIVERY_DATES === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+			self::save_delivery_dates( $procedure_id );
+			return;
+		}
 
 		if ( self::OP_EXPORT === $op || self::OP_REVIEW === $op ) {
 			// Gestionar solicitudes pide su capacidad, no la de editar: es otra
@@ -316,6 +401,14 @@ final class ProcedureEditor {
 
 		if ( self::OP_PUBLISH === $op ) {
 			self::publish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_UNPUBLISH === $op ) {
+			self::unpublish( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_TOGGLE_APPLICATIONS === $op ) {
+			self::toggle_applications( $procedure_id, $user_id );
 			return;
 		}
 		if ( self::PANEL_DATA === $op ) {
@@ -509,23 +602,39 @@ final class ProcedureEditor {
 	/**
 	 * What the «Datos» form sent, in the shape ProcedureInput wants.
 	 *
+	 * @param int $procedure_id Existing procedure, or 0 on creation.
 	 * @return array<string, mixed>
 	 */
-	private static function submitted_data(): array {
+	private static function submitted_data( int $procedure_id = 0 ): array {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
 		$descripcion = wp_kses_post( wp_unslash( (string) ( $_POST[ self::FIELD_DESCRIPTION ] ?? '' ) ) );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::ownership() se queda solo con lo que está en ella.
 		$titularidad = (array) wp_unslash( $_POST[ ProcedureMetaKeys::OWNERSHIP ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- lista cerrada: ProcedureInput::centre_kinds() se queda solo con lo que está en ella.
-		$clases   = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
-		$coordina = ! empty( $_POST[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] );
+		$clases = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CENTRE_KINDS ] ?? array() );
+		$tipo   = isset( $_POST[ self::FIELD_COORDINATOR_KIND ] )
+			? sanitize_key( wp_unslash( (string) $_POST[ self::FIELD_COORDINATOR_KIND ] ) )
+			: '';
+		if ( in_array( $tipo, array( 'none', 'one', 'several' ), true ) ) {
+			if ( 'none' === $tipo ) {
+				$coordina = '0';
+			} elseif ( 'one' === $tipo ) {
+				$coordina = '1';
+			} else {
+				$coordina = (string) max( 2, min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, (int) self::field( ProcedureMetaKeys::COORDINATOR_COUNT ) ) );
+			}
+		} else {
+			$coordina = isset( $_POST[ ProcedureMetaKeys::COORDINATOR_COUNT ] )
+				? self::field( ProcedureMetaKeys::COORDINATOR_COUNT )
+				: ( $procedure_id > 0 ? (string) Applications::coordinator_count( $procedure_id ) : '0' );
+		}
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- identificadores de término: ProcedureInput::term_ids() se queda solo con los enteros positivos.
 		$ambitos = (array) wp_unslash( $_POST[ self::FIELD_AREA ] ?? array() );
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- correos: ProcedureInput::emails() se queda solo con los que lo son.
 		$correos = (array) wp_unslash( $_POST[ ProcedureMetaKeys::CONTACT_EMAILS ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		return array(
+		$datos                      = array(
 			'title'                => self::field( self::FIELD_TITLE ),
 			'description'          => $descripcion,
 			'areas'                => $ambitos,
@@ -539,9 +648,11 @@ final class ProcedureEditor {
 			'audience'             => self::field( ProcedureMetaKeys::AUDIENCE ),
 			'ownership'            => $titularidad,
 			'centre_kinds'         => $clases,
-			'requires_coordinator' => $coordina,
+			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
 		);
+		$datos['coordinator_count'] = $coordina;
+		return $datos;
 	}
 
 	/**
@@ -558,7 +669,7 @@ final class ProcedureEditor {
 	 * @return array<string, mixed>
 	 */
 	private static function gated_data( int $procedure_id, bool $datos, bool $fechas ): array {
-		$crudo = self::submitted_data();
+		$crudo = self::submitted_data( $procedure_id );
 		if ( ! $fechas ) {
 			$plazos = array(
 				'opens_at'        => ProcedureMetaKeys::OPENS_AT,
@@ -573,8 +684,8 @@ final class ProcedureEditor {
 		if ( ! $datos ) {
 			// En crudo, sin los filtros de `display`: esto se va a reescribir
 			// tal cual, no a pintar.
-			$post  = get_post( $procedure_id );
-			$crudo = array_merge(
+			$post                       = get_post( $procedure_id );
+			$crudo                      = array_merge(
 				$crudo,
 				array(
 					'title'                => $post instanceof \WP_Post ? $post->post_title : '',
@@ -590,6 +701,7 @@ final class ProcedureEditor {
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 				)
 			);
+			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
 		return $crudo;
 	}
@@ -618,6 +730,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::REQUIRES_COORDINATOR => $limpio['requires_coordinator'],
 			ProcedureMetaKeys::COMMITMENTS          => $limpio['commitments'],
 		);
+		$meta[ ProcedureMetaKeys::COORDINATOR_COUNT ] = $limpio['coordinator_count'];
 		foreach ( $meta as $clave => $valor ) {
 			update_post_meta( $procedure_id, $clave, wp_slash( $valor ) );
 		}
@@ -639,28 +752,81 @@ final class ProcedureEditor {
 	 */
 	private static function save_questions( int $procedure_id ): void {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- el nonce lo comprobó handle(); son listas y cada elemento se sanea en el bucle de abajo.
-		$claves    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
-		$rotulos   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
-		$ayudas    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
-		$tipos     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
-		$opciones  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
-		$obligadas = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
+		$rotulos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'label' ] ?? array() );
+		$ayudas     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'help' ] ?? array() );
+		$tipos      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'type' ] ?? array() );
+		$opciones   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'choices' ] ?? array() );
+		$obligadas  = (array) wp_unslash( $_POST[ self::FIELD_Q . 'required' ] ?? array() );
+		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
+		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
+		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		$crudas = array();
 		foreach ( $rotulos as $i => $rotulo ) {
 			$crudas[] = array(
-				'key'      => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
-				'label'    => sanitize_text_field( (string) $rotulo ),
-				'help'     => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
-				'type'     => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
-				'choices'  => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
-				'required' => ! empty( $obligadas[ $i ] ),
+				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'label'     => sanitize_text_field( (string) $rotulo ),
+				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
+				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
+				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
+				'required'  => ! empty( $obligadas[ $i ] ),
+				'delivery'  => ! empty( $deliveries[ $i ] ),
+				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
+				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
 			);
 		}
 
-		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( ProcedureQuestions::sanitize( $crudas ) ) );
+		$questions = ProcedureQuestions::sanitize( $crudas );
+		foreach ( $questions as $question ) {
+			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
+				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
+				return;
+			}
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+	/**
+	 * Extend the closing date of existing independent deliveries without
+	 * changing their questions or opening dates.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function save_delivery_dates( int $procedure_id ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() verified this operation's nonce.
+		$closes = wp_unslash( $_POST[ self::FIELD_DELIVERY_CLOSES ] ?? array() );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( ! is_array( $closes ) ) {
+			self::$rejected = 'No se han podido validar los nuevos plazos. No se ha cambiado nada.';
+			return;
+		}
+
+		$questions = Applications::questions( $procedure_id );
+		$updated   = 0;
+		foreach ( $questions as &$question ) {
+			if ( ! ProcedureQuestions::is_delivery( $question ) || ! array_key_exists( $question['key'], $closes ) ) {
+				continue;
+			}
+			$new_close = is_string( $closes[ $question['key'] ] ) ? sanitize_text_field( $closes[ $question['key'] ] ) : '';
+			++$updated;
+			if ( ! ProcedureInput::is_valid_date( $new_close ) || $new_close < $question['closes_at'] ) {
+				self::$rejected = 'El nuevo cierre debe ser una fecha válida igual o posterior al actual. No se ha cambiado ningún plazo.';
+				return;
+			}
+			$question['closes_at'] = $new_close;
+		}
+		unset( $question );
+
+		if ( 0 === $updated ) {
+			self::$rejected = 'No hay entregas documentales cuyos plazos se puedan ampliar.';
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_DELIVERIES, array( self::ARG_NOTICE => 'entregas' ) ) );
 	}
 
 	/**
@@ -705,6 +871,59 @@ final class ProcedureEditor {
 			)
 		);
 		Shell::leave( self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => 'publicado' ) ) );
+	}
+
+	/**
+	 * Return the procedure to draft without changing its configured dates.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who is asking.
+	 * @return void
+	 */
+	private static function unpublish( int $procedure_id, int $user_id ): void {
+		if ( ! ProcedureAccess::can_publish( $user_id, $procedure_id ) ) {
+			self::$rejected = 'Su perfil no puede devolver este procedimiento a borrador.';
+			return;
+		}
+		$result = wp_update_post(
+			array(
+				'ID'          => $procedure_id,
+				'post_status' => 'draft',
+			),
+			true
+		);
+		if ( is_wp_error( $result ) ) {
+			self::$rejected = 'No se pudo devolver el procedimiento a borrador. No se ha cambiado.';
+			return;
+		}
+		Shell::leave( self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => 'borrador' ) ) );
+	}
+
+	/**
+	 * Pause or resume new applications while leaving delivery deadlines alone.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $user_id      Who is asking.
+	 * @return void
+	 */
+	private static function toggle_applications( int $procedure_id, int $user_id ): void {
+		if ( 'publish' !== get_post_status( $procedure_id ) ) {
+			self::$rejected = 'Solo se puede cerrar la inscripción de un procedimiento publicado.';
+			return;
+		}
+		if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+			return;
+		}
+		$closed = ! (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, $closed );
+		if ( $closed xor (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ) ) {
+			self::$rejected = 'No se pudo cambiar el cierre de solicitudes. No se ha aplicado el cambio.';
+			return;
+		}
+		Shell::leave(
+			self::url( $procedure_id, self::PANEL_PUBLISH, array( self::ARG_NOTICE => $closed ? 'cerradas' : 'reabiertas' ) )
+		);
 	}
 
 	/**
@@ -860,49 +1079,54 @@ final class ProcedureEditor {
 	 */
 	private static function blank(): array {
 		return array(
-			'aviso'         => '',
-			'aviso_tipo'    => 'aviso',
-			'nuevo'         => false,
-			'procedure_id'  => 0,
-			'title'         => '',
-			'panel'         => self::PANEL_DATA,
-			'panels'        => array(),
-			'flash'         => array(
+			'aviso'                   => '',
+			'aviso_tipo'              => 'aviso',
+			'nuevo'                   => false,
+			'procedure_id'            => 0,
+			'title'                   => '',
+			'panel'                   => self::PANEL_DATA,
+			'panels'                  => array(),
+			'flash'                   => array(
 				'tipo'  => '',
 				'texto' => '',
 			),
-			'can_edit'      => false,
-			'groups'        => array(),
-			'state_notice'  => '',
-			'can_review'    => false,
-			'can_publish'   => false,
-			'can_archive'   => false,
-			'can_unarchive' => false,
-			'archived'      => false,
-			'lock'          => EditLock::none(),
-			'state'         => '',
-			'state_label'   => '',
-			'status'        => '',
-			'status_label'  => '',
-			'area_names'    => '',
-			'foreign_areas' => array(),
-			'view_url'      => '',
-			'workspace_url' => Shell::url( 'workspace' ),
-			'values'        => array(),
-			'terms'         => array(
+			'can_edit'                => false,
+			'groups'                  => array(),
+			'state_notice'            => '',
+			'can_review'              => false,
+			'can_edit_custom_js'      => false,
+			'can_publish'             => false,
+			'can_unpublish'           => false,
+			'can_toggle_applications' => false,
+			'applications_closed'     => false,
+			'pending_documentation'   => false,
+			'can_archive'             => false,
+			'can_unarchive'           => false,
+			'archived'                => false,
+			'lock'                    => EditLock::none(),
+			'state'                   => '',
+			'state_label'             => '',
+			'status'                  => '',
+			'status_label'            => '',
+			'area_names'              => '',
+			'foreign_areas'           => array(),
+			'view_url'                => '',
+			'workspace_url'           => Shell::url( 'workspace' ),
+			'values'                  => array(),
+			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
 			),
-			'ownerships'    => ProcedureMetaKeys::ownerships(),
-			'centre_kinds'  => ProcedureMetaKeys::centre_kinds(),
-			'audiences'     => ProcedureMetaKeys::audiences(),
-			'header_colors' => ProcedureMetaKeys::header_colors(),
-			'questions'     => array(),
-			'q_types'       => ProcedureQuestions::types(),
-			'q_max'         => ProcedureQuestions::MAX,
-			'applications'  => array(),
-			'app_cols'      => array(),
-			'review_states' => ApplicationMetaKeys::review_states(),
+			'ownerships'              => ProcedureMetaKeys::ownerships(),
+			'centre_kinds'            => ProcedureMetaKeys::centre_kinds(),
+			'audiences'               => ProcedureMetaKeys::audiences(),
+			'header_colors'           => ProcedureMetaKeys::header_colors(),
+			'questions'               => array(),
+			'q_types'                 => ProcedureQuestions::types(),
+			'q_max'                   => ProcedureQuestions::MAX,
+			'applications'            => array(),
+			'app_cols'                => array(),
+			'review_states'           => ApplicationMetaKeys::review_states(),
 		);
 	}
 
@@ -960,14 +1184,15 @@ final class ProcedureEditor {
 		$procedure_id = (int) $procedimiento->ID;
 		$paneles      = self::panels( $procedure_id );
 
-		$m['procedure_id'] = $procedure_id;
-		$m['title']        = (string) $procedimiento->post_title;
-		$m['panels']       = $paneles;
-		$m['panel']        = isset( $paneles[ $pedido ] ) ? $pedido : self::PANEL_DATA;
-		$m['flash']        = self::flash( $hecho );
-		$m['can_edit']     = ProcedureAccess::can_edit( $user_id, $procedure_id );
-		$m['can_review']   = ProcedureAccess::can_review( $user_id, $procedure_id );
-		$m['archived']     = ProcedureAccess::is_archived( $procedure_id );
+		$m['procedure_id']       = $procedure_id;
+		$m['title']              = (string) $procedimiento->post_title;
+		$m['panels']             = $paneles;
+		$m['panel']              = isset( $paneles[ $pedido ] ) ? $pedido : self::PANEL_DATA;
+		$m['flash']              = self::flash( $hecho );
+		$m['can_edit']           = ProcedureAccess::can_edit( $user_id, $procedure_id );
+		$m['can_edit_custom_js'] = ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id );
+		$m['can_review']         = ProcedureAccess::can_review( $user_id, $procedure_id );
+		$m['archived']           = ProcedureAccess::is_archived( $procedure_id );
 		// Abrir el taller toma el bloqueo del procedimiento, igual que abrir el
 		// editor del escritorio: es el mismo bloqueo (ADR-0008). Si ya lo tiene
 		// otra persona, el taller pasa a solo lectura.
@@ -975,12 +1200,29 @@ final class ProcedureEditor {
 		if ( (int) $m['lock']['owner'] > 0 ) {
 			$m['can_edit'] = false;
 		}
-		$libre              = 0 === (int) $m['lock']['owner'];
-		$m['can_archive']   = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
-		$m['can_unarchive'] = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
-		$m['can_publish']   = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
-		$m['state']         = ProcedureState::of_post( $procedure_id );
-		$m['state_label']   = ProcedureState::label( (string) $m['state'] );
+		$libre                        = 0 === (int) $m['lock']['owner'];
+		$m['can_archive']             = $libre && ! $m['archived'] && ProcedureAccess::can_archive( $user_id, $procedure_id );
+		$m['can_unarchive']           = $libre && $m['archived'] && ProcedureAccess::can_unarchive( $user_id );
+		$m['can_publish']             = $m['can_edit'] && 'publish' !== $procedimiento->post_status && ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_unpublish']           = $m['can_edit']
+			&& 'publish' === $procedimiento->post_status
+			&& ProcedureAccess::can_publish( $user_id, $procedure_id );
+		$m['can_toggle_applications'] = $libre && $m['can_edit'] && 'publish' === $procedimiento->post_status;
+		$m['applications_closed']     = (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		$m['pending_documentation']   = false;
+		if ( 0 < (int) $paneles[ self::PANEL_APPLICATIONS ]['count'] ) {
+			foreach ( Applications::questions( $procedure_id ) as $question ) {
+				if ( ! ProcedureQuestions::is_delivery( $question ) ) {
+					continue;
+				}
+				if ( ProcedureQuestions::delivery_is_open( $question, ProcedureState::today() ) ) {
+					$m['pending_documentation'] = true;
+					break;
+				}
+			}
+		}
+		$m['state']       = ProcedureState::of_post( $procedure_id );
+		$m['state_label'] = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
 		// Qué grupos deja tocar el estado de hoy, y por qué cierra el resto.
 		// Lo decide el dominio; la pantalla solo pinta apagado lo que aquí
 		// salga en `false`.
@@ -998,6 +1240,7 @@ final class ProcedureEditor {
 		$m['values']        = self::values( $procedure_id );
 		$m['terms']         = self::term_lists( $user_id );
 		$m['questions']     = Applications::questions( $procedure_id );
+		$m['deliveries']    = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			$m['app_cols']     = Applications::columns( (array) $m['questions'] );
@@ -1051,19 +1294,22 @@ final class ProcedureEditor {
 				? ProcedureInput::ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) )
 				: array_keys( ProcedureMetaKeys::ownerships() ),
 			ProcedureMetaKeys::CENTRE_KINDS         => self::centre_kinds_value( $procedure_id ),
-			ProcedureMetaKeys::REQUIRES_COORDINATOR => get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ) ? '1' : '',
+			ProcedureMetaKeys::REQUIRES_COORDINATOR => Applications::coordinator_count( $procedure_id ) > 0 ? '1' : '',
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
+			ProcedureMetaKeys::CUSTOM_CSS           => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS ),
+			ProcedureMetaKeys::CUSTOM_JS            => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS ),
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
 		);
+		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		if ( '' === self::$rejected ) {
 			return $guardado;
 		}
 
 		// Lo tecleado manda sobre lo guardado, pero solo en los campos que
 		// existen: del POST no entra ninguna clave nueva.
-		$tecleado = self::submitted_data();
+		$tecleado = self::submitted_data( $procedure_id );
 		$mapa     = array(
 			self::FIELD_TITLE                  => 'title',
 			self::FIELD_DESCRIPTION            => 'description',
@@ -1090,8 +1336,8 @@ final class ProcedureEditor {
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
 		}
-		if ( in_array( self::FIELD_TITLE, $enviados, true ) ) {
-			$guardado[ ProcedureMetaKeys::REQUIRES_COORDINATOR ] = $tecleado['requires_coordinator'] ? '1' : '';
+		if ( in_array( ProcedureMetaKeys::COORDINATOR_COUNT, $enviados, true ) ) {
+			$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) $tecleado['coordinator_count'];
 		}
 		foreach ( array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL ) as $clave ) {
 			if ( in_array( $clave, $enviados, true ) ) {

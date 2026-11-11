@@ -56,12 +56,13 @@ class Test_Provision extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Los dos roles, con sus capacidades propias y las de los tipos.
+	 * Los roles de centro, docente y gestión, con sus capacidades.
 	 */
 	public function test_roles_exist_with_their_capabilities() {
 		$this->assertTrue( get_role( 'prc_manager' )->has_cap( 'prc_manage_procedures' ) );
 		$this->assertTrue( get_role( 'prc_manager' )->has_cap( 'edit_prc_procedures' ), 'las del tipo las reparte el aplicativo en la misma pasada' );
 		$this->assertTrue( get_role( 'prc_school_head' )->has_cap( 'prc_apply' ) );
+		$this->assertTrue( get_role( 'prc_teacher' )->has_cap( 'prc_apply_as_teacher' ) );
 	}
 
 	/**
@@ -74,6 +75,11 @@ class Test_Provision extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_Term::class, $area );
 		$this->assertSame( 0, $servicio->parent );
 		$this->assertSame( $servicio->term_id, $area->parent, 'el área cuelga de su servicio' );
+		foreach ( array( 'ambito-1', 'subambito-1a', 'subambito-1b', 'subambito-1c', 'ambito-2', 'subambito-2a', 'subambito-2b' ) as $slug ) {
+			$term = get_term_by( 'slug', $slug, ProcedureTaxonomies::AREA );
+			$this->assertSame( $slug . '@example.org', get_term_meta( $term->term_id, ProcedureTaxonomies::EMAIL, true ) );
+			$this->assertTrue( wp_attachment_is_image( (int) get_term_meta( $term->term_id, ProcedureTaxonomies::IMAGE_ID, true ) ) );
+		}
 
 		$this->assertInstanceOf( WP_Term::class, get_term_by( 'slug', '2026-2027', ProcedureTaxonomies::COURSE ) );
 	}
@@ -125,7 +131,7 @@ class Test_Provision extends WP_UnitTestCase {
 		sort( $estados );
 		$esperados = array_keys( ProcedureMetaKeys::states() );
 		sort( $esperados );
-		$this->assertSame( $esperados, $estados, 'uno por estado, sin repetir' );
+		$this->assertSame( array(), array_diff( $esperados, $estados ), 'hay al menos un procedimiento por estado derivado' );
 
 		$this->assertSame( array(), array_diff( array( 'text', 'single', 'multiple', 'yesno' ), $tipos ), 'hay preguntas de los cuatro tipos' );
 	}
@@ -142,7 +148,14 @@ class Test_Provision extends WP_UnitTestCase {
 			)
 		);
 		$estados     = array();
+		$docente     = false;
 		foreach ( $solicitudes as $solicitud ) {
+			if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $solicitud->ID, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+				$this->assertSame( 'profesor', get_userdata( (int) $solicitud->post_author )->user_login );
+				$this->assertSame( '', get_post_meta( $solicitud->ID, ApplicationMetaKeys::CENTRE_CODE, true ) );
+				$docente = true;
+				continue;
+			}
 			$estados[] = get_post_meta( $solicitud->ID, ApplicationMetaKeys::REVIEW_STATE, true );
 			$this->assertSame(
 				CentreScope::code_for( (int) $solicitud->post_author ),
@@ -156,6 +169,7 @@ class Test_Provision extends WP_UnitTestCase {
 		$estados = array_values( array_unique( $estados ) );
 		sort( $estados );
 		$this->assertSame( $esperados, $estados );
+		$this->assertTrue( $docente, 'hay una solicitud individual de ejemplo para profesorado' );
 	}
 
 	/**
@@ -186,6 +200,17 @@ class Test_Provision extends WP_UnitTestCase {
 				'users'        => count_users()['total_users'],
 				'procedures'   => $posts( ProcedurePostType::POST_TYPE ),
 				'applications' => $posts( ApplicationPostType::POST_TYPE ),
+				'demo_images'  => count(
+					get_posts(
+						array(
+							'post_type'   => 'attachment',
+							'post_status' => 'inherit',
+							'numberposts' => -1,
+							'meta_key'    => '_prc_demo_scope_image', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- el test cuenta el adjunto único de demostración.
+							'meta_value'  => '1', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+						)
+					)
+				),
 			);
 		};
 

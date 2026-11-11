@@ -23,7 +23,7 @@ aplicativo**, no en el escritorio: en «Gestión de procedimientos», que es lo
 que se viene a ver.
 
 Lleva también el mu-plugin de desarrollo, así que desde la barra superior se
-puede **cambiar de cuenta** —`gestion`, `gestion2`, `direccion`, `direccion2`—
+puede **cambiar de cuenta** —`gestion`, `gestion2`, `direccion`, `direccion2`, `profesor`—
 y ver el aplicativo desde cada lado: quien convoca y quien solicita, cada uno
 acotado a su ámbito o a su centro, que es la mitad de lo que hay que probar
 aquí. Volver a la propia cuenta se hace desde la misma barra.
@@ -198,14 +198,16 @@ contraseña es `password` en todos.
 | `editor-ambito2` | `editor` | Ámbito 2 y descendientes |
 | `direccion` | `prc_school_head` | Un centro del catálogo inventado |
 | `direccion2` | `prc_school_head` | Otro centro |
+| `profesor` | `prc_teacher` | Sin centro; tiene una solicitud de ejemplo |
 
 Flujo sugerido: entra como `editor-ambito1` y `editor-ambito2` y comprueba que
 ambos pueden editar el procedimiento compartido, pero cada uno solo cambia
 los ámbitos organizadores de su rama. Un procedimiento exclusivo de la otra
 rama no aparece en el listado ni se abre por enlace directo. Después entra
 como `direccion`, presenta una solicitud y vuelve a «Solicitar»: te reabre la
-misma. `gestion` y `gestion2` sirven para comprobar la compatibilidad del rol
-anterior.
+misma. Con `profesor`, consulta la solicitud individual de ejemplo y presenta
+otra desde un procedimiento dirigido al profesorado. `gestion` y `gestion2`
+sirven para comprobar la compatibilidad del rol anterior.
 
 Para cambiar de usuario sin cerrar sesión, **WPFront User Role Editor** (menú
 «Switch To» en Usuarios), igual que en producción.
@@ -303,3 +305,16 @@ empiece a medir, y lo que hace se comprueba en `test-load-order.php`—.
 - `docs/adr/registro.md` — índice de decisiones
 - `docs/sdd/registro.md` — índice de diseño
 - [`AGENTS.md`](AGENTS.md) — instrucciones para agentes de código y convenciones
+
+## Entregas con plazo propio
+
+En «Preguntas», una pregunta de tipo «Archivo» puede marcarse como entrega con
+plazo propio, con apertura y cierre inclusivos. Se configura antes de cerrar la
+inscripción, mientras ese panel siga editable. El centro presenta primero su
+solicitud y después entrega cada documento desde «Mi centro», incluso si el
+procedimiento ya está resuelto. La entrega conserva la solicitud y su revisión.
+
+No se permite entregar a solicitudes excluidas ni a procedimientos archivados.
+El documento sigue siendo privado; una nueva entrega sustituye al anterior.
+Para probarlo en local: entre como `direccion`, abra «Escuelas Promotoras de Salud»
+en «Mi centro» y entregue su «Memoria final». Véase ADR-0033.

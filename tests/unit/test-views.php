@@ -289,7 +289,7 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( '2026-2027', $html );
 		$this->assertStringContainsString( 'Inscripción', $html );
 		$this->assertStringContainsString( 'Subsanación', $html );
-		$this->assertStringContainsString( 'Pide una persona coordinadora', $html );
+		$this->assertStringContainsString( 'Pide 1 persona coordinadora', $html );
 		$this->assertStringContainsString( 'mailto:contacto@example.org', $html );
 		$this->assertStringContainsString( 'prc-resumen__enlaces', $html );
 		$this->assertStringContainsString( 'Listado definitivo de admitidos', $html );
@@ -297,6 +297,20 @@ class Test_Views extends WP_UnitTestCase {
 		// A quién se dirige, en la tarjeta de acceso y en el pie.
 		$this->assertStringContainsString( 'Todos los centros', $html );
 		$this->assertStringContainsString( 'Las bases de la convocatoria.', $html );
+	}
+
+	/** A manager link is shown as the primary action when the model provides it. */
+	public function test_the_public_card_paints_the_primary_manage_link() {
+		$id = $this->procedure( $this->administrator(), array( $this->area( 'Área de prueba' ) ) );
+
+		$this->acting_as( 0 );
+		$model               = ProcedureView::model( $id );
+		$model['manage_url'] = 'https://example.org/gestionar';
+		$html                = ProcedureChrome::html( $model );
+
+		$this->assertStringContainsString( 'class="prc-btn prc-btn-primary btn btn-primary"', $html );
+		$this->assertStringContainsString( 'href="https://example.org/gestionar"', $html );
+		$this->assertStringContainsString( 'Editar procedimiento', $html );
 	}
 
 	/**

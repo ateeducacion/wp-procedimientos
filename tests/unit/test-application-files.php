@@ -1260,6 +1260,11 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$solicitud = $this->application( $datos['procedure'], $datos['head'], 'C0001' );
 		ApplicationFiles::store_all( $solicitud, array( 'q1' => $this->un_pdf( 'buena.pdf' ) ) );
 		$antes = ApplicationFiles::descriptors( $solicitud );
+		update_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		update_post_meta( $solicitud, ApplicationMetaKeys::APPLICANT_POSITION, ApplicationMetaKeys::POSITION_SECRETARY );
+		update_post_meta( $solicitud, ApplicationMetaKeys::ANSWERS, array( 'q2' => 'Respuesta original' ) );
+		$metas  = get_post_meta( $solicitud );
+		$titulo = get_the_title( $solicitud );
 
 		$this->en_files( array( 'q1' => $this->un_pdf( 'segunda.pdf' ) ) );
 		$this->almacen_roto();
@@ -1268,6 +1273,25 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'no se ha presentado', $this->el_rechazo() );
 		$this->assertSame( $solicitud, Applications::find( $datos['procedure'], 'C0001' ), 'Sigue estando.' );
 		$this->assertSame( $antes, ApplicationFiles::descriptors( $solicitud ), 'Y con su documento de antes.' );
+		$this->assertSame( $metas, get_post_meta( $solicitud ), 'Ni el núcleo ni la revisión cambian cuando falla el documento.' );
+		$this->assertSame( $titulo, get_the_title( $solicitud ) );
+	}
+
+	/** A failed descriptor write keeps the original file and removes the new one. */
+	public function test_a_failed_descriptor_write_preserves_the_original_document() {
+		$data   = $this->un_documento_guardado();
+		$before = ApplicationFiles::descriptors( $data['application'] );
+		$refuse = static function ( $check, $id, $key ) {
+			return ApplicationMetaKeys::FILES === $key ? false : $check;
+		};
+		add_filter( 'update_post_metadata', $refuse, 10, 3 );
+		try {
+			$this->assertFalse( ApplicationFiles::store_all( $data['application'], array( 'q1' => $this->un_pdf( 'replacement.pdf' ) ) ) );
+		} finally {
+			remove_filter( 'update_post_metadata', $refuse, 10 );
+		}
+		$this->assertSame( $before, ApplicationFiles::descriptors( $data['application'] ) );
+		$this->assertNotNull( ApplicationFiles::read( $before['q1'] ) );
 	}
 
 	// ─── la tabla y el CSV ─────────────────────────────────────────────────
@@ -1350,5 +1374,191 @@ class Test_Application_Files extends WP_UnitTestCase {
 			call_user_func( $metas[ ApplicationMetaKeys::FILES ]['auth_callback'] ),
 			'Ninguna vía escribe esta meta desde fuera del aplicativo (ADR-0018).'
 		);
+	}
+	/**
+	 * Create an open delivery belonging to a resolved procedure.
+	 *
+	 * @return array<string, int>
+	 */
+	private function delivery_fixture(): array {
+		$data  = $this->un_plazo_abierto();
+		$today = ProcedureState::today();
+		update_post_meta(
+			$data['procedure'],
+			ProcedureMetaKeys::QUESTIONS,
+			array(
+				array(
+					'key'       => 'q1',
+					'label'     => 'Memoria',
+					'type'      => 'file',
+					'required'  => true,
+					'delivery'  => true,
+					'opens_at'  => $today,
+					'closes_at' => $today,
+				),
+				array(
+					'key'   => 'q2',
+					'label' => 'Documento inicial',
+					'type'  => 'file',
+				),
+			)
+		);
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::FINAL_LIST_URL, 'https://example.org/final.pdf' );
+		$data['application'] = $this->application(
+			$data['procedure'],
+			$data['head'],
+			'C0001',
+			array(
+				ApplicationMetaKeys::REVIEW_STATE => ApplicationMetaKeys::REVIEW_ADMITTED,
+				ApplicationMetaKeys::ANSWERS      => array( 'q3' => 'Respuesta original' ),
+			)
+		);
+		return $data;
+	}
+
+	/**
+	 * Submit a document through the real controller.
+	 *
+	 * @param array<string, int>    $data Fixture.
+	 * @param array<string, string> $extra Forged or overridden fields.
+	 * @return string|null
+	 */
+	private function deliver_document( array $data, array $extra = array() ): ?string {
+		$this->acting_as( $data['head'] );
+		$this->post(
+			array_merge(
+				array(
+					ApplyForm::FIELD_OP        => ApplyForm::OP_DELIVER,
+					ApplyForm::FIELD_PROCEDURE => (string) $data['procedure'],
+					ApplyForm::FIELD_CENTRE    => 'C0001',
+					ApplyForm::FIELD_DELIVERY  => 'q1',
+				),
+				$extra
+			),
+			ApplyForm::NONCE_ACTION,
+			ApplyForm::NONCE_FIELD
+		);
+		if ( isset( $extra[ ApplyForm::NONCE_FIELD ] ) ) {
+			$_POST[ ApplyForm::NONCE_FIELD ] = $extra[ ApplyForm::NONCE_FIELD ];
+		}
+		return $this->exit_url( array( ApplyForm::class, 'handle' ) );
+	}
+
+	/** A resolved procedure accepts its document without reopening or resetting review. */
+	public function test_a_resolved_procedure_accepts_a_delivery_without_changing_the_application() {
+		$data   = $this->delivery_fixture();
+		$before = Applications::meta( $data['application'] );
+		$this->en_files(
+			array(
+				'q1' => $this->un_pdf( 'memoria.pdf' ),
+				'q2' => $this->un_pdf( 'forjado.pdf' ),
+			)
+		);
+		$this->assertNotNull( $this->deliver_document( $data, array( ApplyForm::FIELD_POSITION => ApplicationMetaKeys::POSITION_OTHER ) ) );
+		$after = Applications::meta( $data['application'] );
+		unset( $before[ ApplicationMetaKeys::FILES ], $after[ ApplicationMetaKeys::FILES ] );
+		$this->assertSame( $before, $after );
+		$this->assertSame( array( 'q1' ), array_keys( ApplicationFiles::descriptors( $data['application'] ) ) );
+		$this->assertSame( ProcedureMetaKeys::STATE_RESOLVED, ProcedureState::of_post( $data['procedure'] ) );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $data['procedure'];
+		$model                            = ApplyForm::model();
+		$this->assertFalse( $model['can_submit'] );
+		$this->assertTrue( $model['deliveries'][0]['can_submit'] );
+		$html = ApplyFormView::html( $model );
+		$this->assertStringContainsString( 'Entregar documento', $html );
+		$this->assertStringContainsString( 'memoria.pdf', $html );
+	}
+
+	/** Owning a centre cannot grant access to another centre's application. */
+	public function test_a_delivery_cannot_target_another_centre_or_an_initial_file_question() {
+		$data  = $this->delivery_fixture();
+		$other = $this->application( $data['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$this->en_files( array( 'q1' => $this->un_pdf() ) );
+		$this->assertNull( $this->deliver_document( $data, array( ApplyForm::FIELD_CENTRE => 'C0002' ) ) );
+		$this->assertSame( array(), ApplicationFiles::descriptors( $other ) );
+		$this->assertSame( array(), ApplicationFiles::descriptors( $data['application'] ) );
+		$this->assertNull( $this->deliver_document( $data, array( ApplyForm::FIELD_DELIVERY => 'q2' ) ) );
+		$this->assertSame( array(), ApplicationFiles::descriptors( $data['application'] ) );
+		$this->assertNull( $this->deliver_document( $data, array( ApplyForm::NONCE_FIELD => 'invalid' ) ) );
+		$this->assertSame( array(), ApplicationFiles::descriptors( $data['application'] ) );
+	}
+
+	/** Archive, exclusion, invalid dates and future or expired windows reject direct POSTs. */
+	public function test_delivery_permissions_and_dates_are_checked_on_every_post() {
+		$data = $this->delivery_fixture();
+		$this->en_files( array( 'q1' => $this->un_pdf() ) );
+		$questions = Applications::questions( $data['procedure'] );
+		foreach ( array( array( '2000-01-01', '2000-01-02' ), array( '2999-01-01', '2999-01-02' ), array( '', '' ) ) as $range ) {
+			$questions[0]['opens_at']  = $range[0];
+			$questions[0]['closes_at'] = $range[1];
+			update_post_meta( $data['procedure'], ProcedureMetaKeys::QUESTIONS, $questions );
+			$this->assertNull( $this->deliver_document( $data ) );
+		}
+		$questions[0]['opens_at']  = ProcedureState::today();
+		$questions[0]['closes_at'] = ProcedureState::today();
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::QUESTIONS, $questions );
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::ARCHIVED, true );
+		$this->assertNull( $this->deliver_document( $data ) );
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::ARCHIVED, false );
+		update_post_meta( $data['application'], ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_EXCLUDED );
+		$this->assertNull( $this->deliver_document( $data ) );
+		$this->assertSame( array(), ApplicationFiles::descriptors( $data['application'] ) );
+	}
+
+	/** A failed replacement preserves the entire existing application and its document. */
+	public function test_a_delivery_storage_failure_preserves_the_original_document_and_review() {
+		$data = $this->delivery_fixture();
+		ApplicationFiles::store_all( $data['application'], array( 'q1' => $this->un_pdf( 'original.pdf' ) ) );
+		$before = get_post_meta( $data['application'] );
+		$this->en_files( array( 'q1' => $this->un_pdf( 'replacement.pdf' ) ) );
+		$this->almacen_roto();
+		$this->assertNull( $this->deliver_document( $data ) );
+		$this->assertSame( $before, get_post_meta( $data['application'] ) );
+	}
+
+	/** A required future delivery does not block submitting the initial application. */
+	public function test_an_independent_delivery_does_not_block_the_initial_application() {
+		$data = $this->delivery_fixture();
+		wp_delete_post( $data['application'], true );
+		delete_post_meta( $data['procedure'], ProcedureMetaKeys::FINAL_LIST_URL );
+		$this->assertNotNull( $this->presentar( $data ) );
+		$this->assertCount( 1, Applications::spec( $data['procedure'] )['questions'] );
+		$this->assertSame( array(), ApplicationFiles::descriptors( (int) Applications::find( $data['procedure'], 'C0001' ) ) );
+	}
+	/** Deliveries never create applications, and reject missing files and unpublished procedures. */
+	public function test_a_delivery_needs_an_existing_application_and_a_real_file() {
+		$data = $this->delivery_fixture();
+		$this->assertNull( $this->deliver_document( $data ) );
+		$this->assertStringContainsString( 'Falta un documento', $this->el_rechazo() );
+		$this->en_files( array( 'q1' => $this->un_pdf() ) );
+		wp_update_post(
+			array(
+				'ID'          => $data['procedure'],
+				'post_status' => 'draft',
+			)
+		);
+		$this->assertNull( $this->deliver_document( $data ) );
+		wp_update_post(
+			array(
+				'ID'          => $data['procedure'],
+				'post_status' => 'publish',
+			)
+		);
+		wp_delete_post( $data['application'], true );
+		$this->assertNull( $this->deliver_document( $data ) );
+		$this->assertNull( Applications::find( $data['procedure'], 'C0001' ) );
+	}
+
+	/** Public dates reveal no document metadata; the private download remains authorized. */
+	public function test_public_delivery_dates_reveal_no_private_document() {
+		$data = $this->delivery_fixture();
+		ApplicationFiles::store_all( $data['application'], array( 'q1' => $this->un_pdf( 'privado.pdf' ) ) );
+		$this->acting_as( 0 );
+		$model = \Prc\PublicFront\ProcedureView::model( $data['procedure'] );
+		$html  = \Prc\PublicFront\View\ProcedureChrome::html( $model );
+		$this->assertStringContainsString( 'Entregas de documentación', $html );
+		$this->assertStringContainsString( 'Memoria', $html );
+		$this->assertStringNotContainsString( 'privado.pdf', $html );
+		$this->assertStringNotContainsString( ApplicationFiles::ARG_FILE . '=', $html );
 	}
 }

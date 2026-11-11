@@ -26,7 +26,8 @@ final class WorkspaceView {
 	 * The legend, in the order it is read.
 	 *
 	 * Las ocho entradas del original eran el cruce de un estado escrito a mano
-	 * con la fecha límite. Aquí el estado se deriva de las fechas, así que son
+	 * con la fecha límite. Aquí el estado se deriva de las fechas y del cierre
+	 * manual de solicitudes, así que son
 	 * los siete estados del aplicativo; las dos entradas contradictorias de
 	 * aquella leyenda se han convertido en la octava, que es lo que siempre
 	 * fueron: un aviso de que los datos no cuadran.
@@ -211,7 +212,7 @@ final class WorkspaceView {
 			return;
 		}
 		$s      = $m['selection'];
-		$cursos = (array) $m['courses'] + array( 0 => 'Todos los cursos' );
+		$cursos = (array) $m['courses'];
 		?>
 		<nav class="prc-cursos" aria-label="Curso escolar">
 			<ul class="prc-cursos__lista">
@@ -244,12 +245,12 @@ final class WorkspaceView {
 		// Se arma de una pieza y no a trozos en el marcado: entre dos etiquetas
 		// de PHP siempre queda un espacio, y aquí se notaría antes del punto.
 		$frase = sprintf(
-			'Mostrando <strong>%1$s</strong> %2$s %3$s',
+			'Mostrando <strong>%1$s</strong> %2$s%3$s',
 			esc_html( (string) $n ),
 			esc_html( 1 === $n ? 'procedimiento' : 'procedimientos' ),
 			'' !== $curso
-				? 'en <strong>' . esc_html( $curso ) . '</strong>'
-				: 'de <strong>todos los cursos</strong>'
+				? ' en <strong>' . esc_html( $curso ) . '</strong>'
+				: ''
 		);
 		if ( '' !== $q ) {
 			$frase .= sprintf(
@@ -281,7 +282,7 @@ final class WorkspaceView {
 		<div class="prc-tabla-caja">
 			<table class="prc-tabla prc-tabla--densa prc-tabla--taller">
 				<caption class="screen-reader-text">
-					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos de todos los cursos' ); ?>
+					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos' ); ?>
 				</caption>
 				<thead>
 					<tr class="prc-tabla__grupos">

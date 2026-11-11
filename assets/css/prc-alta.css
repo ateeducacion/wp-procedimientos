@@ -26,6 +26,8 @@
   text-align: left;
 }
 
+.prc-form.prc-form--taller [data-prc-schools-only][hidden] { display: none !important; }
+
 .prc-form.prc-form--taller .prc-campo__etiqueta {
   display: block;
   margin: 0;
@@ -110,6 +112,19 @@
 .prc-form.prc-form--taller .prc-opcion label {
   font: 400 13px/16.9px var(--prc-fuente);
   color: var(--prc-c-fuerte);
+}
+
+/* «Sí, varias personas: [5]»: el número va en la misma línea que su radio. */
+.prc-form.prc-form--taller .prc-opcion--varias {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prc-form.prc-form--taller .prc-opcion--varias .prc-control {
+  width: auto;
+  min-width: 4.5rem;
 }
 
 /* --- la banda de sección ------------------------------------------------

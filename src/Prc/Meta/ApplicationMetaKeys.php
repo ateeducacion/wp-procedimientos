@@ -19,6 +19,10 @@ namespace Prc\Meta;
  * se escriban desde fuera del aplicativo.
  */
 final class ApplicationMetaKeys {
+	/** Applicant's identity kind; older applications without this key are centres. */
+	public const APPLICANT_TYPE = 'prc_applicant_type';
+	public const TYPE_CENTRE    = 'centre';
+	public const TYPE_TEACHER   = 'teacher';
 
 	/**
 	 * Código del centro que solicita. Viene de la persona (ADR-0016), nunca del formulario.
@@ -84,6 +88,7 @@ final class ApplicationMetaKeys {
 	 */
 	public static function all(): array {
 		return array(
+			self::APPLICANT_TYPE,
 			self::CENTRE_CODE,
 			self::CENTRE_NAME,
 			self::APPLICANT_POSITION,

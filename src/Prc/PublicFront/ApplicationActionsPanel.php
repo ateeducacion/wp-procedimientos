@@ -81,7 +81,7 @@ final class ApplicationActionsPanel {
 		'restaurada'       => 'Solicitud restaurada: vuelve a la tabla como estaba.',
 		'prorroga'         => 'Prórroga guardada: el centro puede editar esa solicitud entera hasta ese día, incluido.',
 		'prorroga-quitada' => 'Prórroga quitada: la solicitud vuelve a seguir el plazo general.',
-		'en-nombre'        => 'Solicitud presentada en nombre del centro, vacía y en «Presentada». El centro la ve en «Mi centro» y la completa con su formulario hasta el último día de la prórroga. El aplicativo no le avisa por correo: el catálogo no trae su dirección.',
+		'en-nombre'        => 'Solicitud presentada en nombre del centro, vacía y en «Presentada». El centro la ve en «Solicitudes de mi centro» y la completa con su formulario hasta el último día de la prórroga. El aplicativo no le avisa por correo: el catálogo no trae su dirección.',
 	);
 
 	/**

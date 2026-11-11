@@ -276,9 +276,13 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El menú es el del sitio que se sustituye —Inicio, Sus solicitudes,
+	 * El menú es el del sitio que se sustituye —Inicio, las solicitudes,
 	 * Administrar y Ayuda—, pero de cada entrada solo se pinta lo que esa
 	 * persona puede abrir, y la que se queda sin nada dentro no se pinta.
+	 *
+	 * Las solicitudes se llaman igual en el menú, en la miga de pan y en el
+	 * título: «Solicitudes de mi centro» o, para el profesorado, «Mis
+	 * solicitudes». Una entrada directa, sin desplegable de un solo enlace.
 	 *
 	 * Esconder una entrada no es control de acceso: cada pantalla comprueba su
 	 * capacidad al servirse. Esto es la ayuda para navegar.
@@ -286,10 +290,12 @@ class Test_Shell extends WP_UnitTestCase {
 	public function test_the_menu_paints_only_what_each_profile_can_open() {
 		// Equipo directivo: lo suyo son las solicitudes de su centro.
 		$this->acting_as( $this->school_head( 'C0001' ) );
-		$html = Shell::render( 'Mi centro', '', '' );
+		$html = Shell::render( 'Solicitudes de mi centro', '', '' );
 		$this->assertStringContainsString( '>Inicio<', $html );
-		$this->assertStringContainsString( '>Sus solicitudes<', $html );
-		$this->assertStringContainsString( '>De su centro<', $html );
+		$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*href="' . preg_quote( Shell::url( 'mine' ), '#' ) . '">Solicitudes de mi centro</a>#', $html, 'una entrada directa' );
+		$this->assertStringNotContainsString( '>Sus solicitudes<', $html );
+		$this->assertStringNotContainsString( '>De su centro<', $html );
+		$this->assertSame( 'Solicitudes de mi centro', Shell::sections()['mine']['label'] );
 		$this->assertStringNotContainsString( '>Administrar<', $html );
 
 		// El perfil docente presenta solicitudes personales.
@@ -297,8 +303,9 @@ class Test_Shell extends WP_UnitTestCase {
 		$docente->add_cap( ProcedureAccess::CAP_APPLY_AS_TEACHER );
 		$this->acting_as( $docente->ID );
 		$html = Shell::render( 'Mis solicitudes', '', '' );
-		$this->assertStringContainsString( '>Personales<', $html );
-		$this->assertStringNotContainsString( '>De su centro<', $html );
+		$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*href="' . preg_quote( Shell::url( 'mine' ), '#' ) . '">Mis solicitudes</a>#', $html );
+		$this->assertStringNotContainsString( '>Solicitudes de mi centro<', $html );
+		$this->assertSame( 'Mis solicitudes', Shell::sections()['mine']['label'] );
 
 		// Gestión: administrar. «Sus solicitudes» no, que no tiene centro con
 		// el que solicitar.
@@ -308,7 +315,7 @@ class Test_Shell extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>Gestión de procedimientos<', $html, 'el rótulo del grupo del desplegable' );
 		$this->assertStringContainsString( '>Crear procedimiento<', $html );
 		$this->assertStringContainsString( '>Gestionar procedimientos<', $html );
-		$this->assertStringNotContainsString( '>Sus solicitudes<', $html );
+		$this->assertStringNotContainsString( '>Solicitudes de mi centro<', $html );
 
 		// Y sin sesión, solo lo que se lee sin entrar: la portada y la ayuda.
 		$this->acting_as( 0 );
@@ -316,7 +323,7 @@ class Test_Shell extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>Inicio<', $html );
 		$this->assertStringContainsString( '>Ayuda<', $html );
 		$this->assertStringNotContainsString( '>Administrar<', $html );
-		$this->assertStringNotContainsString( '>Sus solicitudes<', $html );
+		$this->assertStringNotContainsString( '>Solicitudes de mi centro<', $html );
 	}
 
 	/**

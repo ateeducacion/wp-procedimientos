@@ -1325,4 +1325,16 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->olvidar_rechazo();
 		$this->assertStringNotContainsString( 'aria-invalid', $this->pintar( $procedimiento ) );
 	}
+
+	/**
+	 * La vuelta se llama como la entrada del menú y el título de la pantalla.
+	 */
+	public function test_the_way_back_is_named_like_the_menu() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertStringContainsString( '&larr; Solicitudes de mi centro</a>', $this->pintar( $procedimiento ) );
+
+		unset( $_GET[ ApplyForm::ARG_PROCEDURE ] );
+		$this->assertStringContainsString( '>Solicitudes de mi centro</a>', ApplyFormView::html( ApplyForm::model() ), 'también sin procedimiento' );
+	}
 }

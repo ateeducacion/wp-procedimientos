@@ -205,7 +205,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -213,7 +213,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => '«Mi centro» con la fila de la solicitud en estado «Presentada»',
+						'caption' => '«Solicitudes de mi centro» con la fila de la solicitud en estado «Presentada»',
 						'image'   => '',
 					),
 				),
@@ -223,7 +223,7 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
 				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
@@ -239,17 +239,17 @@ final class HelpContent {
 				'id'    => 'modificar-la-solicitud',
 				'level' => 2,
 				'title' => 'Modifique la solicitud',
-				'html'  => '<p>Mientras el plazo esté abierto, entre en <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a> → «Ver la solicitud»</strong>, cambie lo que necesite y pulse <strong>«Guardar los cambios»</strong>. Recibirá un correo de que la solicitud se ha modificado. Cualquier persona del equipo directivo del mismo centro ve y edita la misma solicitud.</p>',
+				'html'  => '<p>Mientras el plazo esté abierto, entre en <strong><a href="%mine%">«Solicitudes de mi centro»</a> → «Ver la solicitud»</strong>, cambie lo que necesite y pulse <strong>«Guardar los cambios»</strong>. Recibirá un correo de que la solicitud se ha modificado. Cualquier persona del equipo directivo del mismo centro ve y edita la misma solicitud.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'subsanar',
 				'level' => 2,
 				'title' => 'Subsane si se lo piden',
-				'html'  => '<p>Si quien revisa le pide subsanar, la solicitud aparece como <strong>«A subsanar»</strong> con una nota que explica qué falta, y en «Mi centro» un aviso amarillo: «1 solicitud tiene la subsanación abierta hasta el …». Pulse <strong>«Ir a la solicitud»</strong>, corrija y guarde <strong>dentro del plazo de subsanación</strong>. Fuera de ese plazo ya no se puede editar.</p>',
+				'html'  => '<p>Si quien revisa le pide subsanar, la solicitud aparece como <strong>«A subsanar»</strong> con una nota que explica qué falta, y en «Solicitudes de mi centro» un aviso amarillo: «1 solicitud tiene la subsanación abierta hasta el …». Pulse <strong>«Ir a la solicitud»</strong>, corrija y guarde <strong>dentro del plazo de subsanación</strong>. Fuera de ese plazo ya no se puede editar.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'aviso de subsanación en «Mi centro» y la nota de revisión en la fila',
+						'caption' => 'aviso de subsanación en «Solicitudes de mi centro» y la nota de revisión en la fila',
 						'image'   => '',
 					),
 				),
@@ -277,7 +277,7 @@ final class HelpContent {
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -508,7 +508,7 @@ final class HelpContent {
 				'id'    => 'como-se-que-esta-presentada',
 				'level' => 3,
 				'title' => '¿Cómo sé que mi solicitud ha quedado presentada?',
-				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
+				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Solicitudes de mi centro» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -522,7 +522,7 @@ final class HelpContent {
 				'id'    => 'no-he-dado-de-alta-a-nadie',
 				'level' => 3,
 				'title' => 'He presentado la solicitud y no he dado de alta a nadie',
-				'html'  => '<p>Es normal: la lista se rellena <strong>después</strong> de presentar. Vuelva a la solicitud («Sus solicitudes» → «Ver la solicitud») y use «Dar de alta a una persona».</p>',
+				'html'  => '<p>Es normal: la lista se rellena <strong>después</strong> de presentar. Vuelva a la solicitud («Solicitudes de mi centro» → «Ver la solicitud») y use «Dar de alta a una persona».</p>',
 				'shots' => array(),
 			),
 			array(

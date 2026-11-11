@@ -136,7 +136,7 @@ final class ProcedureChrome {
 			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
 				<section class="prc-seccion" aria-labelledby="prc-delivery-dates">
 					<h2 id="prc-delivery-dates">Entregas de documentación</h2>
-					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Mi centro», dentro de cada plazo.</p>
+					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Solicitudes de mi centro», dentro de cada plazo.</p>
 					<ul>
 						<?php foreach ( $m['deliveries'] as $delivery ) : ?>
 							<li><strong><?php echo esc_html( (string) $delivery['label'] ); ?></strong>: <?php echo esc_html( DateRange::of( (string) $delivery['opens_at'], (string) $delivery['closes_at'] ) ); ?></li>

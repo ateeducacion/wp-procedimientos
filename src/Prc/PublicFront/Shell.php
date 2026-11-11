@@ -89,6 +89,18 @@ final class Shell {
 	public const NOTICE_ANCHOR = 'prc-aviso';
 
 	/**
+	 * El nombre de la sección de las solicitudes propias, por quién solicita.
+	 *
+	 * Uno solo y en todas partes: el menú, la miga de pan y el título.
+	 *
+	 * @var array<string, string>
+	 */
+	private const MINE_LABELS = array(
+		'centre'  => 'Solicitudes de mi centro',
+		'teacher' => 'Mis solicitudes',
+	);
+
+	/**
 	 * Hojas de WordPress que ninguna pantalla del aplicativo usa.
 	 *
 	 * @var string[]
@@ -461,7 +473,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
+				'label' => self::mine_label( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -483,6 +495,16 @@ final class Shell {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * The name of the section of one's own applications.
+	 *
+	 * @param bool $teacher Whether the person applies as a teacher.
+	 * @return string
+	 */
+	public static function mine_label( bool $teacher ): string {
+		return self::MINE_LABELS[ $teacher ? 'teacher' : 'centre' ];
 	}
 
 	/**
@@ -714,7 +736,7 @@ final class Shell {
 	/**
 	 * The menu: the four entries of the bar and what hangs from each one.
 	 *
-	 * Las cuatro del sitio que se sustituye —Inicio, Sus solicitudes,
+	 * Las cuatro del sitio que se sustituye —Inicio, las solicitudes propias,
 	 * Administrar y Ayuda—, pero **de cada una solo se pinta lo que esa
 	 * persona puede abrir**, y la que se queda sin nada dentro no se pinta:
 	 * un desplegable vacío no dice nada y uno con un enlace al que no se
@@ -745,12 +767,10 @@ final class Shell {
 			$menu[] = self::entry( 'Inicio', $inicio, 'home' === $activa );
 		}
 
-		// Solicitudes presentadas por el centro o por la persona docente.
+		// Solicitudes presentadas por el centro o por la persona docente: una
+		// entrada directa, con el mismo nombre que el título de la pantalla.
 		if ( isset( $secciones['mine'] ) ) {
-			$suyas            = self::entry( 'Sus solicitudes' );
-			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Personales' : 'De su centro';
-			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
-			$menu[]           = $suyas;
+			$menu[] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
 		}
 
 		// «Administrar»: crear y gestionar. El editor no es una sección con

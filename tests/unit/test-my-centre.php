@@ -203,7 +203,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertSame( 'Docente de prueba', $model['rows'][0]['applicant'] );
 		$this->assertSame( ApplyForm::url( $procedure ), $model['rows'][0]['url'] );
 		$html = MyCentreView::html( $model );
-		$this->assertStringContainsString( 'Mis solicitudes de participación en procedimientos', $html );
+		$this->assertStringContainsString( '<h1 class="prc-h1">Mis solicitudes</h1>', $html, 'el mismo nombre que en el menú' );
 		$this->assertStringContainsString( 'Solicitudes presentadas por Docente de prueba', $html );
 		$this->assertStringNotContainsString( 'Coordinador/a', $html );
 	}

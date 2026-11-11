@@ -22,11 +22,6 @@ use Prc\Meta\ApplicationMetaKeys;
 final class MyCentreView {
 
 	/**
-	 * Título de la pantalla. Literal fijo: no depende de quién mire.
-	 */
-	private const TITLE = 'Solicitudes de participación en procedimientos de su centro educativo';
-
-	/**
 	 * Paint the screen.
 	 *
 	 * @param array<string, mixed> $m What MyCentre::model() returned.
@@ -34,7 +29,8 @@ final class MyCentreView {
 	 */
 	public static function html( array $m ): string {
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' );
-		$titulo  = $docente ? 'Mis solicitudes de participación en procedimientos' : self::TITLE;
+		// El mismo nombre que la entrada del menú y la miga de pan de la solicitud.
+		$titulo = Shell::mine_label( $docente );
 		if ( '' !== (string) $m['aviso'] ) {
 			return Shell::render( $titulo, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
 		}

@@ -1341,5 +1341,10 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		unset( $_GET[ ApplyForm::ARG_PROCEDURE ] );
 		$this->assertStringContainsString( '>Solicitudes de mi centro</a>', ApplyFormView::html( ApplyForm::model() ), 'también sin procedimiento' );
+
+		// Y es la de quien mira, no la de a quién va el procedimiento: la
+		// dirección que abre uno de profesorado vuelve a las de su centro.
+		$docentes = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$this->assertStringContainsString( '&larr; Solicitudes de mi centro</a>', $this->pintar( $docentes ) );
 	}
 }

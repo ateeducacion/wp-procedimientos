@@ -20938,7 +20938,7 @@ final class WorkspaceView {
 				<?php self::applications( $row ); ?>
 			</td>
 			<td class="prc-celda-accion" data-rotulo="Acciones">
-				<p class="prc-acciones">
+				<div class="prc-acciones">
 					<?php if ( '' !== (string) $row['view_url'] ) : ?>
 						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
 							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
@@ -20946,7 +20946,7 @@ final class WorkspaceView {
 					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
 						<?php self::duplicate( $row ); ?>
 					<?php endif; ?>
-				</p>
+				</div>
 			</td>
 		</tr>
 		<?php
@@ -27453,7 +27453,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( Shell::mine_label( ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'] ) ); ?></a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( (string) ( $m['mine_label'] ?? Shell::mine_label( false ) ) ); ?></a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 			<span class="<?php echo esc_attr( Assets::state_class( (string) $m['state'] ) ); ?>"><?php echo esc_html( (string) $m['state_label'] ); ?></span>
@@ -28032,7 +28032,7 @@ final class ApplyFormView {
 		if ( '' === $url ) {
 			return '';
 		}
-		$rotulo = Shell::mine_label( ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' ) );
+		$rotulo = (string) ( $m['mine_label'] ?? Shell::mine_label( false ) );
 		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">' . esc_html( $rotulo ) . '</a></p>';
 	}
 }
@@ -28432,6 +28432,9 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+
+
+			'mine_label'      => Shell::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 			'help_url'        => Help::url( HelpContent::GUIDE_APPLY, 'rellenar-la-solicitud' ),
 			'applicant_type'  => '',
 			'state'           => '',

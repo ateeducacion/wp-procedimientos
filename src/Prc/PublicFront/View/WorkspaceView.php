@@ -362,7 +362,7 @@ final class WorkspaceView {
 				<?php self::applications( $row ); ?>
 			</td>
 			<td class="prc-celda-accion" data-rotulo="Acciones">
-				<p class="prc-acciones">
+				<div class="prc-acciones">
 					<?php if ( '' !== (string) $row['view_url'] ) : ?>
 						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
 							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
@@ -370,7 +370,7 @@ final class WorkspaceView {
 					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
 						<?php self::duplicate( $row ); ?>
 					<?php endif; ?>
-				</p>
+				</div>
 			</td>
 		</tr>
 		<?php

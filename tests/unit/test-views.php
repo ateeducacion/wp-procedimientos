@@ -188,13 +188,17 @@ class Test_Views extends WP_UnitTestCase {
 		$quien = $this->manager( array( $area ) );
 		$id    = $this->procedure( $quien, array( $area ), $this->abierto(), array( 'post_title' => 'La cerrada' ) );
 
-		// «Histórico» es también una opción del desplegable de estado, así que
-		// lo que se mira es la pastilla de la fila, no la palabra suelta.
+		// «Histórico» es también una opción del desplegable de estado y una
+		// pastilla de la leyenda, así que lo que se mira es la tabla.
+		$tabla = static function (): string {
+			$html = WorkspaceView::html( Workspace::model() );
+			return (string) substr( $html, (int) strpos( $html, '<tbody>' ) );
+		};
 		$this->acting_as( $quien );
-		$this->assertStringNotContainsString( 'prc-state-' . ProcedureMetaKeys::STATE_ARCHIVED, WorkspaceView::html( Workspace::model() ) );
+		$this->assertStringNotContainsString( 'prc-state-' . ProcedureMetaKeys::STATE_ARCHIVED, $tabla() );
 
 		update_post_meta( $id, ProcedureMetaKeys::ARCHIVED, true );
-		$this->assertStringContainsString( 'prc-state-' . ProcedureMetaKeys::STATE_ARCHIVED, WorkspaceView::html( Workspace::model() ) );
+		$this->assertStringContainsString( 'prc-state-' . ProcedureMetaKeys::STATE_ARCHIVED, $tabla() );
 
 		// Y cuando el estado derivado dice otra cosa —un borrador cerrado a
 		// edición—, la marca va aparte para que no se pierda de vista.

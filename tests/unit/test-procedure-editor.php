@@ -208,17 +208,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			array(
 				ProcedureEditor::PANEL_DATA,
 				ProcedureEditor::PANEL_QUESTIONS,
+				ProcedureEditor::PANEL_PEOPLE,
 				ProcedureEditor::PANEL_LINKS,
+				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
-				ProcedureEditor::PANEL_PEOPLE,
-				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_NOTICES,
 				ProcedureEditor::PANEL_OBSERVE,
 				ProcedureEditor::PANEL_CODE,
 			),
-			array_keys( $m['panels'] )
+			array_keys( $m['panels'] ),
+			'en el orden en que se trabaja: preparar, gestionar y el resto'
 		);
+		$this->assertSame(
+			array( 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Gestionar', 'Gestionar', 'Más ajustes', 'Más ajustes', 'Más ajustes' ),
+			array_values( wp_list_pluck( $m['panels'], 'group' ) )
+		);
+		$this->assertSame( 'Acceso de consulta', $m['panels'][ ProcedureEditor::PANEL_OBSERVE ]['label'], 'no se llama como el menú de arriba' );
+
+		$html = ProcedureEditorView::html( $m );
+		$this->assertStringContainsString( 'role="group" aria-label="Gestionar"', $html, 'cada grupo se nombra' );
+		$this->assertStringContainsString( '<span class="prc-tabs-grupo__rotulo" aria-hidden="true">Más ajustes</span>', $html );
+		$this->assertStringContainsString( '<span class="prc-tab-n">1</span>', $html, 'el contador sin la clase de Bootstrap que lo pinta en blanco' );
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
@@ -266,6 +277,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
 		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
 		$this->assertStringNotContainsString( 'JavaScript', $html );
+		$this->assertStringContainsString( '>Guardar el código</button>', $html, 'guardar y qué' );
 	}
 
 	/** Administrators see the executable editor and its yellow public-impact warning. */
@@ -713,7 +725,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * interno y el estado) aquí **no existen**: el primero es el `ID` del post
 	 * y el segundo lo derivan las fechas (ADR-0013).
 	 */
-	public function test_the_create_screen_is_the_express_form_without_its_hidden_fields() {
+	public function test_the_create_screen_asks_the_minimum_without_its_hidden_fields() {
 		$area  = $this->area( 'Área de prueba' );
 		$curso = $this->course();
 		$uid   = $this->manager( array( $area ) );
@@ -722,11 +734,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 
-		// El subtítulo y las cuatro bandas son los literales del sistema que se
-		// sustituye: quien da de alta pidió esta pantalla igual que aquella. Las
-		// mayúsculas de la banda las pone el CSS: escritas, un lector de pantalla
-		// las deletrea.
-		$this->assertStringContainsString( '<strong>Formato Express</strong>', $html );
+		// Las cuatro bandas son los literales del sistema que se sustituye;
+		// «Formato Express», su jerga, ya no. Las mayúsculas de la banda las
+		// pone el CSS: escritas, un lector de pantalla las deletrea.
+		$this->assertStringNotContainsString( 'Formato Express', $html );
+		$this->assertStringContainsString( 'Rellene lo mínimo para crearlo.', $html );
+		$this->assertStringContainsString( '&larr; Gestión de procedimientos</a>', $html, 'la vuelta se llama como la pantalla' );
 		foreach ( array( 'Ajustes generales', 'Promociona', 'Más información', 'Aspectos de diseño' ) as $banda ) {
 			$this->assertStringContainsString( '<legend class="prc-seccion__titulo">' . $banda . '</legend>', $html );
 		}
@@ -759,8 +772,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_AREA . '[]" value="' . $area . '"', $html );
 		$this->assertStringNotContainsString( '<select class="prc-control" id="prc-area"', $html );
 
-		// Los tres correos y las diez muestras de color.
+		// Los tres correos —el primero, y los otros como un grupo opcional— y
+		// las diez muestras de color, sin asterisco: ya viene una elegida.
 		$this->assertSame( ProcedureMetaKeys::CONTACT_EMAILS_MAX, substr_count( $html, 'name="' . ProcedureMetaKeys::CONTACT_EMAILS . '[]"' ) );
+		$this->assertStringContainsString( 'Otros correos de contacto (opcional)', $html );
+		$this->assertStringNotContainsString( '2.º correo', $html );
+		$this->assertMatchesRegularExpression( '#<legend class="prc-campo__etiqueta">Color de cabecera\s*</legend>#', $html );
 		$this->assertSame( count( ProcedureMetaKeys::header_colors() ), substr_count( $html, 'name="' . ProcedureMetaKeys::HEADER_COLOR . '"' ) );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
@@ -1956,7 +1973,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNotNull( $redirect );
 		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
 		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
-		$this->assertStringContainsString( 'Guardar nuevos cierres', $html );
+		$this->assertStringContainsString( 'Guardar los nuevos cierres', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
 		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertSame( $new_close, $after[0]['closes_at'] );
@@ -2418,5 +2435,33 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		);
 		$this->assertArrayNotHasKey( 'q2', \Prc\PublicFront\Applications::answered_keys( $procedimiento ) );
 		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( 1 => ProcedureQuestions::TYPE_TEXT ) ) ) ) );
+	}
+
+	/**
+	 * Un envío rechazado no redirige: vuelve a pintar el taller en la misma
+	 * petición. Cada formulario apunta al aviso, para que el navegador lleve
+	 * allí el foco y el lector de pantalla empiece por él.
+	 */
+	public function test_every_workshop_form_comes_back_to_the_notice() {
+		list( , , $procedimiento ) = $this->mio();
+		$this->application( $procedimiento, $this->school_head( 'C0001' ) );
+		$this->acting_as( $this->administrator() );
+		$paneles = array(
+			ProcedureEditor::PANEL_DATA,
+			ProcedureEditor::PANEL_QUESTIONS,
+			ProcedureEditor::PANEL_LINKS,
+			ProcedureEditor::PANEL_APPLICATIONS,
+			ProcedureEditor::PANEL_DELIVERIES,
+			ProcedureEditor::PANEL_PEOPLE,
+			ProcedureEditor::PANEL_PUBLISH,
+			ProcedureEditor::PANEL_NOTICES,
+			ProcedureEditor::PANEL_OBSERVE,
+			ProcedureEditor::PANEL_CODE,
+		);
+		foreach ( $paneles as $panel ) {
+			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
+			$this->assertStringNotContainsString( 'method="post" action=""', $html, $panel );
+		}
+		$this->assertStringContainsString( 'method="post" action="#prc-aviso"', $html );
 	}
 }

@@ -224,17 +224,6 @@ final class ProcedureEditor {
 	);
 
 	/**
-	 * Why nobody without capability and ámbito gets to create a procedure.
-	 *
-	 * La misma condición —`can_manage_procedures()`, que pide la capacidad y
-	 * al menos un ámbito— se cuenta con las mismas palabras la pinte quien la
-	 * pinte: el envío rechazado y la pantalla de «nuevo procedimiento».
-	 *
-	 * @var string
-	 */
-	private const CANNOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
-
-	/**
 	 * Why the last submit did not go through.
 	 *
 	 * Un envío rechazado no redirige: la misma petición vuelve a pintar la
@@ -305,12 +294,21 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * The five inner tabs, with where each one goes.
+	 * The inner tabs, in three groups, with where each one goes.
+	 *
+	 * En el orden en que se trabaja: lo que se prepara antes de publicar, lo
+	 * que se gestiona con el plazo abierto y el resto. «Acceso de consulta» y
+	 * no «Consulta», que es como se llama la entrada del menú de arriba.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array<string, array{label:string, url:string, count:?int}>
+	 * @return array<string, array{label:string, url:string, count:?int, group:string}>
 	 */
 	public static function panels( int $procedure_id ): array {
+		$grupos  = array(
+			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Más ajustes' => array( self::PANEL_NOTICES, self::PANEL_OBSERVE, self::PANEL_CODE ),
+		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Preguntas',
@@ -320,7 +318,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
-			self::PANEL_OBSERVE      => 'Consulta',
+			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -330,12 +328,15 @@ final class ProcedureEditor {
 		);
 
 		$out = array();
-		foreach ( $rotulos as $slug => $rotulo ) {
-			$out[ $slug ] = array(
-				'label' => $rotulo,
-				'url'   => self::url( $procedure_id, $slug ),
-				'count' => $cuentas[ $slug ] ?? null,
-			);
+		foreach ( $grupos as $grupo => $slugs ) {
+			foreach ( $slugs as $slug ) {
+				$out[ $slug ] = array(
+					'label' => $rotulos[ $slug ],
+					'url'   => self::url( $procedure_id, $slug ),
+					'count' => $cuentas[ $slug ] ?? null,
+					'group' => $grupo,
+				);
+			}
 		}
 		return $out;
 	}
@@ -570,7 +571,7 @@ final class ProcedureEditor {
 	 */
 	private static function create( int $user_id ): void {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			self::$rejected = self::CANNOT_CREATE;
+			self::$rejected = ProcedureAccess::WHY_NOT_CREATE;
 			return;
 		}
 		$revisado = self::validate_data( $user_id, self::submitted_data() );
@@ -1516,7 +1517,7 @@ final class ProcedureEditor {
 	 */
 	private static function blank_procedure( array $m, int $user_id ): array {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			$m['aviso']      = self::CANNOT_CREATE;
+			$m['aviso']      = ProcedureAccess::WHY_NOT_CREATE;
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}

@@ -169,7 +169,6 @@
   --prc-e-historica: #aaa;
   --prc-e-incoh-abierta: #f00;   /* abierta con el plazo vencido */
   --prc-e-incoh-cerrada: #fc0;   /* cerrada con el plazo vivo */
-  --prc-e-etiqueta: #1a1a8c;     /* la etiqueta bajo la tarjeta de la portada */
 
   /* --- el recuadro amarillo de «Solo administración» ---------------------
      Los contrastes están medidos, no supuestos (fórmula de luminancia
@@ -487,7 +486,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
 
 /* --- el menú -------------------------------------------------------------
 
-   Cuatro entradas en mayúsculas grises —Inicio, Sus solicitudes, Administrar
+   Cuatro entradas en mayúsculas grises —Inicio, Solicitudes de mi centro, Administrar
    y Ayuda— y las que tienen hijos los despliegan con un `details` nativo: sin
    JavaScript (ADR-0022), con teclado y con un solo nivel, que es justo lo que
    los tres niveles anidados del menú original no tenían. */
@@ -567,6 +566,8 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-c-tenue);
 }
 
+/* El contador de una pestaña: texto oscuro sobre el amarillo claro, que
+   pasa de 4,5:1. Sin la clase `badge`, que con Bootstrap lo pinta en blanco. */
 .prc-tab-n {
   padding: .05em .5em;
   border-radius: 999px;
@@ -574,6 +575,21 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-esp);
   font-size: var(--prc-t-menudo);
   font-weight: 700;
+}
+
+/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
+   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
+.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
+.prc-tabs-grupo__rotulo {
+  position: absolute;
+  top: 0;
+  font-size: var(--prc-t-menudo);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--prc-c-medio);
 }
 
 /* --- lienzo -------------------------------------------------------------- */
@@ -621,6 +637,10 @@ body.prc-app .prc-hoja {
   margin: 0 0 20px;
   padding: 0 0 10px;
 }
+
+/* La vuelta a la pantalla de la que se viene: texto corriente, no un título
+   que compita con el h1. */
+.prc-miga { margin: 0 0 4px; font-size: .875rem; }
 
 .prc-sub {
   font-size: var(--prc-t-h2);
@@ -861,6 +881,23 @@ body.prc-app .prc-hoja {
 .prc-aviso-success { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
 .prc-aviso-warning { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
 .prc-aviso-danger { background: var(--prc-mal-fondo); border-color: var(--prc-mal-borde); color: var(--prc-mal-texto); }
+.prc-aviso:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.prc-aviso p { margin: 0; }
+.prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
+.prc-aviso__campos a { color: inherit; text-decoration: underline; }
+
+/* La ayuda de un campo, en todas las pantallas: 14 px y gris oscuro (7:1),
+   que es la que evita los errores y tiene que leerse. */
+.prc-campo__ayuda { font-size: .875rem; color: var(--prc-c-medio); }
+
+/* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
+.prc-control.is-invalid,
+.prc-opciones.is-invalid,
+.prc-opciones[aria-invalid="true"] { border-color: var(--prc-mal-texto); }
+.prc-opciones[aria-invalid="true"] { border-left: 3px solid var(--prc-mal-texto); padding-left: 8px; }
+/* Una casilla no tiene borde que pintar: se marca con su contorno. */
+input[type="checkbox"].is-invalid { outline: 2px solid var(--prc-mal-texto); outline-offset: 1px; }
+.invalid-feedback.d-block { display: block; margin: 4px 0 0; color: var(--prc-mal-texto); font-size: .875rem; }
 
 /* La misma geometría sin color: la caja neutra que envuelve un bloque. */
 .prc-caja {
@@ -908,6 +945,14 @@ body.prc-app .prc-hoja {
 .prc-btn-primary { color: #fff; background: var(--prc-c-azul); border-color: var(--prc-c-azul); }
 .prc-btn-primary:hover { color: #fff; background: var(--prc-c-azul-hover); border-color: var(--prc-c-azul-borde); filter: none; }
 
+/* La secundaria de `Assets::button_class()`: blanca con borde gris, que no
+   compite con la principal ni se confunde con un campo. */
+.prc-btn-sec { color: #495057; background: #fff; border-color: #6c757d; }
+.prc-btn-sec:hover { color: #fff; background: #6c757d; filter: none; }
+
+/* La acción final de una pantalla —presentar la solicitud—: la principal, más grande. */
+.prc-btn-final { padding: 10px 20px; font-size: 18px; font-weight: 600; }
+
 /* El secundario: el mismo botón en blanco. No está en el original —allí la
    acción secundaria era un enlace suelto— y se añade porque una pantalla con
    dos botones azules no dice cuál es la acción principal. */
@@ -950,6 +995,12 @@ body.prc-app .btn-primary {
   --bs-btn-hover-border-color: var(--prc-c-azul-borde);
   --bs-btn-active-bg: var(--prc-c-azul-hover);
   --bs-btn-active-border-color: var(--prc-c-azul-borde);
+}
+body.prc-app .btn-outline-secondary {
+  --bs-btn-color: #495057;
+  --bs-btn-border-color: #6c757d;
+  --bs-btn-hover-bg: #6c757d;
+  --bs-btn-hover-border-color: #6c757d;
 }
 body.prc-app .btn-light {
   --bs-btn-bg: var(--prc-c-fondo-accion);

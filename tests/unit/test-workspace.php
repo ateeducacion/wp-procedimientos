@@ -5,8 +5,12 @@
  * @package Prc
  */
 
+use Prc\Access\ProcedureAccess;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\View\WorkspaceView;
 use Prc\PublicFront\Workspace;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -375,6 +379,7 @@ class Test_Workspace extends WP_UnitTestCase {
 		$aviso                         = Workspace::model()['notice'];
 		$this->assertSame( 'ok', $aviso['type'] );
 		$this->assertStringContainsString( 'Procedimiento creado', $aviso['text'] );
+		$this->assertStringContainsString( 'id="' . Shell::NOTICE_ANCHOR . '"', WorkspaceView::html( Workspace::model() ), 'la vuelta llega al aviso' );
 
 		$_GET[ Workspace::VAR_NOTICE ] = 'permiso';
 		$this->assertSame( 'error', Workspace::model()['notice']['type'] );
@@ -406,7 +411,9 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Solicitudes', $html );
 		$this->assertStringContainsString( 'Nuevo procedimiento', $html );
 		$this->assertStringContainsString( 'Abrir el taller de este procedimiento', $html );
-		$this->assertStringContainsString( 'Ver la ficha pública', $html );
+		$this->assertStringContainsString( '>Ver la ficha</a>', $html, 'las acciones dicen lo que hacen, con texto' );
+		$this->assertStringContainsString( '>1 solicitud</a>', $html, 'el recuento es el enlace a las solicitudes' );
+		$this->assertStringContainsString( esc_url( ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ) ), $html );
 		$this->assertStringContainsString( esc_url( Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ) ), $html );
 	}
 
@@ -493,17 +500,18 @@ class Test_Workspace extends WP_UnitTestCase {
 		// Y el buscador se pinta con lo que se buscó, para poder corregirlo.
 		$_GET[ Workspace::VAR_SEARCH ] = 'red';
 		$html                          = Workspace::render();
-		$this->assertStringContainsString( 'Buscar en la tabla', $html );
+		$this->assertMatchesRegularExpression( '#<label class="prc-buscador__rotulo" for="prc-buscar">Buscar por título, número o ámbito</label>#', $html, 'el rótulo se ve' );
+		$this->assertStringContainsString( '>Buscar</button>', $html );
 		$this->assertStringContainsString( 'value="red"', $html );
 		$seguido = (string) preg_replace( '/\s+/', ' ', $html );
 		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento que contiene «<strong>red</strong>»:', $seguido, 'una fila es un procedimiento, no «1 procedimientos»' );
 	}
 
 	/**
-	 * La pantalla es el calco: héroe, leyenda, pestañas por curso y tabla de
-	 * dos niveles con la miniatura de color y las fechas como se leen.
+	 * La tabla primero: título de pantalla corriente con «Nuevo procedimiento»
+	 * a su derecha, la leyenda plegada, pestañas por curso y seis columnas.
 	 */
-	public function test_the_screen_is_the_copy_of_the_old_workshop() {
+	public function test_the_screen_puts_the_table_first() {
 		$area  = $this->area( 'Área de prueba' );
 		$viejo = $this->course( '2025-2026' );
 		$nuevo = $this->course( '2026-2027' );
@@ -530,16 +538,16 @@ class Test_Workspace extends WP_UnitTestCase {
 		$html    = Workspace::render();
 		$seguido = (string) preg_replace( '/\s+/', ' ', $html );
 
-		// El título grande y centrado, el de la portada y el del taller.
-		$this->assertStringContainsString( 'prc-hero', $html );
+		// El título de las pantallas de dentro, con la acción principal al lado.
+		$this->assertStringNotContainsString( 'prc-hero', $html );
+		$this->assertMatchesRegularExpression( '#<div class="prc-h1-fila">\s*<h1 class="prc-h1">Gestión de procedimientos</h1>\s*<p class="prc-acciones">\s*<a class="' . preg_quote( Assets::button_class( true ), '#' ) . '"#', $html );
 
-		// La leyenda: los siete estados del aplicativo, con su icono, más el
-		// aviso en que se convirtieron las dos entradas contradictorias.
-		$this->assertStringContainsString( 'prc-leyenda', $html );
-		foreach ( Workspace::state_icons() as $glifo ) {
-			$this->assertStringContainsString( '>' . $glifo . '<', $html );
+		// La leyenda, plegada: los siete estados con su pastilla, más el
+		// aviso de unas fechas que no cuadran.
+		$this->assertStringContainsString( '<details class="prc-leyenda"><summary>¿Qué significa cada estado?</summary>', $html );
+		foreach ( array_keys( Workspace::state_icons() ) as $estado ) {
+			$this->assertStringContainsString( 'class="' . Assets::state_class( $estado ) . '"', $html, $estado );
 		}
-		$this->assertSame( 7, count( Workspace::state_icons() ) );
 		$this->assertStringContainsString( 'fechas no cuadran', $html );
 
 		// Una pestaña por curso, navegables por URL.
@@ -553,20 +561,16 @@ class Test_Workspace extends WP_UnitTestCase {
 		// El recuento del curso que se está mirando.
 		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento en <strong>2026-2027</strong>:', $seguido );
 
-		// La tabla: dos niveles de cabecera, miniatura de color, «Dirigido a»,
-		// las fechas en día-mes-año y la acción de solicitudes con su número.
-		$this->assertStringContainsString( 'Detalles del procedimiento', $html );
-		$this->assertStringContainsString( 'Fecha límite', $html );
-		$this->assertStringContainsString( 'prc-tabla__grupo--3', $html );
-		$this->assertStringContainsString( 'prc-mini-color', $html );
-		$this->assertStringContainsString( ProcedureMetaKeys::header_hex( 'granate' ), $html );
-		$this->assertStringContainsString( 'Dirigido a', $html );
+		// Seis columnas: lo que se mira y lo que se hace. Sin color, sin la
+		// fecha de creación y sin el estado repetido en un icono.
+		preg_match_all( '#<th scope="col"[^>]*>([^<]+)</th>#', $html, $cabeceras );
+		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes', 'Acciones' ), array_map( 'trim', $cabeceras[1] ) );
+		$this->assertStringNotContainsString( 'prc-mini-color', $html );
+		$this->assertStringNotContainsString( 'Detalles del procedimiento', $html );
 		$this->assertStringContainsString( 'Centros educativos', $html );
-		$this->assertStringContainsString( '08-05-2026', $html, 'la fecha de creación va en día-mes-año' );
-		$this->assertSame( '08-05-2026', $m['rows'][0]['created'] );
-		$this->assertSame( gmdate( 'd-m-Y', strtotime( '+3 days' ) ), $m['rows'][0]['closes'] );
-		$this->assertStringContainsString( 'Ver solicitudes', $html );
-		$this->assertStringContainsString( 'prc-accion__contador', $html );
+		$this->assertStringContainsString( esc_html( (string) $m['rows'][0]['dates'] ), $html, 'el plazo, como se lee' );
+		$this->assertStringContainsString( 'N.º ' . $id, $seguido, 'el número, que es lo que se copia de un correo, bajo el título' );
+		$this->assertStringContainsString( '>1 solicitud</a>', $html );
 	}
 
 	/**
@@ -617,5 +621,23 @@ class Test_Workspace extends WP_UnitTestCase {
 
 		$this->assertTrue( shortcode_exists( Workspace::SHORTCODE ) );
 		$this->assertSame( Workspace::SHORTCODE, Shell::SHORTCODES['workspace'] );
+	}
+
+	/**
+	 * Quien llega al listado puede crear: el botón sale siempre que haya taller.
+	 * Quien no puede crear no llega aquí; lee el motivo en la pantalla sin uso.
+	 */
+	public function test_whoever_reaches_the_list_can_create() {
+		$area  = $this->area( 'Área de prueba' );
+		$quien = $this->manager( array( $area ) );
+		$this->acting_as( $quien );
+
+		$m = Workspace::model();
+		$this->assertTrue( $m['can_create'] );
+		$this->assertArrayNotHasKey( 'create_reason', $m );
+		$this->assertStringContainsString( '<a class="' . Assets::button_class( true ) . '"', WorkspaceView::html( $m ) );
+
+		$this->acting_as( $this->manager() );
+		$this->assertFalse( Workspace::model()['can_use'] );
 	}
 }

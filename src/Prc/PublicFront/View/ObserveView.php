@@ -1,7 +1,7 @@
 <?php
 /**
  * The read-only consultation, painted from what Observe::model() decided,
- * and the «Consulta» panel of the workshop.
+ * and the «Acceso de consulta» panel of the workshop.
  *
  * @package Prc
  */
@@ -251,10 +251,10 @@ final class ObserveView {
 		return '' !== $texto ? esc_html( $texto ) : '<span class="prc-sindato" title="Sin datos">&mdash;</span>';
 	}
 
-	// ─── el panel «Consulta» del taller ────────────────────────────────────
+	// ─── el panel «Acceso de consulta» del taller ──────────────────────────────────
 
 	/**
-	 * The «Consulta» panel: whether the procedure admits it, and what it shows.
+	 * The «Acceso de consulta» panel: whether the procedure admits it, and what it shows.
 	 *
 	 * @param array<string, mixed> $m Model of the workshop; `observe` is ObserveSettings::model().
 	 * @return string
@@ -264,7 +264,7 @@ final class ObserveView {
 		$op = ProcedureEditor::OP_OBSERVE;
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />

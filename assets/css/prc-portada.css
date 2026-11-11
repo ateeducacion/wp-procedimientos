@@ -152,13 +152,9 @@
   color: var(--prc-c-titulo);
 }
 
-.prc-proc__estado {
-  font-size: var(--prc-t-menudo);
-  line-height: var(--prc-i-menudo);
-  font-variant: small-caps;
-  font-weight: 600;
-  color: var(--prc-e-etiqueta);
-}
+.prc-proc__estado { margin: 0; }
+/* La pastilla de estado de siempre, a 14 px: la de la tabla va más apretada. */
+.prc-proc__estado .prc-state { font-size: .875rem; }
 
 /* Los días que quedan y la marca del centro: esto el original no lo tiene, y
    es lo que ahorra el viaje «portada → ficha → ver si ya lo pedí». */

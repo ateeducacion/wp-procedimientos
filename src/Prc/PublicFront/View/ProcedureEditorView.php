@@ -163,7 +163,7 @@ final class ProcedureEditorView {
 			<?php if ( empty( $m['deliveries'] ) ) : ?>
 				<p>Este procedimiento no tiene entregas con plazo propio.</p>
 			<?php else : ?>
-				<form class="prc-form" method="post" action="">
+				<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 					<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
 					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
 					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -173,7 +173,7 @@ final class ProcedureEditorView {
 							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
 						</div>
 					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar nuevos cierres' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					<?php echo PanelParts::submit( 'Guardar los nuevos cierres' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</form>
 			<?php endif; ?>
 		</section>
@@ -196,15 +196,13 @@ final class ProcedureEditorView {
 	private static function new_procedure( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1">Crear un procedimiento</h1>
 		</div>
-		<h2 class="prc-sub"><strong>Formato Express</strong></h2>
 		<p class="prc-intro">
-			En este formulario <strong>solo aparecen los campos mínimos</strong> para crear el
-			procedimiento. Nace en borrador y no se ve fuera hasta que lo publique. Una vez creado
-			se abre su taller, y desde ahí se añaden <strong>los plazos, las preguntas y los
+			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -222,7 +220,7 @@ final class ProcedureEditorView {
 	 */
 	private static function flash( array $m ): string {
 		$flash = (array) $m['flash'];
-		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'], true );
 	}
 
 	/**
@@ -234,7 +232,7 @@ final class ProcedureEditorView {
 	private static function head( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título' ); ?></h1>
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -266,7 +264,7 @@ final class ProcedureEditorView {
 		$op = ProcedureEditor::OP_DUPLICATE;
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action=""
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
 			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -292,25 +290,37 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The inner tabs, each with its count where there is something to count.
+	 * The inner tabs, in their groups, each with its count where there is something to count.
+	 *
+	 * Cada grupo —Preparar, Gestionar, Más ajustes— lleva su rótulo pequeño
+	 * encima y un `role="group"` con su nombre para quien no lo ve.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function tabs( array $m ): string {
 		$activa = (string) $m['panel'];
+		$grupos = array();
+		foreach ( (array) $m['panels'] as $clave => $panel ) {
+			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
+		}
 
 		ob_start();
 		?>
-		<nav class="prc-tabs" aria-label="Paneles del procedimiento">
+		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
-					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-							<span class="prc-tab-n badge"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-						<?php endif; ?></a>
+				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
+					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
+						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
+						<?php foreach ( $paneles as $clave => $panel ) : ?>
+							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+								<?php endif; ?></a>
+						<?php endforeach; ?>
+					</div>
 				<?php endforeach; ?>
 			</div>
 		</nav>
@@ -380,7 +390,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="">
+		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -605,37 +615,35 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * «Más información»: los tres correos de contacto.
+	 * «Más información»: el correo de contacto, y los otros dos, opcionales.
+	 *
+	 * Los dos de más van juntos bajo un solo rótulo, «Otros correos de
+	 * contacto (opcional)»: «2.º correo» y «3.er correo» parecían dos campos
+	 * que había que rellenar.
 	 *
 	 * @param array<string, mixed> $v Field values.
 	 * @return string
 	 */
 	private static function email_fields( array $v ): string {
 		$correos = array_pad( array_values( (array) $v[ ProcedureMetaKeys::CONTACT_EMAILS ] ), ProcedureMetaKeys::CONTACT_EMAILS_MAX, '' );
-		$rotulos = array( 'Correo de contacto', '2.º correo', '3.er correo' );
 
 		ob_start();
 		?>
-		<?php foreach ( $rotulos as $i => $rotulo ) : ?>
-			<div class="prc-campo">
-				<label class="prc-campo__etiqueta" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>">
-					<?php echo esc_html( $rotulo ); ?>
-					<?php
-					if ( 0 === $i ) {
-						echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-					}
-					?>
-				</label>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-contact-0">Correo de contacto <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></label>
+			<input class="prc-control" type="email" id="prc-contact-0" name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]" required
+				aria-describedby="prc-contact-ayuda" value="<?php echo esc_attr( (string) $correos[0] ); ?>" />
+			<p class="prc-campo__ayuda" id="prc-contact-ayuda">Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. Sale en la ficha pública.</p>
+		</div>
+		<fieldset class="prc-campo prc-campo--grupo">
+			<legend class="prc-campo__etiqueta">Otros correos de contacto (opcional)</legend>
+			<?php for ( $i = 1; $i < ProcedureMetaKeys::CONTACT_EMAILS_MAX; ++$i ) : ?>
+				<label class="screen-reader-text" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_html( sprintf( 'Otro correo de contacto %d', $i ) ); ?></label>
 				<input class="prc-control" type="email" id="prc-contact-<?php echo esc_attr( (string) $i ); ?>"
 					name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]"
-					<?php echo 0 === $i ? 'required' : ''; ?>
 					value="<?php echo esc_attr( (string) $correos[ $i ] ); ?>" />
-			</div>
-		<?php endforeach; ?>
-		<p class="prc-campo__ayuda">
-			Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. El
-			primero sale en la ficha pública; los otros dos son opcionales.
-		</p>
+			<?php endfor; ?>
+		</fieldset>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -659,7 +667,8 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-campo">
 			<fieldset>
-				<legend class="prc-campo__etiqueta">Color de cabecera <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
+				<?php // Sin asterisco: ya viene uno elegido, y no hay forma de dejarlo vacío. ?>
+				<legend class="prc-campo__etiqueta">Color de cabecera</legend>
 				<div class="prc-paleta">
 					<?php foreach ( (array) $m['header_colors'] as $clave => $color ) : ?>
 						<label class="prc-muestra" style="--prc-muestra: <?php echo esc_attr( (string) $color['hex'] ); ?>">
@@ -907,7 +916,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -936,7 +945,7 @@ final class ProcedureEditorView {
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
-		<form id="prc-q-mover" method="post" action="">
+		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_MOVE_QUESTION ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1126,7 +1135,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1183,7 +1192,7 @@ final class ProcedureEditorView {
 				<?php $op = ProcedureEditor::OP_PUBLISH; ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
 					y los centros solicitan cuando abra el plazo.</p>
-				<form class="prc-acciones" method="post" action=""
+				<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
 					<?php echo self::op_fields( $m, $op ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -1297,7 +1306,7 @@ final class ProcedureEditorView {
 		);
 		$confirma = $cerrada ? '' : ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Cerrar solicitudes"';
 		return '<p class="prc-intro">' . esc_html( $texto ) . '</p>'
-			. '<form class="prc-acciones" method="post" action=""' . $confirma . '>'
+			. '<form class="prc-acciones" method="post" action="' . esc_url( '#' . Shell::NOTICE_ANCHOR ) . '"' . $confirma . '>'
 			. self::op_fields( $m, ProcedureEditor::OP_TOGGLE_APPLICATIONS )
 			. '<button class="' . esc_attr( Assets::button_class( $cerrada ? false : 'danger' ) ) . '" type="submit">'
 			. ( $cerrada ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora' ) . '</button>'
@@ -1319,7 +1328,7 @@ final class ProcedureEditorView {
 			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar hasta que vuelva a publicarse.',
 			(string) $m['title']
 		);
-		return '<form class="prc-acciones" method="post" action="" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
+		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . Shell::NOTICE_ANCHOR ) . '" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
 			. self::op_fields( $m, ProcedureEditor::OP_UNPUBLISH )
 			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
 			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
@@ -1340,7 +1349,7 @@ final class ProcedureEditorView {
 		$apagados = (array) ( $m['values'][ ProcedureMetaKeys::NOTIFY ] ?? array() );
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1377,7 +1386,7 @@ final class ProcedureEditorView {
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
-			<form class="prc-form prc-form--taller" method="post" action="">
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1389,7 +1398,7 @@ final class ProcedureEditorView {
 					</div>
 					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php endif; ?>
-				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
+				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
 			</form>
 		</section>
 		<?php
@@ -1475,7 +1484,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action=""
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( $pregunta ); ?>"
 			data-prc-confirm-ok="<?php echo esc_attr( $rotulo ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>

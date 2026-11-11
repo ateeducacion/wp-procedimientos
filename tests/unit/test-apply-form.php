@@ -11,6 +11,8 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\Shell;
 use Prc\PublicFront\View\ApplyFormView;
 use Prc\PublicFront\View\ProcedureChrome;
 
@@ -74,6 +76,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		\Closure::bind(
 			static function (): void {
 				self::$rejected = '';
+				self::$invalid  = array();
 			},
 			null,
 			ApplyForm::class
@@ -540,16 +543,20 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 
 		$this->assertStringContainsString( 'class="prc-form prc-form--solicitud"', $html );
-		foreach ( array( 'DATOS DEL CENTRO EDUCATIVO', 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO', 'SOLICITA', 'DATOS DE LA COORDINACIÓN' ) as $rotulo ) {
-			$this->assertStringContainsString( '<h3 class="prc-seccion__titulo">' . $rotulo . '</h3>', $html, $rotulo );
+		// Títulos de sección en `h2` y en caja normal: las mayúsculas las pone
+		// el CSS, porque escritas en la cadena algunos lectores las deletrean.
+		foreach ( array( 'Datos del centro educativo', 'Datos personales de la dirección del centro', 'Solicita', 'Datos de la coordinación' ) as $rotulo ) {
+			$this->assertStringContainsString( '<h2 class="prc-seccion__titulo">' . $rotulo . '</h2>', $html, $rotulo );
 		}
+		$this->assertStringNotContainsString( '<h3', $html, 'del h1 al h2, sin saltos' );
 
 		$this->assertStringContainsString( 'class="prc-seccion__cuerpo"', $html, 'la retícula de doce columnas' );
 		$this->assertStringContainsString( 'prc-campo prc-campo--cuarto', $html, 'un campo de tres columnas' );
 		$this->assertStringContainsString( 'prc-control prc-control--bloqueado', $html, 'el campo bloqueado' );
 		$this->assertStringContainsString( 'class="prc-campo__obligatorio" aria-hidden="true">*', $html, 'el asterisco es decorativo' );
 		$this->assertStringContainsString( 'placeholder="Escriba aquí"', $html, 'la caja de respuesta libre' );
-		$this->assertStringContainsString( 'class="prc-boton-enviar"', $html );
+		$this->assertStringContainsString( '<button class="' . Assets::button_class( 'final' ) . '" type="submit">', $html, 'el botón de siempre, en su variante final' );
+		$this->assertStringNotContainsString( 'prc-boton-enviar', $html );
 	}
 
 	/** A procedure requesting two coordinators shows two independently labelled rows. */
@@ -675,7 +682,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 		$html                             = ApplyForm::render();
 
-		$this->assertStringNotContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+		$this->assertStringNotContainsString( 'Datos de la coordinación', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORDINATORS, $html );
 		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. Allí podrá cambiarlas hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido.', $html );
 
@@ -716,7 +723,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			$this->acting_as( $this->school_head( 'C0001' ) );
 			$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 			$html                             = ApplyForm::render();
-			$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+			$this->assertStringContainsString( 'Datos de la coordinación', $html );
 			$this->assertStringNotContainsString( 'se dan de alta en la lista de personas', $html );
 		}
 	}
@@ -916,7 +923,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->acting_as( $direccion );
 		$html = $this->pintar( $procedimiento );
-		$this->assertStringContainsString( 'Guardar los cambios', $html, 'y el botón ya no dice presentar' );
+		$this->assertStringContainsString( 'Guardar los cambios de la solicitud', $html, 'y el botón ya no dice presentar' );
 		$this->assertStringContainsString( 'Su solicitud', $html );
 	}
 
@@ -1107,7 +1114,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertFalse( \Prc\Access\ProcedureAccess::can_apply( $teacher, $school_procedure ), 'el perfil docente no solicita procedimientos de centros' );
 
 		$html = $this->pintar( $procedure );
-		$this->assertStringContainsString( 'DATOS DE LA PERSONA PARTICIPANTE', $html );
+		$this->assertStringContainsString( 'Datos de la persona participante', $html );
 		$this->assertStringNotContainsString( 'DATOS DEL CENTRO EDUCATIVO', $html );
 		$this->assertStringNotContainsString( 'Cargo en el centro', $html );
 
@@ -1264,5 +1271,130 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->olvidar_rechazo();
 		$this->assertNotNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => $bien ) ), 'cero responde una obligatoria' );
+	}
+
+	/**
+	 * Lo que falla se marca en su campo y el aviso de arriba lleva a cada uno:
+	 * en un formulario largo no hay que buscarlo a ciegas.
+	 */
+	public function test_the_failing_fields_are_marked_where_they_are() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::REQUIRES_COORDINATOR => true,
+				ProcedureMetaKeys::QUESTIONS            => array(
+					array(
+						'label'    => 'Modalidad',
+						'type'     => ProcedureQuestions::TYPE_SINGLE,
+						'choices'  => array( 'A', 'B' ),
+						'required' => true,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+
+		$this->assertNull(
+			$this->enviar(
+				$direccion,
+				$procedimiento,
+				array(
+					ApplyForm::FIELD_POSITION   => 'conserje',
+					ApplyForm::FIELD_COORD_NAME => 'Ana',
+					ApplyForm::FIELD_COORD_DNI  => '12345678A',
+				)
+			)
+		);
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+
+		// El cargo: marcado, con su error al lado y enlazado.
+		$this->assertMatchesRegularExpression( '/<select[^>]*id="prc-position"[^>]*aria-invalid="true"/s', $html );
+		$this->assertMatchesRegularExpression( '/<select[^>]*class="prc-control is-invalid"[^>]*id="prc-position"/s', $html );
+		$this->assertMatchesRegularExpression( '/<select[^>]*id="prc-position"[^>]*aria-describedby="prc-position-error"/s', $html );
+		$this->assertStringContainsString( '<p class="invalid-feedback d-block" id="prc-position-error">Revise el cargo.</p>', $html );
+
+		// El DNI de la primera coordinadora: su ayuda y su error, los dos.
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-dni-0"[^>]*aria-describedby="prc-coordinator-dni-ayuda-0 prc-coordinator-dni-0-error"/s', $html );
+		$this->assertStringNotContainsString( 'id="prc-coordinator-name-0-error"', $html, 'el nombre estaba bien' );
+
+		// Una pregunta de opciones: el grupo entero.
+		$this->assertMatchesRegularExpression( '/role="radiogroup"[^>]*id="prc-q-q1"[^>]*aria-invalid="true"/s', $html );
+
+		// Y el aviso de arriba: un enlace por campo.
+		$this->assertStringContainsString( 'id="' . Shell::NOTICE_ANCHOR . '"', $html );
+		$this->assertStringContainsString( '<a href="#prc-position">el cargo</a>', $html );
+		$this->assertStringContainsString( '<a href="#prc-coordinator-dni-0">el DNI o NIE de la persona coordinadora 1</a>', $html );
+		$this->assertStringContainsString( '<a href="#prc-q-q1">la respuesta a «Modalidad»</a>', $html );
+
+		// Sin envío fallido, nada marcado.
+		$this->olvidar_rechazo();
+		$this->assertStringNotContainsString( 'aria-invalid', $this->pintar( $procedimiento ) );
+	}
+
+	/**
+	 * La vuelta se llama como la entrada del menú y el título de la pantalla.
+	 */
+	public function test_the_way_back_is_named_like_the_menu() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertStringContainsString( '&larr; Solicitudes de mi centro</a>', $this->pintar( $procedimiento ) );
+
+		unset( $_GET[ ApplyForm::ARG_PROCEDURE ] );
+		$this->assertStringContainsString( '>Solicitudes de mi centro</a>', ApplyFormView::html( ApplyForm::model() ), 'también sin procedimiento' );
+
+		// Y es la de quien mira, no la de a quién va el procedimiento: la
+		// dirección que abre uno de profesorado vuelve a las de su centro.
+		$docentes = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$this->assertStringContainsString( '&larr; Solicitudes de mi centro</a>', $this->pintar( $docentes ) );
+	}
+
+	/**
+	 * El número, la fecha y el sí/no que fallan se ven marcados, como los demás.
+	 */
+	public function test_number_date_and_yesno_look_invalid_too() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_NUMBER,
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Fecha del claustro',
+						'type'  => ProcedureQuestions::TYPE_DATE,
+					),
+					array(
+						'key'      => 'q3',
+						'label'    => 'Acepta la visita',
+						'type'     => ProcedureQuestions::TYPE_YESNO,
+						'required' => true,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+		$respuestas    = array(
+			'q1' => '1,5',
+			'q2' => '2026-02-30',
+		);
+		$this->assertNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => $respuestas ) ) );
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+
+		$this->assertMatchesRegularExpression( '/<input type="number" class="prc-control is-invalid"[^>]*id="prc-q-q1"/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="date" class="prc-control is-invalid"[^>]*id="prc-q-q2"/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="checkbox" class="is-invalid" id="prc-q-q3"/', $html );
+	}
+
+	/**
+	 * Un envío rechazado no redirige: la página vuelve a pintarse con el
+	 * formulario apuntando al aviso, y el navegador lleva allí el foco.
+	 */
+	public function test_the_form_comes_back_to_the_notice() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--solicitud"[^>]*action="#' . Shell::NOTICE_ANCHOR . '"/', $this->pintar( $procedimiento ) );
 	}
 }

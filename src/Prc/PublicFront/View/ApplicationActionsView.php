@@ -40,7 +40,7 @@ final class ApplicationActionsView {
 		ob_start();
 		?>
 		<section class="prc-seccion" id="<?php echo esc_attr( WithdrawForm::ANCHOR ); ?>">
-			<h3 class="prc-seccion__titulo">Retirar la solicitud</h3>
+			<h2 class="prc-seccion__titulo">Retirar la solicitud</h2>
 			<?php echo Shell::notice( 'error', (string) $w['rejected'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php if ( ! empty( $w['can'] ) ) : ?>
 				<p>Si ya no quiere participar en este procedimiento, puede retirar la solicitud mientras el plazo siga abierto. Dejará de contar y, mientras haya plazo, podrá presentar otra nueva.</p>
@@ -116,7 +116,7 @@ final class ApplicationActionsView {
 					</ul>
 				<?php endif; ?>
 			<?php endif; ?>
-			<form class="prc-form prc-form--taller" method="post" action="" data-prc-once>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $procedure_id ); ?>" />
@@ -170,7 +170,7 @@ final class ApplicationActionsView {
 								<td class="prc-celda" data-rotulo="Motivo"><?php echo esc_html( '' !== (string) $fila['reason'] ? (string) $fila['reason'] : '—' ); ?></td>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php if ( ! empty( $fila['can'] ) ) : ?>
-										<form class="prc-acciones" method="post" action="">
+										<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 											<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, (int) $fila['id'] ), ProcedureEditor::nonce_name( $op, (int) $fila['id'] ), false ); ?>
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -246,7 +246,7 @@ final class ApplicationActionsView {
 		$hasta = (string) $a['late_until'];
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller prc-prorroga" method="post" action="">
+		<form class="prc-form prc-form--taller prc-prorroga" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php echo self::hidden( $m, $op, $id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<p class="prc-campo__ayuda">
 				<?php
@@ -311,7 +311,7 @@ final class ApplicationActionsView {
 		?>
 		<details class="prc-retirar">
 			<summary class="prc-revision__abrir">Retirar esta solicitud</summary>
-			<form class="prc-form prc-form--taller" method="post" action=""
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 				data-prc-confirm="<?php echo esc_attr( $pregunta ); ?>" data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
 				<?php echo self::hidden( $m, $op, $id ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<div class="prc-campo">

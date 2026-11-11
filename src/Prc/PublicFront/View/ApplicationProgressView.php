@@ -73,21 +73,23 @@ final class ApplicationProgressView {
 	/**
 	 * The notice of the screen, with its way to what is missing when there is one.
 	 *
-	 * @param array<string, string> $flash Tone, text and, optionally, a link.
+	 * Tras un envío rechazado por campos, el aviso es la lista de esos
+	 * campos, cada uno con su enlace ({@see FieldErrorView::summary()}).
+	 *
+	 * @param array<string, string> $flash   Tone, text and, optionally, a link.
+	 * @param array<string, string> $invalid Failing field code => what names it.
 	 * @return string
 	 */
-	public static function notice( array $flash ): string {
+	public static function notice( array $flash, array $invalid = array() ): string {
+		if ( 'error' === (string) ( $flash['tipo'] ?? '' ) && array() !== $invalid ) {
+			return FieldErrorView::summary( 'La solicitud no se ha guardado. Revise:', $invalid );
+		}
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {
-			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto, true );
 		}
-		$tonos = array(
-			'ok'    => 'success',
-			'aviso' => 'warning',
-			'error' => 'danger',
-		);
-		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+		return Shell::notice_open( (string) ( $flash['tipo'] ?? '' ), true )
 			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
 	}
 
@@ -156,8 +158,8 @@ final class ApplicationProgressView {
 			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
-			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
-			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
+			. '<button class="' . esc_attr( Assets::button_class( 'final' ) ) . '" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios de la solicitud' ) . '</button></div>';
 	}
 
 	/**

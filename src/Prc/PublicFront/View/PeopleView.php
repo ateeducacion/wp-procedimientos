@@ -41,7 +41,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
-			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
+			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Personas que participan</h2>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
@@ -253,7 +253,7 @@ final class PeopleView {
 				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
-				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
+				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de la persona' ); ?></button>
 			</div>
 		</form>
 		<?php
@@ -346,7 +346,7 @@ final class PeopleView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />

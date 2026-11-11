@@ -200,6 +200,8 @@ final class Workspace {
 				'subtitle'   => $todas
 					? 'Todos los procedimientos, de todos los ámbitos.'
 					: 'Solo los procedimientos de su ámbito: los que convocan otros ámbitos no salen aquí.',
+				// Quien llega aquí ya gestiona procedimientos (why_nothing()):
+				// el botón solo falta si no hay página del taller.
 				'can_create' => '' !== $crear,
 				'create_url' => $crear,
 			)

@@ -801,6 +801,7 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertSame( 2, substr_count( $html, 'data-prc-once' ), 'un solo envío por botón' );
 		$this->assertStringContainsString( '¿Duplicar «Red de prueba»?', $html );
 		$this->assertStringContainsString( '¿Duplicar «Otro programa»?', $html );
+		$this->assertSame( 2, substr_count( $html, '>Duplicar</button>' ), 'el botón dice lo que hace, con texto' );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_PROCEDURE . '" value="' . $otro . '"', $html );
 		$this->assertStringContainsString( 'action="' . esc_url( ProcedureEditor::url( $id ) ) . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html );

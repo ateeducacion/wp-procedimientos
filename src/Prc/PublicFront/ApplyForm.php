@@ -104,6 +104,13 @@ final class ApplyForm {
 	private static $rejected = '';
 
 	/**
+	 * The fields of the rejected submit that failed, and what names each one.
+	 *
+	 * @var array<string, string>
+	 */
+	private static $invalid = array();
+
+	/**
 	 * Register the shortcode and the POST handler.
 	 *
 	 * @return void
@@ -247,6 +254,7 @@ final class ApplyForm {
 			self::$rejected = '' !== $porque && $revisado['ok']
 				? $porque
 				: ApplicationInput::why( $revisado['errors'], (array) $spec['questions'] );
+			self::$invalid  = ApplicationInput::labels( $revisado['fields'], (array) $spec['questions'] );
 			return;
 		}
 
@@ -382,6 +390,9 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			// La vuelta se llama como la entrada del menú: según quién mira, no
+			// según a quién va el procedimiento.
+			'mine_label'      => Shell::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 			'help_url'        => Help::url( HelpContent::GUIDE_APPLY, 'rellenar-la-solicitud' ),
 			'applicant_type'  => '',
 			'state'           => '',
@@ -419,6 +430,8 @@ final class ApplyForm {
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
 			'values'          => array(),
+			// Los campos del envío rechazado que fallan, con lo que los nombra.
+			'invalid'         => self::$invalid,
 		);
 
 		if ( ! is_user_logged_in() ) {

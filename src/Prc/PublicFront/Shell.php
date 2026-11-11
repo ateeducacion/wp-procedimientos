@@ -84,6 +84,23 @@ final class Shell {
 	public const ARG_PROCEDURE = 'procedimiento';
 
 	/**
+	 * El `id` del aviso del resultado, al que vuelve la redirección tras un POST.
+	 */
+	public const NOTICE_ANCHOR = 'prc-aviso';
+
+	/**
+	 * El nombre de la sección de las solicitudes propias, por quién solicita.
+	 *
+	 * Uno solo y en todas partes: el menú, la miga de pan y el título.
+	 *
+	 * @var array<string, string>
+	 */
+	private const MINE_LABELS = array(
+		'centre'  => 'Solicitudes de mi centro',
+		'teacher' => 'Mis solicitudes',
+	);
+
+	/**
 	 * Hojas de WordPress que ninguna pantalla del aplicativo usa.
 	 *
 	 * @var string[]
@@ -103,6 +120,7 @@ final class Shell {
 	 */
 	public static function register(): void {
 		add_filter( 'body_class', array( self::class, 'body_class' ) );
+		add_filter( 'document_title_parts', array( self::class, 'document_title_parts' ) );
 		add_filter( 'show_admin_bar', array( self::class, 'show_admin_bar' ), 100 );
 		// Antes de pintar nada: en `template_redirect` aún se pueden mandar
 		// cabeceras, y dentro del shortcode ya no.
@@ -456,7 +474,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
+				'label' => self::mine_label( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -478,6 +496,34 @@ final class Shell {
 		}
 
 		return $out;
+	}
+
+	/**
+	 * The name of the section of one's own applications.
+	 *
+	 * @param bool $teacher Whether the person applies as a teacher.
+	 * @return string
+	 */
+	public static function mine_label( bool $teacher ): string {
+		return self::MINE_LABELS[ $teacher ? 'teacher' : 'centre' ];
+	}
+
+	/**
+	 * The document title of one's own section, named like its menu entry.
+	 *
+	 * La pestaña del navegador dice lo mismo que el menú y el H1: la sección
+	 * propia se llama según quién mira, y no como se llame la página de
+	 * WordPress —que en una instalación anterior puede seguir siendo otro
+	 * nombre—.
+	 *
+	 * @param array<string, string> $parts Title parts.
+	 * @return array<string, string>
+	 */
+	public static function document_title_parts( array $parts ): array {
+		if ( 'mine' === self::current_section() ) {
+			$parts['title'] = self::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) );
+		}
+		return $parts;
 	}
 
 	/**
@@ -709,7 +755,7 @@ final class Shell {
 	/**
 	 * The menu: the four entries of the bar and what hangs from each one.
 	 *
-	 * Las cuatro del sitio que se sustituye —Inicio, Sus solicitudes,
+	 * Las cuatro del sitio que se sustituye —Inicio, las solicitudes propias,
 	 * Administrar y Ayuda—, pero **de cada una solo se pinta lo que esa
 	 * persona puede abrir**, y la que se queda sin nada dentro no se pinta:
 	 * un desplegable vacío no dice nada y uno con un enlace al que no se
@@ -740,12 +786,10 @@ final class Shell {
 			$menu[] = self::entry( 'Inicio', $inicio, 'home' === $activa );
 		}
 
-		// Solicitudes presentadas por el centro o por la persona docente.
+		// Solicitudes presentadas por el centro o por la persona docente: una
+		// entrada directa, con el mismo nombre que el título de la pantalla.
 		if ( isset( $secciones['mine'] ) ) {
-			$suyas            = self::entry( 'Sus solicitudes' );
-			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Personales' : 'De su centro';
-			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
-			$menu[]           = $suyas;
+			$menu[] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
 		}
 
 		// «Administrar»: crear y gestionar. El editor no es una sección con
@@ -925,21 +969,42 @@ final class Shell {
 	/**
 	 * A one-line notice: what just happened, or why a screen is empty.
 	 *
-	 * @param string $type ok | aviso | error.
-	 * @param string $text What to say, plain text.
+	 * @param string $type   ok | aviso | error.
+	 * @param string $text   What to say, plain text.
+	 * @param bool   $anchor Whether it is the result a redirect comes back to.
 	 * @return string
 	 */
-	public static function notice( string $type, string $text ): string {
+	public static function notice( string $type, string $text, bool $anchor = false ): string {
 		if ( '' === $text ) {
 			return '';
 		}
+		return self::notice_open( $type, $anchor ) . esc_html( $text ) . '</p>';
+	}
+
+	/**
+	 * The opening tag of a notice, for the ones that carry a link inside.
+	 *
+	 * El error y la advertencia se anuncian en cuanto aparecen (`alert`); lo
+	 * hecho y la nota esperan a que el lector termine (`status`). El aviso del
+	 * resultado —el de la vuelta de un POST— lleva además el ancla a la que
+	 * llega la redirección ({@see leave()}) y admite el foco, para que quien
+	 * navega con teclado o lector de pantalla empiece a leer por él.
+	 *
+	 * @param string $type   ok | aviso | error.
+	 * @param bool   $anchor Whether it is the result a redirect comes back to.
+	 * @param string $tag    `p` for one line, `div` for a notice with a list inside.
+	 * @return string
+	 */
+	public static function notice_open( string $type, bool $anchor = false, string $tag = 'p' ): string {
 		$tonos = array(
 			'ok'    => 'success',
 			'aviso' => 'warning',
 			'error' => 'danger',
 		);
 		$tono  = $tonos[ $type ] ?? 'info';
-		return '<p class="' . esc_attr( Assets::alert_class( $tono ) ) . '">' . esc_html( $text ) . '</p>';
+		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
+		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
+		return '<' . ( 'div' === $tag ? 'div' : 'p' ) . ' class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}
 
 	/**
@@ -987,7 +1052,8 @@ final class Shell {
 	 * Where to go back to after saving something.
 	 *
 	 * `wp_get_referer()` devuelve `false` justo cuando el referer coincide con
-	 * la propia URL, que es siempre en un formulario con `action=""`. Se usa el
+	 * la propia URL, que es siempre en un formulario que se envía a sí mismo
+	 * (`action=""` o `action="#prc-aviso"`: el referer no lleva el fragmento). Se usa el
 	 * referer crudo y, si no hay, una página del aplicativo: nunca la portada
 	 * del sitio.
 	 *
@@ -1031,6 +1097,7 @@ final class Shell {
 	 * @throws ExitSignal Under the tests filter, instead of leaving.
 	 */
 	public static function leave( string $url = '' ): void {
+		$url = self::to_notice( $url );
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
 			throw new ExitSignal( $url ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- la URL viaja para que el test la lea; no se imprime.
 		}
@@ -1038,6 +1105,23 @@ final class Shell {
 			wp_safe_redirect( $url );
 		}
 		exit;
+	}
+
+	/**
+	 * The address to come back to, pointing at the notice when it carries one.
+	 *
+	 * Todas las pantallas dicen el resultado de un POST con `?aviso=`; la
+	 * vuelta lleva al aviso, salvo que ya lleve a otro sitio de la página.
+	 *
+	 * @param string $url Where to go.
+	 * @return string
+	 */
+	private static function to_notice( string $url ): string {
+		if ( '' === $url || false !== strpos( $url, '#' ) ) {
+			return $url;
+		}
+		$args = wp_parse_args( (string) wp_parse_url( $url, PHP_URL_QUERY ) );
+		return isset( $args['aviso'] ) ? $url . '#' . self::NOTICE_ANCHOR : $url;
 	}
 
 	/**

@@ -84,6 +84,14 @@ final class ProcedureAccess {
 	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
 
 	/**
+	 * Why {@see can_manage_procedures()} says no to creating a procedure.
+	 *
+	 * Las mismas palabras las pinte quien las pinte: el envío rechazado, la
+	 * pantalla de «nuevo procedimiento» y el sitio del botón en «Gestión».
+	 */
+	public const WHY_NOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
+
+	/**
 	 * What {@see can_view_application()} asks: only if it is the user's own, or
 	 * whether one of its documents may be downloaded.
 	 */

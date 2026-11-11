@@ -16,33 +16,31 @@ use Prc\PublicFront\Workspace;
 /**
  * Solo pinta: no lee la petición, no consulta y no decide.
  *
- * Es el calco del taller que se sustituye: título grande, banda con el
- * buscador a la izquierda y la leyenda de estados a la derecha, una pestaña
- * por curso, la línea de recuento y una tabla de dos niveles. Lo que cambia
- * respecto del original está anotado donde cambia.
+ * Nació como calco del taller que se sustituye —título grande, leyenda de
+ * ocho iconos y una tabla de once columnas en dos niveles— y se ha quedado con
+ * lo que se usa: el título corriente de las pantallas de dentro con «Nuevo
+ * procedimiento» a su lado, el buscador con su rótulo, la leyenda plegada, una
+ * pestaña por curso y seis columnas. El estado sale una vez, en su pastilla.
  */
 final class WorkspaceView {
 
 	/**
-	 * The legend, in the order it is read.
+	 * The legend, in the order it is read: what each state means.
 	 *
-	 * Las ocho entradas del original eran el cruce de un estado escrito a mano
-	 * con la fecha límite. Aquí el estado se deriva de las fechas y del cierre
-	 * manual de solicitudes, así que son
-	 * los siete estados del aplicativo; las dos entradas contradictorias de
-	 * aquella leyenda se han convertido en la octava, que es lo que siempre
-	 * fueron: un aviso de que los datos no cuadran.
+	 * El estado se deriva de las fechas y del cierre manual de solicitudes;
+	 * las dos entradas contradictorias de la leyenda original se convirtieron
+	 * en el aviso de que las fechas no cuadran.
 	 *
 	 * @var array<string, string>
 	 */
 	private const LEGEND = array(
-		ProcedureMetaKeys::STATE_OPEN      => 'Procedimiento <strong>abierto</strong>. Plazo de solicitud <strong>abierto</strong>.',
-		ProcedureMetaKeys::STATE_AMENDMENT => 'Procedimiento en <strong>subsanación</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_UPCOMING  => 'Procedimiento <strong>próximo</strong>. El plazo de solicitud todavía no ha empezado.',
-		ProcedureMetaKeys::STATE_CLOSED    => 'Procedimiento <strong>cerrado</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_RESOLVED  => 'Procedimiento <strong>resuelto</strong>, con su listado definitivo publicado.',
-		ProcedureMetaKeys::STATE_DRAFT     => 'Procedimiento <strong>en borrador</strong>: todavía no se ve en la portada.',
-		ProcedureMetaKeys::STATE_ARCHIVED  => 'Procedimiento <strong>histórico</strong>: se consulta y se exporta, pero ya no se edita.',
+		ProcedureMetaKeys::STATE_OPEN      => 'Plazo de solicitud <strong>abierto</strong>.',
+		ProcedureMetaKeys::STATE_AMENDMENT => 'Plazo de solicitud <strong>finalizado</strong>; el de subsanación, abierto.',
+		ProcedureMetaKeys::STATE_UPCOMING  => 'El plazo de solicitud todavía no ha empezado.',
+		ProcedureMetaKeys::STATE_CLOSED    => 'Plazo de solicitud <strong>finalizado</strong>.',
+		ProcedureMetaKeys::STATE_RESOLVED  => 'Con su listado definitivo publicado.',
+		ProcedureMetaKeys::STATE_DRAFT     => 'Todavía no se ve en la portada.',
+		ProcedureMetaKeys::STATE_ARCHIVED  => 'Se consulta y se exporta, pero ya no se edita.',
 	);
 
 	/**
@@ -63,21 +61,45 @@ final class WorkspaceView {
 
 		ob_start();
 		?>
+		<?php self::heading( $m ); ?>
 		<div class="prc-taller">
-			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Shell::notice escapa su texto. ?>
+			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'], true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Shell::notice escapa su texto. ?>
 			<?php self::band( $m ); ?>
 			<?php self::courses( $m ); ?>
 			<?php self::count( $m ); ?>
 			<?php self::table( $m ); ?>
 		</div>
 		<?php
-		// El título grande y centrado del original, no el `h1` de las pantallas
-		// de dentro: esta y la portada son las dos que lo llevan.
-		return Shell::render( 'Gestión de procedimientos', '', (string) ob_get_clean(), true );
+		// El título va en la pantalla, y no en Shell::render(), para llevar al
+		// lado la acción principal: el h1 corriente, no el de la portada.
+		return Shell::render( '', '', (string) ob_get_clean() );
 	}
 
 	/**
-	 * The header band: search on the left, legend on the right.
+	 * The heading, with «Nuevo procedimiento» next to it, or why there is none.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return void
+	 */
+	private static function heading( array $m ): void {
+		?>
+		<div class="prc-h1-fila">
+			<h1 class="prc-h1">Gestión de procedimientos</h1>
+			<?php if ( ! empty( $m['can_create'] ) ) : ?>
+				<p class="prc-acciones">
+					<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
+						<?php echo Shell::icon_plus(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- SVG literal. ?>
+						Nuevo procedimiento
+					</a>
+				</p>
+			<?php endif; ?>
+		</div>
+		<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
+		<?php
+	}
+
+	/**
+	 * The band under the heading: the search, and the legend folded next to it.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return void
@@ -85,21 +107,8 @@ final class WorkspaceView {
 	private static function band( array $m ): void {
 		?>
 		<div class="prc-taller__banda">
-			<div class="prc-taller__izq">
-				<?php self::search( $m ); ?>
-				<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
-				<?php if ( ! empty( $m['can_create'] ) ) : ?>
-					<p class="prc-acciones">
-						<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
-							<?php echo Shell::icon_plus(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- SVG literal. ?>
-							Nuevo procedimiento
-						</a>
-					</p>
-				<?php endif; ?>
-			</div>
-			<div class="prc-taller__der">
-				<?php self::legend(); ?>
-			</div>
+			<?php self::search( $m ); ?>
+			<?php self::legend(); ?>
 		</div>
 		<?php
 	}
@@ -124,19 +133,21 @@ final class WorkspaceView {
 			<?php if ( (int) $s['course'] > 0 ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( Workspace::VAR_COURSE ); ?>" value="<?php echo esc_attr( (string) $s['course'] ); ?>" />
 			<?php endif; ?>
-			<label class="screen-reader-text" for="prc-buscar">Buscar en la tabla</label>
-			<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
-				name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
-				value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
-			<label class="screen-reader-text" for="prc-estado">Estado</label>
-			<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
-				<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
-					<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
-						<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
-					</option>
-				<?php endforeach; ?>
-			</select>
-			<button class="prc-buscador__boton" type="submit">Buscar en la tabla</button>
+			<label class="prc-buscador__rotulo" for="prc-buscar">Buscar por título, número o ámbito</label>
+			<span class="prc-buscador__fila">
+				<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
+					name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
+					value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
+				<label class="screen-reader-text" for="prc-estado">Estado</label>
+				<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
+					<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
+						<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
+							<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Buscar</button>
+			</span>
 			<?php if ( '' !== (string) $m['reset_url'] ) : ?>
 				<a class="prc-buscador__quitar" href="<?php echo esc_url( (string) $m['reset_url'] ); ?>">Quitar los filtros</a>
 			<?php endif; ?>
@@ -145,18 +156,18 @@ final class WorkspaceView {
 	}
 
 	/**
-	 * The legend of states: what each icon of the table means.
+	 * The legend of states, folded: each pill and what it means.
 	 *
 	 * @return void
 	 */
 	private static function legend(): void {
-		$iconos = Workspace::state_icons();
+		$rotulos = Workspace::state_filters();
 		?>
-		<div class="prc-leyenda">
+		<details class="prc-leyenda"><summary>¿Qué significa cada estado?</summary>
 			<ul class="prc-leyenda__lista">
 				<?php foreach ( self::LEGEND as $estado => $frase ) : ?>
 					<li class="prc-leyenda__item">
-						<?php self::icon( (string) ( $iconos[ $estado ] ?? '' ), $estado ); ?>
+						<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) ( $rotulos[ $estado ] ?? $estado ) ); ?></span>
 						<span><?php echo wp_kses( $frase, array( 'strong' => array() ) ); ?></span>
 					</li>
 				<?php endforeach; ?>
@@ -165,7 +176,7 @@ final class WorkspaceView {
 					<span><?php echo wp_kses( self::LEGEND_WARNING, array( 'strong' => array() ) ); ?></span>
 				</li>
 			</ul>
-		</div>
+		</details>
 		<?php
 	}
 
@@ -182,9 +193,6 @@ final class WorkspaceView {
 	 * @return void
 	 */
 	private static function icon( string $glifo, string $estado, string $rotulo = '' ): void {
-		if ( '' === $glifo ) {
-			return;
-		}
 		$clases = 'material-symbols-outlined prc-icono-estado prc-icono-estado--' . sanitize_html_class( $estado );
 		if ( '' === $rotulo ) {
 			printf( '<span class="%s" aria-hidden="true">%s</span>', esc_attr( $clases ), esc_html( $glifo ) );
@@ -286,26 +294,13 @@ final class WorkspaceView {
 					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos' ); ?>
 				</caption>
 				<thead>
-					<tr class="prc-tabla__grupos">
-						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
-						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
-					</tr>
 					<tr>
-						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
-							<span class="material-symbols-outlined" aria-hidden="true">image</span>
-							<span class="screen-reader-text">Color de cabecera</span>
-						</th>
-						<th scope="col" class="prc-th--a prc-th--centro">#</th>
-						<th scope="col" class="prc-th--a">Título</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Dirigido a</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Estado</th>
-						<th scope="col" class="prc-th--a">Creado</th>
-						<th scope="col" class="prc-th--b">Límite<br />solicitud</th>
-						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
+						<th scope="col" class="prc-th--titulo">Título</th>
+						<th scope="col">Estado</th>
+						<th scope="col">Plazo</th>
+						<th scope="col">Dirigido a</th>
+						<th scope="col">Solicitudes</th>
+						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -321,40 +316,26 @@ final class WorkspaceView {
 	/**
 	 * One row of the table.
 	 *
+	 * El número y los ámbitos van bajo el título, en pequeño: el número es lo
+	 * que se copia de un correo y lo que encuentra el buscador.
+	 *
 	 * @param array<string, mixed> $row One row of the model.
 	 * @return void
 	 */
 	private static function row( array $row ): void {
 		$estado = (string) $row['state'];
 		$aviso  = (string) $row['warning'];
-		$mirar  = 'publish' === (string) $row['status']
-			? 'Ver la ficha pública'
-			: 'Previsualizar la ficha, que está en borrador';
+		$meta   = implode( ' · ', array_merge( array( 'N.º ' . (string) $row['id'] ), array_map( 'strval', (array) $row['areas'] ) ) );
 		?>
 		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>">
-			<td class="prc-celda-color" data-rotulo="Color">
-				<span class="prc-mini-color" style="background-color:<?php echo esc_attr( (string) $row['color'] ); ?>"></span>
-			</td>
-			<th scope="row" class="prc-celda-num" data-rotulo="Número">
-				<?php self::icon( (string) ( Workspace::state_icons()[ $estado ] ?? '' ), $estado, (string) $row['state_label'] ); ?>
-				<br /><?php echo esc_html( (string) $row['id'] ); ?>
-			</th>
-			<td class="prc-celda-titulo" data-rotulo="Título">
+			<th scope="row" class="prc-celda-titulo" data-rotulo="Título">
 				<?php if ( '' !== (string) $row['url'] ) : ?>
-					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento">
-						<?php echo esc_html( (string) $row['title'] ); ?>
-					</a>
+					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento"><?php echo esc_html( (string) $row['title'] ); ?></a>
 				<?php else : ?>
 					<?php echo esc_html( (string) $row['title'] ); ?>
 				<?php endif; ?>
-			</td>
-			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
-				<span class="material-symbols-outlined prc-icono-azul" aria-hidden="true"><?php echo esc_html( ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) $row['audience'] ? 'group' : 'home_work' ); ?></span>
-				<br /><?php echo esc_html( (string) $row['audience_label'] ); ?>
-				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
-					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
-				<?php endif; ?>
-			</td>
+				<span class="prc-celda-titulo__meta"><?php echo esc_html( $meta ); ?></span>
+			</th>
 			<td class="prc-celda-estado" data-rotulo="Estado">
 				<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span>
 				<?php if ( ! empty( $row['archived'] ) && ProcedureMetaKeys::STATE_ARCHIVED !== $estado ) : ?>
@@ -368,30 +349,46 @@ final class WorkspaceView {
 					<br /><em class="prc-state__curso"><?php echo esc_html( implode( ' · ', (array) $row['courses'] ) ); ?></em>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-fecha" data-rotulo="Creado"><?php echo esc_html( (string) $row['created'] ); ?></td>
-			<td class="prc-celda-fecha" data-rotulo="Límite de solicitud"><?php echo esc_html( (string) $row['closes'] ); ?></td>
-			<td class="prc-celda-ambitos" data-rotulo="Gestiona">
-				<?php if ( array() !== (array) $row['areas'] ) : ?>
-					<ol class="prc-ambitos">
-						<?php foreach ( (array) $row['areas'] as $nombre ) : ?>
-							<li><?php echo esc_html( (string) $nombre ); ?></li>
-						<?php endforeach; ?>
-					</ol>
+			<td class="prc-celda-fecha" data-rotulo="Plazo"><?php echo esc_html( '' !== (string) $row['dates'] ? (string) $row['dates'] : 'Sin plazo' ); ?></td>
+			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
+				<?php echo esc_html( (string) $row['audience_label'] ); ?>
+				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
+					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Detalles">
-				<?php self::action( (string) $row['view_url'], 'visibility', $mirar ); ?>
+			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
+				<?php self::applications( $row ); ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Solicitudes">
-				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
-				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
-			</td>
-			<td class="prc-celda-accion" data-rotulo="Duplicar">
-				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
-					<?php self::duplicate( $row ); ?>
-				<?php endif; ?>
+			<td class="prc-celda-accion" data-rotulo="Acciones">
+				<div class="prc-acciones">
+					<?php if ( '' !== (string) $row['view_url'] ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
+							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
+					<?php endif; ?>
+					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+						<?php self::duplicate( $row ); ?>
+					<?php endif; ?>
+				</div>
 			</td>
 		</tr>
+		<?php
+	}
+
+	/**
+	 * How many applications, as the link to them.
+	 *
+	 * @param array<string, mixed> $row One row of the model.
+	 * @return void
+	 */
+	private static function applications( array $row ): void {
+		$n     = (int) $row['applications'];
+		$texto = 1 === $n ? '1 solicitud' : $n . ' solicitudes';
+		if ( '' === (string) $row['applications_url'] ) {
+			echo esc_html( $texto );
+			return;
+		}
+		?>
+		<a href="<?php echo esc_url( (string) $row['applications_url'] ); ?>"><?php echo esc_html( $texto ); ?></a>
 		<?php
 	}
 
@@ -414,31 +411,8 @@ final class WorkspaceView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
-				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-				<span class="screen-reader-text">Duplicar este procedimiento</span>
-			</button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" title="Duplicar este procedimiento">Duplicar</button>
 		</form>
-		<?php
-	}
-
-	/**
-	 * One icon action of a cell: el icono es lo único que dice qué hace.
-	 *
-	 * @param string $url    Where it goes; empty paints nothing.
-	 * @param string $glifo  Material Symbols ligature.
-	 * @param string $rotulo What it does.
-	 * @return void
-	 */
-	private static function action( string $url, string $glifo, string $rotulo ): void {
-		if ( '' === $url ) {
-			return;
-		}
-		?>
-		<a class="prc-accion" href="<?php echo esc_url( $url ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
-			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $glifo ); ?></span>
-			<span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
-		</a>
 		<?php
 	}
 }

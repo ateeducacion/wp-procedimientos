@@ -38,12 +38,12 @@ const USERS = {
 const SCENES = [
 	{ name: 'Catálogo público', who: '', go: '/procedimientos/' },
 	{ name: 'Ficha pública', who: '', go: '/?post_type=prc_procedure&p={ID}' },
-	{ name: 'Mis procedimientos', who: 'gestion', go: '/gestion-de-procedimientos/' },
+	{ name: 'Gestión de procedimientos', who: 'gestion', go: '/gestion-de-procedimientos/' },
 	{ name: 'Edición: datos', who: 'gestion', go: '/editar-procedimiento/?procedimiento={ID}&panel=datos' },
 	{ name: 'Edición: preguntas', who: 'gestion', go: '/editar-procedimiento/?procedimiento={ID}&panel=preguntas' },
 	{ name: 'Edición: solicitudes', who: 'gestion', go: '/editar-procedimiento/?procedimiento={ID}&panel=solicitudes' },
 	{ name: 'Solicitud de un centro', who: 'direccion', go: '/solicitud/?procedimiento={ID}' },
-	{ name: 'Mi centro', who: 'direccion', go: '/mi-centro/' },
+	{ name: 'Solicitudes de mi centro', who: 'direccion', go: '/mi-centro/' },
 	{ name: 'Listado del escritorio', who: 'admin', go: '/wp-admin/edit.php?post_type=prc_procedure' },
 	{ name: 'Solicitudes del escritorio', who: 'admin', go: '/wp-admin/edit.php?post_type=prc_application' },
 ];
@@ -225,7 +225,7 @@ async function measure( label ) {
 		/data-estado="open"[^>]*data-procedimiento="(\d+)"|data-procedimiento="(\d+)"[^>]*data-estado="open"/
 	)?.slice( 1 ).find( Boolean );
 	if ( ! id ) {
-		throw new Error( 'No encuentro ningún procedimiento abierto en «Mis procedimientos»: ¿está provisionado el entorno?' );
+		throw new Error( 'No encuentro ningún procedimiento abierto en «Gestión de procedimientos»: ¿está provisionado el entorno?' );
 	}
 
 	// Cada informe se reconoce por su URI, así que se vacía el directorio antes.

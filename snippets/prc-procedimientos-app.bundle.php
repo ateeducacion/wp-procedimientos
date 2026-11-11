@@ -2820,6 +2820,10 @@ final class ApplicationInput {
 
 
 
+
+
+
+
 	public static function validate( array $raw, array $procedure ): array {
 		$errors  = array();
 		$teacher = 'teacher' === ( $procedure['applicant_type'] ?? '' );
@@ -2850,6 +2854,7 @@ final class ApplicationInput {
 		return array(
 			'ok'     => array() === $errors,
 			'errors' => $errors,
+			'fields' => array_values( array_merge( array_diff( $errors, $coordinacion['errors'] ), $coordinacion['fields'] ) ),
 			'data'   => array(
 				'position'    => $position,
 				'coordinator' => $coordinators,
@@ -2881,6 +2886,7 @@ final class ApplicationInput {
 			);
 		}
 		$errors = array();
+		$fields = array();
 		$data   = array();
 		for ( $i = 0; $i < $count; ++$i ) {
 			$fila        = is_array( $filas[ $i ] ?? null ) ? $filas[ $i ] : array();
@@ -2899,12 +2905,14 @@ final class ApplicationInput {
 			foreach ( $checks as $error => $ok ) {
 				if ( ! $ok ) {
 					$errors[] = $error;
+					$fields[] = $error . ':' . $i;
 				}
 			}
 			$data[] = $coordinator;
 		}
 		return array(
 			'errors' => $errors,
+			'fields' => $fields,
 			'data'   => $data,
 		);
 	}
@@ -2917,17 +2925,7 @@ final class ApplicationInput {
 
 
 	public static function why( array $errors, array $questions = array() ): string {
-		$textos = array(
-			'position'            => 'el cargo',
-			'coordinator_name'    => 'el nombre de cada persona coordinadora',
-			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
-			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
-			'coordinator_email'   => 'el correo de cada persona coordinadora',
-			'accept'              => 'la aceptación de los compromisos',
-		);
-		foreach ( $questions as $pregunta ) {
-			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
-		}
+		$textos = self::texts( $questions );
 
 		$faltan = array();
 		foreach ( $errors as $error ) {
@@ -2945,6 +2943,52 @@ final class ApplicationInput {
 
 		$ultimo = array_pop( $faltan );
 		return 'Revise ' . implode( ', ', $faltan ) . ' y ' . $ultimo . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function labels( array $fields, array $questions = array() ): array {
+		$textos = self::texts( $questions );
+		$out    = array();
+		foreach ( $fields as $field ) {
+			$partes = explode( ':', (string) $field, 2 );
+			$fila   = 0 === strpos( $partes[0], 'coordinator_' ) && isset( $partes[1] ) ? (int) $partes[1] + 1 : 0;
+			$texto  = (string) ( $textos[ $fila > 0 ? $partes[0] : (string) $field ] ?? '' );
+			if ( '' !== $texto ) {
+				$out[ (string) $field ] = $fila > 0 ? str_replace( 'cada persona coordinadora', 'la persona coordinadora ' . $fila, $texto ) : $texto;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function texts( array $questions ): array {
+		$textos = array(
+			'position'            => 'el cargo',
+			'coordinator_name'    => 'el nombre de cada persona coordinadora',
+			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
+			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
+			'coordinator_email'   => 'el correo de cada persona coordinadora',
+			'accept'              => 'la aceptación de los compromisos',
+		);
+		foreach ( $questions as $pregunta ) {
+			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
+		}
+		return $textos;
 	}
 
 
@@ -6439,6 +6483,14 @@ final class ProcedureAccess {
 
 
 	public const CAP_VIEW_APPLICATIONS = 'prc_view_applications';
+
+
+
+
+
+
+
+	public const WHY_NOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
 
 
 
@@ -10120,13 +10172,20 @@ final class Assets {
 
 
 
+
+
+
 	public static function button_class( $variant = false ): string {
-		if ( 'danger' === $variant ) {
-			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		$clases = array(
+			'danger' => 'prc-btn prc-btn-borrar btn btn-outline-danger',
+			'final'  => 'prc-btn prc-btn-primary prc-btn-final btn btn-primary btn-lg',
+		);
+		if ( is_string( $variant ) && isset( $clases[ $variant ] ) ) {
+			return $clases[ $variant ];
 		}
 		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
-			: 'prc-btn btn btn-light';
+			: 'prc-btn prc-btn-sec btn btn-outline-secondary';
 	}
 
 
@@ -10291,6 +10350,23 @@ final class Shell {
 
 
 
+	public const NOTICE_ANCHOR = 'prc-aviso';
+
+
+
+
+
+
+
+
+	private const MINE_LABELS = array(
+		'centre'  => 'Solicitudes de mi centro',
+		'teacher' => 'Mis solicitudes',
+	);
+
+
+
+
 
 
 	private const CORE_ASSETS = array(
@@ -10308,6 +10384,7 @@ final class Shell {
 
 	public static function register(): void {
 		add_filter( 'body_class', array( self::class, 'body_class' ) );
+		add_filter( 'document_title_parts', array( self::class, 'document_title_parts' ) );
 		add_filter( 'show_admin_bar', array( self::class, 'show_admin_bar' ), 100 );
 
 
@@ -10661,7 +10738,7 @@ final class Shell {
 		}
 		if ( ProcedureAccess::can_apply( $user_id ) ) {
 			$out['mine'] = array(
-				'label' => user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Mis solicitudes' : 'Mi centro',
+				'label' => self::mine_label( user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 				'url'   => self::url( 'mine' ),
 			);
 		}
@@ -10683,6 +10760,34 @@ final class Shell {
 		}
 
 		return $out;
+	}
+
+
+
+
+
+
+
+	public static function mine_label( bool $teacher ): string {
+		return self::MINE_LABELS[ $teacher ? 'teacher' : 'centre' ];
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function document_title_parts( array $parts ): array {
+		if ( 'mine' === self::current_section() ) {
+			$parts['title'] = self::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) );
+		}
+		return $parts;
 	}
 
 
@@ -10946,11 +11051,9 @@ final class Shell {
 		}
 
 
+
 		if ( isset( $secciones['mine'] ) ) {
-			$suyas            = self::entry( 'Sus solicitudes' );
-			$rotulo           = user_can( $user_id, ProcedureAccess::CAP_APPLY_AS_TEACHER ) ? 'Personales' : 'De su centro';
-			$suyas['items'][] = self::entry( $rotulo, $secciones['mine']['url'], 'mine' === $activa );
-			$menu[]           = $suyas;
+			$menu[] = self::entry( $secciones['mine']['label'], $secciones['mine']['url'], 'mine' === $activa );
 		}
 
 
@@ -11134,17 +11237,38 @@ final class Shell {
 
 
 
-	public static function notice( string $type, string $text ): string {
+
+	public static function notice( string $type, string $text, bool $anchor = false ): string {
 		if ( '' === $text ) {
 			return '';
 		}
+		return self::notice_open( $type, $anchor ) . esc_html( $text ) . '</p>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function notice_open( string $type, bool $anchor = false, string $tag = 'p' ): string {
 		$tonos = array(
 			'ok'    => 'success',
 			'aviso' => 'warning',
 			'error' => 'danger',
 		);
 		$tono  = $tonos[ $type ] ?? 'info';
-		return '<p class="' . esc_attr( Assets::alert_class( $tono ) ) . '">' . esc_html( $text ) . '</p>';
+		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
+		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
+		return '<' . ( 'div' === $tag ? 'div' : 'p' ) . ' class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}
 
 
@@ -11199,6 +11323,7 @@ final class Shell {
 
 
 
+
 	public static function back_url( string $section = 'workspace' ): string {
 		$destino = wp_validate_redirect( (string) wp_get_raw_referer(), '' );
 		if ( '' !== $destino ) {
@@ -11236,6 +11361,7 @@ final class Shell {
 
 
 	public static function leave( string $url = '' ): void {
+		$url = self::to_notice( $url );
 		if ( apply_filters( 'prc_exit_throws', false, $url ) ) {
 			throw new ExitSignal( $url );
 		}
@@ -11243,6 +11369,23 @@ final class Shell {
 			wp_safe_redirect( $url );
 		}
 		exit;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function to_notice( string $url ): string {
+		if ( '' === $url || false !== strpos( $url, '#' ) ) {
+			return $url;
+		}
+		$args = wp_parse_args( (string) wp_parse_url( $url, PHP_URL_QUERY ) );
+		return isset( $args['aviso'] ) ? $url . '#' . self::NOTICE_ANCHOR : $url;
 	}
 
 
@@ -11764,6 +11907,110 @@ final class PanelParts {
 			return $fecha;
 		}
 		return (string) wp_date( 'j \d\e F \d\e Y', $marca );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\FieldErrorView', false ) ) {
+final class FieldErrorView {
+
+
+
+
+
+
+
+	public static function anchor( string $code ): string {
+		$partes = explode( ':', $code, 2 );
+		if ( 'answer' === $partes[0] ) {
+			return 'prc-q-' . ( $partes[1] ?? '' );
+		}
+		if ( 0 === strpos( $partes[0], 'coordinator_' ) ) {
+			return 'prc-coordinator-' . substr( $partes[0], strlen( 'coordinator_' ) ) . '-' . (int) ( $partes[1] ?? 0 );
+		}
+		return 'prc-' . $partes[0];
+	}
+
+
+
+
+
+
+
+
+
+	public static function attrs( array $invalid, string $code, string $help_id = '' ): string {
+		$falla  = isset( $invalid[ $code ] );
+		$quien  = trim( $help_id . ( $falla ? ' ' . self::anchor( $code ) . '-error' : '' ) );
+		$atribs = '' !== $quien ? ' aria-describedby="' . esc_attr( $quien ) . '"' : '';
+		return $atribs . ( $falla ? ' aria-invalid="true"' : '' );
+	}
+
+
+
+
+
+
+
+
+	public static function css( array $invalid, string $code ): string {
+		return isset( $invalid[ $code ] ) ? ' is-invalid' : '';
+	}
+
+
+
+
+
+
+
+
+	public static function feedback( array $invalid, string $code ): string {
+		if ( ! isset( $invalid[ $code ] ) ) {
+			return '';
+		}
+		return '<p class="invalid-feedback d-block" id="' . esc_attr( self::anchor( $code ) . '-error' ) . '">'
+			. esc_html( 'Revise ' . $invalid[ $code ] . '.' ) . '</p>';
+	}
+
+
+
+
+
+
+
+
+	public static function summary( string $intro, array $invalid ): string {
+		$items = '';
+		foreach ( $invalid as $code => $rotulo ) {
+			$items .= '<li><a href="#' . esc_attr( self::anchor( (string) $code ) ) . '">' . esc_html( (string) $rotulo ) . '</a></li>';
+		}
+		return Shell::notice_open( 'error', true, 'div' )
+			. '<p>' . esc_html( $intro ) . '</p><ul class="prc-aviso__campos">' . $items . '</ul></div>';
 	}
 }
 
@@ -17039,7 +17286,7 @@ final class ApplicationActionsPanel {
 		'restaurada'       => 'Solicitud restaurada: vuelve a la tabla como estaba.',
 		'prorroga'         => 'Prórroga guardada: el centro puede editar esa solicitud entera hasta ese día, incluido.',
 		'prorroga-quitada' => 'Prórroga quitada: la solicitud vuelve a seguir el plazo general.',
-		'en-nombre'        => 'Solicitud presentada en nombre del centro, vacía y en «Presentada». El centro la ve en «Mi centro» y la completa con su formulario hasta el último día de la prórroga. El aplicativo no le avisa por correo: el catálogo no trae su dirección.',
+		'en-nombre'        => 'Solicitud presentada en nombre del centro, vacía y en «Presentada». El centro la ve en «Solicitudes de mi centro» y la completa con su formulario hasta el último día de la prórroga. El aplicativo no le avisa por correo: el catálogo no trae su dirección.',
 	);
 
 
@@ -17380,6 +17627,7 @@ final class ApplicationActionsPanel {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
 
 
@@ -17495,6 +17743,7 @@ final class HomeView {
 
 
 
+
 	private static function card( array $row ): void {
 		?>
 		<li class="prc-proc">
@@ -17505,7 +17754,7 @@ final class HomeView {
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
-				<p class="prc-proc__estado"><?php echo esc_html( (string) $row['state_label'] ); ?></p>
+				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>
 			<?php if ( '' !== (string) $row['deadline'] ) : ?>
 				<p class="prc-proc__plazo<?php echo empty( $row['urgent'] ) ? '' : ' prc-proc__plazo--urgente'; ?>">
@@ -18261,7 +18510,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a></strong> (o <strong>«Personales»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -18269,7 +18518,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => '«Mi centro» con la fila de la solicitud en estado «Presentada»',
+						'caption' => '«Solicitudes de mi centro» con la fila de la solicitud en estado «Presentada»',
 						'image'   => '',
 					),
 				),
@@ -18279,7 +18528,7 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
 				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
@@ -18295,17 +18544,17 @@ final class HelpContent {
 				'id'    => 'modificar-la-solicitud',
 				'level' => 2,
 				'title' => 'Modifique la solicitud',
-				'html'  => '<p>Mientras el plazo esté abierto, entre en <strong>«Sus solicitudes» → <a href="%mine%">«De su centro»</a> → «Ver la solicitud»</strong>, cambie lo que necesite y pulse <strong>«Guardar los cambios»</strong>. Recibirá un correo de que la solicitud se ha modificado. Cualquier persona del equipo directivo del mismo centro ve y edita la misma solicitud.</p>',
+				'html'  => '<p>Mientras el plazo esté abierto, entre en <strong><a href="%mine%">«Solicitudes de mi centro»</a> → «Ver la solicitud»</strong>, cambie lo que necesite y pulse <strong>«Guardar los cambios»</strong>. Recibirá un correo de que la solicitud se ha modificado. Cualquier persona del equipo directivo del mismo centro ve y edita la misma solicitud.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'subsanar',
 				'level' => 2,
 				'title' => 'Subsane si se lo piden',
-				'html'  => '<p>Si quien revisa le pide subsanar, la solicitud aparece como <strong>«A subsanar»</strong> con una nota que explica qué falta, y en «Mi centro» un aviso amarillo: «1 solicitud tiene la subsanación abierta hasta el …». Pulse <strong>«Ir a la solicitud»</strong>, corrija y guarde <strong>dentro del plazo de subsanación</strong>. Fuera de ese plazo ya no se puede editar.</p>',
+				'html'  => '<p>Si quien revisa le pide subsanar, la solicitud aparece como <strong>«A subsanar»</strong> con una nota que explica qué falta, y en «Solicitudes de mi centro» un aviso amarillo: «1 solicitud tiene la subsanación abierta hasta el …». Pulse <strong>«Ir a la solicitud»</strong>, corrija y guarde <strong>dentro del plazo de subsanación</strong>. Fuera de ese plazo ya no se puede editar.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'aviso de subsanación en «Mi centro» y la nota de revisión en la fila',
+						'caption' => 'aviso de subsanación en «Solicitudes de mi centro» y la nota de revisión en la fila',
 						'image'   => '',
 					),
 				),
@@ -18333,7 +18582,7 @@ final class HelpContent {
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -18354,7 +18603,7 @@ final class HelpContent {
 				'id'    => 'su-lista',
 				'level' => 2,
 				'title' => 'Su lista: «Gestión de procedimientos»',
-				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento, a quién se dirige, su estado, la fecha límite de solicitud y tres columnas de acciones: <strong>Detalles</strong> (abre el taller), <strong>Solicitudes</strong> y <strong>Duplicar</strong>. Al lado, la leyenda de los iconos de estado; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
+				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, cuántas <strong>solicitudes</strong> tiene (abre la lista) y las <strong>acciones</strong>: «Ver la ficha» y «Duplicar». Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
 				'shots' => array(
 					array(
 						'caption' => '«Gestión de procedimientos» con la tabla y la leyenda de estados',
@@ -18366,13 +18615,13 @@ final class HelpContent {
 				'id'    => 'crear-o-duplicar',
 				'level' => 2,
 				'title' => 'Cree uno nuevo o duplique uno anterior',
-				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong> en su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El <strong>Formato Express</strong> pide solo lo mínimo:</p>'
-					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Mis procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha) y <strong>Color de cabecera</strong>.</li></ul>'
+				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong>, junto al título de su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El alta pide solo lo mínimo:</p>'
+					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Gestión de procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha), <strong>Otros correos de contacto</strong>, si quiere, y <strong>Color de cabecera</strong>, que ya viene elegido.</li></ul>'
 					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
-					. '<p><strong>Duplicar</strong>: el icono «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+					. '<p><strong>Duplicar</strong>: el botón «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pantalla «Crear un procedimiento», Formato Express',
+						'caption' => 'pantalla «Crear un procedimiento»',
 						'image'   => '',
 					),
 				),
@@ -18381,7 +18630,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -18457,7 +18706,7 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-consulta',
 				'level' => 3,
-				'title' => 'Consulta',
+				'title' => 'Acceso de consulta',
 				'html'  => '<p>Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
 				'shots' => array(),
 			),
@@ -18515,7 +18764,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(
@@ -18564,7 +18813,7 @@ final class HelpContent {
 				'id'    => 'como-se-que-esta-presentada',
 				'level' => 3,
 				'title' => '¿Cómo sé que mi solicitud ha quedado presentada?',
-				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Sus solicitudes» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
+				'html'  => '<p>Tiene tres pruebas: la línea «Presentada el … a las …» en la propia solicitud, con su justificante («Ver e imprimir el justificante»); el correo «Solicitud presentada n.º …: …», que es su justificante; y la fila en «Solicitudes de mi centro» con el estado «Presentada». Si tiene las tres, está presentada. Si además pone «Incompleta», está presentada pero le falta algo: lo dice al lado.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -18578,7 +18827,7 @@ final class HelpContent {
 				'id'    => 'no-he-dado-de-alta-a-nadie',
 				'level' => 3,
 				'title' => 'He presentado la solicitud y no he dado de alta a nadie',
-				'html'  => '<p>Es normal: la lista se rellena <strong>después</strong> de presentar. Vuelva a la solicitud («Sus solicitudes» → «Ver la solicitud») y use «Dar de alta a una persona».</p>',
+				'html'  => '<p>Es normal: la lista se rellena <strong>después</strong> de presentar. Vuelva a la solicitud («Solicitudes de mi centro» → «Ver la solicitud») y use «Dar de alta a una persona».</p>',
 				'shots' => array(),
 			),
 			array(
@@ -19146,7 +19395,7 @@ final class ProcedureChrome {
 			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
 				<section class="prc-seccion" aria-labelledby="prc-delivery-dates">
 					<h2 id="prc-delivery-dates">Entregas de documentación</h2>
-					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Mi centro», dentro de cada plazo.</p>
+					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Solicitudes de mi centro», dentro de cada plazo.</p>
 					<ul>
 						<?php foreach ( $m['deliveries'] as $delivery ) : ?>
 							<li><strong><?php echo esc_html( (string) $delivery['label'] ); ?></strong>: <?php echo esc_html( DateRange::of( (string) $delivery['opens_at'], (string) $delivery['closes_at'] ) ); ?></li>
@@ -19986,7 +20235,7 @@ final class ProcedureView {
 		return array(
 			'iso'      => $fin->format( 'c' ),
 
-			'dias'     => sprintf( '%03d', intdiv( $queda, DAY_IN_SECONDS ) ),
+			'dias'     => (string) intdiv( $queda, DAY_IN_SECONDS ),
 			'horas'    => sprintf( '%02d', intdiv( $queda % DAY_IN_SECONDS, HOUR_IN_SECONDS ) ),
 			'minutos'  => sprintf( '%02d', intdiv( $queda % HOUR_IN_SECONDS, MINUTE_IN_SECONDS ) ),
 			'segundos' => sprintf( '%02d', $queda % MINUTE_IN_SECONDS ),
@@ -20367,6 +20616,7 @@ use Prc\PublicFront\Workspace;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\View\WorkspaceView', false ) ) {
 final class WorkspaceView {
 
@@ -20379,17 +20629,14 @@ final class WorkspaceView {
 
 
 
-
-
-
 	private const LEGEND = array(
-		ProcedureMetaKeys::STATE_OPEN      => 'Procedimiento <strong>abierto</strong>. Plazo de solicitud <strong>abierto</strong>.',
-		ProcedureMetaKeys::STATE_AMENDMENT => 'Procedimiento en <strong>subsanación</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_UPCOMING  => 'Procedimiento <strong>próximo</strong>. El plazo de solicitud todavía no ha empezado.',
-		ProcedureMetaKeys::STATE_CLOSED    => 'Procedimiento <strong>cerrado</strong>. Plazo de solicitud <strong>finalizado</strong>.',
-		ProcedureMetaKeys::STATE_RESOLVED  => 'Procedimiento <strong>resuelto</strong>, con su listado definitivo publicado.',
-		ProcedureMetaKeys::STATE_DRAFT     => 'Procedimiento <strong>en borrador</strong>: todavía no se ve en la portada.',
-		ProcedureMetaKeys::STATE_ARCHIVED  => 'Procedimiento <strong>histórico</strong>: se consulta y se exporta, pero ya no se edita.',
+		ProcedureMetaKeys::STATE_OPEN      => 'Plazo de solicitud <strong>abierto</strong>.',
+		ProcedureMetaKeys::STATE_AMENDMENT => 'Plazo de solicitud <strong>finalizado</strong>; el de subsanación, abierto.',
+		ProcedureMetaKeys::STATE_UPCOMING  => 'El plazo de solicitud todavía no ha empezado.',
+		ProcedureMetaKeys::STATE_CLOSED    => 'Plazo de solicitud <strong>finalizado</strong>.',
+		ProcedureMetaKeys::STATE_RESOLVED  => 'Con su listado definitivo publicado.',
+		ProcedureMetaKeys::STATE_DRAFT     => 'Todavía no se ve en la portada.',
+		ProcedureMetaKeys::STATE_ARCHIVED  => 'Se consulta y se exporta, pero ya no se edita.',
 	);
 
 
@@ -20410,8 +20657,9 @@ final class WorkspaceView {
 
 		ob_start();
 		?>
+		<?php self::heading( $m ); ?>
 		<div class="prc-taller">
-			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'] );?>
+			<?php echo Shell::notice( (string) $m['notice']['type'], (string) $m['notice']['text'], true );?>
 			<?php self::band( $m ); ?>
 			<?php self::courses( $m ); ?>
 			<?php self::count( $m ); ?>
@@ -20420,7 +20668,30 @@ final class WorkspaceView {
 		<?php
 
 
-		return Shell::render( 'Gestión de procedimientos', '', (string) ob_get_clean(), true );
+		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+	private static function heading( array $m ): void {
+		?>
+		<div class="prc-h1-fila">
+			<h1 class="prc-h1">Gestión de procedimientos</h1>
+			<?php if ( ! empty( $m['can_create'] ) ) : ?>
+				<p class="prc-acciones">
+					<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
+						<?php echo Shell::icon_plus();?>
+						Nuevo procedimiento
+					</a>
+				</p>
+			<?php endif; ?>
+		</div>
+		<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
+		<?php
 	}
 
 
@@ -20432,21 +20703,8 @@ final class WorkspaceView {
 	private static function band( array $m ): void {
 		?>
 		<div class="prc-taller__banda">
-			<div class="prc-taller__izq">
-				<?php self::search( $m ); ?>
-				<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
-				<?php if ( ! empty( $m['can_create'] ) ) : ?>
-					<p class="prc-acciones">
-						<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['create_url'] ); ?>">
-							<?php echo Shell::icon_plus();?>
-							Nuevo procedimiento
-						</a>
-					</p>
-				<?php endif; ?>
-			</div>
-			<div class="prc-taller__der">
-				<?php self::legend(); ?>
-			</div>
+			<?php self::search( $m ); ?>
+			<?php self::legend(); ?>
 		</div>
 		<?php
 	}
@@ -20471,19 +20729,21 @@ final class WorkspaceView {
 			<?php if ( (int) $s['course'] > 0 ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( Workspace::VAR_COURSE ); ?>" value="<?php echo esc_attr( (string) $s['course'] ); ?>" />
 			<?php endif; ?>
-			<label class="screen-reader-text" for="prc-buscar">Buscar en la tabla</label>
-			<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
-				name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
-				value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
-			<label class="screen-reader-text" for="prc-estado">Estado</label>
-			<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
-				<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
-					<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
-						<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
-					</option>
-				<?php endforeach; ?>
-			</select>
-			<button class="prc-buscador__boton" type="submit">Buscar en la tabla</button>
+			<label class="prc-buscador__rotulo" for="prc-buscar">Buscar por título, número o ámbito</label>
+			<span class="prc-buscador__fila">
+				<input type="search" id="prc-buscar" class="prc-buscador__campo" size="20"
+					name="<?php echo esc_attr( Workspace::VAR_SEARCH ); ?>"
+					value="<?php echo esc_attr( (string) $s['q'] ); ?>" />
+				<label class="screen-reader-text" for="prc-estado">Estado</label>
+				<select class="prc-buscador__estado" id="prc-estado" name="<?php echo esc_attr( Workspace::VAR_STATE ); ?>">
+					<?php foreach ( Workspace::state_filters() as $clave => $rotulo ) : ?>
+						<option value="<?php echo esc_attr( $clave ); ?>" <?php selected( (string) $s['state'], $clave ); ?>>
+							<?php echo esc_html( sprintf( '%s (%d)', $rotulo, (int) ( $m['counts'][ $clave ] ?? 0 ) ) ); ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Buscar</button>
+			</span>
 			<?php if ( '' !== (string) $m['reset_url'] ) : ?>
 				<a class="prc-buscador__quitar" href="<?php echo esc_url( (string) $m['reset_url'] ); ?>">Quitar los filtros</a>
 			<?php endif; ?>
@@ -20497,13 +20757,13 @@ final class WorkspaceView {
 
 
 	private static function legend(): void {
-		$iconos = Workspace::state_icons();
+		$rotulos = Workspace::state_filters();
 		?>
-		<div class="prc-leyenda">
+		<details class="prc-leyenda"><summary>¿Qué significa cada estado?</summary>
 			<ul class="prc-leyenda__lista">
 				<?php foreach ( self::LEGEND as $estado => $frase ) : ?>
 					<li class="prc-leyenda__item">
-						<?php self::icon( (string) ( $iconos[ $estado ] ?? '' ), $estado ); ?>
+						<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) ( $rotulos[ $estado ] ?? $estado ) ); ?></span>
 						<span><?php echo wp_kses( $frase, array( 'strong' => array() ) ); ?></span>
 					</li>
 				<?php endforeach; ?>
@@ -20512,7 +20772,7 @@ final class WorkspaceView {
 					<span><?php echo wp_kses( self::LEGEND_WARNING, array( 'strong' => array() ) ); ?></span>
 				</li>
 			</ul>
-		</div>
+		</details>
 		<?php
 	}
 
@@ -20529,9 +20789,6 @@ final class WorkspaceView {
 
 
 	private static function icon( string $glifo, string $estado, string $rotulo = '' ): void {
-		if ( '' === $glifo ) {
-			return;
-		}
 		$clases = 'material-symbols-outlined prc-icono-estado prc-icono-estado--' . sanitize_html_class( $estado );
 		if ( '' === $rotulo ) {
 			printf( '<span class="%s" aria-hidden="true">%s</span>', esc_attr( $clases ), esc_html( $glifo ) );
@@ -20633,26 +20890,13 @@ final class WorkspaceView {
 					<?php echo esc_html( '' !== $curso ? 'Procedimientos de ' . $curso : 'Procedimientos' ); ?>
 				</caption>
 				<thead>
-					<tr class="prc-tabla__grupos">
-						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
-						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
-					</tr>
 					<tr>
-						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
-							<span class="material-symbols-outlined" aria-hidden="true">image</span>
-							<span class="screen-reader-text">Color de cabecera</span>
-						</th>
-						<th scope="col" class="prc-th--a prc-th--centro">#</th>
-						<th scope="col" class="prc-th--a">Título</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Dirigido a</th>
-						<th scope="col" class="prc-th--a prc-th--centro">Estado</th>
-						<th scope="col" class="prc-th--a">Creado</th>
-						<th scope="col" class="prc-th--b">Límite<br />solicitud</th>
-						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
-						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
+						<th scope="col" class="prc-th--titulo">Título</th>
+						<th scope="col">Estado</th>
+						<th scope="col">Plazo</th>
+						<th scope="col">Dirigido a</th>
+						<th scope="col">Solicitudes</th>
+						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -20671,37 +20915,23 @@ final class WorkspaceView {
 
 
 
+
+
+
 	private static function row( array $row ): void {
 		$estado = (string) $row['state'];
 		$aviso  = (string) $row['warning'];
-		$mirar  = 'publish' === (string) $row['status']
-			? 'Ver la ficha pública'
-			: 'Previsualizar la ficha, que está en borrador';
+		$meta   = implode( ' · ', array_merge( array( 'N.º ' . (string) $row['id'] ), array_map( 'strval', (array) $row['areas'] ) ) );
 		?>
 		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>">
-			<td class="prc-celda-color" data-rotulo="Color">
-				<span class="prc-mini-color" style="background-color:<?php echo esc_attr( (string) $row['color'] ); ?>"></span>
-			</td>
-			<th scope="row" class="prc-celda-num" data-rotulo="Número">
-				<?php self::icon( (string) ( Workspace::state_icons()[ $estado ] ?? '' ), $estado, (string) $row['state_label'] ); ?>
-				<br /><?php echo esc_html( (string) $row['id'] ); ?>
-			</th>
-			<td class="prc-celda-titulo" data-rotulo="Título">
+			<th scope="row" class="prc-celda-titulo" data-rotulo="Título">
 				<?php if ( '' !== (string) $row['url'] ) : ?>
-					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento">
-						<?php echo esc_html( (string) $row['title'] ); ?>
-					</a>
+					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento"><?php echo esc_html( (string) $row['title'] ); ?></a>
 				<?php else : ?>
 					<?php echo esc_html( (string) $row['title'] ); ?>
 				<?php endif; ?>
-			</td>
-			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
-				<span class="material-symbols-outlined prc-icono-azul" aria-hidden="true"><?php echo esc_html( ProcedureMetaKeys::AUDIENCE_TEACHERS === (string) $row['audience'] ? 'group' : 'home_work' ); ?></span>
-				<br /><?php echo esc_html( (string) $row['audience_label'] ); ?>
-				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
-					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
-				<?php endif; ?>
-			</td>
+				<span class="prc-celda-titulo__meta"><?php echo esc_html( $meta ); ?></span>
+			</th>
 			<td class="prc-celda-estado" data-rotulo="Estado">
 				<span class="<?php echo esc_attr( Assets::state_class( $estado ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span>
 				<?php if ( ! empty( $row['archived'] ) && ProcedureMetaKeys::STATE_ARCHIVED !== $estado ) : ?>
@@ -20715,30 +20945,46 @@ final class WorkspaceView {
 					<br /><em class="prc-state__curso"><?php echo esc_html( implode( ' · ', (array) $row['courses'] ) ); ?></em>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-fecha" data-rotulo="Creado"><?php echo esc_html( (string) $row['created'] ); ?></td>
-			<td class="prc-celda-fecha" data-rotulo="Límite de solicitud"><?php echo esc_html( (string) $row['closes'] ); ?></td>
-			<td class="prc-celda-ambitos" data-rotulo="Gestiona">
-				<?php if ( array() !== (array) $row['areas'] ) : ?>
-					<ol class="prc-ambitos">
-						<?php foreach ( (array) $row['areas'] as $nombre ) : ?>
-							<li><?php echo esc_html( (string) $nombre ); ?></li>
-						<?php endforeach; ?>
-					</ol>
+			<td class="prc-celda-fecha" data-rotulo="Plazo"><?php echo esc_html( '' !== (string) $row['dates'] ? (string) $row['dates'] : 'Sin plazo' ); ?></td>
+			<td class="prc-celda-destinatario" data-rotulo="Dirigido a">
+				<?php echo esc_html( (string) $row['audience_label'] ); ?>
+				<?php if ( '' !== (string) ( $row['ownership_label'] ?? '' ) ) : ?>
+					<br /><span class="<?php echo esc_attr( Assets::state_class( 'audience' ) ); ?>"><?php echo esc_html( (string) $row['ownership_label'] ); ?></span>
 				<?php endif; ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Detalles">
-				<?php self::action( (string) $row['view_url'], 'visibility', $mirar ); ?>
+			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
+				<?php self::applications( $row ); ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Solicitudes">
-				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
-				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
-			</td>
-			<td class="prc-celda-accion" data-rotulo="Duplicar">
-				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
-					<?php self::duplicate( $row ); ?>
-				<?php endif; ?>
+			<td class="prc-celda-accion" data-rotulo="Acciones">
+				<div class="prc-acciones">
+					<?php if ( '' !== (string) $row['view_url'] ) : ?>
+						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
+							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
+					<?php endif; ?>
+					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+						<?php self::duplicate( $row ); ?>
+					<?php endif; ?>
+				</div>
 			</td>
 		</tr>
+		<?php
+	}
+
+
+
+
+
+
+
+	private static function applications( array $row ): void {
+		$n     = (int) $row['applications'];
+		$texto = 1 === $n ? '1 solicitud' : $n . ' solicitudes';
+		if ( '' === (string) $row['applications_url'] ) {
+			echo esc_html( $texto );
+			return;
+		}
+		?>
+		<a href="<?php echo esc_url( (string) $row['applications_url'] ); ?>"><?php echo esc_html( $texto ); ?></a>
 		<?php
 	}
 
@@ -20761,31 +21007,8 @@ final class WorkspaceView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
-				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-				<span class="screen-reader-text">Duplicar este procedimiento</span>
-			</button>
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" title="Duplicar este procedimiento">Duplicar</button>
 		</form>
-		<?php
-	}
-
-
-
-
-
-
-
-
-
-	private static function action( string $url, string $glifo, string $rotulo ): void {
-		if ( '' === $url ) {
-			return;
-		}
-		?>
-		<a class="prc-accion" href="<?php echo esc_url( $url ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
-			<span class="material-symbols-outlined" aria-hidden="true"><?php echo esc_html( $glifo ); ?></span>
-			<span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
-		</a>
 		<?php
 	}
 }
@@ -20995,6 +21218,8 @@ final class Workspace {
 				'subtitle'   => $todas
 					? 'Todos los procedimientos, de todos los ámbitos.'
 					: 'Solo los procedimientos de su ámbito: los que convocan otros ámbitos no salen aquí.',
+
+
 				'can_create' => '' !== $crear,
 				'create_url' => $crear,
 			)
@@ -21495,6 +21720,7 @@ use Prc\PublicFront\ApplicationsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\CentreColumns;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
 
 
 
@@ -21552,7 +21778,7 @@ final class ExportDialogView {
 		?>
 		<details class="prc-exportar" data-prc-export>
 			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
-			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="" aria-labelledby="prc-exportar-titulo">
+			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" aria-labelledby="prc-exportar-titulo">
 				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
@@ -21613,7 +21839,7 @@ final class ExportDialogView {
 				</fieldset>
 
 				<div class="prc-acciones">
-					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar</button>
+					<button class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" type="submit">Descargar el fichero</button>
 				</div>
 			</form>
 		</details>
@@ -21782,7 +22008,7 @@ final class ApplicationActionsView {
 		ob_start();
 		?>
 		<section class="prc-seccion" id="<?php echo esc_attr( WithdrawForm::ANCHOR ); ?>">
-			<h3 class="prc-seccion__titulo">Retirar la solicitud</h3>
+			<h2 class="prc-seccion__titulo">Retirar la solicitud</h2>
 			<?php echo Shell::notice( 'error', (string) $w['rejected'] );?>
 			<?php if ( ! empty( $w['can'] ) ) : ?>
 				<p>Si ya no quiere participar en este procedimiento, puede retirar la solicitud mientras el plazo siga abierto. Dejará de contar y, mientras haya plazo, podrá presentar otra nueva.</p>
@@ -21858,7 +22084,7 @@ final class ApplicationActionsView {
 					</ul>
 				<?php endif; ?>
 			<?php endif; ?>
-			<form class="prc-form prc-form--taller" method="post" action="" data-prc-once>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $procedure_id ); ?>" />
@@ -21912,7 +22138,7 @@ final class ApplicationActionsView {
 								<td class="prc-celda" data-rotulo="Motivo"><?php echo esc_html( '' !== (string) $fila['reason'] ? (string) $fila['reason'] : '—' ); ?></td>
 								<td class="prc-celda" data-rotulo="Acciones">
 									<?php if ( ! empty( $fila['can'] ) ) : ?>
-										<form class="prc-acciones" method="post" action="">
+										<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 											<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, (int) $fila['id'] ), ProcedureEditor::nonce_name( $op, (int) $fila['id'] ), false ); ?>
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 											<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -21988,7 +22214,7 @@ final class ApplicationActionsView {
 		$hasta = (string) $a['late_until'];
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller prc-prorroga" method="post" action="">
+		<form class="prc-form prc-form--taller prc-prorroga" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php echo self::hidden( $m, $op, $id );?>
 			<p class="prc-campo__ayuda">
 				<?php
@@ -22053,7 +22279,7 @@ final class ApplicationActionsView {
 		?>
 		<details class="prc-retirar">
 			<summary class="prc-revision__abrir">Retirar esta solicitud</summary>
-			<form class="prc-form prc-form--taller" method="post" action=""
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 				data-prc-confirm="<?php echo esc_attr( $pregunta ); ?>" data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
 				<?php echo self::hidden( $m, $op, $id );?>
 				<div class="prc-campo">
@@ -22140,6 +22366,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
 
 
 
@@ -22341,7 +22568,7 @@ final class ApplicationsPanelView {
 		?>
 		<details class="prc-bloque">
 			<summary class="prc-revision__abrir">Revisar varias a la vez</summary>
-			<form class="prc-form prc-form--taller prc-bloque__form" id="<?php echo esc_attr( self::BULK_FORM ); ?>" method="post" action=""
+			<form class="prc-form prc-form--taller prc-bloque__form" id="<?php echo esc_attr( self::BULK_FORM ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 				data-prc-confirm="¿Cambiar la revisión de las solicitudes marcadas? Cada una recibe el mismo estado y la misma nota, y a cada centro le llega su aviso por correo."
 				data-prc-confirm-ok="Cambiar la revisión">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -22580,7 +22807,7 @@ final class ApplicationsPanelView {
 				<?php endforeach; ?>
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
-			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="">
+			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -22778,7 +23005,7 @@ final class ProcedureEditorView {
 			<?php if ( empty( $m['deliveries'] ) ) : ?>
 				<p>Este procedimiento no tiene entregas con plazo propio.</p>
 			<?php else : ?>
-				<form class="prc-form" method="post" action="">
+				<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 					<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
 					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
 					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -22788,7 +23015,7 @@ final class ProcedureEditorView {
 							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
 						</div>
 					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar nuevos cierres' );?>
+					<?php echo PanelParts::submit( 'Guardar los nuevos cierres' );?>
 				</form>
 			<?php endif; ?>
 		</section>
@@ -22811,15 +23038,13 @@ final class ProcedureEditorView {
 	private static function new_procedure( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1">Crear un procedimiento</h1>
 		</div>
-		<h2 class="prc-sub"><strong>Formato Express</strong></h2>
 		<p class="prc-intro">
-			En este formulario <strong>solo aparecen los campos mínimos</strong> para crear el
-			procedimiento. Nace en borrador y no se ve fuera hasta que lo publique. Una vez creado
-			se abre su taller, y desde ahí se añaden <strong>los plazos, las preguntas y los
+			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -22837,7 +23062,7 @@ final class ProcedureEditorView {
 
 	private static function flash( array $m ): string {
 		$flash = (array) $m['flash'];
-		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'] );
+		return Shell::notice( (string) $flash['tipo'], (string) $flash['texto'], true );
 	}
 
 
@@ -22849,7 +23074,7 @@ final class ProcedureEditorView {
 	private static function head( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título' ); ?></h1>
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
@@ -22881,7 +23106,7 @@ final class ProcedureEditorView {
 		$op = ProcedureEditor::OP_DUPLICATE;
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action=""
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
 			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -22912,20 +23137,32 @@ final class ProcedureEditorView {
 
 
 
+
+
+
 	private static function tabs( array $m ): string {
 		$activa = (string) $m['panel'];
+		$grupos = array();
+		foreach ( (array) $m['panels'] as $clave => $panel ) {
+			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
+		}
 
 		ob_start();
 		?>
-		<nav class="prc-tabs" aria-label="Paneles del procedimiento">
+		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
-					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-							<span class="prc-tab-n badge"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-						<?php endif; ?></a>
+				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
+					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
+						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
+						<?php foreach ( $paneles as $clave => $panel ) : ?>
+							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+								<?php endif; ?></a>
+						<?php endforeach; ?>
+					</div>
 				<?php endforeach; ?>
 			</div>
 		</nav>
@@ -22995,7 +23232,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="">
+		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -23225,32 +23462,30 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
 	private static function email_fields( array $v ): string {
 		$correos = array_pad( array_values( (array) $v[ ProcedureMetaKeys::CONTACT_EMAILS ] ), ProcedureMetaKeys::CONTACT_EMAILS_MAX, '' );
-		$rotulos = array( 'Correo de contacto', '2.º correo', '3.er correo' );
 
 		ob_start();
 		?>
-		<?php foreach ( $rotulos as $i => $rotulo ) : ?>
-			<div class="prc-campo">
-				<label class="prc-campo__etiqueta" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>">
-					<?php echo esc_html( $rotulo ); ?>
-					<?php
-					if ( 0 === $i ) {
-						echo self::obl();
-					}
-					?>
-				</label>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-contact-0">Correo de contacto <?php echo self::obl();?></label>
+			<input class="prc-control" type="email" id="prc-contact-0" name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]" required
+				aria-describedby="prc-contact-ayuda" value="<?php echo esc_attr( (string) $correos[0] ); ?>" />
+			<p class="prc-campo__ayuda" id="prc-contact-ayuda">Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. Sale en la ficha pública.</p>
+		</div>
+		<fieldset class="prc-campo prc-campo--grupo">
+			<legend class="prc-campo__etiqueta">Otros correos de contacto (opcional)</legend>
+			<?php for ( $i = 1; $i < ProcedureMetaKeys::CONTACT_EMAILS_MAX; ++$i ) : ?>
+				<label class="screen-reader-text" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_html( sprintf( 'Otro correo de contacto %d', $i ) ); ?></label>
 				<input class="prc-control" type="email" id="prc-contact-<?php echo esc_attr( (string) $i ); ?>"
 					name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]"
-					<?php echo 0 === $i ? 'required' : ''; ?>
 					value="<?php echo esc_attr( (string) $correos[ $i ] ); ?>" />
-			</div>
-		<?php endforeach; ?>
-		<p class="prc-campo__ayuda">
-			Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. El
-			primero sale en la ficha pública; los otros dos son opcionales.
-		</p>
+			<?php endfor; ?>
+		</fieldset>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -23274,7 +23509,8 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-campo">
 			<fieldset>
-				<legend class="prc-campo__etiqueta">Color de cabecera <?php echo self::obl();?></legend>
+				<?php ?>
+				<legend class="prc-campo__etiqueta">Color de cabecera</legend>
 				<div class="prc-paleta">
 					<?php foreach ( (array) $m['header_colors'] as $clave => $color ) : ?>
 						<label class="prc-muestra" style="--prc-muestra: <?php echo esc_attr( (string) $color['hex'] ); ?>">
@@ -23522,7 +23758,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -23551,7 +23787,7 @@ final class ProcedureEditorView {
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
 		</form>
-		<form id="prc-q-mover" method="post" action="">
+		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_MOVE_QUESTION ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -23741,7 +23977,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -23798,7 +24034,7 @@ final class ProcedureEditorView {
 				<?php $op = ProcedureEditor::OP_PUBLISH; ?>
 				<p class="prc-intro">En borrador no se ve fuera y ningún centro puede solicitar. Al publicarlo sale en la portada,
 					y los centros solicitan cuando abra el plazo.</p>
-				<form class="prc-acciones" method="post" action=""
+				<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 					data-prc-confirm="<?php echo esc_attr( sprintf( '¿Publicar «%s»? Pasará a verse en la portada.', (string) $m['title'] ) ); ?>"
 					data-prc-confirm-ok="Publicar">
 					<?php echo self::op_fields( $m, $op );?>
@@ -23912,7 +24148,7 @@ final class ProcedureEditorView {
 		);
 		$confirma = $cerrada ? '' : ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Cerrar solicitudes"';
 		return '<p class="prc-intro">' . esc_html( $texto ) . '</p>'
-			. '<form class="prc-acciones" method="post" action=""' . $confirma . '>'
+			. '<form class="prc-acciones" method="post" action="' . esc_url( '#' . Shell::NOTICE_ANCHOR ) . '"' . $confirma . '>'
 			. self::op_fields( $m, ProcedureEditor::OP_TOGGLE_APPLICATIONS )
 			. '<button class="' . esc_attr( Assets::button_class( $cerrada ? false : 'danger' ) ) . '" type="submit">'
 			. ( $cerrada ? 'Volver al calendario automático' : 'Cerrar solicitudes ahora' ) . '</button>'
@@ -23934,7 +24170,7 @@ final class ProcedureEditorView {
 			'¿Devolver «%s» a borrador? Dejará de verse públicamente y no se podrá solicitar hasta que vuelva a publicarse.',
 			(string) $m['title']
 		);
-		return '<form class="prc-acciones" method="post" action="" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
+		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . Shell::NOTICE_ANCHOR ) . '" data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Devolver a borrador">'
 			. self::op_fields( $m, ProcedureEditor::OP_UNPUBLISH )
 			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
 			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
@@ -23955,7 +24191,7 @@ final class ProcedureEditorView {
 		$apagados = (array) ( $m['values'][ ProcedureMetaKeys::NOTIFY ] ?? array() );
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -23992,7 +24228,7 @@ final class ProcedureEditorView {
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
-			<form class="prc-form prc-form--taller" method="post" action="">
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -24004,7 +24240,7 @@ final class ProcedureEditorView {
 					</div>
 					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false );?>
 				<?php endif; ?>
-				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar código</button>
+				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
 			</form>
 		</section>
 		<?php
@@ -24090,7 +24326,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action=""
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( $pregunta ); ?>"
 			data-prc-confirm-ok="<?php echo esc_attr( $rotulo ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -24372,17 +24608,6 @@ final class ProcedureEditor {
 
 
 
-
-	private const CANNOT_CREATE = 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado. Pídalo a quien administre el aplicativo.';
-
-
-
-
-
-
-
-
-
 	private static $rejected = '';
 
 
@@ -24451,7 +24676,16 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
 	public static function panels( int $procedure_id ): array {
+		$grupos  = array(
+			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Más ajustes' => array( self::PANEL_NOTICES, self::PANEL_OBSERVE, self::PANEL_CODE ),
+		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Preguntas',
@@ -24461,7 +24695,7 @@ final class ProcedureEditor {
 			self::PANEL_PEOPLE       => 'Personas',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
-			self::PANEL_OBSERVE      => 'Consulta',
+			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -24471,12 +24705,15 @@ final class ProcedureEditor {
 		);
 
 		$out = array();
-		foreach ( $rotulos as $slug => $rotulo ) {
-			$out[ $slug ] = array(
-				'label' => $rotulo,
-				'url'   => self::url( $procedure_id, $slug ),
-				'count' => $cuentas[ $slug ] ?? null,
-			);
+		foreach ( $grupos as $grupo => $slugs ) {
+			foreach ( $slugs as $slug ) {
+				$out[ $slug ] = array(
+					'label' => $rotulos[ $slug ],
+					'url'   => self::url( $procedure_id, $slug ),
+					'count' => $cuentas[ $slug ] ?? null,
+					'group' => $grupo,
+				);
+			}
 		}
 		return $out;
 	}
@@ -24711,7 +24948,7 @@ final class ProcedureEditor {
 
 	private static function create( int $user_id ): void {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			self::$rejected = self::CANNOT_CREATE;
+			self::$rejected = ProcedureAccess::WHY_NOT_CREATE;
 			return;
 		}
 		$revisado = self::validate_data( $user_id, self::submitted_data() );
@@ -25657,7 +25894,7 @@ final class ProcedureEditor {
 
 	private static function blank_procedure( array $m, int $user_id ): array {
 		if ( ! ProcedureAccess::can_manage_procedures( $user_id ) ) {
-			$m['aviso']      = self::CANNOT_CREATE;
+			$m['aviso']      = ProcedureAccess::WHY_NOT_CREATE;
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}
@@ -26303,13 +26540,15 @@ final class MeasuredQuestionView {
 
 
 
-	public static function html( array $p, $valor ): string {
+
+	public static function html( array $p, $valor, array $invalid = array() ): string {
 		$key     = (string) $p['key'];
 		$id      = 'prc-q-' . $key;
 		$nombre  = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';
 		$obliga  = ! empty( $p['required'] );
 		$ayuda   = (string) $p['help'];
-		$pie     = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo  = 'answer:' . $key;
+		$pie     = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
 		$rejilla = ProcedureQuestions::TYPE_GRID === (string) $p['type'];
 
 		$control = '';
@@ -26322,17 +26561,18 @@ final class MeasuredQuestionView {
 					. self::number_input( $id . '-' . $rk, $nombre . '[' . $rk . ']', $dadas[ $rk ] ?? '', 0, null, $obliga )
 					. '</div>';
 			}
-			$control = '<div class="prc-opciones prc-rejilla" role="group" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
+			$control = '<div class="prc-opciones prc-rejilla" role="group" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
 		} elseif ( ProcedureQuestions::TYPE_NUMBER === (string) $p['type'] ) {
-			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie );
+			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie, FieldErrorView::css( $invalid, $codigo ) );
 		} else {
-			$control = '<input type="date" class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
+			$control = '<input type="date" class="prc-control' . esc_attr( FieldErrorView::css( $invalid, $codigo ) ) . '" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
 				. ( $obliga ? ' required' : '' ) . $pie . ' />';
 		}
 
 		return '<div class="prc-campo prc-pregunta ' . esc_attr( $rejilla ? 'prc-campo--completo' : 'prc-campo--medio' ) . '">'
 			. self::label( $rejilla ? $id . '-rotulo' : $id, (string) $p['label'], $obliga, $rejilla )
 			. $control
+			. FieldErrorView::feedback( $invalid, $codigo )
 			. ( '' !== $ayuda ? '<div class="prc-campo__ayuda" id="' . esc_attr( $id . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</div>' : '' )
 			. '</div>';
 	}
@@ -26349,8 +26589,9 @@ final class MeasuredQuestionView {
 
 
 
-	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '' ): string {
-		return '<input type="number" class="prc-control" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
+
+	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '', string $clase = '' ): string {
+		return '<input type="number" class="prc-control' . esc_attr( $clase ) . '" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
 			. ' value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '" min="' . esc_attr( (string) $minimo ) . '"'
 			. ( null !== $maximo ? ' max="' . esc_attr( (string) $maximo ) . '"' : '' )
 			. ( $obliga ? ' required' : '' ) . $extra . ' />';
@@ -26421,7 +26662,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
-			<h3 class="prc-seccion__titulo" id="prc-personas-titulo">PERSONAS QUE PARTICIPAN</h3>
+			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Personas que participan</h2>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
 				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
@@ -26633,7 +26874,7 @@ final class PeopleView {
 				<?php echo self::select( $base . 'group', 'group', array() === $exigen ? 'Grupo' : 'Grupo (obligatorio para: ' . implode( ', ', $exigen ) . ')', array( '' => '— Sin grupo —' ) + (array) $p['groups'], (string) ( $valores['group'] ?? '' ), false );?>
 			<?php endif; ?>
 			<div class="prc-campo prc-campo--completo">
-				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de esta persona' ); ?></button>
+				<button type="submit" class="<?php echo esc_attr( Assets::button_class() ); ?>"><?php echo esc_html( PeopleForm::OP_ADD === $op ? 'Dar de alta' : 'Guardar los cambios de la persona' ); ?></button>
 			</div>
 		</form>
 		<?php
@@ -26726,7 +26967,7 @@ final class PeopleView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26914,18 +27155,20 @@ final class ApplicationProgressView {
 
 
 
-	public static function notice( array $flash ): string {
+
+
+
+
+	public static function notice( array $flash, array $invalid = array() ): string {
+		if ( 'error' === (string) ( $flash['tipo'] ?? '' ) && array() !== $invalid ) {
+			return FieldErrorView::summary( 'La solicitud no se ha guardado. Revise:', $invalid );
+		}
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {
-			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto );
+			return Shell::notice( (string) ( $flash['tipo'] ?? '' ), $texto, true );
 		}
-		$tonos = array(
-			'ok'    => 'success',
-			'aviso' => 'warning',
-			'error' => 'danger',
-		);
-		return '<p class="' . esc_attr( Assets::alert_class( $tonos[ (string) ( $flash['tipo'] ?? '' ) ] ?? 'info' ) ) . '">'
+		return Shell::notice_open( (string) ( $flash['tipo'] ?? '' ), true )
 			. esc_html( $texto ) . ' <a href="' . esc_url( $link ) . '">' . esc_html( (string) ( $flash['link_text'] ?? '' ) ) . '</a></p>';
 	}
 
@@ -26994,8 +27237,8 @@ final class ApplicationProgressView {
 			? '<p class="prc-form__siguiente">' . esc_html( $texto ) . '</p>'
 			: '';
 		return '<div class="prc-form__envio">' . $aviso
-			. '<button class="prc-boton-enviar" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
-			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios' ) . '</button></div>';
+			. '<button class="' . esc_attr( Assets::button_class( 'final' ) ) . '" type="submit"><span class="material-symbols-outlined" aria-hidden="true">send</span> '
+			. esc_html( $nueva ? 'Presentar la solicitud' : 'Guardar los cambios de la solicitud' ) . '</button></div>';
 	}
 
 
@@ -27152,7 +27395,7 @@ final class ApplyFormView {
 
 		ob_start();
 		echo self::head( $m );
-		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) );
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ), (array) ( $m['invalid'] ?? array() ) );
 		echo self::choices( $m );
 		echo ApplicationProgressView::card( $m );
 
@@ -27192,7 +27435,7 @@ final class ApplyFormView {
 			$dates = DateRange::of( (string) $question['opens_at'], (string) $question['closes_at'] );
 			?>
 			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h3>
+				<h2 class="prc-seccion__titulo"><?php echo esc_html( (string) $question['label'] ); ?></h2>
 				<p><?php echo esc_html( '' !== $dates ? 'Plazo de entrega: ' . lcfirst( $dates ) . '.' : 'Plazo de entrega pendiente de configurar.' ); ?></p>
 				<p>Documento presentado: <?php echo wp_kses_post( self::attached( (array) $m['application'], $key ) ); ?></p>
 				<?php if ( ! empty( $question['can_submit'] ) ) : ?>
@@ -27230,7 +27473,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'] ? 'Mis solicitudes' : 'Mi centro' ); ?></a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( (string) ( $m['mine_label'] ?? Shell::mine_label( false ) ) ); ?></a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 			<span class="<?php echo esc_attr( Assets::state_class( (string) $m['state'] ) ); ?>"><?php echo esc_html( (string) $m['state_label'] ); ?></span>
@@ -27307,7 +27550,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<nav class="prc-seccion" aria-labelledby="prc-apply-centre">
-			<h3 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h3>
+			<h2 class="prc-seccion__titulo" id="prc-apply-centre">Solicita en nombre de</h2>
 			<div class="prc-seccion__cuerpo">
 				<p class="prc-campo__ayuda">Su cuenta tiene más de un código y este procedimiento admite los dos. Cada uno tiene su propia solicitud: elija con cuál quiere verla o presentarla.</p>
 				<ul class="prc-opciones prc-opciones--vertical">
@@ -27370,6 +27613,7 @@ final class ApplyFormView {
 		$quien   = (array) ( $m['applicant'] ?? array() );
 		$nueva   = array() === (array) $m['application'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
+		$falla   = (array) ( $m['invalid'] ?? array() );
 
 
 
@@ -27412,7 +27656,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<?php ?>
-		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="" enctype="multipart/form-data">
+		<form class="prc-form prc-form--solicitud" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" enctype="multipart/form-data">
 			<?php wp_nonce_field( ApplyForm::NONCE_ACTION, ApplyForm::NONCE_FIELD, false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -27422,7 +27666,7 @@ final class ApplyFormView {
 
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">DATOS DEL CENTRO EDUCATIVO</h3>
+					<h2 class="prc-seccion__titulo">Datos del centro educativo</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php echo $del_centro;?>
 					</div>
@@ -27430,18 +27674,19 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<section class="prc-seccion">
-				<h3 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'DATOS DE LA PERSONA PARTICIPANTE' : 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO' ); ?></h3>
+				<h2 class="prc-seccion__titulo"><?php echo esc_html( $docente ? 'Datos de la persona participante' : 'Datos personales de la dirección del centro' ); ?></h2>
 				<div class="prc-seccion__cuerpo">
 					<?php echo $de_quien;?>
 					<?php if ( ! $docente ) : ?>
 						<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
 							<?php echo self::label( 'prc-position', 'Cargo en el centro', true );?>
-							<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
+							<select class="prc-control<?php echo esc_attr( FieldErrorView::css( $falla, 'position' ) ); ?>" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required<?php echo FieldErrorView::attrs( $falla, 'position' );?>>
 								<option value="">— Elija —</option>
 								<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
 									<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 								<?php endforeach; ?>
 							</select>
+							<?php echo FieldErrorView::feedback( $falla, 'position' );?>
 						</div>
 					<?php endif; ?>
 				</div>
@@ -27449,7 +27694,7 @@ final class ApplyFormView {
 
 			<?php if ( '' !== trim( (string) $spec['commitments'] ) ) : ?>
 				<section class="prc-seccion">
-					<h3 class="prc-seccion__titulo">SOLICITA</h3>
+					<h2 class="prc-seccion__titulo">Solicita</h2>
 					<div class="prc-seccion__cuerpo">
 						<div class="prc-nota prc-campo--completo">
 							<p><?php echo esc_html( $docente ? 'Su participación en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' : 'La participación de su centro en la presente convocatoria, comprometiéndose a cumplir los siguientes compromisos:' ); ?></p>
@@ -27459,11 +27704,12 @@ final class ApplyFormView {
 							<div class="prc-opciones prc-opciones--vertical">
 								<div class="prc-opcion">
 									<label for="prc-accept">
-										<input type="checkbox" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?> />
+										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' );?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
 									</label>
 								</div>
 							</div>
+							<?php echo FieldErrorView::feedback( $falla, 'accept' );?>
 						</div>
 					</div>
 				</section>
@@ -27471,10 +27717,10 @@ final class ApplyFormView {
 
 			<?php if ( array() !== (array) $spec['questions'] ) : ?>
 				<section class="prc-seccion prc-seccion--sin-titulo" aria-labelledby="prc-preguntas">
-					<h3 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h3>
+					<h2 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
-							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos );?>
+							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla );?>
 						<?php endforeach; ?>
 					</div>
 				</section>
@@ -27511,9 +27757,9 @@ final class ApplyFormView {
 		}
 		$campos = '';
 		for ( $index = 0; $index < $cuantas; ++$index ) {
-			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ), (array) ( $m['invalid'] ?? array() ) );
 		}
-		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
+		return '<section class="prc-seccion"><h2 class="prc-seccion__titulo">Datos de la coordinación</h2><div class="prc-seccion__cuerpo">'
 			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
 			. $campos . '</div></section>';
 	}
@@ -27581,9 +27827,10 @@ final class ApplyFormView {
 
 
 
-	private static function question( array $p, array $answers, array $files = array() ): string {
+
+	private static function question( array $p, array $answers, array $files = array(), array $invalid = array() ): string {
 		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
-			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '', $invalid );
 		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
@@ -27593,7 +27840,9 @@ final class ApplyFormView {
 		$obliga = ! empty( $p['required'] );
 		$ayuda  = (string) $p['help'];
 		$id     = 'prc-q-' . $key;
-		$pie    = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo = 'answer:' . $key;
+		$pie    = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
+		$clase  = 'prc-control' . FieldErrorView::css( $invalid, $codigo );
 		$ancho  = in_array( $tipo, array( ProcedureQuestions::TYPE_TEXT, ProcedureQuestions::TYPE_FILE ), true )
 			? self::ANCHO[12]
 			: self::ANCHO[6];
@@ -27608,7 +27857,7 @@ final class ApplyFormView {
 						<span class="prc-campo__obligatorio" aria-hidden="true">*</span>
 					<?php endif; ?>
 				</label>
-				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="prc-control" rows="3"
+				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="<?php echo esc_attr( $clase ); ?>" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
 					<?php echo $pie;?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
@@ -27622,7 +27871,7 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="prc-control" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie;?> />
 				<div class="prc-campo__ayuda">
@@ -27633,7 +27882,7 @@ final class ApplyFormView {
 				<div class="prc-opciones prc-opciones--vertical">
 					<div class="prc-opcion">
 						<label for="<?php echo esc_attr( $id ); ?>">
-							<input type="checkbox" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" value="1"
+							<input type="checkbox"<?php echo '' !== FieldErrorView::css( $invalid, $codigo ) ? ' class="is-invalid"' : ''; ?> id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" value="1"
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
 								<?php echo $pie;?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>
@@ -27646,7 +27895,7 @@ final class ApplyFormView {
 				$unica  = is_scalar( $valor ) ? (string) $valor : '';
 				echo self::label( $id . '-rotulo', (string) $p['label'], $obliga, 'p' );
 				?>
-				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>"
+				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>" id="<?php echo esc_attr( $id ); ?>"
 					aria-labelledby="<?php echo esc_attr( $id . '-rotulo' ); ?>"
 					<?php echo $pie;?>>
 					<?php foreach ( (array) $p['choices'] as $i => $opcion ) : ?>
@@ -27667,6 +27916,7 @@ final class ApplyFormView {
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
+			<?php echo FieldErrorView::feedback( $invalid, $codigo );?>
 			<?php if ( '' !== $ayuda ) : ?>
 				<div class="prc-campo__ayuda" id="<?php echo esc_attr( $id . '-ayuda' ); ?>"><?php echo esc_html( $ayuda ); ?></div>
 			<?php endif; ?>
@@ -27708,7 +27958,8 @@ final class ApplyFormView {
 
 
 
-	private static function coordinator_fields( int $index, array $coordinator ): string {
+
+	private static function coordinator_fields( int $index, array $coordinator, array $invalid = array() ): string {
 		$campos = array(
 			'name'    => array( 'Nombre', 'text', 'prc-campo--cuarto prc-campo--abre-fila', '' ),
 			'surname' => array( 'Apellidos', 'text', 'prc-campo--cuarto', '' ),
@@ -27721,14 +27972,19 @@ final class ApplyFormView {
 		<fieldset class="prc-seccion-campos">
 			<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
 			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $clases, $ayuda ) ) : ?>
-				<?php $id = 'prc-coordinator-' . $campo . '-' . $index; ?>
+				<?php
+				$id     = 'prc-coordinator-' . $campo . '-' . $index;
+				$codigo = 'coordinator_' . $campo . ':' . $index;
+				?>
 				<div class="prc-campo <?php echo esc_attr( $clases ); ?>">
 					<?php echo self::label( $id, $rotulo, true );?>
-					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
+					<input class="prc-control<?php echo esc_attr( FieldErrorView::css( $invalid, $codigo ) ); ?>" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
 						<?php if ( 'dni' === $campo ) : ?>
-							autocomplete="off" aria-describedby="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"
+							autocomplete="off"
 						<?php endif; ?>
+						<?php echo FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? 'prc-coordinator-dni-ayuda-' . $index : '' );?>
 						value="<?php echo esc_attr( (string) ( $coordinator[ $campo ] ?? '' ) ); ?>" />
+					<?php echo FieldErrorView::feedback( $invalid, $codigo );?>
 					<?php if ( '' !== $ayuda ) : ?>
 						<p class="prc-campo__ayuda" id="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"><?php echo esc_html( $ayuda ); ?></p>
 					<?php endif; ?>
@@ -27756,7 +28012,7 @@ final class ApplyFormView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-solicitud-resumen" id="<?php echo esc_attr( ApplicationProgress::ANCHOR_FORM ); ?>">
-			<h3 class="prc-seccion__titulo">LO QUE PRESENTÓ</h3>
+			<h2 class="prc-seccion__titulo">Lo que presentó</h2>
 			<dl class="prc-respuestas">
 				<?php if ( '' !== (string) $s['position'] ) : ?>
 					<dt>Cargo</dt>
@@ -27796,7 +28052,7 @@ final class ApplyFormView {
 		if ( '' === $url ) {
 			return '';
 		}
-		$rotulo = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' ) ? 'Mis solicitudes' : 'Las solicitudes de mi centro';
+		$rotulo = (string) ( $m['mine_label'] ?? Shell::mine_label( false ) );
 		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">' . esc_html( $rotulo ) . '</a></p>';
 	}
 }
@@ -27908,6 +28164,13 @@ final class ApplyForm {
 
 
 	private static $rejected = '';
+
+
+
+
+
+
+	private static $invalid = array();
 
 
 
@@ -28053,6 +28316,7 @@ final class ApplyForm {
 			self::$rejected = '' !== $porque && $revisado['ok']
 				? $porque
 				: ApplicationInput::why( $revisado['errors'], (array) $spec['questions'] );
+			self::$invalid  = ApplicationInput::labels( $revisado['fields'], (array) $spec['questions'] );
 			return;
 		}
 
@@ -28188,6 +28452,9 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+
+
+			'mine_label'      => Shell::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 			'help_url'        => Help::url( HelpContent::GUIDE_APPLY, 'rellenar-la-solicitud' ),
 			'applicant_type'  => '',
 			'state'           => '',
@@ -28225,6 +28492,8 @@ final class ApplyForm {
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
 			'values'          => array(),
+
+			'invalid'         => self::$invalid,
 		);
 
 		if ( ! is_user_logged_in() ) {
@@ -29316,17 +29585,13 @@ final class MyCentreView {
 
 
 
-	private const TITLE = 'Solicitudes de participación en procedimientos de su centro educativo';
-
-
-
-
 
 
 
 	public static function html( array $m ): string {
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' );
-		$titulo  = $docente ? 'Mis solicitudes de participación en procedimientos' : self::TITLE;
+
+		$titulo = Shell::mine_label( $docente );
 		if ( '' !== (string) $m['aviso'] ) {
 			return Shell::render( $titulo, '', Shell::notice( 'aviso', (string) $m['aviso'] ) );
 		}
@@ -30418,7 +30683,7 @@ final class ObserveView {
 		$op = ProcedureEditor::OP_OBSERVE;
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="">
+		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -33161,8 +33426,8 @@ final class App {
 .prc-form.prc-form--taller .prc-campo__ayuda {
   margin: 6px 0 0;
   padding: 0;
-  font: 400 12px/1.5 var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem/1.5 var(--prc-fuente);
+  color: var(--prc-c-medio);
   max-width: 60ch;
 }
 
@@ -33420,7 +33685,23 @@ final class App {
    42,5px de alto con 30px de aire arriba y abajo. Lo que no se copia es el
    `outline: none` del foco: allí el botón de crear no se ve al enfocarlo. */
 
-.prc-acciones--pie { margin: 0; padding: 0; }
+/* El pie con «Guardar …» se queda pegado abajo mientras se baja por el
+   panel: en «Datos» el botón queda a más de una pantalla del título. Solo
+   CSS; donde no hay `sticky`, el pie se queda en su sitio, como antes. */
+.prc-acciones--pie {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 12px 0;
+  background: var(--prc-c-fondo);
+  border-top: 1px solid var(--prc-c-linea);
+}
+.prc-acciones--pie .prc-btn.prc-envio { margin: 0; }
+/* Al tabular hacia abajo, el navegador deja el campo enfocado en el borde de
+   la ventana, que es donde está el pie: sin este hueco, lo tapa entero
+   (WCAG 2.2, 2.4.11). El pie mide unos 62 px; se reservan 80. */
+html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
 
 .prc-btn.prc-envio {
   display: inline-block;
@@ -33593,6 +33874,10 @@ final class App {
 }
 
 .prc-respuestas dd { margin: 0; }
+
+/* «Otros correos de contacto (opcional)»: un rótulo para los dos campos. */
+.prc-form--taller .prc-campo--grupo { margin: 0; padding: 0; border: 0; min-width: 0; }
+.prc-form--taller .prc-campo--grupo .prc-control + .prc-control { margin-top: 8px; }
 ',
   'css/prc-app.css' => '/* Aplicativo de procedimientos: **los tokens, el armazón y los componentes
    comunes**. Cabecera, menú, lienzo, títulos, avisos, botones, pastillas de
@@ -33765,7 +34050,6 @@ final class App {
   --prc-e-historica: #aaa;
   --prc-e-incoh-abierta: #f00;   /* abierta con el plazo vencido */
   --prc-e-incoh-cerrada: #fc0;   /* cerrada con el plazo vivo */
-  --prc-e-etiqueta: #1a1a8c;     /* la etiqueta bajo la tarjeta de la portada */
 
   /* --- el recuadro amarillo de «Solo administración» ---------------------
      Los contrastes están medidos, no supuestos (fórmula de luminancia
@@ -34083,7 +34367,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
 
 /* --- el menú -------------------------------------------------------------
 
-   Cuatro entradas en mayúsculas grises —Inicio, Sus solicitudes, Administrar
+   Cuatro entradas en mayúsculas grises —Inicio, Solicitudes de mi centro, Administrar
    y Ayuda— y las que tienen hijos los despliegan con un `details` nativo: sin
    JavaScript (ADR-0022), con teclado y con un solo nivel, que es justo lo que
    los tres niveles anidados del menú original no tenían. */
@@ -34163,6 +34447,8 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-c-tenue);
 }
 
+/* El contador de una pestaña: texto oscuro sobre el amarillo claro, que
+   pasa de 4,5:1. Sin la clase `badge`, que con Bootstrap lo pinta en blanco. */
 .prc-tab-n {
   padding: .05em .5em;
   border-radius: 999px;
@@ -34170,6 +34456,21 @@ html:has(> body.prc-app) { overflow-x: clip; }
   color: var(--prc-esp);
   font-size: var(--prc-t-menudo);
   font-weight: 700;
+}
+
+/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
+   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
+.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
+.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
+.prc-tabs-grupo__rotulo {
+  position: absolute;
+  top: 0;
+  font-size: var(--prc-t-menudo);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--prc-c-medio);
 }
 
 /* --- lienzo -------------------------------------------------------------- */
@@ -34217,6 +34518,10 @@ body.prc-app .prc-hoja {
   margin: 0 0 20px;
   padding: 0 0 10px;
 }
+
+/* La vuelta a la pantalla de la que se viene: texto corriente, no un título
+   que compita con el h1. */
+.prc-miga { margin: 0 0 4px; font-size: .875rem; }
 
 .prc-sub {
   font-size: var(--prc-t-h2);
@@ -34457,6 +34762,23 @@ body.prc-app .prc-hoja {
 .prc-aviso-success { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
 .prc-aviso-warning { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
 .prc-aviso-danger { background: var(--prc-mal-fondo); border-color: var(--prc-mal-borde); color: var(--prc-mal-texto); }
+.prc-aviso:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.prc-aviso p { margin: 0; }
+.prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
+.prc-aviso__campos a { color: inherit; text-decoration: underline; }
+
+/* La ayuda de un campo, en todas las pantallas: 14 px y gris oscuro (7:1),
+   que es la que evita los errores y tiene que leerse. */
+.prc-campo__ayuda { font-size: .875rem; color: var(--prc-c-medio); }
+
+/* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
+.prc-control.is-invalid,
+.prc-opciones.is-invalid,
+.prc-opciones[aria-invalid="true"] { border-color: var(--prc-mal-texto); }
+.prc-opciones[aria-invalid="true"] { border-left: 3px solid var(--prc-mal-texto); padding-left: 8px; }
+/* Una casilla no tiene borde que pintar: se marca con su contorno. */
+input[type="checkbox"].is-invalid { outline: 2px solid var(--prc-mal-texto); outline-offset: 1px; }
+.invalid-feedback.d-block { display: block; margin: 4px 0 0; color: var(--prc-mal-texto); font-size: .875rem; }
 
 /* La misma geometría sin color: la caja neutra que envuelve un bloque. */
 .prc-caja {
@@ -34504,6 +34826,14 @@ body.prc-app .prc-hoja {
 .prc-btn-primary { color: #fff; background: var(--prc-c-azul); border-color: var(--prc-c-azul); }
 .prc-btn-primary:hover { color: #fff; background: var(--prc-c-azul-hover); border-color: var(--prc-c-azul-borde); filter: none; }
 
+/* La secundaria de `Assets::button_class()`: blanca con borde gris, que no
+   compite con la principal ni se confunde con un campo. */
+.prc-btn-sec { color: #495057; background: #fff; border-color: #6c757d; }
+.prc-btn-sec:hover { color: #fff; background: #6c757d; filter: none; }
+
+/* La acción final de una pantalla —presentar la solicitud—: la principal, más grande. */
+.prc-btn-final { padding: 10px 20px; font-size: 18px; font-weight: 600; }
+
 /* El secundario: el mismo botón en blanco. No está en el original —allí la
    acción secundaria era un enlace suelto— y se añade porque una pantalla con
    dos botones azules no dice cuál es la acción principal. */
@@ -34546,6 +34876,12 @@ body.prc-app .btn-primary {
   --bs-btn-hover-border-color: var(--prc-c-azul-borde);
   --bs-btn-active-bg: var(--prc-c-azul-hover);
   --bs-btn-active-border-color: var(--prc-c-azul-borde);
+}
+body.prc-app .btn-outline-secondary {
+  --bs-btn-color: #495057;
+  --bs-btn-border-color: #6c757d;
+  --bs-btn-hover-bg: #6c757d;
+  --bs-btn-hover-border-color: #6c757d;
 }
 body.prc-app .btn-light {
   --bs-btn-bg: var(--prc-c-fondo-accion);
@@ -35418,7 +35754,8 @@ body.prc-app .prc-btn-borrar {
 }
 
 .prc-form--solicitud .prc-seccion__titulo,
-.prc-solicitud-resumen > .prc-seccion__titulo {
+.prc-solicitud-resumen > .prc-seccion__titulo,
+.prc-personas > .prc-seccion__titulo {
   display: block;
   width: auto;
   height: auto;
@@ -35426,7 +35763,9 @@ body.prc-app .prc-btn-borrar {
   margin: 0 0 15px;
   font: var(--prc-p-h3) var(--prc-t-h3) / var(--prc-i-h3) var(--prc-fuente);
   color: var(--prc-c-fuerte);
-  text-transform: none;   /* los rótulos ya vienen en mayúsculas en el texto */
+  /* Las mayúsculas, aquí: escritas en la cadena, algunos lectores de
+     pantalla las deletrean. El rótulo va en caja normal en el HTML. */
+  text-transform: uppercase;
   background: transparent;
   border: none;
   border-top: 2px solid var(--prc-c-linea-seccion);
@@ -35456,8 +35795,8 @@ body.prc-app .prc-btn-borrar {
   max-width: 100%;
   padding: 0;
   margin-top: 6px;
-  font: 300 var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
-  color: var(--prc-c-texto);
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
   text-align: left;
 }
 
@@ -35544,42 +35883,9 @@ body.prc-app .prc-btn-borrar {
 .prc-form--solicitud .prc-nota p:last-child { padding-bottom: 0; }
 
 /* --- botón de envío -----------------------------------------------------
-   El color medido es el del despliegue que se sustituye y queda como variable
-   (`--prc-envio-fondo`), no como token del sistema: blanco sobre `#5f9ea0` da
-   3,05:1, que llega para texto grande y no para texto normal. Quien despliegue
-   lo sube sin tocar esta hoja. */
-.prc-form--solicitud .prc-boton-enviar {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  width: auto;
-  height: auto;
-  padding: 12px 20px;
-  margin: 30px 0;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: normal;
-  color: #fff;
-  text-align: center;
-  text-shadow: none;
-  vertical-align: middle;
-  cursor: pointer;
-  background: var(--prc-envio-fondo, #5f9ea0);
-  border: 1px solid var(--prc-envio-fondo, #5f9ea0);
-  border-radius: var(--prc-radio-caja);
-  box-shadow: var(--prc-sombra-boton);
-}
-
-.prc-form--solicitud .prc-boton-enviar:hover,
-.prc-form--solicitud .prc-boton-enviar:active {
-  color: #fff;
-  background: var(--prc-envio-hover, #099);
-  border-color: var(--prc-envio-hover, #099);
-}
-
-.prc-form--solicitud .prc-boton-enviar:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
-.prc-form--solicitud .prc-boton-enviar[disabled] { cursor: not-allowed; opacity: .5; }
+   Es el botón de siempre (`Assets::button_class( \'final\' )`), con aire
+   arriba y abajo: la acción con la que termina la pantalla. */
+.prc-form--solicitud .prc-form__envio .prc-btn-final { margin: 30px 0; }
 
 /* --- aviso de protección de datos ---------------------------------------
    La plantilla pinta la caja; **el texto es del despliegue** y llega por el
@@ -35676,7 +35982,7 @@ body.prc-app .prc-btn-borrar {
   .prc-justificante { color: #000; }
 }
 ',
-  'css/prc-mi-centro.css' => '/* «Mis solicitudes» del centro.
+  'css/prc-mi-centro.css' => '/* «Solicitudes de mi centro» (y «Mis solicitudes» del profesorado).
    ==========================================================================
 
    Lo propio de esta pantalla y nada más: la ayuda de ordenación, el
@@ -35961,13 +36267,9 @@ body.prc-app .prc-btn-borrar {
   color: var(--prc-c-titulo);
 }
 
-.prc-proc__estado {
-  font-size: var(--prc-t-menudo);
-  line-height: var(--prc-i-menudo);
-  font-variant: small-caps;
-  font-weight: 600;
-  color: var(--prc-e-etiqueta);
-}
+.prc-proc__estado { margin: 0; }
+/* La pastilla de estado de siempre, a 14 px: la de la tabla va más apretada. */
+.prc-proc__estado .prc-state { font-size: .875rem; }
 
 /* Los días que quedan y la marca del centro: esto el original no lo tiene, y
    es lo que ahorra el viaje «portada → ficha → ver si ya lo pedí». */
@@ -36003,50 +36305,28 @@ body.prc-app .prc-btn-borrar {
 ',
   'css/prc-taller.css' => '/* El taller del gestor: la pantalla «Gestión de procedimientos».
 
-   Calco de la pantalla que se sustituye: título grande, banda de dos mitades
-   con el buscador a la izquierda y la leyenda de estados a la derecha, una
-   pestaña por curso, la línea de recuento y la tabla de dos niveles con su
-   paleta granate. Los tokens y los componentes comunes —fila, héroe, tabla
-   base, pastilla de estado, botón de icono, estado vacío— están en
-   `prc-app.css` y aquí no se repiten: esto es solo lo que esta pantalla
-   tiene y ninguna otra.
-
-   La paleta de la cabecera de dos niveles se declara aquí, en el ámbito de la
-   pantalla, porque hoy no la usa nadie más. Si el editor acaba pintando la
-   misma cabecera, sube a `prc-app.css` sin cambiar de nombre. */
-
-.prc-taller {
-  --prc-g1: #9a031e;      /* grupo «Detalles del procedimiento» */
-  --prc-g2: #5f0f40;      /* grupo «Fecha límite» */
-  --prc-g3: #321325;      /* grupo «Gestión» */
-  --prc-g1-sub: #daa3ad;  /* segunda fila de cabecera, bajo cada grupo */
-  --prc-g2-sub: #c4a7b9;
-  --prc-g3-sub: #b4a9af;
-  --prc-g-texto: #fff;
-}
+   Nació como calco de la pantalla que se sustituye y se ha quedado con lo
+   que se usa: el título corriente con «Nuevo procedimiento» al lado, el
+   buscador con su rótulo, la leyenda plegada, una pestaña por curso, la línea
+   de recuento y una tabla de seis columnas. Los tokens y los componentes
+   comunes —fila, tabla base, pastilla de estado, botón, estado vacío— están
+   en `prc-app.css` y aquí no se repiten: esto es solo lo que esta pantalla
+   tiene y ninguna otra. */
 
 /* --- la banda de cabecera ------------------------------------------------ */
 
-/* Dos mitades con el hueco del 5,5 % de la fila. La ilustración del original
-   no se calca: es una imagen del sitio que se sustituye, no diseño. */
+/* El buscador a la izquierda y la leyenda plegada a su lado: la tabla, que
+   es lo que se viene a mirar, queda arriba. */
 .prc-taller__banda {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: var(--prc-hueco-px);
-  align-items: start;
-  padding: var(--prc-fila-relleno);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: 0 0 12px;
 }
 
-.prc-taller__izq { text-align: center; }
-.prc-taller__izq .prc-acciones { justify-content: center; }
-
-.prc-taller__nota {
-  font-size: var(--prc-t-base);
-  line-height: var(--prc-i-base);
-  color: var(--prc-c-texto);
-  margin: 0;
-  padding: 10px 0;
-}
+.prc-taller__nota { margin: 0 0 12px; font-size: .875rem; color: var(--prc-c-medio); }
 
 /* El estado del procedimiento se presenta como etapas ordenadas, con texto además de color. */
 .prc-ciclo-publicacion { list-style: none; margin: 0 0 24px; padding: 0 0 0 12px; }
@@ -36074,62 +36354,52 @@ body.prc-app .prc-btn-borrar {
 /* La consecuencia de una acción de peligro, al lado del botón. */
 .prc-consecuencia { align-self: center; margin-left: 8px; font-size: .875rem; color: var(--prc-c-texto); }
 
-@media (max-width: 991.98px) {
-  .prc-taller__banda { grid-template-columns: 1fr; row-gap: 16px; }
-}
 
 /* --- el buscador de la tabla --------------------------------------------- */
 
-/* Los controles van en bloque y centrados, como en el original: el campo con
-   su ancho de siempre y el botón debajo. Filtra el servidor. */
+/* El rótulo se ve, encima; el campo, el estado y el botón en una fila.
+   Filtra el servidor. */
 .prc-buscador { margin: 0; }
+.prc-buscador__rotulo { display: block; margin: 0 0 4px; font-size: .875rem; font-weight: 600; color: var(--prc-c-titulo); }
+.prc-buscador__fila { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 .prc-buscador__campo,
 .prc-buscador__estado {
-  display: block;
-  margin: 0 auto 6px;
-  width: 177px;
+  width: 220px;
   max-width: 100%;
+  min-height: var(--prc-alto-boton, 38px);
   padding: 6px 10px;
   font: 400 var(--prc-t-base)/normal var(--prc-fuente);
-  color: var(--prc-c-texto);
+  color: var(--prc-c-tabla);
   background: var(--prc-c-fondo);
-  border: 1px solid var(--prc-c-linea);
+  border: 1px solid var(--prc-c-borde-campo, #ced4da);
   border-radius: var(--prc-radio-campo);
 }
+.prc-buscador__estado { width: auto; }
 
-.prc-buscador__boton {
-  display: block;
-  margin: 0 auto;
-  padding: 6px 12px;
-  font: 400 var(--prc-t-base)/1.4 var(--prc-fuente);
-  color: var(--prc-c-fuerte);
-  background: #e6e6e6;
-  border: 0;
-  border-radius: var(--prc-radio);
-  cursor: pointer;
-}
-
-.prc-buscador__boton:hover { filter: brightness(.95); }
 .prc-buscador__campo:focus-visible,
-.prc-buscador__estado:focus-visible,
-.prc-buscador__boton:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
-.prc-buscador__quitar { display: inline-block; margin: 8px 0 0; font-size: var(--prc-t-menudo); }
+.prc-buscador__estado:focus-visible { outline: 2px solid var(--prc-c-azul-borde); outline-offset: 2px; }
+.prc-buscador__quitar { display: inline-block; margin: 8px 0 0; font-size: .875rem; }
 
 /* --- la leyenda de estados ----------------------------------------------- */
 
+/* Plegada: se abre cuando hace falta, sin JavaScript. */
 .prc-leyenda {
   border: 1px solid var(--prc-c-linea);
   background: var(--prc-c-fondo-leyenda);
-  padding: 10px 14px;
+  padding: 8px 14px;
+  max-width: 560px;
 }
+.prc-leyenda > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: var(--prc-c-titulo); }
+.prc-leyenda[open] > summary { margin-bottom: 8px; }
 
 .prc-leyenda__lista { list-style: none; margin: 0; padding: 0; }
 
 .prc-leyenda__item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin: 0 0 4px;
   font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
 }
@@ -36199,73 +36469,42 @@ body.prc-app .prc-btn-borrar {
 
 .prc-recuento strong { font-weight: var(--prc-p-fuerte); }
 
-/* --- la tabla de dos niveles --------------------------------------------- */
+/* --- la tabla ------------------------------------------------------------ */
 
-/* Quince columnas apretadas no caben en un móvil: por debajo de 1000px la
-   caja se desplaza en horizontal, y por debajo de 720px `prc-app.css` la
-   convierte en tarjetas. */
-.prc-tabla--taller { min-width: 1000px; table-layout: fixed; }
+/* Seis columnas: por debajo de 720px `prc-app.css` y la regla de abajo la
+   convierten en tarjetas. */
+.prc-tabla--taller { width: 100%; }
 
 .prc-tabla--taller thead th {
-  font-size: var(--prc-t-tabla);
-  line-height: var(--prc-i-tabla);
+  font-size: var(--prc-t-base);
   font-weight: var(--prc-p-fuerte);
-  padding: 3px;
+  padding: 8px 6px;
   vertical-align: bottom;
-  white-space: normal;
-  border-color: rgba(255, 255, 255, .25);
+  white-space: nowrap;
+  color: var(--prc-c-titulo);
+  background: var(--prc-c-fondo-barra);
+  border: 1px solid var(--prc-c-linea-celda);
 }
-
-/* Las seis van acotadas a la tabla del taller, y no sueltas por su clase, por
-   una razón de peso: el armazón pinta `.prc-tabla th { background: transparent }`,
-   que con su elemento pesa más que una clase suelta y dejaba la cabecera en
-   blanco. Con la tabla delante pesan más que él y la banda granate sale. */
-.prc-tabla--taller .prc-tabla__grupo { color: var(--prc-g-texto); }
-.prc-tabla--taller .prc-tabla__grupo--1 { background: var(--prc-g1); }
-.prc-tabla--taller .prc-tabla__grupo--2 { background: var(--prc-g2); }
-.prc-tabla--taller .prc-tabla__grupo--3 { background: var(--prc-g3); }
-
-/* La segunda fila lleva el texto en el granate oscuro del tercer grupo y no
-   en blanco: sobre el rosa del original, el blanco da 1,99:1 y este 8,39:1,
-   sin tocar la paleta que la gente reconoce. */
-.prc-tabla--taller .prc-th--a { background: var(--prc-g1-sub); color: var(--prc-g3); }
-.prc-tabla--taller .prc-th--b { background: var(--prc-g2-sub); color: var(--prc-g3); }
-.prc-tabla--taller .prc-th--c { background: var(--prc-g3-sub); color: var(--prc-g3); }
-.prc-th--centro { text-align: center; }
-.prc-th--color { width: 64px; }
-.prc-th--gestiona { width: 200px; }
 
 .prc-tabla--taller tbody th,
 .prc-tabla--taller tbody td {
-  font-size: var(--prc-t-tabla);
-  line-height: var(--prc-i-tabla);
+  font-size: var(--prc-t-base);
+  line-height: 1.4;
   font-weight: 400;
   color: var(--prc-c-tabla);
   border: 1px solid var(--prc-c-linea-celda);
-  /* 6px de alto en vez de los 3px del original: con filas de dos renglones,
-     3px hace que los de filas contiguas se toquen. */
-  padding: 6px 4px;
+  padding: 8px 6px;
   vertical-align: middle;
   text-align: left;
   white-space: normal;
 }
 
-.prc-tabla--taller .prc-celda-color,
-.prc-tabla--taller .prc-celda-num,
-.prc-tabla--taller .prc-celda-destinatario,
-.prc-tabla--taller .prc-celda-estado,
-.prc-tabla--taller .prc-celda-accion { text-align: center; }
-
-.prc-mini-color { display: block; width: 40px; height: 40px; margin: 0 auto; }
-
-/* Acotadas igual que las de la cabecera, y por lo mismo: sueltas las pisan
-   las reglas por elemento de `.prc-tabla--taller tbody td`, que van ahí
-   arriba y pesan más. */
-.prc-tabla--taller .prc-celda-num { font-weight: 500; }
-.prc-celda-titulo a { color: var(--prc-c-azul-tabla); }
+.prc-celda-titulo a { color: var(--prc-c-azul-tabla); font-weight: 600; }
+.prc-celda-titulo__meta { display: block; margin-top: 2px; font-size: .875rem; color: var(--prc-c-medio); font-weight: 400; }
 .prc-celda-estado .prc-state { white-space: normal; }
 .prc-celda-estado .prc-state__curso { display: inline-block; padding-top: 2px; }
-.prc-tabla--taller .prc-celda-fecha { white-space: nowrap; }
+.prc-tabla--taller .prc-celda-accion .prc-acciones { gap: 6px; margin: 0; flex-wrap: nowrap; }
+.prc-tabla--taller .prc-celda-accion form { margin: 0; }
 
 .prc-ambitos { margin: 0; padding-left: 1.1em; }
 .prc-ambitos li { line-height: var(--prc-i-tabla); }
@@ -36300,22 +36539,8 @@ body.prc-app .prc-btn-borrar {
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller { min-width: 0; table-layout: auto; }
-  .prc-tabla--taller tbody th { display: flex; gap: 12px; padding: 6px 0; border: 0; text-align: left; }
-  .prc-tabla--taller tbody th::before {
-    content: attr(data-rotulo);
-    flex: 0 0 8rem;
-    font-size: var(--prc-t-menudo);
-    font-weight: var(--prc-p-fuerte);
-    color: var(--prc-c-tenue);
-  }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0; border: 0; text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
-  .prc-tabla--taller .prc-celda-color,
-  .prc-tabla--taller .prc-celda-num,
-  .prc-tabla--taller .prc-celda-destinatario,
-  .prc-tabla--taller .prc-celda-estado,
-  .prc-tabla--taller .prc-celda-accion { text-align: left; }
-  .prc-mini-color { width: 100%; height: 10px; }
 }
 
 /* --- «Preguntas» ---------------------------------------------------------- */
@@ -36427,7 +36652,7 @@ body.prc-app .prc-btn-borrar {
 			buttonsStyling: false,
 			customClass: {
 				confirmButton: \'prc-btn prc-btn-borrar btn\',
-				cancelButton: \'prc-btn btn btn-light\'
+				cancelButton: \'prc-btn prc-btn-sec btn btn-outline-secondary\'
 			}
 		} ).then( function ( respuesta ) {
 			if ( ! respuesta.isConfirmed ) {
@@ -36705,7 +36930,7 @@ body.prc-app .prc-btn-borrar {
 		}
 		var cancelar = document.createElement( \'button\' );
 		cancelar.type = \'button\';
-		cancelar.className = \'prc-btn btn btn-light\';
+		cancelar.className = \'prc-btn prc-btn-sec btn btn-outline-secondary\';
 		cancelar.textContent = \'Cancelar\';
 		cancelar.setAttribute( \'data-prc-export-close\', \'\' );
 		var acciones = form.querySelector( \'.prc-acciones\' ) || form;
@@ -36884,6 +37109,7 @@ body.prc-app .prc-btn-borrar {
 			celdas[ nodo.getAttribute( \'data-prc-cuenta\' ) ] = nodo;
 		} );
 
+		// El reloj va con dos cifras; los días, tal cual: «010» se lee mal.
 		function escribe( clave, valor, digitos ) {
 			if ( celdas[ clave ] ) {
 				celdas[ clave ].textContent = String( valor ).padStart( digitos, \'0\' );
@@ -36892,7 +37118,7 @@ body.prc-app .prc-btn-borrar {
 
 		function pinta() {
 			var queda = Math.max( 0, Math.floor( ( fin - Date.now() ) / 1000 ) );
-			escribe( \'dias\', Math.floor( queda / 86400 ), 3 );
+			escribe( \'dias\', Math.floor( queda / 86400 ), 1 );
 			escribe( \'horas\', Math.floor( queda / 3600 ) % 24, 2 );
 			escribe( \'minutos\', Math.floor( queda / 60 ) % 60, 2 );
 			escribe( \'segundos\', queda % 60, 2 );

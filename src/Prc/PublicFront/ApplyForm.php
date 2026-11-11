@@ -390,6 +390,9 @@ final class ApplyForm {
 			'title'           => '',
 			'view_url'        => '',
 			'mine_url'        => Shell::url( 'mine' ),
+			// La vuelta se llama como la entrada del menú: según quién mira, no
+			// según a quién va el procedimiento.
+			'mine_label'      => Shell::mine_label( user_can( get_current_user_id(), ProcedureAccess::CAP_APPLY_AS_TEACHER ) ),
 			'help_url'        => Help::url( HelpContent::GUIDE_APPLY, 'rellenar-la-solicitud' ),
 			'applicant_type'  => '',
 			'state'           => '',

@@ -144,7 +144,7 @@ final class ApplyFormView {
 
 		ob_start();
 		?>
-		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( Shell::mine_label( ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'] ) ); ?></a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['mine_url'] ); ?>">&larr; <?php echo esc_html( (string) ( $m['mine_label'] ?? Shell::mine_label( false ) ) ); ?></a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( (string) $m['title'] ); ?></h1>
 			<span class="<?php echo esc_attr( Assets::state_class( (string) $m['state'] ) ); ?>"><?php echo esc_html( (string) $m['state_label'] ); ?></span>
@@ -723,7 +723,7 @@ final class ApplyFormView {
 		if ( '' === $url ) {
 			return '';
 		}
-		$rotulo = Shell::mine_label( ApplicationMetaKeys::TYPE_TEACHER === (string) ( $m['applicant_type'] ?? '' ) );
+		$rotulo = (string) ( $m['mine_label'] ?? Shell::mine_label( false ) );
 		return '<p><a class="' . esc_attr( Assets::button_class( true ) ) . '" href="' . esc_url( $url ) . '">' . esc_html( $rotulo ) . '</a></p>';
 	}
 }

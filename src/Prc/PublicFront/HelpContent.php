@@ -354,10 +354,10 @@ final class HelpContent {
 				'id'    => 'taller-preguntas',
 				'level' => 3,
 				'title' => 'Preguntas',
-				'html'  => '<p>Hasta 40 preguntas propias. Al final aparece siempre una <strong>«Pregunta nueva»</strong> vacía: rellénela y pulse <strong>«Guardar las preguntas»</strong>; aparecerá otra vacía para la siguiente. Se crean <strong>de una en una</strong>.</p>'
+				'html'  => '<p>Hasta 40 preguntas propias. Al final hay siempre una <strong>«Pregunta nueva»</strong> vacía y, en <strong>«Añadir otra pregunta»</strong>, dos más: rellene las que necesite y pulse <strong>«Guardar las preguntas»</strong>. Las que deje sin rótulo no se crean. Cada pregunta enseña solo los campos de su tipo.</p>'
 					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, borre su rótulo y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar. El rótulo sí, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, marque <strong>«Quitar esta pregunta»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el rótulo se dice cuántas la han contestado. El rótulo sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
@@ -598,7 +598,7 @@ final class HelpContent {
 				'id'    => 'varias-casillas',
 				'level' => 3,
 				'title' => '¿Cómo creo varias casillas o varias preguntas?',
-				'html'  => '<p>Se crean de una en una: rellene la «Pregunta nueva» y pulse «Guardar las preguntas»; aparecerá otra vacía. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'html'  => '<p>Rellene la «Pregunta nueva» y, si necesita más, las dos de «Añadir otra pregunta», y pulse «Guardar las preguntas»; aparecerán otras tres vacías. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
 				'shots' => array(),
 			),
 			array(

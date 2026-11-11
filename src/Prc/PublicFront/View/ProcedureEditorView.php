@@ -26,6 +26,11 @@ use Prc\PublicFront\Shell;
 final class ProcedureEditorView {
 
 	/**
+	 * Blank rows the «Preguntas» panel offers to add questions at once.
+	 */
+	private const NEW_QUESTIONS = 3;
+
+	/**
 	 * Paint the workshop.
 	 *
 	 * @param array<string, mixed> $m What ProcedureEditor::model() returned.
@@ -866,12 +871,18 @@ final class ProcedureEditorView {
 	// ─── Preguntas ─────────────────────────────────────────────────────────
 
 	/**
-	 * The «Preguntas» panel: the question list, plus one blank row to add another.
+	 * The «Preguntas» panel: the question list, plus three blank rows to add more.
 	 *
 	 * **No es un constructor de formularios**: una pregunta tiene rótulo,
 	 * indicaciones, tipo, opciones y si es obligatoria. Ni condiciones ni
-	 * reglas (ADR-0019). Sin JavaScript: las filas son campos paralelos y la
-	 * última va en blanco; se borra el rótulo y la pregunta se va.
+	 * reglas (ADR-0019). Sin JavaScript: las filas son campos paralelos y las
+	 * tres últimas van en blanco, la primera a la vista y las otras dos en
+	 * «Añadir otra pregunta»; la que se guarda sin rótulo no se crea. Una
+	 * guardada se quita con su casilla «Quitar esta pregunta».
+	 *
+	 * Cada grupo de campos dice para qué tipos es (`data-prc-q-for`) y el CSS
+	 * esconde con `:has()` los que no tocan al tipo elegido; sin `:has()` se
+	 * ven todos, como antes.
 	 *
 	 * «Subir» y «bajar» son botones de otro formulario, el de mover, que va
 	 * fuera de este (`form="prc-q-mover"`): mueven una pregunta por POST y
@@ -881,18 +892,18 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function questions_panel( array $m ): string {
-		$op    = ProcedureEditor::PANEL_QUESTIONS;
-		$filas = (array) $m['questions'];
-		if ( count( $filas ) < (int) $m['q_max'] ) {
-			$filas[] = array(
-				'key'      => '',
-				'label'    => '',
-				'help'     => '',
-				'type'     => ProcedureQuestions::TYPE_TEXT,
-				'required' => false,
-				'choices'  => array(),
-			);
-		}
+		$op        = ProcedureEditor::PANEL_QUESTIONS;
+		$guardas   = (array) $m['questions'];
+		$total     = count( $guardas );
+		$nuevas    = max( 0, min( self::NEW_QUESTIONS, (int) $m['q_max'] - $total ) );
+		$en_blanco = array(
+			'key'      => '',
+			'label'    => '',
+			'help'     => '',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
 
 		ob_start();
 		?>
@@ -904,14 +915,24 @@ final class ProcedureEditorView {
 			<p class="prc-intro">
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
-				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
+			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php foreach ( $guardas as $i => $pregunta ) : ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, $m, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endforeach; ?>
+			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
+				<?php if ( 1 === $n ) : ?>
+					<details class="prc-preguntas-mas">
+						<summary>Añadir otra pregunta</summary>
+				<?php endif; ?>
+				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php endfor; ?>
+			<?php if ( $nuevas > 1 ) : ?>
+				</details>
+			<?php endif; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
@@ -925,7 +946,9 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The «Subir» and «Bajar» buttons of one saved question.
+	 * The «Subir» and «Bajar» buttons of one saved question, and its «Quitar».
+	 *
+	 * Secundarios: no compiten con «Guardar las preguntas».
 	 *
 	 * @param int                  $i     Row index.
 	 * @param array<string, mixed> $p     Question.
@@ -941,7 +964,7 @@ final class ProcedureEditorView {
 		foreach ( $botones as $hacia => $boton ) {
 			$out .= sprintf(
 				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
-				esc_attr( Assets::button_class( true ) ),
+				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
 				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
@@ -949,7 +972,10 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
+			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
 	/**
@@ -965,22 +991,24 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<div class="prc-seccion__cuerpo">
-			<?php
-			foreach ( array(
-				'min' => 'Mínimo',
-				'max' => 'Máximo',
-			) as $limite => $rotulo ) :
-				?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
-					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+		<div data-prc-q-for="number">
+			<div class="prc-seccion__cuerpo">
+				<?php
+				foreach ( array(
+					'min' => 'Mínimo',
+					'max' => 'Máximo',
+				) as $limite => $rotulo ) :
+					?>
+					<div class="prc-campo prc-campo--medio">
+						<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+						<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+							value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
 		</div>
-		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
-		<div class="prc-campo">
+		<div class="prc-campo" data-prc-q-for="grid">
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
@@ -991,18 +1019,45 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * One question row.
+	 * «Entrega con plazo propio» and its two dates: only for «Archivo».
 	 *
-	 * @param int                   $i     Row index.
-	 * @param array<string, mixed>  $p     Question.
-	 * @param array<string, string> $tipos Question types.
-	 * @param int                   $total Saved questions, to know the last one.
+	 * @param int                  $i Row index.
+	 * @param array<string, mixed> $p Question.
 	 * @return string
 	 */
-	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
-		$nueva  = '' === (string) $p['key'];
-		$campo  = ProcedureEditor::FIELD_Q;
-		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+	private static function delivery_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$ayuda = 'prc-q-d-help-' . $i;
+		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
+			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
+			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+		foreach ( array(
+			'opens_at'  => 'Apertura de la entrega',
+			'closes_at' => 'Cierre de la entrega (inclusive)',
+		) as $date_key => $date_label ) {
+			$id   = 'prc-q-' . $date_key . '-' . $i;
+			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+		}
+		return $out . '</div>';
+	}
+
+	/**
+	 * One question row.
+	 *
+	 * @param int                  $i     Row index.
+	 * @param array<string, mixed> $p     Question.
+	 * @param array<string, mixed> $m     Model: `q_types` and `answers`.
+	 * @param int                  $total Saved questions, to know the last one.
+	 * @return string
+	 */
+	private static function question_row( int $i, array $p, array $m, int $total ): string {
+		$nueva     = '' === (string) $p['key'];
+		$campo     = ProcedureEditor::FIELD_Q;
+		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
+		$aviso     = 'prc-q-l-aviso-' . $i;
 
 		ob_start();
 		?>
@@ -1014,12 +1069,15 @@ final class ProcedureEditorView {
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>" />
+						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
+					<?php if ( $contestan > 0 ) : ?>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-t-<?php echo esc_attr( (string) $i ); ?>">Tipo</label>
-					<select class="prc-control" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
-						<?php foreach ( $tipos as $valor => $nombre ) : ?>
+					<select class="prc-control prc-pregunta__tipo" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
+						<?php foreach ( (array) $m['q_types'] as $valor => $nombre ) : ?>
 							<option value="<?php echo esc_attr( (string) $valor ); ?>" <?php selected( (string) $valor, (string) $p['type'] ); ?>><?php echo esc_html( (string) $nombre ); ?></option>
 						<?php endforeach; ?>
 					</select>
@@ -1031,29 +1089,14 @@ final class ProcedureEditorView {
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
 				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
 			</div>
-			<div class="prc-campo">
+			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
 				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<div class="prc-campo prc-opcion">
-				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
-				<p class="prc-campo__ayuda" id="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p>
-			</div>
-			<?php
-			foreach ( array(
-				'opens_at'  => 'Apertura de la entrega',
-				'closes_at' => 'Cierre de la entrega (inclusive)',
-			) as $date_key => $date_label ) :
-				?>
-				<div class="prc-campo">
-					<label for="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>"><?php echo esc_html( $date_label ); ?></label>
-					<input class="prc-control" type="date" id="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $date_key ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) ( $p[ $date_key ] ?? '' ) ); ?>" aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+			<?php echo self::delivery_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />

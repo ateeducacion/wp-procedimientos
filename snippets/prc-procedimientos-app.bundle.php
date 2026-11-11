@@ -12023,11 +12023,28 @@ final class Applications {
 
 
 	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
+		return array_fill_keys( array_keys( self::answer_counts( $procedure_id, $empty_too ) ), true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function answer_counts( int $procedure_id, bool $empty_too = false ): array {
 		$out = array();
 		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
 			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
 			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
-			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+			foreach ( array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) as $clave ) {
+				$out[ (string) $clave ] = ( $out[ (string) $clave ] ?? 0 ) + 1;
+			}
 		}
 		return $out;
 	}
@@ -18165,10 +18182,10 @@ final class HelpContent {
 				'id'    => 'taller-preguntas',
 				'level' => 3,
 				'title' => 'Preguntas',
-				'html'  => '<p>Hasta 40 preguntas propias. Al final aparece siempre una <strong>«Pregunta nueva»</strong> vacía: rellénela y pulse <strong>«Guardar las preguntas»</strong>; aparecerá otra vacía para la siguiente. Se crean <strong>de una en una</strong>.</p>'
+				'html'  => '<p>Hasta 40 preguntas propias. Al final hay siempre una <strong>«Pregunta nueva»</strong> vacía y, en <strong>«Añadir otra pregunta»</strong>, dos más: rellene las que necesite y pulse <strong>«Guardar las preguntas»</strong>. Las que deje sin rótulo no se crean. Cada pregunta enseña solo los campos de su tipo.</p>'
 					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, borre su rótulo y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar. El rótulo sí, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, marque <strong>«Quitar esta pregunta»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el rótulo se dice cuántas la han contestado. El rótulo sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
@@ -18409,7 +18426,7 @@ final class HelpContent {
 				'id'    => 'varias-casillas',
 				'level' => 3,
 				'title' => '¿Cómo creo varias casillas o varias preguntas?',
-				'html'  => '<p>Se crean de una en una: rellene la «Pregunta nueva» y pulse «Guardar las preguntas»; aparecerá otra vacía. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'html'  => '<p>Rellene la «Pregunta nueva» y, si necesita más, las dos de «Añadir otra pregunta», y pulse «Guardar las preguntas»; aparecerán otras tres vacías. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -22397,6 +22414,11 @@ final class ProcedureEditorView {
 
 
 
+	private const NEW_QUESTIONS = 3;
+
+
+
+
 
 
 
@@ -23249,19 +23271,25 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
+
+
 	private static function questions_panel( array $m ): string {
-		$op    = ProcedureEditor::PANEL_QUESTIONS;
-		$filas = (array) $m['questions'];
-		if ( count( $filas ) < (int) $m['q_max'] ) {
-			$filas[] = array(
-				'key'      => '',
-				'label'    => '',
-				'help'     => '',
-				'type'     => ProcedureQuestions::TYPE_TEXT,
-				'required' => false,
-				'choices'  => array(),
-			);
-		}
+		$op        = ProcedureEditor::PANEL_QUESTIONS;
+		$guardas   = (array) $m['questions'];
+		$total     = count( $guardas );
+		$nuevas    = max( 0, min( self::NEW_QUESTIONS, (int) $m['q_max'] - $total ) );
+		$en_blanco = array(
+			'key'      => '',
+			'label'    => '',
+			'help'     => '',
+			'type'     => ProcedureQuestions::TYPE_TEXT,
+			'required' => false,
+			'choices'  => array(),
+		);
 
 		ob_start();
 		?>
@@ -23273,14 +23301,24 @@ final class ProcedureEditorView {
 			<p class="prc-intro">
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
-				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
+			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) );?>
 
-			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) );?>
+			<?php foreach ( $guardas as $i => $pregunta ) : ?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, $m, $total );?>
 			<?php endforeach; ?>
+			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
+				<?php if ( 1 === $n ) : ?>
+					<details class="prc-preguntas-mas">
+						<summary>Añadir otra pregunta</summary>
+				<?php endif; ?>
+				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total );?>
+			<?php endfor; ?>
+			<?php if ( $nuevas > 1 ) : ?>
+				</details>
+			<?php endif; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
 		</form>
@@ -23301,6 +23339,8 @@ final class ProcedureEditorView {
 
 
 
+
+
 	private static function move_buttons( int $i, array $p, int $total ): string {
 		$botones = array(
 			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
@@ -23310,7 +23350,7 @@ final class ProcedureEditorView {
 		foreach ( $botones as $hacia => $boton ) {
 			$out .= sprintf(
 				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
-				esc_attr( Assets::button_class( true ) ),
+				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
 				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
@@ -23318,7 +23358,10 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
+			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
 
@@ -23334,22 +23377,24 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<div class="prc-seccion__cuerpo">
-			<?php
-			foreach ( array(
-				'min' => 'Mínimo',
-				'max' => 'Máximo',
-			) as $limite => $rotulo ) :
-				?>
-				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
-					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+		<div data-prc-q-for="number">
+			<div class="prc-seccion__cuerpo">
+				<?php
+				foreach ( array(
+					'min' => 'Mínimo',
+					'max' => 'Máximo',
+				) as $limite => $rotulo ) :
+					?>
+					<div class="prc-campo prc-campo--medio">
+						<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+						<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+							value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
 		</div>
-		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
-		<div class="prc-campo">
+		<div class="prc-campo" data-prc-q-for="grid">
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
@@ -23366,12 +23411,39 @@ final class ProcedureEditorView {
 
 
 
+	private static function delivery_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$ayuda = 'prc-q-d-help-' . $i;
+		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
+			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
+			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+		foreach ( array(
+			'opens_at'  => 'Apertura de la entrega',
+			'closes_at' => 'Cierre de la entrega (inclusive)',
+		) as $date_key => $date_label ) {
+			$id   = 'prc-q-' . $date_key . '-' . $i;
+			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+		}
+		return $out . '</div>';
+	}
 
 
-	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
-		$nueva  = '' === (string) $p['key'];
-		$campo  = ProcedureEditor::FIELD_Q;
-		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+
+
+
+
+
+
+
+
+	private static function question_row( int $i, array $p, array $m, int $total ): string {
+		$nueva     = '' === (string) $p['key'];
+		$campo     = ProcedureEditor::FIELD_Q;
+		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
+		$aviso     = 'prc-q-l-aviso-' . $i;
 
 		ob_start();
 		?>
@@ -23383,12 +23455,15 @@ final class ProcedureEditorView {
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
-						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>" />
+						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
+					<?php if ( $contestan > 0 ) : ?>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-q-t-<?php echo esc_attr( (string) $i ); ?>">Tipo</label>
-					<select class="prc-control" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
-						<?php foreach ( $tipos as $valor => $nombre ) : ?>
+					<select class="prc-control prc-pregunta__tipo" id="prc-q-t-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'type' ); ?>[<?php echo esc_attr( (string) $i ); ?>]">
+						<?php foreach ( (array) $m['q_types'] as $valor => $nombre ) : ?>
 							<option value="<?php echo esc_attr( (string) $valor ); ?>" <?php selected( (string) $valor, (string) $p['type'] ); ?>><?php echo esc_html( (string) $nombre ); ?></option>
 						<?php endforeach; ?>
 					</select>
@@ -23400,29 +23475,14 @@ final class ProcedureEditorView {
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
 				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
 			</div>
-			<div class="prc-campo">
+			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
 				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p );?>
-			<div class="prc-campo prc-opcion">
-				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
-				<p class="prc-campo__ayuda" id="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p>
-			</div>
-			<?php
-			foreach ( array(
-				'opens_at'  => 'Apertura de la entrega',
-				'closes_at' => 'Cierre de la entrega (inclusive)',
-			) as $date_key => $date_label ) :
-				?>
-				<div class="prc-campo">
-					<label for="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>"><?php echo esc_html( $date_label ); ?></label>
-					<input class="prc-control" type="date" id="prc-q-<?php echo esc_attr( $date_key . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $date_key ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) ( $p[ $date_key ] ?? '' ) ); ?>" aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
-				</div>
-			<?php endforeach; ?>
+			<?php echo self::delivery_fields( $i, $p );?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
@@ -24722,6 +24782,7 @@ final class ProcedureEditor {
 
 
 
+
 	private static function save_questions( int $procedure_id ): void {
 
 		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
@@ -24736,6 +24797,7 @@ final class ProcedureEditor {
 		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
 		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
 		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
+		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 
 
 		$antes   = Applications::questions( $procedure_id );
@@ -24745,7 +24807,8 @@ final class ProcedureEditor {
 			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
 				'key'       => $key,
-				'label'     => sanitize_text_field( (string) $rotulo ),
+
+				'label'     => empty( $quitadas[ $i ] ) ? sanitize_text_field( (string) $rotulo ) : '',
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
 				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
@@ -25240,7 +25303,7 @@ final class ProcedureEditor {
 
 
 
-		$m['checklist']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+		$m['checklist'] = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
 			array(
 				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
 				'questions'  => Applications::questions( $procedure_id ),
@@ -25249,7 +25312,10 @@ final class ProcedureEditor {
 				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			)
 		);
-		$m['not_ready']     = ProcedureInput::blocking( $m['checklist'] );
+		$m['not_ready'] = ProcedureInput::blocking( $m['checklist'] );
+
+
+		$m['answers']       = self::PANEL_QUESTIONS === $m['panel'] ? Applications::answer_counts( $procedure_id ) : array();
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 
@@ -25287,6 +25353,7 @@ final class ProcedureEditor {
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
 			'checklist'               => array(),
+			'answers'                 => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -35928,6 +35995,29 @@ body.prc-app .prc-btn-borrar {
   .prc-tabla--taller .prc-celda-accion { text-align: left; }
   .prc-mini-color { width: 100%; height: 10px; }
 }
+
+/* --- «Preguntas» ---------------------------------------------------------- */
+
+/* Cada pregunta enseña solo los campos de su tipo. Cada grupo dice para qué
+   tipos es (`data-prc-q-for`) y aquí se esconde el resto según la opción
+   elegida en «Tipo», sin guion. Un navegador sin `:has()` no entiende la
+   regla y lo enseña todo, como antes: es el fallo bueno. Lo escondido se
+   sigue enviando, como cuando se veía. */
+.prc-pregunta:has(.prc-pregunta__tipo option[value="text"]:checked) [data-prc-q-for]:not([data-prc-q-for~="text"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="single"]:checked) [data-prc-q-for]:not([data-prc-q-for~="single"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="multiple"]:checked) [data-prc-q-for]:not([data-prc-q-for~="multiple"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="yesno"]:checked) [data-prc-q-for]:not([data-prc-q-for~="yesno"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="file"]:checked) [data-prc-q-for]:not([data-prc-q-for~="file"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="number"]:checked) [data-prc-q-for]:not([data-prc-q-for~="number"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="date"]:checked) [data-prc-q-for]:not([data-prc-q-for~="date"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="grid"]:checked) [data-prc-q-for]:not([data-prc-q-for~="grid"]) { display: none; }
+
+/* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
+.prc-preguntas-mas { margin: 0 0 16px; }
+.prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prc-pregunta__quitar { margin-left: auto; }
+.prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
 ',
   'js/prc-app.js' => '/*
  * Lo mínimo que las pantallas del aplicativo no pueden hacer sin guion.

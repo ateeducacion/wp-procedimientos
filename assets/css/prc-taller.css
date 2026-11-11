@@ -314,3 +314,26 @@
   .prc-tabla--taller .prc-celda-accion { text-align: left; }
   .prc-mini-color { width: 100%; height: 10px; }
 }
+
+/* --- «Preguntas» ---------------------------------------------------------- */
+
+/* Cada pregunta enseña solo los campos de su tipo. Cada grupo dice para qué
+   tipos es (`data-prc-q-for`) y aquí se esconde el resto según la opción
+   elegida en «Tipo», sin guion. Un navegador sin `:has()` no entiende la
+   regla y lo enseña todo, como antes: es el fallo bueno. Lo escondido se
+   sigue enviando, como cuando se veía. */
+.prc-pregunta:has(.prc-pregunta__tipo option[value="text"]:checked) [data-prc-q-for]:not([data-prc-q-for~="text"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="single"]:checked) [data-prc-q-for]:not([data-prc-q-for~="single"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="multiple"]:checked) [data-prc-q-for]:not([data-prc-q-for~="multiple"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="yesno"]:checked) [data-prc-q-for]:not([data-prc-q-for~="yesno"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="file"]:checked) [data-prc-q-for]:not([data-prc-q-for~="file"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="number"]:checked) [data-prc-q-for]:not([data-prc-q-for~="number"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="date"]:checked) [data-prc-q-for]:not([data-prc-q-for~="date"]),
+.prc-pregunta:has(.prc-pregunta__tipo option[value="grid"]:checked) [data-prc-q-for]:not([data-prc-q-for~="grid"]) { display: none; }
+
+/* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
+.prc-preguntas-mas { margin: 0 0 16px; }
+.prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prc-pregunta__quitar { margin-left: auto; }
+.prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }

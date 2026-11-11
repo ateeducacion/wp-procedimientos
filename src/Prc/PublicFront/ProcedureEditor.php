@@ -861,9 +861,10 @@ final class ProcedureEditor {
 	 * Save the question list of the procedure.
 	 *
 	 * Campos paralelos, sin JavaScript: una fila por índice. La que llegue sin
-	 * rótulo se cae sola en {@see ProcedureQuestions::sanitize()}, y es lo que
-	 * hace que la fila en blanco del final sirva para añadir una pregunta y
-	 * también para no añadir ninguna. Las respuestas ya dadas a una pregunta
+	 * rótulo —o con «Quitar esta pregunta» marcada— se cae sola en
+	 * {@see ProcedureQuestions::sanitize()}, y es lo que hace que las filas en
+	 * blanco del final sirvan para añadir preguntas y también para no añadir
+	 * ninguna. Las respuestas ya dadas a una pregunta
 	 * que se borra se quedan bajo su clave (ADR-0019).
 	 *
 	 * Las filas de una rejilla llegan como texto y se casan con las que tenía
@@ -888,6 +889,7 @@ final class ProcedureEditor {
 		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
 		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
 		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
+		$quitadas   = (array) wp_unslash( $_POST[ self::FIELD_Q . 'remove' ] ?? array() );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 		$antes   = Applications::questions( $procedure_id );
@@ -897,7 +899,8 @@ final class ProcedureEditor {
 			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
 				'key'       => $key,
-				'label'     => sanitize_text_field( (string) $rotulo ),
+				// «Quitar esta pregunta» es lo mismo que dejar el rótulo en blanco.
+				'label'     => empty( $quitadas[ $i ] ) ? sanitize_text_field( (string) $rotulo ) : '',
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
 				'choices'   => sanitize_textarea_field( (string) ( $opciones[ $i ] ?? '' ) ),
@@ -1392,7 +1395,7 @@ final class ProcedureEditor {
 		// Lo que falta para publicar se avisa en todo el taller mientras no
 		// esté publicado, y sin ello no se ofrece publicar. «Publicación» lo
 		// enseña punto por punto, con lo que solo avisa (la resolución).
-		$m['checklist']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+		$m['checklist'] = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
 			array(
 				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
 				'questions'  => Applications::questions( $procedure_id ),
@@ -1401,7 +1404,10 @@ final class ProcedureEditor {
 				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			)
 		);
-		$m['not_ready']     = ProcedureInput::blocking( $m['checklist'] );
+		$m['not_ready'] = ProcedureInput::blocking( $m['checklist'] );
+		// Cuántas solicitudes contestaron cada pregunta: solo en su pestaña,
+		// que es la única que lo dice y la única que recorre las solicitudes.
+		$m['answers']       = self::PANEL_QUESTIONS === $m['panel'] ? Applications::answer_counts( $procedure_id ) : array();
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
@@ -1439,6 +1445,7 @@ final class ProcedureEditor {
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
 			'checklist'               => array(),
+			'answers'                 => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,

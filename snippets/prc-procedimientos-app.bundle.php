@@ -1002,6 +1002,25 @@ final class ProcedureState {
 
 
 
+
+	public static function why_not_archivable( string $state ): string {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_CLOSED, ProcedureMetaKeys::STATE_RESOLVED ), true ) ) {
+			return '';
+		}
+		return ProcedureMetaKeys::STATE_ARCHIVED === $state
+			? 'Este procedimiento ya está marcado como histórico.'
+			: 'Solo se marca como histórico un procedimiento cerrado o resuelto: este sigue vivo.';
+	}
+
+
+
+
+
+
+
+
+
+
 	public static function accepts_applications( string $state ): bool {
 		return ProcedureMetaKeys::STATE_OPEN === $state;
 	}
@@ -2467,17 +2486,109 @@ final class ProcedureInput {
 
 
 
-	public static function not_ready( int $course, array $questions ): array {
+
+
+
+
+
+
+	public static function not_ready( int $course, array $questions, string $opens_at ): array {
+		return self::blocking(
+			self::checklist(
+				array(
+					'course'    => $course,
+					'questions' => $questions,
+					'opens_at'  => $opens_at,
+				)
+			)
+		);
+	}
+
+
+
+
+
+
+
+	public static function blocking( array $checklist ): array {
 		$faltan = array();
-		if ( $course <= 0 ) {
-			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
-		}
-		foreach ( $questions as $pregunta ) {
-			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
-				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+		foreach ( $checklist as $punto ) {
+			if ( ! empty( $punto['blocks'] ) && empty( $punto['ok'] ) ) {
+				$faltan = array_merge( $faltan, (array) $punto['missing'] );
 			}
 		}
 		return $faltan;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function checklist( array $facts ): array {
+		$abre       = self::text( $facts, 'opens_at' );
+		$abre       = self::is_valid_date( $abre ) ? $abre : '';
+		$cierra     = self::text( $facts, 'closes_at' );
+		$cierra     = self::is_valid_date( $cierra ) ? $cierra : $abre;
+		$preguntas  = (array) ( $facts['questions'] ?? array() );
+		$sin_curso  = 'Falta el curso: elíjalo en «Datos».';
+		$sin_plazo  = 'Falta el plazo de solicitud: ponga al menos su fecha de inicio en «Datos».';
+		$lista      = array(
+			self::point( 'course', (int) ( $facts['course'] ?? 0 ) > 0, true, 'Curso elegido.', $sin_curso, array( $sin_curso ) ),
+			self::point( 'window', '' !== $abre, true, sprintf( 'Plazo de solicitud: del %1$s al %2$s.', self::dmy( $abre ), self::dmy( $cierra ) ), $sin_plazo . ' Sin él, el procedimiento se quedaría en «Próximo» y nadie podría solicitar.', array( $sin_plazo ) ),
+			self::point( 'questions', true, false, array() === $preguntas ? 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Preguntas propias: %d.', count( $preguntas ) ), '', array() ),
+		);
+		$sin_fechas = array();
+		$entregas   = 0;
+		foreach ( $preguntas as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
+				++$entregas;
+				if ( ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+				}
+			}
+		}
+		if ( $entregas > 0 ) {
+			$lista[] = self::point( 'delivery', array() === $sin_fechas, true, 'Las entregas con plazo propio tienen sus fechas.', implode( ' ', $sin_fechas ), $sin_fechas );
+		}
+		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces».', array() );
+		return $lista;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function point( string $key, bool $ok, bool $blocks, string $done, string $missing, array $why ): array {
+		return array(
+			'key'     => $key,
+			'ok'      => $ok,
+			'blocks'  => $blocks,
+			'text'    => $ok ? $done : $missing,
+			'missing' => $ok ? array() : $why,
+		);
+	}
+
+
+
+
+
+
+
+	private static function dmy( string $ymd ): string {
+		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
 	}
 
 
@@ -6250,6 +6361,7 @@ final class ProcedureAccess {
 
 
 
+
 	private static function is_unready_publication( int $post_id, string $status, $course, ?array &$why = null ): bool {
 		$why        = array();
 		$publicados = array( 'publish', 'future' );
@@ -6267,7 +6379,8 @@ final class ProcedureAccess {
 			}
 		}
 		$preguntas = ProcedureQuestions::sanitize( $post_id > 0 ? get_post_meta( $post_id, ProcedureMetaKeys::QUESTIONS, true ) : array() );
-		$why       = ProcedureInput::not_ready( $curso, $preguntas );
+		$abre      = $post_id > 0 ? (string) get_post_meta( $post_id, ProcedureMetaKeys::OPENS_AT, true ) : '';
+		$why       = ProcedureInput::not_ready( $curso, $preguntas, $abre );
 		return array() !== $why;
 	}
 
@@ -6313,6 +6426,8 @@ final class ProcedureAccess {
 		if ( 0 === $post_id && ! self::can_edit_all_areas() && in_array( $request->get_param( 'status' ), array( 'publish', 'future', 'private' ), true ) ) {
 			return new \WP_Error( 'prc_scope_draft_first', 'Cree el procedimiento como borrador antes de publicarlo, para que tenga ámbito desde el principio.', array( 'status' => 400 ) );
 		}
+
+
 
 		$faltan = array();
 		if ( self::is_unready_publication( $post_id, (string) $request->get_param( 'status' ), $request->has_param( ProcedureTaxonomies::COURSE ) ? $request->get_param( ProcedureTaxonomies::COURSE ) : null, $faltan ) ) {
@@ -6685,8 +6800,9 @@ final class ProcedureAccess {
 
 
 
+
 	public static function can_archive( int $user_id, int $post_id ): bool {
-		return self::can_open( $user_id, $post_id );
+		return self::can_open( $user_id, $post_id ) && '' === ProcedureState::why_not_archivable( ProcedureState::of_post( $post_id ) );
 	}
 
 
@@ -24770,7 +24886,7 @@ final class ProcedureEditor {
 		}
 
 
-		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ), self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ) );
 		if ( array() !== $faltan ) {
 			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
 			return;
@@ -24854,8 +24970,9 @@ final class ProcedureEditor {
 			? ProcedureAccess::can_archive( $user_id, $procedure_id )
 			: ProcedureAccess::can_unarchive( $user_id );
 		if ( ! $puede ) {
+			$no_es_suyo     = 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.';
 			self::$rejected = $marcar
-				? 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.'
+				? ( ProcedureAccess::can_open( $user_id, $procedure_id ) ? ProcedureState::why_not_archivable( ProcedureState::of_post( $procedure_id ) ) : $no_es_suyo )
 				: 'Volver a abrir un procedimiento histórico solo lo hace quien administra el aplicativo.';
 			return;
 		}
@@ -25074,7 +25191,17 @@ final class ProcedureEditor {
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 
 
-		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+
+		$m['checklist']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+			array(
+				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
+				'questions'  => Applications::questions( $procedure_id ),
+				'opens_at'   => self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ),
+				'closes_at'  => self::meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT ),
+				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
+			)
+		);
+		$m['not_ready']     = ProcedureInput::blocking( $m['checklist'] );
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 
@@ -25111,6 +25238,7 @@ final class ProcedureEditor {
 			'can_publish'             => false,
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
+			'checklist'               => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -31548,8 +31676,10 @@ final class Mailer {
 			$falta[] = 'Enlace a la resolución';
 		}
 
+
+
 		$curso = wp_get_post_terms( $procedure_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) );
-		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ) ) );
+		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ), ProcedureState::today() ) );
 	}
 
 

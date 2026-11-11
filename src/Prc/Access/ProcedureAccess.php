@@ -188,10 +188,11 @@ final class ProcedureAccess {
 	/**
 	 * Whether this write would publish a procedure that is not ready yet.
 	 *
-	 * Sin curso o con una entrega con plazo propio sin fechas
-	 * ({@see ProcedureInput::not_ready()}) no se publica, entre por donde
-	 * entre. Solo en el paso de no publicado a publicado o programado: lo que
-	 * ya está publicado se sigue guardando igual, aunque no tenga curso.
+	 * Sin curso, sin plazo de solicitud o con una entrega con plazo propio sin
+	 * fechas ({@see ProcedureInput::not_ready()}) no se publica, entre por
+	 * donde entre. Solo en el paso de no publicado a publicado o programado:
+	 * lo que ya está publicado se sigue guardando igual, aunque no tenga curso
+	 * ni plazo.
 	 *
 	 * @param int        $post_id Procedure ID; 0 when it is being created.
 	 * @param string     $status  Status the write asks for.
@@ -216,7 +217,8 @@ final class ProcedureAccess {
 			}
 		}
 		$preguntas = ProcedureQuestions::sanitize( $post_id > 0 ? get_post_meta( $post_id, ProcedureMetaKeys::QUESTIONS, true ) : array() );
-		$why       = ProcedureInput::not_ready( $curso, $preguntas );
+		$abre      = $post_id > 0 ? (string) get_post_meta( $post_id, ProcedureMetaKeys::OPENS_AT, true ) : '';
+		$why       = ProcedureInput::not_ready( $curso, $preguntas, $abre );
 		return array() !== $why;
 	}
 
@@ -262,7 +264,9 @@ final class ProcedureAccess {
 		if ( 0 === $post_id && ! self::can_edit_all_areas() && in_array( $request->get_param( 'status' ), array( 'publish', 'future', 'private' ), true ) ) {
 			return new \WP_Error( 'prc_scope_draft_first', 'Cree el procedimiento como borrador antes de publicarlo, para que tenga ámbito desde el principio.', array( 'status' => 400 ) );
 		}
-		// Sin curso o con entregas sin fechas no se publica, y la REST dice por qué.
+		// Sin curso, sin plazo o con entregas sin fechas no se publica, y la
+		// REST dice por qué. Las metas no se publican en la REST: el plazo es
+		// siempre el guardado.
 		$faltan = array();
 		if ( self::is_unready_publication( $post_id, (string) $request->get_param( 'status' ), $request->has_param( ProcedureTaxonomies::COURSE ) ? $request->get_param( ProcedureTaxonomies::COURSE ) : null, $faltan ) ) {
 			return new \WP_Error( 'prc_not_ready', 'Todavía no se puede publicar. ' . implode( ' ', $faltan ), array( 'status' => 400 ) );
@@ -628,14 +632,15 @@ final class ProcedureAccess {
 	 *
 	 * Lo marca el ámbito que lo convocó. La puerta es {@see can_open()} y no
 	 * {@see can_edit()} a propósito: `can_edit()` lleva el cierre encima, y
-	 * lo primero que hace la marca es quitar esa posibilidad.
+	 * lo primero que hace la marca es quitar esa posibilidad. Y solo cuando
+	 * ya terminó, cerrado o resuelto ({@see ProcedureState::why_not_archivable()}).
 	 *
 	 * @param int $user_id User ID.
 	 * @param int $post_id Procedure ID.
 	 * @return bool
 	 */
 	public static function can_archive( int $user_id, int $post_id ): bool {
-		return self::can_open( $user_id, $post_id );
+		return self::can_open( $user_id, $post_id ) && '' === ProcedureState::why_not_archivable( ProcedureState::of_post( $post_id ) );
 	}
 
 	/**

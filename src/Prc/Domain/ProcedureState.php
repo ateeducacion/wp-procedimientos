@@ -200,6 +200,25 @@ final class ProcedureState {
 	}
 
 	/**
+	 * Why a procedure in this state cannot be marked as «histórico» yet.
+	 *
+	 * Histórico es dar por terminado: solo lo que ya terminó, cerrado o
+	 * resuelto. Un procedimiento vivo marcado por error deja a los centros sin
+	 * poder solicitar y solo administración lo vuelve a abrir (ADR-0023).
+	 *
+	 * @param string $state State slug.
+	 * @return string Empty when it may be marked.
+	 */
+	public static function why_not_archivable( string $state ): string {
+		if ( in_array( $state, array( ProcedureMetaKeys::STATE_CLOSED, ProcedureMetaKeys::STATE_RESOLVED ), true ) ) {
+			return '';
+		}
+		return ProcedureMetaKeys::STATE_ARCHIVED === $state
+			? 'Este procedimiento ya está marcado como histórico.'
+			: 'Solo se marca como histórico un procedimiento cerrado o resuelto: este sigue vivo.';
+	}
+
+	/**
 	 * Whether a school may submit or edit its application in this state.
 	 *
 	 * Solo el plazo: en subsanación solo edita quien tiene la solicitud «a

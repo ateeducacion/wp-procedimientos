@@ -215,21 +215,113 @@ final class ProcedureInput {
 	 * las dos cosas (PR 8 del PLAN-0003): se puede seguir completando en
 	 * borrador, y no se publica hasta tenerlas.
 	 *
+	 * Sin plazo de solicitud tampoco: el estado se quedaría en «Próximo» para
+	 * siempre y nadie podría solicitar. Quien quiera anunciarlo antes pone
+	 * fechas futuras y se publica igual, como «Próximo». Solo se mira al
+	 * publicar: lo ya publicado sin plazo se sigue guardando como estaba.
+	 *
 	 * @param int                              $course    Term ID of prc_course; 0 for none.
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @param string                           $opens_at  First day of the application window, Y-m-d; '' for none.
 	 * @return string[] Empty when it may be published.
 	 */
-	public static function not_ready( int $course, array $questions ): array {
+	public static function not_ready( int $course, array $questions, string $opens_at ): array {
+		return self::blocking(
+			self::checklist(
+				array(
+					'course'    => $course,
+					'questions' => $questions,
+					'opens_at'  => $opens_at,
+				)
+			)
+		);
+	}
+
+	/**
+	 * What of a checklist stops the publication, in Spanish.
+	 *
+	 * @param array<int, array<string, mixed>> $checklist What checklist() returned.
+	 * @return string[] Empty when it may be published.
+	 */
+	public static function blocking( array $checklist ): array {
 		$faltan = array();
-		if ( $course <= 0 ) {
-			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
-		}
-		foreach ( $questions as $pregunta ) {
-			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
-				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+		foreach ( $checklist as $punto ) {
+			if ( ! empty( $punto['blocks'] ) && empty( $punto['ok'] ) ) {
+				$faltan = array_merge( $faltan, (array) $punto['missing'] );
 			}
 		}
 		return $faltan;
+	}
+
+	/**
+	 * «Antes de publicar»: each thing the workshop checks, in the order it is filled in.
+	 *
+	 * Lo que bloquea —curso, plazo, fechas de las entregas— es lo mismo que
+	 * {@see not_ready()}; las preguntas y la resolución solo informan: un
+	 * procedimiento se puede publicar sin resolución enlazada todavía.
+	 *
+	 * @param array<string, mixed> $facts `course`, `questions`, `opens_at`, `closes_at`, `resolution`.
+	 * @return array<int, array{key:string, ok:bool, blocks:bool, text:string, missing:string[]}>
+	 */
+	public static function checklist( array $facts ): array {
+		$abre       = self::text( $facts, 'opens_at' );
+		$abre       = self::is_valid_date( $abre ) ? $abre : '';
+		$cierra     = self::text( $facts, 'closes_at' );
+		$cierra     = self::is_valid_date( $cierra ) ? $cierra : $abre;
+		$preguntas  = (array) ( $facts['questions'] ?? array() );
+		$sin_curso  = 'Falta el curso: elíjalo en «Datos».';
+		$sin_plazo  = 'Falta el plazo de solicitud: ponga al menos su fecha de inicio en «Datos».';
+		$lista      = array(
+			self::point( 'course', (int) ( $facts['course'] ?? 0 ) > 0, true, 'Curso elegido.', $sin_curso, array( $sin_curso ) ),
+			self::point( 'window', '' !== $abre, true, sprintf( 'Plazo de solicitud: del %1$s al %2$s.', self::dmy( $abre ), self::dmy( $cierra ) ), $sin_plazo . ' Sin él, el procedimiento se quedaría en «Próximo» y nadie podría solicitar.', array( $sin_plazo ) ),
+			self::point( 'questions', true, false, array() === $preguntas ? 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Preguntas propias: %d.', count( $preguntas ) ), '', array() ),
+		);
+		$sin_fechas = array();
+		$entregas   = 0;
+		foreach ( $preguntas as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
+				++$entregas;
+				if ( ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+				}
+			}
+		}
+		if ( $entregas > 0 ) {
+			$lista[] = self::point( 'delivery', array() === $sin_fechas, true, 'Las entregas con plazo propio tienen sus fechas.', implode( ' ', $sin_fechas ), $sin_fechas );
+		}
+		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces».', array() );
+		return $lista;
+	}
+
+	/**
+	 * One point of the checklist.
+	 *
+	 * @param string   $key     Point key.
+	 * @param bool     $ok      Whether it is done.
+	 * @param bool     $blocks  Whether, missing, it stops the publication.
+	 * @param string   $done    Text when it is done.
+	 * @param string   $missing Text when it is not.
+	 * @param string[] $why     What not_ready() says when it is not.
+	 * @return array{key:string, ok:bool, blocks:bool, text:string, missing:string[]}
+	 */
+	private static function point( string $key, bool $ok, bool $blocks, string $done, string $missing, array $why ): array {
+		return array(
+			'key'     => $key,
+			'ok'      => $ok,
+			'blocks'  => $blocks,
+			'text'    => $ok ? $done : $missing,
+			'missing' => $ok ? array() : $why,
+		);
+	}
+
+	/**
+	 * A Y-m-d day as d-m-Y.
+	 *
+	 * @param string $ymd Day.
+	 * @return string
+	 */
+	private static function dmy( string $ymd ): string {
+		return implode( '-', array_reverse( explode( '-', $ymd ) ) );
 	}
 
 	/**

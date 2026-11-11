@@ -229,7 +229,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertTrue( $m['can_edit'] );
 		$this->assertTrue( $m['can_review'] );
 		$this->assertFalse( $m['can_publish'], 'ya está publicado' );
-		$this->assertTrue( $m['can_archive'] );
+		$this->assertFalse( $m['can_archive'], 'vivo no se marca como histórico' );
 		$this->assertSame( 'Área de prueba', $m['area_names'] );
 		$this->assertSame( array(), $m['applications'], 'la tabla solo se carga en su pestaña' );
 
@@ -1134,7 +1134,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * Publicar, marcar como histórico y desmarcar: lo último, solo administración.
 	 */
 	public function test_publish_archive_and_unarchive() {
-		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OPENS_AT => $this->dia( '+10 days' ) ), array( 'post_status' => 'draft' ) );
 		$this->acting_as( $uid );
 
 		// Sin curso no se publica: no se ofrece ni se acepta (PR 8 del PLAN-0003).
@@ -1153,6 +1153,15 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'publicado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 		$this->assertFalse( $this->modelo( $procedimiento )['can_publish'] );
 
+		// Vivo —«Próximo»— no se marca como histórico, y se dice por qué.
+		$this->assertFalse( $this->modelo( $procedimiento )['can_archive'] );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_ARCHIVE, $procedimiento ) );
+		$this->assertFalse( ProcedureAccess::is_archived( $procedimiento ) );
+		$this->assertStringContainsString( 'Solo se marca como histórico un procedimiento cerrado o resuelto', $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH )['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		$this->assertTrue( $this->modelo( $procedimiento )['can_archive'] );
 		$url = $this->submit( $uid, ProcedureEditor::OP_ARCHIVE, $procedimiento );
 		$this->assertTrue( ProcedureAccess::is_archived( $procedimiento ) );
 		$this->assertSame( 'archivado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
@@ -1678,7 +1687,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		}
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
-		$this->assertStringContainsString( 'Marcar como histórico', $html );
+		$this->assertStringNotContainsString( 'Marcar como histórico</button>', $html, 'vivo no se ofrece marcarlo' );
 		$this->assertStringContainsString( 'Cerrar solicitudes ahora', $html );
 		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
@@ -1692,7 +1701,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * abre en solo lectura y administración ve el recuadro para reabrirlo.
 	 */
 	public function test_the_empty_the_draft_and_the_archived_screens() {
-		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OPENS_AT => $this->dia( '+10 days' ) ), array( 'post_status' => 'draft' ) );
 		wp_set_object_terms( $procedimiento, array( $this->course() ), ProcedureTaxonomies::COURSE );
 		$this->acting_as( $uid );
 

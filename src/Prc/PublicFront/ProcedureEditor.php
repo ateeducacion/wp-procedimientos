@@ -1086,7 +1086,7 @@ final class ProcedureEditor {
 		}
 		// Un duplicado nace sin curso y con sus entregas sin fechas: se
 		// completa en borrador y no se publica hasta tenerlos.
-		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ), self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ) );
 		if ( array() !== $faltan ) {
 			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
 			return;
@@ -1170,8 +1170,9 @@ final class ProcedureEditor {
 			? ProcedureAccess::can_archive( $user_id, $procedure_id )
 			: ProcedureAccess::can_unarchive( $user_id );
 		if ( ! $puede ) {
+			$no_es_suyo     = 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.';
 			self::$rejected = $marcar
-				? 'Este procedimiento no es suyo: solo lo marca como histórico el ámbito que lo convoca.'
+				? ( ProcedureAccess::can_open( $user_id, $procedure_id ) ? ProcedureState::why_not_archivable( ProcedureState::of_post( $procedure_id ) ) : $no_es_suyo )
 				: 'Volver a abrir un procedimiento histórico solo lo hace quien administra el aplicativo.';
 			return;
 		}
@@ -1389,8 +1390,18 @@ final class ProcedureEditor {
 
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 		// Lo que falta para publicar se avisa en todo el taller mientras no
-		// esté publicado, y sin ello no se ofrece publicar.
-		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		// esté publicado, y sin ello no se ofrece publicar. «Publicación» lo
+		// enseña punto por punto, con lo que solo avisa (la resolución).
+		$m['checklist']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::checklist(
+			array(
+				'course'     => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
+				'questions'  => Applications::questions( $procedure_id ),
+				'opens_at'   => self::meta( $procedure_id, ProcedureMetaKeys::OPENS_AT ),
+				'closes_at'  => self::meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT ),
+				'resolution' => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
+			)
+		);
+		$m['not_ready']     = ProcedureInput::blocking( $m['checklist'] );
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
@@ -1427,6 +1438,7 @@ final class ProcedureEditor {
 			'can_publish'             => false,
 			'can_duplicate'           => false,
 			'not_ready'               => array(),
+			'checklist'               => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,

@@ -297,6 +297,7 @@ class Test_Edit_Lock extends WP_UnitTestCase {
 	 * Y marcar como histórico es una escritura más: también pasa por el bloqueo.
 	 */
 	public function test_a_stale_archive_is_rejected_too() {
+		update_post_meta( $this->procedimiento, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
 		$this->abrir( $this->primera );
 
 		$this->murio(
@@ -427,6 +428,8 @@ class Test_Edit_Lock extends WP_UnitTestCase {
 	 * y administración no tiene por qué esperar a que caduque para corregirlo.
 	 */
 	public function test_marking_it_as_historic_releases_the_lock() {
+		// Solo se marca lo que ya terminó: el procedimiento, cerrado.
+		update_post_meta( $this->procedimiento, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
 		$this->abrir( $this->primera );
 		$this->assertSame( $this->primera, $this->duenio() );
 

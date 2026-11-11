@@ -745,9 +745,11 @@ final class Mailer {
 		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
 			$falta[] = 'Enlace a la resolución';
 		}
-		// Lo que impide publicarlo: el curso y las fechas de las entregas.
+		// Lo que impide publicarlo: el curso y las fechas de las entregas. El
+		// plazo también, pero ya va arriba con sus palabras: se le da por
+		// puesto para no decirlo dos veces.
 		$curso = wp_get_post_terms( $procedure_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) );
-		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ) ) );
+		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ), ProcedureState::today() ) );
 	}
 
 	/**

@@ -176,7 +176,8 @@ final class MyCentreView {
 				$out .= '<span class="prc-nota-revision">' . esc_html( 'Hasta el ' . (string) $fila['people_until'] . ', incluido.' ) . '</span>';
 			}
 		} else {
-			$out .= '<span class="prc-nota-revision">La lista ya no se puede cambiar.</span>';
+			$porque = (string) ( $fila['people_why'] ?? '' );
+			$out   .= '<span class="prc-nota-revision">' . esc_html( '' !== $porque ? $porque : 'La lista ya no se puede cambiar.' ) . '</span>';
 		}
 		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
 	}

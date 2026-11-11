@@ -198,6 +198,10 @@ final class MyCentre {
 	/**
 	 * Whether any row has a list of people, and how many lists are short.
 	 *
+	 * Solo cuentan las que el centro puede completar ahora: una excluida no
+	 * está incompleta para quien revisa, y una con la lista cerrada —ya, o
+	 * todavía— lleva a una fila donde no hay nada que hacer.
+	 *
 	 * @param array<string, mixed> $m Model with its rows.
 	 * @return array<string, mixed>
 	 */
@@ -205,7 +209,7 @@ final class MyCentre {
 		$cortas = array();
 		foreach ( (array) $m['rows'] as $fila ) {
 			$m['has_people'] = $m['has_people'] || ! empty( $fila['people'] );
-			if ( empty( $fila['people_complete'] ) ) {
+			if ( empty( $fila['people_complete'] ) && ! empty( $fila['people_open'] ) ) {
 				$cortas[] = (string) $fila['procedure_id'];
 			}
 		}
@@ -220,7 +224,8 @@ final class MyCentre {
 	 * What the «Personas» column says of one application.
 	 *
 	 * Cuántas hay y cuántas pide, si llega al mínimo y, mientras se pueda
-	 * cambiar, hasta cuándo (ADR-0041).
+	 * cambiar, hasta cuándo (ADR-0041); si no se puede, por qué: no es lo
+	 * mismo «todavía no» que «ya no».
 	 *
 	 * @param int  $application_id Application ID.
 	 * @param int  $procedure_id   Procedure ID.
@@ -239,7 +244,8 @@ final class MyCentre {
 		}
 		$spec    = People::spec( $procedure_id );
 		$filas   = People::of( $application_id );
-		$abierta = ProcedureAccess::can_edit_people( get_current_user_id(), $application_id );
+		$porque  = ProcedureAccess::why_not_people( get_current_user_id(), $application_id );
+		$abierta = '' === $porque;
 		return array(
 			'people'          => true,
 			'people_url'      => PeopleForm::url( $application_id ),
@@ -248,6 +254,7 @@ final class MyCentre {
 			'people_max'      => (int) $spec['max'],
 			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
 			'people_open'     => $abierta,
+			'people_why'      => $porque,
 			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
 			'people_sort'     => (string) count( $filas ),
 		);

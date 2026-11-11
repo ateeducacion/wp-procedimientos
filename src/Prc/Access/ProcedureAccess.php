@@ -733,8 +733,9 @@ final class ProcedureAccess {
 	 *
 	 * La regla del ámbito y, por encima, el cierre: histórico no lo edita el
 	 * ámbito que lo convocó, y sí administración. `map_meta_cap()` manda aquí
-	 * `edit_post`, `delete_post` y `publish_post`, así que alcanza también al
-	 * escritorio, a la edición rápida y a la REST.
+	 * `edit_post` y `publish_post` —`delete_post` tiene su propia regla, en
+	 * {@see ProcedureDeletion}—, así que alcanza también al escritorio, a la
+	 * edición rápida y a la REST.
 	 *
 	 * @param int $user_id User ID.
 	 * @param int $post_id Procedure ID.
@@ -1328,6 +1329,10 @@ final class ProcedureAccess {
 		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
 			// Papelera y borrado definitivo tienen su propia regla (ADR-0044).
 			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( 'delete_post' === $cap ) {
+			// Solo un borrador sin solicitudes va a la papelera, también por el
+			// escritorio y la REST (adenda a la ADR-0007).
+			$permitido = ProcedureDeletion::allows( $user_id, $post_id );
 		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )

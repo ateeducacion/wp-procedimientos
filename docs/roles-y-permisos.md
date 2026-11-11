@@ -189,7 +189,8 @@ coincide con `prc_centre_code` de la solicitud.
 |---|---|---|
 | Ver un procedimiento publicado | Cualquiera | — |
 | Ver un procedimiento en borrador | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | — |
-| Crear, editar, publicar, despublicar, enviar a la papelera | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | Que **no** esté archivado |
+| Crear, editar, publicar, despublicar | `prc_manage_procedures` en su ámbito, o `prc_manage_all_areas` | Que **no** esté archivado |
+| Borrar un procedimiento (papelera) | Los mismos, desde el menú «⋮» del taller (`ProcedureDeletion::can_delete_procedure()`) | Solo un **borrador** —ni publicado, ni programado, ni histórico— **sin ninguna solicitud**, tampoco retirada en la papelera; ni abierto por otra persona. Se confirma escribiendo BORRAR. Es `wp_trash_post()`, nunca borrado definitivo. La misma regla cierra `delete_post` para gestión en el escritorio y en la REST, así que tampoco restaura ni vacía la papelera; `prc_manage_app` conserva lo de antes: lo mismo que editar |
 | Marcar como histórico | Los mismos | Solo con el procedimiento cerrado o resuelto (`ProcedureState::why_not_archivable()`); con confirmación: no hay vuelta atrás sin administración |
 | Desarchivar | Solo `prc_manage_app` | — |
 | Presentar una solicitud | `prc_apply` con código de centro | Procedimiento `open`; para crear, el centro pasa los acotados del procedimiento —titularidad, tipo, isla y lista cerrada— y, si hay alguno además de la lista, está en el catálogo (ADR-0042); sin solicitud previa del centro (si la hay, se edita esa aunque el procedimiento se haya acotado después) |
@@ -256,7 +257,7 @@ Cuatro reglas, todas comprobables en el código:
 | Capa | Qué hace | Dónde |
 |---|---|---|
 | `pre_get_posts` | **Esconde** filas del listado del escritorio | `Admin/ProcedureAdmin.php` |
-| `map_meta_cap` | **Deniega** `edit_post`, `delete_post`, `publish_post` y `read_post` en los dos tipos | `Access/ProcedureAccess.php` |
+| `map_meta_cap` | **Deniega** `edit_post`, `delete_post`, `publish_post` y `read_post` en los dos tipos | `Access/ProcedureAccess.php` (y, para `delete_post` de un procedimiento, `Access/ProcedureDeletion.php`) |
 
 La segunda es la que protege. La primera solo filtra la consulta principal:
 el enlace directo a `post.php?post=N`, la edición rápida, la REST y las

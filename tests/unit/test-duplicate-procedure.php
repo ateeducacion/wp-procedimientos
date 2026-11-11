@@ -779,36 +779,21 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Cada fila de «Gestión» ofrece duplicar, con confirmación y hacia el
-	 * taller del original, que es quien explica un rechazo.
+	 * «Gestión» ya no duplica: el botón está en el menú del taller, que es
+	 * donde se ve lo que se va a copiar.
 	 */
-	public function test_each_row_of_the_workspace_offers_to_duplicate() {
+	public function test_the_workspace_rows_do_not_offer_to_duplicate() {
 		$area = $this->area( 'Área de prueba' );
 		$uid  = $this->manager( array( $area ) );
-		$id   = $this->completo( $uid, array( $area ) );
-		$otro = $this->procedure( $uid, array( $area ), array(), array( 'post_title' => 'Otro programa' ) );
-		wp_set_object_terms( $otro, array( $this->curso() ), ProcedureTaxonomies::COURSE );
+		$this->completo( $uid, array( $area ) );
 
 		$this->acting_as( $uid );
 		$_GET   = array();
 		$modelo = Workspace::model();
-		foreach ( $modelo['rows'] as $fila ) {
-			$this->assertSame( ProcedureAccess::can_duplicate( $uid, (int) $fila['id'] ), $fila['can_duplicate'], 'lo mismo que dice el guardián' );
-		}
+		$this->assertNotEmpty( $modelo['rows'] );
+		$this->assertArrayNotHasKey( 'can_duplicate', $modelo['rows'][0] );
 		$html = WorkspaceView::html( $modelo );
-
-		$this->assertSame( 2, substr_count( $html, 'value="' . ProcedureEditor::OP_DUPLICATE . '"' ) );
-		$this->assertSame( 2, substr_count( $html, 'data-prc-once' ), 'un solo envío por botón' );
-		$this->assertStringContainsString( '¿Duplicar «Red de prueba»?', $html );
-		$this->assertStringContainsString( '¿Duplicar «Otro programa»?', $html );
-		$this->assertSame( 2, substr_count( $html, '>Duplicar</button>' ), 'el botón dice lo que hace, con texto' );
-		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_PROCEDURE . '" value="' . $otro . '"', $html );
-		$this->assertStringContainsString( 'action="' . esc_url( ProcedureEditor::url( $id ) ) . '"', $html );
-		$this->assertStringContainsString( 'name="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html );
-		$this->assertStringNotContainsString( 'id="' . ProcedureEditor::nonce_name( ProcedureEditor::OP_DUPLICATE ) . '"', $html, 'sin id repetido en cada fila' );
-
-		// Una fila que no se puede duplicar no lleva el botón.
-		$modelo['rows'][0]['can_duplicate'] = false;
-		$this->assertSame( 1, substr_count( WorkspaceView::html( $modelo ), 'value="' . ProcedureEditor::OP_DUPLICATE . '"' ) );
+		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_DUPLICATE . '"', $html );
+		$this->assertStringNotContainsString( '>Duplicar</button>', $html );
 	}
 }

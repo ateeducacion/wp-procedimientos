@@ -7141,6 +7141,7 @@ final class ProcedureAccess {
 
 
 
+
 	public static function can_edit( int $user_id, int $post_id ): bool {
 		if ( ! self::can_open( $user_id, $post_id ) ) {
 			return false;
@@ -7729,6 +7730,10 @@ final class ProcedureAccess {
 		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
 
 			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		} elseif ( 'delete_post' === $cap ) {
+
+
+			$permitido = ProcedureDeletion::allows( $user_id, $post_id );
 		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
@@ -8420,6 +8425,130 @@ final class ApplicationActions {
 
 	public static function day( string $ymd ): string {
 		return '' === $ymd ? '' : implode( '-', array_reverse( explode( '-', $ymd ) ) );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Access;
+
+use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Access\ProcedureDeletion', false ) ) {
+final class ProcedureDeletion {
+
+
+
+
+
+
+	private const DRAFT_STATUSES = array( 'draft', 'pending', 'auto-draft' );
+
+
+
+
+
+
+
+
+	public static function can_delete_procedure( int $user_id, int $post_id ): bool {
+		return '' === self::why_not_delete_procedure( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+	public static function why_not_delete_procedure( int $user_id, int $post_id ): string {
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) ) {
+			return 'Ese procedimiento ya no existe.';
+		}
+		if ( 'trash' === get_post_status( $post_id ) ) {
+			return 'Este procedimiento ya está en la papelera.';
+		}
+		if ( ProcedureAccess::is_archived( $post_id ) ) {
+			return 'Este procedimiento está marcado como histórico y no se borra: se sigue consultando y exportando.';
+		}
+		if ( ! ProcedureAccess::can_edit( $user_id, $post_id ) ) {
+			$motivo = ProcedureAccess::why_not_editable( $user_id, $post_id );
+			return '' !== $motivo ? $motivo : 'Su perfil no puede borrar este procedimiento.';
+		}
+		if ( ! in_array( (string) get_post_status( $post_id ), self::DRAFT_STATUSES, true ) ) {
+			return 'Solo se borra un procedimiento en borrador. Si este ya no hace falta, devuélvalo antes a borrador desde «Publicación».';
+		}
+		if ( self::has_applications( $post_id ) ) {
+			return 'Este procedimiento tiene solicitudes —también cuentan las retiradas— y no se borra: lo que un centro presentó no se pierde así.';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function allows( int $user_id, int $post_id ): bool {
+		if ( ProcedureAccess::is_manager( $user_id ) ) {
+			return ProcedureAccess::can_edit( $user_id, $post_id );
+		}
+		return self::can_delete_procedure( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+	public static function has_applications( int $post_id ): bool {
+		$ids = get_posts(
+			array(
+				'post_type'        => ApplicationPostType::POST_TYPE,
+				'post_parent'      => $post_id,
+
+				'post_status'      => array_values( get_post_stati() ),
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'no_found_rows'    => true,
+				'suppress_filters' => true,
+			)
+		);
+		return is_array( $ids ) && array() !== $ids;
 	}
 }
 
@@ -18603,7 +18732,7 @@ final class HelpContent {
 				'id'    => 'su-lista',
 				'level' => 2,
 				'title' => 'Su lista: «Gestión de procedimientos»',
-				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, cuántas <strong>solicitudes</strong> tiene (abre la lista) y las <strong>acciones</strong>: «Ver la ficha» y «Duplicar». Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
+				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, y cuántas <strong>solicitudes</strong> tiene (abre la lista). Ver la ficha, duplicar y borrar se hacen dentro del taller, desde el menú <strong>«⋮»</strong> de arriba a la derecha. Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
 				'shots' => array(
 					array(
 						'caption' => '«Gestión de procedimientos» con la tabla y la leyenda de estados',
@@ -18618,7 +18747,7 @@ final class HelpContent {
 				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong>, junto al título de su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El alta pide solo lo mínimo:</p>'
 					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Gestión de procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha), <strong>Otros correos de contacto</strong>, si quiere, y <strong>Color de cabecera</strong>, que ya viene elegido.</li></ul>'
 					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
-					. '<p><strong>Duplicar</strong>: el botón «Duplicar» de su lista o el botón <strong>«Duplicar»</strong> del taller. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+					. '<p><strong>Duplicar</strong>: abra el procedimiento que quiere copiar, pulse el menú <strong>«⋮»</strong> de arriba a la derecha del taller y elija <strong>«Duplicar»</strong>. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pantalla «Crear un procedimiento»',
@@ -18630,7 +18759,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado; el ojo abre la ficha pública. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -18778,6 +18907,14 @@ final class HelpContent {
 						'image'   => '',
 					),
 				),
+			),
+			array(
+				'id'    => 'borrar',
+				'level' => 2,
+				'title' => 'Borre un procedimiento que no debió crearse',
+				'html'  => '<p>Solo se borra un procedimiento en <strong>borrador</strong> que <strong>no tenga ninguna solicitud</strong>, tampoco retirada. Abra su taller, pulse el menú <strong>«⋮»</strong> de arriba a la derecha y elija <strong>«Borrar»</strong>; si no aparece, es que no se puede borrar. Para confirmarlo, escriba <strong>BORRAR</strong> y pulse <strong>«Enviar a la papelera»</strong>. Vuelve a su lista con el aviso de que se ha enviado a la papelera; <strong>quien administra el aplicativo puede recuperarlo</strong>.</p>'
+					. '<p>Uno publicado no se borra: devuélvalo antes a borrador desde «Publicación». Uno que ya tiene solicitudes, o que terminó, tampoco: márquelo como histórico cuando esté cerrado o resuelto.</p>',
+				'shots' => array(),
 			),
 		),
 		'preguntas' => array(
@@ -20604,7 +20741,6 @@ namespace Prc\PublicFront\View;
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
-use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\Workspace;
 
@@ -20896,7 +21032,6 @@ final class WorkspaceView {
 						<th scope="col">Plazo</th>
 						<th scope="col">Dirigido a</th>
 						<th scope="col">Solicitudes</th>
-						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -20955,17 +21090,6 @@ final class WorkspaceView {
 			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
 				<?php self::applications( $row ); ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Acciones">
-				<div class="prc-acciones">
-					<?php if ( '' !== (string) $row['view_url'] ) : ?>
-						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
-							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
-					<?php endif; ?>
-					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
-						<?php self::duplicate( $row ); ?>
-					<?php endif; ?>
-				</div>
-			</td>
 		</tr>
 		<?php
 	}
@@ -20985,30 +21109,6 @@ final class WorkspaceView {
 		}
 		?>
 		<a href="<?php echo esc_url( (string) $row['applications_url'] ); ?>"><?php echo esc_html( $texto ); ?></a>
-		<?php
-	}
-
-
-
-
-
-
-
-
-
-
-
-	private static function duplicate( array $row ): void {
-		$op = ProcedureEditor::OP_DUPLICATE;
-		?>
-		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
-			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
-			data-prc-confirm-ok="Duplicar" data-prc-once>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" title="Duplicar este procedimiento">Duplicar</button>
-		</form>
 		<?php
 	}
 }
@@ -21328,15 +21428,9 @@ final class Workspace {
 
 	private static function collect( int $user_id ): array {
 		$rows = array();
-
-
-
-		$crea = ProcedureAccess::can_manage_procedures( $user_id );
 		foreach ( self::scope( $user_id ) as $post ) {
 			if ( ProcedureAccess::can_open( $user_id, (int) $post->ID ) ) {
-				$fila                  = self::row( $post );
-				$fila['can_duplicate'] = $crea && 'trash' !== $post->post_status;
-				$rows[]                = $fila;
+				$rows[] = self::row( $post );
 			}
 		}
 		return $rows;
@@ -21430,13 +21524,9 @@ final class Workspace {
 			),
 			'warning'          => self::mismatch( $id, $opens, $closes ),
 			'archived'         => ProcedureAccess::is_archived( $id ),
-			'status'           => (string) $post->post_status,
 			'applications'     => 0,
 			'url'              => Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ),
 			'applications_url' => ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ),
-
-
-			'view_url'         => 'publish' === $post->post_status ? (string) get_permalink( $id ) : (string) get_preview_post_link( $id ),
 		);
 	}
 
@@ -21663,14 +21753,15 @@ final class Workspace {
 
 	private static function flash(): array {
 		$avisos = array(
-			'creado'       => array( 'ok', 'Procedimiento creado. Ya puede completarlo y publicarlo.' ),
-			'guardado'     => array( 'ok', 'Cambios guardados.' ),
-			'retirado'     => array( 'ok', 'El procedimiento se ha guardado. Su ámbito ya no lo organiza y dejará de tener acceso a su edición.' ),
-			'borrado'      => array( 'ok', 'Procedimiento enviado a la papelera. Nada se ha perdido: se restaura desde el escritorio de WordPress.' ),
-			'publicado'    => array( 'ok', 'Procedimiento publicado: ya se ve en la portada.' ),
-			'despublicado' => array( 'ok', 'Procedimiento devuelto a borrador: deja de verse en la portada y no se pierde nada.' ),
-			'archivado'    => array( 'ok', 'Procedimiento marcado como histórico: se consulta y se exporta, pero ya no se edita.' ),
-			'permiso'      => array( 'error', 'Ese procedimiento es de otro ámbito: solo lo edita el ámbito que lo convoca o quien administra el aplicativo.' ),
+			'creado'                => array( 'ok', 'Procedimiento creado. Ya puede completarlo y publicarlo.' ),
+			'guardado'              => array( 'ok', 'Cambios guardados.' ),
+			'retirado'              => array( 'ok', 'El procedimiento se ha guardado. Su ámbito ya no lo organiza y dejará de tener acceso a su edición.' ),
+
+			ProcedureDelete::NOTICE => array( 'ok', ProcedureDelete::notice( $_GET ) ),
+			'publicado'             => array( 'ok', 'Procedimiento publicado: ya se ve en la portada.' ),
+			'despublicado'          => array( 'ok', 'Procedimiento devuelto a borrador: deja de verse en la portada y no se pierde nada.' ),
+			'archivado'             => array( 'ok', 'Procedimiento marcado como histórico: se consulta y se exporta, pero ya no se edita.' ),
+			'permiso'               => array( 'error', 'Ese procedimiento es de otro ámbito: solo lo edita el ámbito que lo convoca o quien administra el aplicativo.' ),
 		);
 
 		$aviso = $avisos[ self::input( self::VAR_NOTICE ) ] ?? array( '', '' );
@@ -22894,6 +22985,13 @@ final class ProcedureEditorView {
 
 		ob_start();
 		echo self::head( $m );
+
+
+		if ( true === $m['confirm_delete'] ) {
+			echo self::flash( $m );
+			echo self::delete_confirmation( $m );
+			return Shell::render( '', '', (string) ob_get_clean() );
+		}
 		echo self::tabs( $m );
 		echo self::flash( $m );
 		echo self::archived_notice( $m );
@@ -23080,10 +23178,7 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
 			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) );?>
-			<span class="prc-acciones">
-				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
-				<?php echo self::duplicate_form( $m );?>
-			</span>
+			<?php echo self::menu( $m );?>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
 		<?php
@@ -23099,21 +23194,95 @@ final class ProcedureEditorView {
 
 
 
-	private static function duplicate_form( array $m ): string {
-		if ( true !== $m['can_duplicate'] ) {
+
+
+
+
+	private static function menu( array $m ): string {
+		$ver      = (string) $m['view_url'];
+		$duplicar = true === $m['can_duplicate'];
+		$borrar   = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
+		if ( '' === $ver && ! $duplicar && ! $borrar ) {
 			return '';
 		}
+		$rotulo = 'Más acciones para este procedimiento';
+		ob_start();
+		?>
+		<details class="prc-mas" data-prc-menu>
+			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
+				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
+			</summary>
+			<div class="prc-mas__menu">
+				<?php if ( '' !== $ver ) : ?>
+					<a class="prc-mas__opcion" href="<?php echo esc_url( $ver ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
+				<?php endif; ?>
+				<?php if ( $duplicar ) : ?>
+					<?php echo self::duplicate_form( $m );?>
+				<?php endif; ?>
+				<?php if ( $borrar ) : ?>
+					<a class="prc-mas__opcion prc-mas__opcion--borrar" href="<?php echo esc_url( (string) $m['delete_url'] ); ?>">Borrar</a>
+				<?php endif; ?>
+			</div>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function duplicate_form( array $m ): string {
 		$op = ProcedureEditor::OP_DUPLICATE;
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
+		<form class="prc-mas__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
 			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Duplicar</button>
+			<button type="submit" class="prc-mas__opcion">Duplicar</button>
 		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function delete_confirmation( array $m ): string {
+		$op     = ProcedureEditor::OP_DELETE;
+		$id     = (int) $m['procedure_id'];
+		$titulo = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
+		ob_start();
+		?>
+		<section class="prc-borrar" aria-labelledby="prc-borrar-titulo">
+			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $titulo . '»?' ); ?></h2>
+			<p>Se envía a la papelera; quien administra el aplicativo puede recuperarlo. Deja de verse en «Gestión de procedimientos» y nadie podrá solicitarlo.</p>
+			<form class="prc-form" method="post" action="<?php echo esc_url( (string) $m['delete_url'] . '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-confirm-word">Para confirmarlo, escriba <strong>BORRAR</strong></label>
+					<input class="prc-control" type="text" id="prc-confirm-word" name="<?php echo esc_attr( ProcedureEditor::FIELD_CONFIRM ); ?>"
+						required autocomplete="off" autocapitalize="characters" spellcheck="false" />
+				</div>
+				<div class="prc-acciones">
+					<button type="submit" class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>">Enviar a la papelera</button>
+					<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( ProcedureEditor::url( $id ) ); ?>">Cancelar</a>
+				</div>
+			</form>
+		</section>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -24385,6 +24554,7 @@ final class ProcedureEditorView {
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Access\ProcedureDeletion;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -24436,6 +24606,16 @@ final class ProcedureEditor {
 
 	public const ARG_NOTICE = 'aviso';
 
+
+
+
+	public const ARG_DELETE = 'borrar';
+
+
+
+
+	public const FIELD_CONFIRM = 'prc_confirm_word';
+
 	public const PANEL_DATA         = 'datos';
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
@@ -24462,6 +24642,7 @@ final class ProcedureEditor {
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
 	public const OP_DUPLICATE           = 'duplicate';
+	public const OP_DELETE              = 'delete';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -24556,6 +24737,7 @@ final class ProcedureEditor {
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 		self::OP_DUPLICATE,
+		self::OP_DELETE,
 		ApplicationActionsPanel::OP_RETIRE,
 		ApplicationActionsPanel::OP_RESTORE,
 		ApplicationActionsPanel::OP_EXTEND,
@@ -24770,7 +24952,9 @@ final class ProcedureEditor {
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
-		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : 0 ) ) {
+
+		$fila = self::OP_DELETE === $op ? $procedure_id : 0;
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $fila ) ) {
 			return;
 		}
 
@@ -24790,6 +24974,13 @@ final class ProcedureEditor {
 
 		if ( self::OP_DUPLICATE === $op ) {
 			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
+			return;
+		}
+
+
+		if ( self::OP_DELETE === $op ) {
+			EditLock::require_available( $procedure_id );
+			self::$rejected = ProcedureDelete::handle( $procedure_id, $user_id, self::field( self::FIELD_CONFIRM ) );
 			return;
 		}
 
@@ -25798,6 +25989,11 @@ final class ProcedureEditor {
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
 
+		$m['can_delete'] = 0 === (int) $m['lock']['owner'] && ProcedureDeletion::can_delete_procedure( $user_id, $procedure_id );
+		$m['delete_url'] = $m['can_delete'] ? self::url( $procedure_id, '', array( self::ARG_DELETE => 1 ) ) : '';
+
+		$m['confirm_delete'] = $m['can_delete'] && ! empty( $_GET[ self::ARG_DELETE ] );
+
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 
 
@@ -25830,6 +26026,9 @@ final class ProcedureEditor {
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
 			'can_duplicate'           => false,
+			'can_delete'              => false,
+			'delete_url'              => '',
+			'confirm_delete'          => false,
 			'not_ready'               => array(),
 			'checklist'               => array(),
 			'answers'                 => array(),
@@ -25993,13 +26192,15 @@ final class ProcedureEditor {
 		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-		$m['view_url']       = (string) get_permalink( $procedimiento );
-		$m['values']         = self::values( $procedure_id );
-		$m['terms']          = self::term_lists( $user_id );
-		$m['questions']      = Applications::questions( $procedure_id );
-		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']        = ObserveSettings::model( $procedure_id );
+
+
+		$m['view_url']    = 'publish' === $procedimiento->post_status ? (string) get_permalink( $procedimiento ) : (string) get_preview_post_link( $procedimiento );
+		$m['values']      = self::values( $procedure_id );
+		$m['terms']       = self::term_lists( $user_id );
+		$m['questions']   = Applications::questions( $procedure_id );
+		$m['deliveries']  = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec'] = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']     = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -26501,6 +26702,110 @@ final class ProcedureDuplicate {
 			'tipo'  => 'ok',
 			'texto' => $texto,
 		);
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Access\ProcedureDeletion;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ProcedureDelete', false ) ) {
+final class ProcedureDelete {
+
+
+
+
+	public const NOTICE = 'borrado';
+
+
+
+
+	public const ARG_DELETED = 'borrado';
+
+
+
+
+	public const WORD = 'BORRAR';
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function handle( int $procedure_id, int $user_id, string $typed ): string {
+		$motivo = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
+		if ( '' !== $motivo ) {
+			return $motivo;
+		}
+		if ( ! self::confirmed( $typed ) ) {
+			return 'Para borrarlo, escriba ' . self::WORD . ' en el campo de confirmación. No se ha borrado nada.';
+		}
+		if ( ! wp_trash_post( $procedure_id ) ) {
+			return 'No se ha podido enviar el procedimiento a la papelera.';
+		}
+
+		EditLock::release( $procedure_id );
+		Shell::leave(
+			Shell::url(
+				'workspace',
+				array(
+					Workspace::VAR_NOTICE => self::NOTICE,
+					self::ARG_DELETED     => $procedure_id,
+				)
+			)
+		);
+		return '';
+	}
+
+
+
+
+
+
+
+	public static function confirmed( string $typed ): bool {
+		return self::WORD === strtoupper( trim( $typed ) );
+	}
+
+
+
+
+
+
+
+
+
+	public static function notice( array $request ): string {
+		$id = absint( $request[ self::ARG_DELETED ] ?? 0 );
+		if ( $id > 0 && ProcedureAccess::can_open( get_current_user_id(), $id ) ) {
+			return 'Se ha enviado «' . get_post_field( 'post_title', $id, 'raw' ) . '» a la papelera.';
+		}
+		return 'Se ha enviado el procedimiento a la papelera.';
 	}
 }
 
@@ -34540,6 +34845,48 @@ body.prc-app .prc-hoja {
 
 .prc-acciones { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* «Más acciones» del taller: tres puntos arriba a la derecha que despliegan
+   ver la ficha, duplicar y borrar. Un `details` nativo, como el menú de la
+   persona: sin guion se abre y se cierra igual. Cada opción mide al menos
+   44 px de alto, y la capa no pasa del ancho de la pantalla en el móvil. */
+.prc-mas { position: relative; margin-left: auto; }
+.prc-mas > summary { list-style: none; cursor: pointer; }
+.prc-mas > summary::-webkit-details-marker { display: none; }
+.prc-mas__boton { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; justify-content: center; font-size: 20px; line-height: 1; }
+.prc-mas__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 13rem;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  background: var(--prc-sup);
+  border: 1px solid var(--prc-linea);
+  border-radius: 12px;
+  box-shadow: var(--prc-e2);
+  z-index: 30;
+  display: grid;
+}
+.prc-mas__form { margin: 0; display: grid; }
+.prc-mas__opcion {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--prc-texto);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.prc-mas__opcion:hover { background: var(--prc-sup-2); color: var(--prc-pri); text-decoration: none; }
+.prc-mas__opcion--borrar, .prc-mas__opcion--borrar:hover { color: var(--prc-mal); }
+.prc-borrar { max-width: 40rem; }
+
 /* Dentro de una tabla, los botones de acción no se parten en varias líneas:
    la columna es estrecha y dos iconos apilados se leen como dos filas. Que la
    tabla se desplace en horizontal es lo que ya hace `.prc-tabla-caja`. */
@@ -35030,6 +35377,8 @@ body.prc-app .prc-btn-borrar {
   .prc-h1 { font-size: 24px; line-height: 26px; }
   .prc-sub { font-size: 20px; line-height: 22px; }
   .prc-h1-fila .prc-acciones { margin-left: 0; width: 100%; }
+  /* Los tres puntos siguen a la derecha, y su capa se abre hacia dentro. */
+  .prc-mas__menu { min-width: min(13rem, calc(100vw - 32px)); }
   .prc-solo-admin { padding: 14px 14px 2px; }
   /* En el móvil el pie no cabe: la pantalla es para el trabajo, y lo legal
      está a un toque en cualquier otra página del sitio. */
@@ -37075,6 +37424,53 @@ body.prc-app .prc-btn-borrar {
 		Array.prototype.forEach.call( document.querySelectorAll( \'form[data-prc-once]\' ), function ( form ) {
 			delete form.dataset.prcEnviado;
 			botones( form, false );
+		} );
+	} );
+
+	/* --- 9. El menú «Más acciones» --------------------------------------- */
+
+	/*
+	 * `data-prc-menu` en un `<details>`: sin guion se abre y se cierra con su
+	 * `<summary>`, y todo lo de dentro funciona. Con guion, además, se cierra
+	 * como se espera de un menú: con Escape —devolviendo el foco a su botón—,
+	 * al pulsar fuera y al abrir otro. Mientras el diálogo de SweetAlert2 está
+	 * en pantalla, Escape es suyo: cierra el diálogo y no el menú.
+	 */
+	function menusAbiertos() {
+		return document.querySelectorAll( \'details[data-prc-menu][open]\' );
+	}
+
+	// `toggle` no sube por el árbol: se escucha en captura.
+	document.addEventListener( \'toggle\', function ( e ) {
+		var menu = e.target;
+		if ( ! menu || ! menu.matches || ! menu.matches( \'details[data-prc-menu]\' ) || ! menu.open ) {
+			return;
+		}
+		Array.prototype.forEach.call( menusAbiertos(), function ( otro ) {
+			if ( otro !== menu ) {
+				otro.open = false;
+			}
+		} );
+	}, true );
+
+	document.addEventListener( \'keydown\', function ( e ) {
+		if ( \'Escape\' !== e.key || ( window.Swal && window.Swal.isVisible && window.Swal.isVisible() ) ) {
+			return;
+		}
+		Array.prototype.forEach.call( menusAbiertos(), function ( menu ) {
+			menu.open = false;
+			var boton = menu.querySelector( \'summary\' );
+			if ( boton ) {
+				boton.focus();
+			}
+		} );
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		Array.prototype.forEach.call( menusAbiertos(), function ( menu ) {
+			if ( ! menu.contains( e.target ) ) {
+				menu.open = false;
+			}
 		} );
 	} );
 }() );

@@ -411,7 +411,8 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Solicitudes', $html );
 		$this->assertStringContainsString( 'Nuevo procedimiento', $html );
 		$this->assertStringContainsString( 'Abrir el taller de este procedimiento', $html );
-		$this->assertStringContainsString( '>Ver la ficha</a>', $html, 'las acciones dicen lo que hacen, con texto' );
+		$this->assertStringNotContainsString( '>Ver la ficha</a>', $html, 'ver la ficha está en el menú del taller' );
+		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_DUPLICATE . '"', $html, 'y duplicar, también' );
 		$this->assertStringContainsString( '>1 solicitud</a>', $html, 'el recuento es el enlace a las solicitudes' );
 		$this->assertStringContainsString( esc_url( ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ) ), $html );
 		$this->assertStringContainsString( esc_url( Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ) ), $html );
@@ -441,9 +442,10 @@ class Test_Workspace extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Un borrador se mira en previsualización: no tiene ficha pública todavía.
+	 * Las filas no llevan acciones: «Ver la ficha», «Duplicar» y «Borrar»
+	 * están en el menú de la cabecera del taller, al que lleva el título.
 	 */
-	public function test_a_draft_is_previewed_and_not_linked_as_public() {
+	public function test_the_rows_carry_no_actions() {
 		$area  = $this->area( 'Área de prueba' );
 		$quien = $this->manager( array( $area ) );
 		$this->procedure(
@@ -459,9 +461,13 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->acting_as( $quien );
 		$m = Workspace::model();
 
-		$this->assertSame( 'draft', $m['rows'][0]['status'] );
-		$this->assertStringContainsString( 'preview', $m['rows'][0]['view_url'] );
-		$this->assertStringContainsString( 'Previsualizar la ficha', Workspace::render() );
+		$this->assertSame( 'Un borrador', $m['rows'][0]['title'] );
+		$this->assertArrayNotHasKey( 'view_url', $m['rows'][0] );
+		$this->assertArrayNotHasKey( 'can_duplicate', $m['rows'][0] );
+		$html = Workspace::render();
+		$this->assertStringNotContainsString( 'Previsualizar', $html );
+		$this->assertStringNotContainsString( 'prc-celda-accion', $html );
+		$this->assertStringNotContainsString( 'data-prc-confirm', $html );
 	}
 
 	/**
@@ -509,7 +515,7 @@ class Test_Workspace extends WP_UnitTestCase {
 
 	/**
 	 * La tabla primero: título de pantalla corriente con «Nuevo procedimiento»
-	 * a su derecha, la leyenda plegada, pestañas por curso y seis columnas.
+	 * a su derecha, la leyenda plegada, pestañas por curso y cinco columnas.
 	 */
 	public function test_the_screen_puts_the_table_first() {
 		$area  = $this->area( 'Área de prueba' );
@@ -561,10 +567,11 @@ class Test_Workspace extends WP_UnitTestCase {
 		// El recuento del curso que se está mirando.
 		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento en <strong>2026-2027</strong>:', $seguido );
 
-		// Seis columnas: lo que se mira y lo que se hace. Sin color, sin la
-		// fecha de creación y sin el estado repetido en un icono.
+		// Cinco columnas: lo que se mira. Sin color, sin la fecha de
+		// creación, sin el estado repetido en un icono y sin acciones, que
+		// están en el menú del taller.
 		preg_match_all( '#<th scope="col"[^>]*>([^<]+)</th>#', $html, $cabeceras );
-		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes', 'Acciones' ), array_map( 'trim', $cabeceras[1] ) );
+		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes' ), array_map( 'trim', $cabeceras[1] ) );
 		$this->assertStringNotContainsString( 'prc-mini-color', $html );
 		$this->assertStringNotContainsString( 'Detalles del procedimiento', $html );
 		$this->assertStringContainsString( 'Centros educativos', $html );

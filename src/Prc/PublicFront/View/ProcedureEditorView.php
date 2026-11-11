@@ -52,6 +52,13 @@ final class ProcedureEditorView {
 
 		ob_start();
 		echo self::head( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		// «Borrar» pide confirmación en su propia pantalla: sin pestañas ni
+		// paneles, solo lo que se va a borrar y la palabra que lo confirma.
+		if ( true === $m['confirm_delete'] ) {
+			echo self::flash( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+			echo self::delete_confirmation( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+			return Shell::render( '', '', (string) ob_get_clean() );
+		}
 		echo self::tabs( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::flash( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		echo self::archived_notice( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
@@ -238,10 +245,7 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<span class="prc-acciones">
-				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php echo self::duplicate_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			</span>
+			<?php echo self::menu( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
 		<?php
@@ -249,29 +253,103 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * «Duplicar»: otro borrador como este, en cualquier estado.
+	 * «Más acciones»: ver la ficha, duplicar y borrar, en un menú de tres puntos.
 	 *
 	 * Va en la cabecera, fuera de lo que el solo lectura apaga: un histórico
-	 * o un procedimiento que otra persona tiene abierto también se duplican.
+	 * o un procedimiento que otra persona tiene abierto también se miran y se
+	 * duplican. Sin JavaScript es un `details` que se abre y se cierra; el
+	 * guion solo añade cerrarlo con Escape y al pulsar fuera. Lo que no se
+	 * puede hacer no se pinta, tampoco apagado, y sin nada que ofrecer no hay
+	 * menú.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function menu( array $m ): string {
+		$ver      = (string) $m['view_url'];
+		$duplicar = true === $m['can_duplicate'];
+		$borrar   = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
+		if ( '' === $ver && ! $duplicar && ! $borrar ) {
+			return '';
+		}
+		$rotulo = 'Más acciones para este procedimiento';
+		ob_start();
+		?>
+		<details class="prc-mas" data-prc-menu>
+			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
+				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
+			</summary>
+			<div class="prc-mas__menu">
+				<?php if ( '' !== $ver ) : ?>
+					<a class="prc-mas__opcion" href="<?php echo esc_url( $ver ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
+				<?php endif; ?>
+				<?php if ( $duplicar ) : ?>
+					<?php echo self::duplicate_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php endif; ?>
+				<?php if ( $borrar ) : ?>
+					<a class="prc-mas__opcion prc-mas__opcion--borrar" href="<?php echo esc_url( (string) $m['delete_url'] ); ?>">Borrar</a>
+				<?php endif; ?>
+			</div>
+		</details>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Duplicar»: otro borrador como este, en cualquier estado.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function duplicate_form( array $m ): string {
-		if ( true !== $m['can_duplicate'] ) {
-			return '';
-		}
 		$op = ProcedureEditor::OP_DUPLICATE;
 		ob_start();
 		?>
-		<form class="prc-acciones" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
+		<form class="prc-mas__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>"
 			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
 			data-prc-confirm-ok="Duplicar" data-prc-once>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Duplicar</button>
+			<button type="submit" class="prc-mas__opcion">Duplicar</button>
 		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Borrar», confirmado escribiendo la palabra: sin JavaScript, igual.
+	 *
+	 * El servidor vuelve a mirar la palabra y la regla al recibirlo
+	 * ({@see \Prc\PublicFront\ProcedureDelete}); aquí solo se pinta.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function delete_confirmation( array $m ): string {
+		$op     = ProcedureEditor::OP_DELETE;
+		$id     = (int) $m['procedure_id'];
+		$titulo = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
+		ob_start();
+		?>
+		<section class="prc-borrar" aria-labelledby="prc-borrar-titulo">
+			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $titulo . '»?' ); ?></h2>
+			<p>Se envía a la papelera; quien administra el aplicativo puede recuperarlo. Deja de verse en «Gestión de procedimientos» y nadie podrá solicitarlo.</p>
+			<form class="prc-form" method="post" action="<?php echo esc_url( (string) $m['delete_url'] . '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $id ); ?>" />
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="prc-confirm-word">Para confirmarlo, escriba <strong>BORRAR</strong></label>
+					<input class="prc-control" type="text" id="prc-confirm-word" name="<?php echo esc_attr( ProcedureEditor::FIELD_CONFIRM ); ?>"
+						required autocomplete="off" autocapitalize="characters" spellcheck="false" />
+				</div>
+				<div class="prc-acciones">
+					<button type="submit" class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>">Enviar a la papelera</button>
+					<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( ProcedureEditor::url( $id ) ); ?>">Cancelar</a>
+				</div>
+			</form>
+		</section>
 		<?php
 		return (string) ob_get_clean();
 	}

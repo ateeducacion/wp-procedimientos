@@ -9,6 +9,7 @@
 namespace Prc\PublicFront;
 
 use Prc\Access\ProcedureAccess;
+use Prc\Access\ProcedureDeletion;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\PeopleSpec;
@@ -59,6 +60,16 @@ final class ProcedureEditor {
 	 */
 	public const ARG_NOTICE = 'aviso';
 
+	/**
+	 * Query arg that turns the workshop into the «Borrar» confirmation.
+	 */
+	public const ARG_DELETE = 'borrar';
+
+	/**
+	 * Field with the word that confirms «Borrar».
+	 */
+	public const FIELD_CONFIRM = 'prc_confirm_word';
+
 	public const PANEL_DATA         = 'datos';
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
@@ -85,6 +96,7 @@ final class ProcedureEditor {
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
 	public const OP_DUPLICATE           = 'duplicate';
+	public const OP_DELETE              = 'delete';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
@@ -179,6 +191,7 @@ final class ProcedureEditor {
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
 		self::OP_DUPLICATE,
+		self::OP_DELETE,
 		ApplicationActionsPanel::OP_RETIRE,
 		ApplicationActionsPanel::OP_RESTORE,
 		ApplicationActionsPanel::OP_EXTEND,
@@ -393,7 +406,9 @@ final class ProcedureEditor {
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
-		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : 0 ) ) {
+		// Borrar lleva un nonce de cada procedimiento: el de uno no borra otro.
+		$fila = self::OP_DELETE === $op ? $procedure_id : 0;
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $fila ) ) {
 			return;
 		}
 
@@ -413,6 +428,13 @@ final class ProcedureEditor {
 		// cuentan, y un histórico se duplica igual (PR 8 del PLAN-0003).
 		if ( self::OP_DUPLICATE === $op ) {
 			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
+			return;
+		}
+		// Borrar sí cuenta con el bloqueo: no se le quita el procedimiento a
+		// quien lo tiene abierto. La regla la mira ProcedureDelete otra vez.
+		if ( self::OP_DELETE === $op ) {
+			EditLock::require_available( $procedure_id );
+			self::$rejected = ProcedureDelete::handle( $procedure_id, $user_id, self::field( self::FIELD_CONFIRM ) );
 			return;
 		}
 		// Retirar, restaurar, la prórroga y presentar en nombre de un centro
@@ -1420,6 +1442,11 @@ final class ProcedureEditor {
 		$m['answers']       = self::PANEL_QUESTIONS === $m['panel'] ? Applications::answer_counts( $procedure_id ) : array();
 		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
 		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
+		// «Borrar» solo se ofrece cuando se puede, y nunca abierto por otra persona.
+		$m['can_delete'] = 0 === (int) $m['lock']['owner'] && ProcedureDeletion::can_delete_procedure( $user_id, $procedure_id );
+		$m['delete_url'] = $m['can_delete'] ? self::url( $procedure_id, '', array( self::ARG_DELETE => 1 ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- pide pintar la confirmación; borrar lleva su nonce.
+		$m['confirm_delete'] = $m['can_delete'] && ! empty( $_GET[ self::ARG_DELETE ] );
 		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 		// Lo que el taller tiene que avisar de los acotados guardados: un
@@ -1453,6 +1480,9 @@ final class ProcedureEditor {
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
 			'can_duplicate'           => false,
+			'can_delete'              => false,
+			'delete_url'              => '',
+			'confirm_delete'          => false,
 			'not_ready'               => array(),
 			'checklist'               => array(),
 			'answers'                 => array(),
@@ -1616,13 +1646,15 @@ final class ProcedureEditor {
 		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-		$m['view_url']       = (string) get_permalink( $procedimiento );
-		$m['values']         = self::values( $procedure_id );
-		$m['terms']          = self::term_lists( $user_id );
-		$m['questions']      = Applications::questions( $procedure_id );
-		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']        = ObserveSettings::model( $procedure_id );
+		// **Un borrador también se mira**: estando dentro y con permiso,
+		// WordPress lo sirve en vista previa.
+		$m['view_url']    = 'publish' === $procedimiento->post_status ? (string) get_permalink( $procedimiento ) : (string) get_preview_post_link( $procedimiento );
+		$m['values']      = self::values( $procedure_id );
+		$m['terms']       = self::term_lists( $user_id );
+		$m['questions']   = Applications::questions( $procedure_id );
+		$m['deliveries']  = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec'] = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']     = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de

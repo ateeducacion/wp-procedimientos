@@ -543,9 +543,12 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 
 		$this->assertStringContainsString( 'class="prc-form prc-form--solicitud"', $html );
-		foreach ( array( 'DATOS DEL CENTRO EDUCATIVO', 'DATOS PERSONALES DE LA DIRECCIÓN DEL CENTRO', 'SOLICITA', 'DATOS DE LA COORDINACIÓN' ) as $rotulo ) {
-			$this->assertStringContainsString( '<h3 class="prc-seccion__titulo">' . $rotulo . '</h3>', $html, $rotulo );
+		// Títulos de sección en `h2` y en caja normal: las mayúsculas las pone
+		// el CSS, porque escritas en la cadena algunos lectores las deletrean.
+		foreach ( array( 'Datos del centro educativo', 'Datos personales de la dirección del centro', 'Solicita', 'Datos de la coordinación' ) as $rotulo ) {
+			$this->assertStringContainsString( '<h2 class="prc-seccion__titulo">' . $rotulo . '</h2>', $html, $rotulo );
 		}
+		$this->assertStringNotContainsString( '<h3', $html, 'del h1 al h2, sin saltos' );
 
 		$this->assertStringContainsString( 'class="prc-seccion__cuerpo"', $html, 'la retícula de doce columnas' );
 		$this->assertStringContainsString( 'prc-campo prc-campo--cuarto', $html, 'un campo de tres columnas' );
@@ -679,7 +682,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 		$html                             = ApplyForm::render();
 
-		$this->assertStringNotContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+		$this->assertStringNotContainsString( 'Datos de la coordinación', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORDINATORS, $html );
 		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. Allí podrá cambiarlas hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido.', $html );
 
@@ -720,7 +723,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			$this->acting_as( $this->school_head( 'C0001' ) );
 			$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 			$html                             = ApplyForm::render();
-			$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', $html );
+			$this->assertStringContainsString( 'Datos de la coordinación', $html );
 			$this->assertStringNotContainsString( 'se dan de alta en la lista de personas', $html );
 		}
 	}
@@ -1111,7 +1114,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertFalse( \Prc\Access\ProcedureAccess::can_apply( $teacher, $school_procedure ), 'el perfil docente no solicita procedimientos de centros' );
 
 		$html = $this->pintar( $procedure );
-		$this->assertStringContainsString( 'DATOS DE LA PERSONA PARTICIPANTE', $html );
+		$this->assertStringContainsString( 'Datos de la persona participante', $html );
 		$this->assertStringNotContainsString( 'DATOS DEL CENTRO EDUCATIVO', $html );
 		$this->assertStringNotContainsString( 'Cargo en el centro', $html );
 

@@ -565,8 +565,8 @@ class Test_Procedure_View extends WP_UnitTestCase {
 
 		$this->assertSame( 'inscripción', $m['deadline_label'] );
 		$this->assertNotSame( array(), $m['countdown'] );
-		// Los días con tres dígitos y el resto con dos, como el original.
-		$this->assertMatchesRegularExpression( '/^\d{3}$/', $m['countdown']['dias'] );
+		// El reloj con dos cifras; los días, sin ceros de relleno.
+		$this->assertMatchesRegularExpression( '/^[1-9]?\d$/', $m['countdown']['dias'], 'los días sin ceros de relleno: «2», no «002»' );
 		$this->assertMatchesRegularExpression( '/^\d{2}$/', $m['countdown']['horas'] );
 		$this->assertMatchesRegularExpression( '/^\d{2}$/', $m['countdown']['minutos'] );
 		$this->assertMatchesRegularExpression( '/^\d{2}$/', $m['countdown']['segundos'] );

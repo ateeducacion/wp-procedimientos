@@ -1091,7 +1091,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 
 		$html = $this->pantalla( $datos );
 
-		$this->assertStringContainsString( 'LO QUE PRESENTÓ', $html );
+		$this->assertStringContainsString( '>Lo que presentó</h2>', $html );
 		$this->assertStringContainsString( ApplicationFiles::ARG_FILE . '=' . $file, $html );
 		$this->assertStringContainsString( 'acta-del-claustro-CEIP-Ejemplo.pdf', $html );
 	}

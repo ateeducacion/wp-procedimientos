@@ -133,7 +133,8 @@
 }
 
 .prc-form--solicitud .prc-seccion__titulo,
-.prc-solicitud-resumen > .prc-seccion__titulo {
+.prc-solicitud-resumen > .prc-seccion__titulo,
+.prc-personas > .prc-seccion__titulo {
   display: block;
   width: auto;
   height: auto;
@@ -141,7 +142,9 @@
   margin: 0 0 15px;
   font: var(--prc-p-h3) var(--prc-t-h3) / var(--prc-i-h3) var(--prc-fuente);
   color: var(--prc-c-fuerte);
-  text-transform: none;   /* los rótulos ya vienen en mayúsculas en el texto */
+  /* Las mayúsculas, aquí: escritas en la cadena, algunos lectores de
+     pantalla las deletrean. El rótulo va en caja normal en el HTML. */
+  text-transform: uppercase;
   background: transparent;
   border: none;
   border-top: 2px solid var(--prc-c-linea-seccion);

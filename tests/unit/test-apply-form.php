@@ -11,6 +11,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Applications;
+use Prc\PublicFront\Shell;
 use Prc\PublicFront\View\ApplyFormView;
 use Prc\PublicFront\View\ProcedureChrome;
 
@@ -74,6 +75,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		\Closure::bind(
 			static function (): void {
 				self::$rejected = '';
+				self::$invalid  = array();
 			},
 			null,
 			ApplyForm::class
@@ -1264,5 +1266,63 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->olvidar_rechazo();
 		$this->assertNotNull( $this->enviar( $direccion, $procedimiento, array( ApplyForm::FIELD_ANSWERS => $bien ) ), 'cero responde una obligatoria' );
+	}
+
+	/**
+	 * Lo que falla se marca en su campo y el aviso de arriba lleva a cada uno:
+	 * en un formulario largo no hay que buscarlo a ciegas.
+	 */
+	public function test_the_failing_fields_are_marked_where_they_are() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::REQUIRES_COORDINATOR => true,
+				ProcedureMetaKeys::QUESTIONS            => array(
+					array(
+						'label'    => 'Modalidad',
+						'type'     => ProcedureQuestions::TYPE_SINGLE,
+						'choices'  => array( 'A', 'B' ),
+						'required' => true,
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+
+		$this->assertNull(
+			$this->enviar(
+				$direccion,
+				$procedimiento,
+				array(
+					ApplyForm::FIELD_POSITION   => 'conserje',
+					ApplyForm::FIELD_COORD_NAME => 'Ana',
+					ApplyForm::FIELD_COORD_DNI  => '12345678A',
+				)
+			)
+		);
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+
+		// El cargo: marcado, con su error al lado y enlazado.
+		$this->assertMatchesRegularExpression( '/<select[^>]*id="prc-position"[^>]*aria-invalid="true"/s', $html );
+		$this->assertMatchesRegularExpression( '/<select[^>]*class="prc-control is-invalid"[^>]*id="prc-position"/s', $html );
+		$this->assertMatchesRegularExpression( '/<select[^>]*id="prc-position"[^>]*aria-describedby="prc-position-error"/s', $html );
+		$this->assertStringContainsString( '<p class="invalid-feedback d-block" id="prc-position-error">Revise el cargo.</p>', $html );
+
+		// El DNI de la primera coordinadora: su ayuda y su error, los dos.
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-dni-0"[^>]*aria-describedby="prc-coordinator-dni-ayuda-0 prc-coordinator-dni-0-error"/s', $html );
+		$this->assertStringNotContainsString( 'id="prc-coordinator-name-0-error"', $html, 'el nombre estaba bien' );
+
+		// Una pregunta de opciones: el grupo entero.
+		$this->assertMatchesRegularExpression( '/role="radiogroup"[^>]*id="prc-q-q1"[^>]*aria-invalid="true"/s', $html );
+
+		// Y el aviso de arriba: un enlace por campo.
+		$this->assertStringContainsString( 'id="' . Shell::NOTICE_ANCHOR . '"', $html );
+		$this->assertStringContainsString( '<a href="#prc-position">el cargo</a>', $html );
+		$this->assertStringContainsString( '<a href="#prc-coordinator-dni-0">el DNI o NIE de la persona coordinadora 1</a>', $html );
+		$this->assertStringContainsString( '<a href="#prc-q-q1">la respuesta a «Modalidad»</a>', $html );
+
+		// Sin envío fallido, nada marcado.
+		$this->olvidar_rechazo();
+		$this->assertStringNotContainsString( 'aria-invalid', $this->pintar( $procedimiento ) );
 	}
 }

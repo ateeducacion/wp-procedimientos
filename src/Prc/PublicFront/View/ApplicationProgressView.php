@@ -73,10 +73,17 @@ final class ApplicationProgressView {
 	/**
 	 * The notice of the screen, with its way to what is missing when there is one.
 	 *
-	 * @param array<string, string> $flash Tone, text and, optionally, a link.
+	 * Tras un envío rechazado por campos, el aviso es la lista de esos
+	 * campos, cada uno con su enlace ({@see FieldErrorView::summary()}).
+	 *
+	 * @param array<string, string> $flash   Tone, text and, optionally, a link.
+	 * @param array<string, string> $invalid Failing field code => what names it.
 	 * @return string
 	 */
-	public static function notice( array $flash ): string {
+	public static function notice( array $flash, array $invalid = array() ): string {
+		if ( 'error' === (string) ( $flash['tipo'] ?? '' ) && array() !== $invalid ) {
+			return FieldErrorView::summary( 'La solicitud no se ha guardado. Revise:', $invalid );
+		}
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {

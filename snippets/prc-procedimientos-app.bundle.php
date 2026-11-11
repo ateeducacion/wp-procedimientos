@@ -2820,6 +2820,10 @@ final class ApplicationInput {
 
 
 
+
+
+
+
 	public static function validate( array $raw, array $procedure ): array {
 		$errors  = array();
 		$teacher = 'teacher' === ( $procedure['applicant_type'] ?? '' );
@@ -2850,6 +2854,7 @@ final class ApplicationInput {
 		return array(
 			'ok'     => array() === $errors,
 			'errors' => $errors,
+			'fields' => array_values( array_merge( array_diff( $errors, $coordinacion['errors'] ), $coordinacion['fields'] ) ),
 			'data'   => array(
 				'position'    => $position,
 				'coordinator' => $coordinators,
@@ -2881,6 +2886,7 @@ final class ApplicationInput {
 			);
 		}
 		$errors = array();
+		$fields = array();
 		$data   = array();
 		for ( $i = 0; $i < $count; ++$i ) {
 			$fila        = is_array( $filas[ $i ] ?? null ) ? $filas[ $i ] : array();
@@ -2899,12 +2905,14 @@ final class ApplicationInput {
 			foreach ( $checks as $error => $ok ) {
 				if ( ! $ok ) {
 					$errors[] = $error;
+					$fields[] = $error . ':' . $i;
 				}
 			}
 			$data[] = $coordinator;
 		}
 		return array(
 			'errors' => $errors,
+			'fields' => $fields,
 			'data'   => $data,
 		);
 	}
@@ -2917,17 +2925,7 @@ final class ApplicationInput {
 
 
 	public static function why( array $errors, array $questions = array() ): string {
-		$textos = array(
-			'position'            => 'el cargo',
-			'coordinator_name'    => 'el nombre de cada persona coordinadora',
-			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
-			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
-			'coordinator_email'   => 'el correo de cada persona coordinadora',
-			'accept'              => 'la aceptación de los compromisos',
-		);
-		foreach ( $questions as $pregunta ) {
-			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
-		}
+		$textos = self::texts( $questions );
 
 		$faltan = array();
 		foreach ( $errors as $error ) {
@@ -2945,6 +2943,52 @@ final class ApplicationInput {
 
 		$ultimo = array_pop( $faltan );
 		return 'Revise ' . implode( ', ', $faltan ) . ' y ' . $ultimo . '.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function labels( array $fields, array $questions = array() ): array {
+		$textos = self::texts( $questions );
+		$out    = array();
+		foreach ( $fields as $field ) {
+			$partes = explode( ':', (string) $field, 2 );
+			$fila   = 0 === strpos( $partes[0], 'coordinator_' ) && isset( $partes[1] ) ? (int) $partes[1] + 1 : 0;
+			$texto  = (string) ( $textos[ $fila > 0 ? $partes[0] : (string) $field ] ?? '' );
+			if ( '' !== $texto ) {
+				$out[ (string) $field ] = $fila > 0 ? str_replace( 'cada persona coordinadora', 'la persona coordinadora ' . $fila, $texto ) : $texto;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function texts( array $questions ): array {
+		$textos = array(
+			'position'            => 'el cargo',
+			'coordinator_name'    => 'el nombre de cada persona coordinadora',
+			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
+			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
+			'coordinator_email'   => 'el correo de cada persona coordinadora',
+			'accept'              => 'la aceptación de los compromisos',
+		);
+		foreach ( $questions as $pregunta ) {
+			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
+		}
+		return $textos;
 	}
 
 
@@ -11160,7 +11204,8 @@ final class Shell {
 
 
 
-	public static function notice_open( string $type, bool $anchor = false ): string {
+
+	public static function notice_open( string $type, bool $anchor = false, string $tag = 'p' ): string {
 		$tonos = array(
 			'ok'    => 'success',
 			'aviso' => 'warning',
@@ -11169,7 +11214,7 @@ final class Shell {
 		$tono  = $tonos[ $type ] ?? 'info';
 		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
 		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
-		return '<p class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
+		return '<' . ( 'div' === $tag ? 'div' : 'p' ) . ' class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}
 
 
@@ -11807,6 +11852,110 @@ final class PanelParts {
 			return $fecha;
 		}
 		return (string) wp_date( 'j \d\e F \d\e Y', $marca );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\FieldErrorView', false ) ) {
+final class FieldErrorView {
+
+
+
+
+
+
+
+	public static function anchor( string $code ): string {
+		$partes = explode( ':', $code, 2 );
+		if ( 'answer' === $partes[0] ) {
+			return 'prc-q-' . ( $partes[1] ?? '' );
+		}
+		if ( 0 === strpos( $partes[0], 'coordinator_' ) ) {
+			return 'prc-coordinator-' . substr( $partes[0], strlen( 'coordinator_' ) ) . '-' . (int) ( $partes[1] ?? 0 );
+		}
+		return 'prc-' . $partes[0];
+	}
+
+
+
+
+
+
+
+
+
+	public static function attrs( array $invalid, string $code, string $help_id = '' ): string {
+		$falla  = isset( $invalid[ $code ] );
+		$quien  = trim( $help_id . ( $falla ? ' ' . self::anchor( $code ) . '-error' : '' ) );
+		$atribs = '' !== $quien ? ' aria-describedby="' . esc_attr( $quien ) . '"' : '';
+		return $atribs . ( $falla ? ' aria-invalid="true"' : '' );
+	}
+
+
+
+
+
+
+
+
+	public static function css( array $invalid, string $code ): string {
+		return isset( $invalid[ $code ] ) ? ' is-invalid' : '';
+	}
+
+
+
+
+
+
+
+
+	public static function feedback( array $invalid, string $code ): string {
+		if ( ! isset( $invalid[ $code ] ) ) {
+			return '';
+		}
+		return '<p class="invalid-feedback d-block" id="' . esc_attr( self::anchor( $code ) . '-error' ) . '">'
+			. esc_html( 'Revise ' . $invalid[ $code ] . '.' ) . '</p>';
+	}
+
+
+
+
+
+
+
+
+	public static function summary( string $intro, array $invalid ): string {
+		$items = '';
+		foreach ( $invalid as $code => $rotulo ) {
+			$items .= '<li><a href="#' . esc_attr( self::anchor( (string) $code ) ) . '">' . esc_html( (string) $rotulo ) . '</a></li>';
+		}
+		return Shell::notice_open( 'error', true, 'div' )
+			. '<p>' . esc_html( $intro ) . '</p><ul class="prc-aviso__campos">' . $items . '</ul></div>';
 	}
 }
 
@@ -26346,13 +26495,15 @@ final class MeasuredQuestionView {
 
 
 
-	public static function html( array $p, $valor ): string {
+
+	public static function html( array $p, $valor, array $invalid = array() ): string {
 		$key     = (string) $p['key'];
 		$id      = 'prc-q-' . $key;
 		$nombre  = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';
 		$obliga  = ! empty( $p['required'] );
 		$ayuda   = (string) $p['help'];
-		$pie     = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo  = 'answer:' . $key;
+		$pie     = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
 		$rejilla = ProcedureQuestions::TYPE_GRID === (string) $p['type'];
 
 		$control = '';
@@ -26365,7 +26516,7 @@ final class MeasuredQuestionView {
 					. self::number_input( $id . '-' . $rk, $nombre . '[' . $rk . ']', $dadas[ $rk ] ?? '', 0, null, $obliga )
 					. '</div>';
 			}
-			$control = '<div class="prc-opciones prc-rejilla" role="group" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
+			$control = '<div class="prc-opciones prc-rejilla" role="group" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
 		} elseif ( ProcedureQuestions::TYPE_NUMBER === (string) $p['type'] ) {
 			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie );
 		} else {
@@ -26376,6 +26527,7 @@ final class MeasuredQuestionView {
 		return '<div class="prc-campo prc-pregunta ' . esc_attr( $rejilla ? 'prc-campo--completo' : 'prc-campo--medio' ) . '">'
 			. self::label( $rejilla ? $id . '-rotulo' : $id, (string) $p['label'], $obliga, $rejilla )
 			. $control
+			. FieldErrorView::feedback( $invalid, $codigo )
 			. ( '' !== $ayuda ? '<div class="prc-campo__ayuda" id="' . esc_attr( $id . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</div>' : '' )
 			. '</div>';
 	}
@@ -26957,7 +27109,14 @@ final class ApplicationProgressView {
 
 
 
-	public static function notice( array $flash ): string {
+
+
+
+
+	public static function notice( array $flash, array $invalid = array() ): string {
+		if ( 'error' === (string) ( $flash['tipo'] ?? '' ) && array() !== $invalid ) {
+			return FieldErrorView::summary( 'La solicitud no se ha guardado. Revise:', $invalid );
+		}
 		$texto = (string) ( $flash['texto'] ?? '' );
 		$link  = (string) ( $flash['link'] ?? '' );
 		if ( '' === $texto || '' === $link ) {
@@ -27190,7 +27349,7 @@ final class ApplyFormView {
 
 		ob_start();
 		echo self::head( $m );
-		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ) );
+		echo ApplicationProgressView::notice( (array) ( $progreso['flash'] ?? $m['flash'] ), (array) ( $m['invalid'] ?? array() ) );
 		echo self::choices( $m );
 		echo ApplicationProgressView::card( $m );
 
@@ -27408,6 +27567,7 @@ final class ApplyFormView {
 		$quien   = (array) ( $m['applicant'] ?? array() );
 		$nueva   = array() === (array) $m['application'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
+		$falla   = (array) ( $m['invalid'] ?? array() );
 
 
 
@@ -27474,12 +27634,13 @@ final class ApplyFormView {
 					<?php if ( ! $docente ) : ?>
 						<div class="prc-campo prc-campo--cuarto prc-campo--abre-fila">
 							<?php echo self::label( 'prc-position', 'Cargo en el centro', true );?>
-							<select class="prc-control" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required>
+							<select class="prc-control<?php echo esc_attr( FieldErrorView::css( $falla, 'position' ) ); ?>" id="prc-position" name="<?php echo esc_attr( ApplyForm::FIELD_POSITION ); ?>" required<?php echo FieldErrorView::attrs( $falla, 'position' );?>>
 								<option value="">— Elija —</option>
 								<?php foreach ( (array) $m['positions'] as $clave => $rotulo ) : ?>
 									<option value="<?php echo esc_attr( (string) $clave ); ?>" <?php selected( (string) $clave, (string) $v['position'] ); ?>><?php echo esc_html( (string) $rotulo ); ?></option>
 								<?php endforeach; ?>
 							</select>
+							<?php echo FieldErrorView::feedback( $falla, 'position' );?>
 						</div>
 					<?php endif; ?>
 				</div>
@@ -27497,11 +27658,12 @@ final class ApplyFormView {
 							<div class="prc-opciones prc-opciones--vertical">
 								<div class="prc-opcion">
 									<label for="prc-accept">
-										<input type="checkbox" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?> />
+										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' );?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
 									</label>
 								</div>
 							</div>
+							<?php echo FieldErrorView::feedback( $falla, 'accept' );?>
 						</div>
 					</div>
 				</section>
@@ -27512,7 +27674,7 @@ final class ApplyFormView {
 					<h3 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h3>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
-							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos );?>
+							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla );?>
 						<?php endforeach; ?>
 					</div>
 				</section>
@@ -27549,7 +27711,7 @@ final class ApplyFormView {
 		}
 		$campos = '';
 		for ( $index = 0; $index < $cuantas; ++$index ) {
-			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ) );
+			$campos .= self::coordinator_fields( $index, (array) ( $coordinators[ $index ] ?? array() ), (array) ( $m['invalid'] ?? array() ) );
 		}
 		return '<section class="prc-seccion"><h3 class="prc-seccion__titulo">DATOS DE LA COORDINACIÓN</h3><div class="prc-seccion__cuerpo">'
 			. '<div class="prc-nota prc-campo--completo"><p>Las personas coordinadoras aceptan el compromiso de colaborar en el desarrollo del programa, proyecto o red tal como se expresa en la convocatoria.</p></div>'
@@ -27619,9 +27781,10 @@ final class ApplyFormView {
 
 
 
-	private static function question( array $p, array $answers, array $files = array() ): string {
+
+	private static function question( array $p, array $answers, array $files = array(), array $invalid = array() ): string {
 		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
-			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '', $invalid );
 		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
@@ -27631,7 +27794,9 @@ final class ApplyFormView {
 		$obliga = ! empty( $p['required'] );
 		$ayuda  = (string) $p['help'];
 		$id     = 'prc-q-' . $key;
-		$pie    = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo = 'answer:' . $key;
+		$pie    = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
+		$clase  = 'prc-control' . FieldErrorView::css( $invalid, $codigo );
 		$ancho  = in_array( $tipo, array( ProcedureQuestions::TYPE_TEXT, ProcedureQuestions::TYPE_FILE ), true )
 			? self::ANCHO[12]
 			: self::ANCHO[6];
@@ -27646,7 +27811,7 @@ final class ApplyFormView {
 						<span class="prc-campo__obligatorio" aria-hidden="true">*</span>
 					<?php endif; ?>
 				</label>
-				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="prc-control" rows="3"
+				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="<?php echo esc_attr( $clase ); ?>" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
 					<?php echo $pie;?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
@@ -27660,7 +27825,7 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="prc-control" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie;?> />
 				<div class="prc-campo__ayuda">
@@ -27684,7 +27849,7 @@ final class ApplyFormView {
 				$unica  = is_scalar( $valor ) ? (string) $valor : '';
 				echo self::label( $id . '-rotulo', (string) $p['label'], $obliga, 'p' );
 				?>
-				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>"
+				<div class="prc-opciones prc-opciones--vertical" role="<?php echo $varias ? 'group' : 'radiogroup'; ?>" id="<?php echo esc_attr( $id ); ?>"
 					aria-labelledby="<?php echo esc_attr( $id . '-rotulo' ); ?>"
 					<?php echo $pie;?>>
 					<?php foreach ( (array) $p['choices'] as $i => $opcion ) : ?>
@@ -27705,6 +27870,7 @@ final class ApplyFormView {
 					<?php endforeach; ?>
 				</div>
 			<?php endif; ?>
+			<?php echo FieldErrorView::feedback( $invalid, $codigo );?>
 			<?php if ( '' !== $ayuda ) : ?>
 				<div class="prc-campo__ayuda" id="<?php echo esc_attr( $id . '-ayuda' ); ?>"><?php echo esc_html( $ayuda ); ?></div>
 			<?php endif; ?>
@@ -27746,7 +27912,8 @@ final class ApplyFormView {
 
 
 
-	private static function coordinator_fields( int $index, array $coordinator ): string {
+
+	private static function coordinator_fields( int $index, array $coordinator, array $invalid = array() ): string {
 		$campos = array(
 			'name'    => array( 'Nombre', 'text', 'prc-campo--cuarto prc-campo--abre-fila', '' ),
 			'surname' => array( 'Apellidos', 'text', 'prc-campo--cuarto', '' ),
@@ -27759,14 +27926,19 @@ final class ApplyFormView {
 		<fieldset class="prc-seccion-campos">
 			<legend><?php echo esc_html( sprintf( 'Persona coordinadora %d', $index + 1 ) ); ?></legend>
 			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $clases, $ayuda ) ) : ?>
-				<?php $id = 'prc-coordinator-' . $campo . '-' . $index; ?>
+				<?php
+				$id     = 'prc-coordinator-' . $campo . '-' . $index;
+				$codigo = 'coordinator_' . $campo . ':' . $index;
+				?>
 				<div class="prc-campo <?php echo esc_attr( $clases ); ?>">
 					<?php echo self::label( $id, $rotulo, true );?>
-					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
+					<input class="prc-control<?php echo esc_attr( FieldErrorView::css( $invalid, $codigo ) ); ?>" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplyForm::FIELD_COORDINATORS . '[' . $index . '][' . $campo . ']' ); ?>" required
 						<?php if ( 'dni' === $campo ) : ?>
-							autocomplete="off" aria-describedby="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"
+							autocomplete="off"
 						<?php endif; ?>
+						<?php echo FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? 'prc-coordinator-dni-ayuda-' . $index : '' );?>
 						value="<?php echo esc_attr( (string) ( $coordinator[ $campo ] ?? '' ) ); ?>" />
+					<?php echo FieldErrorView::feedback( $invalid, $codigo );?>
 					<?php if ( '' !== $ayuda ) : ?>
 						<p class="prc-campo__ayuda" id="<?php echo esc_attr( 'prc-coordinator-dni-ayuda-' . $index ); ?>"><?php echo esc_html( $ayuda ); ?></p>
 					<?php endif; ?>
@@ -27952,6 +28124,13 @@ final class ApplyForm {
 
 
 
+	private static $invalid = array();
+
+
+
+
+
+
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
 		add_action( 'init', array( self::class, 'handle' ), 20 );
@@ -28091,6 +28270,7 @@ final class ApplyForm {
 			self::$rejected = '' !== $porque && $revisado['ok']
 				? $porque
 				: ApplicationInput::why( $revisado['errors'], (array) $spec['questions'] );
+			self::$invalid  = ApplicationInput::labels( $revisado['fields'], (array) $spec['questions'] );
 			return;
 		}
 
@@ -28263,6 +28443,8 @@ final class ApplyForm {
 			'positions'       => ApplicationMetaKeys::positions(),
 			'review_states'   => ApplicationMetaKeys::review_states(),
 			'values'          => array(),
+
+			'invalid'         => self::$invalid,
 		);
 
 		if ( ! is_user_logged_in() ) {
@@ -34495,6 +34677,17 @@ body.prc-app .prc-hoja {
 .prc-aviso-success { background: var(--prc-ok-fondo); border-color: var(--prc-ok-borde); color: var(--prc-ok-texto); }
 .prc-aviso-warning { background: var(--prc-avi-fondo); border-color: var(--prc-avi-borde); color: var(--prc-avi-texto); }
 .prc-aviso-danger { background: var(--prc-mal-fondo); border-color: var(--prc-mal-borde); color: var(--prc-mal-texto); }
+.prc-aviso:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.prc-aviso p { margin: 0; }
+.prc-aviso__campos { margin: 4px 0 0; padding-left: 20px; }
+.prc-aviso__campos a { color: inherit; text-decoration: underline; }
+
+/* El campo que falla, con Bootstrap y sin él: borde rojo y su línea debajo. */
+.prc-control.is-invalid,
+.prc-opciones.is-invalid,
+.prc-opciones[aria-invalid="true"] { border-color: var(--prc-mal-texto); }
+.prc-opciones[aria-invalid="true"] { border-left: 3px solid var(--prc-mal-texto); padding-left: 8px; }
+.invalid-feedback.d-block { display: block; margin: 4px 0 0; color: var(--prc-mal-texto); font-size: .875rem; }
 
 /* La misma geometría sin color: la caja neutra que envuelve un bloque. */
 .prc-caja {

@@ -11,6 +11,8 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
+use Prc\Domain\QuestionPoints;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
@@ -239,6 +241,29 @@ final class Applications {
 	 */
 	public static function questions( int $procedure_id ): array {
 		return ProcedureQuestions::sanitize( get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+	/**
+	 * The question keys some application of the procedure has answered.
+	 *
+	 * Una respuesta vacía no cuenta —tampoco una rejilla con todas las filas
+	 * vacías—; un «no», sí. Un documento aportado cuenta como respuesta a su
+	 * pregunta. Es lo que decide si una pregunta puede cambiar de tipo, y,
+	 * con las vacías, por dónde empieza el contador de un procedimiento de
+	 * antes (ADR-0040).
+	 *
+	 * @param int  $procedure_id Procedure post ID.
+	 * @param bool $empty_too    Whether an empty answer counts too.
+	 * @return array<string, bool> Question key => true.
+	 */
+	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
+		$out = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
+			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+		}
+		return $out;
 	}
 
 	/**
@@ -566,13 +591,15 @@ final class Applications {
 	 *
 	 * Las fijas y, detrás, una por pregunta del procedimiento: la clave es la
 	 * `key` de la pregunta, así que reescribir un rótulo mueve la cabecera y
-	 * no descoloca ni un dato (ADR-0019).
+	 * no descoloca ni un dato (ADR-0019). Si alguna pregunta da puntos, la
+	 * columna calculada `score` va tras la nota (ADR-0040). Una rejilla es
+	 * aquí una columna; la exportación la abre en una por fila.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
 	 * @return array<string, string> clave => rótulo.
 	 */
 	public static function columns( array $questions ): array {
-		$out = array(
+		$out  = array(
 			'centre'            => 'Centro',
 			'code'              => 'Código',
 			'date'              => 'Fecha',
@@ -585,6 +612,7 @@ final class Applications {
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
 		);
+		$out += QuestionPoints::heading( $questions );
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -615,7 +643,7 @@ final class Applications {
 	 *
 	 * @param \WP_Post                         $application The application.
 	 * @param array<int, array<string, mixed>> $questions   Normalised questions of its procedure.
-	 * @return array<string, mixed> Columns as strings, plus {@see KEY_FILES}, which is not one.
+	 * @return array<string, mixed> Columns as strings —each grid row too, as `q4:r1`—, plus {@see KEY_FILES}, which is not one.
 	 */
 	public static function row( \WP_Post $application, array $questions ): array {
 		$meta   = self::meta( (int) $application->ID );
@@ -645,6 +673,7 @@ final class Applications {
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la
 		// meta bajo su clave: solo salen las preguntas que hoy tiene el procedimiento.
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
+		$fila      += QuestionPoints::cell( $questions, $respuestas );
 		$documentos = ApplicationFiles::descriptors( (int) $application->ID );
 		$adjuntos   = array();
 		foreach ( $questions as $pregunta ) {
@@ -666,6 +695,7 @@ final class Applications {
 				continue;
 			}
 			$fila[ $key ] = ProcedureQuestions::as_text( $pregunta, $respuestas[ $key ] ?? null );
+			$fila        += QuestionGrid::cells( $pregunta, $respuestas[ $key ] ?? null );
 		}
 		$fila[ self::KEY_FILES ] = $adjuntos;
 		return $fila;

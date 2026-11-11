@@ -110,6 +110,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
 			),
+			ProcedureMetaKeys::QUESTIONS_SEQ        => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 			ProcedureMetaKeys::COMMITMENTS          => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',
@@ -370,6 +374,9 @@ final class ProcedureMetaRegistration {
 			$preguntas[ $i ]['label']   = sanitize_text_field( (string) $pregunta['label'] );
 			$preguntas[ $i ]['help']    = sanitize_text_field( (string) $pregunta['help'] );
 			$preguntas[ $i ]['choices'] = array_map( 'sanitize_text_field', (array) $pregunta['choices'] );
+			foreach ( (array) ( $pregunta['rows'] ?? array() ) as $j => $fila ) {
+				$preguntas[ $i ]['rows'][ $j ]['label'] = sanitize_text_field( (string) $fila['label'] );
+			}
 		}
 		return $preguntas;
 	}

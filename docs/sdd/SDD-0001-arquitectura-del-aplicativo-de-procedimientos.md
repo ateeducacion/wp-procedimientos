@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -222,9 +222,9 @@ Lo que cada estado permite:
 | `resolved` | Ve su solicitud y el listado | Edita enlaces; gestiona solicitudes |
 | `archived` | Ve | Nada, salvo desarchivar (administración) |
 
-### Preguntas del procedimiento (`Domain/ProcedureQuestions`, ADR-0019)
+### Preguntas del procedimiento (`Domain/ProcedureQuestions`, ADR-0019, ADR-0040)
 
-`prc_questions` es una lista de hasta 20 preguntas:
+`prc_questions` es una lista de hasta 40 preguntas:
 
 ```
 { key: 'q1', label: 'Modalidad', help: '', type: 'single', required: true,
@@ -232,9 +232,15 @@ Lo que cada estado permite:
 ```
 
 `type` ∈ `text` (respuesta libre, hasta 2.000 caracteres), `single` (una
-opción), `multiple` (varias), `yesno`, `file` (un documento, ADR-0028). `key`
-la genera el aplicativo (`q` + número) y no cambia al reordenar; las respuestas
-se guardan por `key`. `ProcedureQuestions::sanitize()` y
+opción), `multiple` (varias), `yesno`, `file` (un documento, ADR-0028),
+`number` (un entero, con `min` y `max` opcionales; sin mínimo, desde 0),
+`date` (`Y-m-d`) y `grid` (una cantidad entera por fila, con `rows` de
+`{ key: 'r1', label }`, hasta 30, y `row_seq`) (ADR-0040). Una opción de
+`multiple` escrita `Texto | 3` vale 3 puntos: se guarda el texto en `choices`
+y los puntos en `points`, y la solicitud gana la columna calculada `score`,
+que no se guarda. `key` la genera el aplicativo (`q` + número) y no cambia al
+reordenar —«Subir» y «Bajar» en el taller—; las respuestas se guardan por
+`key`, y el tipo de una pregunta con respuestas no se cambia. `ProcedureQuestions::sanitize()` y
 `::validate_answers( $questions, $answers )` son puras: sin WordPress, y por
 eso una pregunta `file` **no pasa por ellas** —el fichero es del borde de la
 aplicación, y su descriptor va a `prc_files`, no a `prc_answers`—.

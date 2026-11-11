@@ -48,7 +48,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 | El ámbito es un árbol de términos filtrado por una meta de usuario con dos fragmentos distintos, uno en servidor y otro en navegador | `prc_area` jerárquica en el contenido y la meta `prc_area` en la persona; lo decide un único guardián, `Access/ProcedureAccess` |
 | La solicitud de un centro es una entrada de otro formulario con la clave «convocatoria · centro» escrita en un campo de texto | CPT `prc_application` con `post_parent` = el procedimiento, **una por centro** (`Applications::find()` antes de crear) |
 | El centro de la persona es una meta de usuario que escribe un fragmento al iniciar sesión | `Access/CentreScope` lee la meta cuya clave devuelve `prc_centre_code_meta_key`; sin código válido, fail-closed |
-| Las opciones que pide la convocatoria: cuatro pares título/indicaciones, un subformulario y, si no basta, un formulario clonado | Núcleo fijo (`Domain/ApplicationInput`) más hasta veinte preguntas en `prc_questions` (`Domain/ProcedureQuestions`) |
+| Las opciones que pide la convocatoria: cuatro pares título/indicaciones, un subformulario y, si no basta, un formulario clonado | Núcleo fijo (`Domain/ApplicationInput`) más hasta cuarenta preguntas en `prc_questions` (`Domain/ProcedureQuestions`) |
 | La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una |
 | El catálogo de centros es un formulario más | El filtro `prc_centres`; en local lo contesta el mu-plugin con centros inventados |
 
@@ -94,7 +94,10 @@ src/Prc/
 ├── Meta/ApplicationMetaKeys.php            Claves de meta, cargos y estados de revisión
 ├── Domain/DateRange.php                    Rangos de fechas (del aplicativo de eventos)
 ├── Domain/ProcedureState.php               Estado derivado de las fechas. Puro
+├── Domain/QuestionPoints.php               Puntos de «varias opciones» y puntuación. Puro
+├── Domain/QuestionGrid.php                 Filas de una rejilla, con su clave. Puro
 ├── Domain/ProcedureQuestions.php           Preguntas y validación de respuestas. Puro
+├── Domain/QuestionChanges.php              Subir, bajar y qué cambios de preguntas se rechazan. Puro
 ├── Domain/ProcedureInput.php               Valida el alta/edición del procedimiento. Puro
 ├── Domain/ApplicationInput.php             Valida la solicitud. Puro
 ├── Domain/CentreCatalog.php                Filtro prc_centres, find/search
@@ -121,6 +124,7 @@ src/Prc/
 ├── PublicFront/Workspace.php               [prc_workspace]
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
+├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
@@ -262,8 +266,10 @@ gestiona) y por **centro** (`Access/CentreScope`, para quien solicita).
   (`schools`, `teachers`) y la titularidad (`public`, `private`) viven en
   `Meta/ProcedureMetaKeys.php`; los cargos y los estados de revisión
   (`submitted`, `amend`, `admitted`, `excluded`) en
-  `Meta/ApplicationMetaKeys.php`, y los cinco tipos de pregunta —`text`,
-  `single`, `multiple`, `yesno`, `file`— en `Domain/ProcedureQuestions.php`.
+  `Meta/ApplicationMetaKeys.php`, y los ocho tipos de pregunta —`text`,
+  `single`, `multiple`, `yesno`, `file`, `number`, `date`, `grid`— en
+  `Domain/ProcedureQuestions.php`
+  ([ADR-0040](docs/adr/ADR-0040-numero-fecha-rejilla-y-puntos-amplian-las-preguntas.md)).
   Solo el ámbito y el curso son taxonomías
   ([ADR-0012](docs/adr/ADR-0012-una-taxonomia-por-dimension.md)).
 - **Toda escritura va por POST** con nonce y comprobación de capacidad, patrón

@@ -212,9 +212,47 @@ copia de todo `procedure_created` y `application_received`). Con
 
 ### PR 3 — Tipos de pregunta (`feature/question-types`)
 
-**Ficheros:** `Domain/ProcedureQuestions.php`, `View/ProcedureEditorView.php`,
-`ProcedureEditor.php`, `View/ApplyFormView.php`; pruebas en
-`test-procedure-questions.php` y `test-apply-form.php`.
+**Ficheros:**
+- Crear `Domain/QuestionGrid.php`, `Domain/QuestionPoints.php`,
+  `Domain/QuestionChanges.php` (puros) y `View/MeasuredQuestionView.php`:
+  sin ellos `ProcedureQuestions` y `ApplyFormView` pasan del umbral de
+  complejidad de PHPMD.
+- Modificar `Domain/ProcedureQuestions.php`, `View/ProcedureEditorView.php`,
+  `ProcedureEditor.php`, `View/ApplyFormView.php`, `Applications.php`,
+  `ApplicationExport.php` y los registros de meta.
+- Pruebas en `test-procedure-questions.php`, `test-apply-form.php`,
+  `test-procedure-editor.php`, `test-application-export.php`,
+  `test-mailer.php` y `test-meta-registration.php`.
+
+**Interfaces que produce:**
+- `ProcedureQuestions::TYPE_NUMBER`, `TYPE_DATE`, `TYPE_GRID`, `MAX = 40`,
+  `MAX_ROWS = 30`, `ProcedureQuestions::integer( $value ): ?int`,
+  `::highest_key( array $keys ): int` y `::is_answer( $value ): bool`.
+- `ProcedureQuestions::sanitize( $raw, int &$seq = 0 ): array` — `$seq` es el
+  contador de preguntas del procedimiento: las claves nuevas salen detrás y
+  se devuelve actualizado. Meta `prc_questions_seq` (entero, sin REST); el
+  taller la lee o, en un procedimiento de antes, la deduce de sus preguntas
+  y de las claves de sus respuestas.
+- Pregunta `number`: `min`, `max` (`int|null`); `grid`: `rows`
+  (`{key:'r1', label}`) y `row_seq`; `multiple` con puntos: `points`
+  (`int[]`, uno por opción). Respuestas: `number` entero o `''`; `date`
+  `'Y-m-d'` o `''`; `grid` `{ r1: 3, r2: '' }`.
+- `QuestionGrid::match_rows( string $text, array $previous ): array`,
+  `::columns( array $question ): array` (`q4:r1` => «Pregunta — Fila»),
+  `::cells( array $question, $answer ): array` y
+  `::expand( array $columns, array $questions ): array`, que abre cada
+  rejilla de `Applications::columns()` en sus filas para la exportación.
+- `QuestionPoints::score( array $questions, array $answers ): ?int` —
+  `null` sin puntos; `::has_points()`, `::lines()`, `::heading()`,
+  `::cell()`. Los puntos solo se leen en el texto del taller; una lista
+  guardada sin `points` se toma tal cual.
+- `QuestionChanges::move( array $questions, string $key, string $direction ): array`,
+  `::refusal( array $before, array $after, array $answered ): string` y
+  `::input_errors( array $raw ): string` (puntos o rango mal escritos).
+- `Applications::answered_keys( int $procedure_id, bool $empty_too = false ): array<string,bool>`;
+  columna calculada `score` en `Applications::columns()` y `row()`.
+- Operación `ProcedureEditor::OP_MOVE_QUESTION` con el campo
+  `FIELD_Q_MOVE` (`q3:up`, `q3:down`); aviso `ordenadas`.
 
 **Decisiones:**
 - Tipos nuevos: `number` (entero, con `min` y `max` opcionales), `date`

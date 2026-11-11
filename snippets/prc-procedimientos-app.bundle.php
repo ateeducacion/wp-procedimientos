@@ -146,6 +146,12 @@ final class ProcedureMetaKeys {
 
 
 
+
+	public const QUESTIONS_SEQ = 'prc_questions_seq';
+
+
+
+
 	public const COMMITMENTS = 'prc_commitments';
 
 
@@ -221,6 +227,7 @@ final class ProcedureMetaKeys {
 			self::CUSTOM_CSS,
 			self::CUSTOM_JS,
 			self::QUESTIONS,
+			self::QUESTIONS_SEQ,
 			self::COMMITMENTS,
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
@@ -921,13 +928,527 @@ namespace Prc\Domain;
 
 
 
+
+if ( ! class_exists( 'Prc\Domain\QuestionPoints', false ) ) {
+final class QuestionPoints {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function choices( string $type, array $raw ): array {
+		$valor = $raw['choices'] ?? array();
+		if ( ProcedureQuestions::TYPE_MULTIPLE !== $type ) {
+			return array( 'choices' => ProcedureQuestions::choices( $valor ) );
+		}
+
+		$con    = isset( $raw['points'] ) && is_array( $raw['points'] );
+		$textos = array();
+		$valen  = array();
+		foreach ( self::items( $valor, $con ? array_values( $raw['points'] ) : array() ) as $una ) {
+			$con = $con || $una[2];
+			if ( '' === $una[0] || in_array( $una[0], $textos, true ) || count( $textos ) >= ProcedureQuestions::MAX_CHOICES ) {
+				continue;
+			}
+			$textos[] = $una[0];
+			$valen[]  = $una[1];
+		}
+		if ( ! $con || array() === array_filter( $valen ) ) {
+			return array( 'choices' => $textos );
+		}
+		return array(
+			'choices' => $textos,
+			'points'  => $valen,
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function answer( array $question, $value ): array {
+		$opciones = (array) ( $question['choices'] ?? array() );
+		$obliga   = ! empty( $question['required'] );
+		if ( ProcedureQuestions::TYPE_SINGLE === ( $question['type'] ?? '' ) ) {
+			$elegida = is_scalar( $value ) ? trim( (string) $value ) : '';
+			$elegida = in_array( $elegida, $opciones, true ) ? $elegida : '';
+			return array( $elegida, $obliga && '' === $elegida );
+		}
+		$limpias = array();
+		foreach ( is_array( $value ) ? $value : array() as $una ) {
+			$una = is_scalar( $una ) ? trim( (string) $una ) : '';
+			if ( in_array( $una, $opciones, true ) && ! in_array( $una, $limpias, true ) ) {
+				$limpias[] = $una;
+			}
+		}
+		return array( $limpias, $obliga && array() === $limpias );
+	}
+
+
+
+
+
+
+
+
+	private static function items( $value, array $points ): array {
+		$texto  = is_string( $value );
+		$lineas = $texto ? preg_split( '/\r\n|\r|\n/', $value ) : $value;
+		$out    = array();
+		foreach ( is_array( $lineas ) ? array_values( $lineas ) : array() as $i => $linea ) {
+			if ( ! is_scalar( $linea ) ) {
+				continue;
+			}
+			$valor = $points[ $i ] ?? 0;
+			$out[] = $texto ? self::split( trim( (string) $linea ) ) : array( trim( (string) $linea ), is_scalar( $valor ) ? (int) $valor : 0, false );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function split( string $line ): array {
+		if ( preg_match( '/^(.*?)\s*\|\s*(\d{1,6})$/u', $line, $partes ) && '' !== trim( $partes[1] ) ) {
+			return array( trim( $partes[1] ), (int) $partes[2], true );
+		}
+		return array( $line, 0, false );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function lines( array $question ): array {
+		$textos = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
+		$puntos = isset( $question['points'] ) && is_array( $question['points'] ) ? $question['points'] : null;
+		if ( null === $puntos ) {
+			$barra = array_filter(
+				$textos,
+				function ( string $texto ): bool {
+					return false !== strpos( $texto, '|' );
+				}
+			);
+			if ( array() === $barra ) {
+				return $textos;
+			}
+			$puntos = array();
+		}
+		$out = array();
+		foreach ( $textos as $i => $texto ) {
+			$out[] = $texto . ' | ' . (int) ( $puntos[ $i ] ?? 0 );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	public static function has_points( array $questions ): bool {
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::TYPE_MULTIPLE === ( $pregunta['type'] ?? '' ) && isset( $pregunta['points'] ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function score( array $questions, array $answers ): ?int {
+		if ( ! self::has_points( $questions ) ) {
+			return null;
+		}
+		$total = 0;
+		foreach ( $questions as $pregunta ) {
+			$vale = self::values( $pregunta );
+			foreach ( (array) ( $answers[ (string) ( $pregunta['key'] ?? '' ) ] ?? array() ) as $marcada ) {
+				$total += is_scalar( $marcada ) ? (int) ( $vale[ (string) $marcada ] ?? 0 ) : 0;
+			}
+		}
+		return $total;
+	}
+
+
+
+
+
+
+
+	public static function heading( array $questions ): array {
+		return self::has_points( $questions ) ? array( 'score' => 'Puntos' ) : array();
+	}
+
+
+
+
+
+
+
+
+	public static function cell( array $questions, array $answers ): array {
+		$puntos = self::score( $questions, $answers );
+		return null === $puntos ? array() : array( 'score' => (string) $puntos );
+	}
+
+
+
+
+
+
+
+	private static function values( array $question ): array {
+		$choices = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
+		$points  = array_map( 'intval', (array) ( $question['points'] ?? array() ) );
+		if ( ProcedureQuestions::TYPE_MULTIPLE !== ( $question['type'] ?? '' ) || count( $choices ) !== count( $points ) ) {
+			return array();
+		}
+		return array_combine( $choices, $points );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\QuestionGrid', false ) ) {
+final class QuestionGrid {
+
+
+
+
+
+
+
+	public static function is_row_key( string $key ): bool {
+		return (bool) preg_match( '/^r[1-9]\d{0,3}$/', $key );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function rows( $raw, int $seq ): array {
+		if ( is_string( $raw ) ) {
+			$raw = preg_split( '/\r\n|\r|\n/', $raw );
+		}
+		$filas = array();
+		$mayor = max( 0, $seq );
+		foreach ( is_array( $raw ) ? $raw : array() as $item ) {
+			$fila = self::row( $item );
+			if ( '' === $fila['label'] || in_array( $fila['label'], array_column( $filas, 'label' ), true ) || count( $filas ) >= ProcedureQuestions::MAX_ROWS ) {
+				continue;
+			}
+			if ( in_array( $fila['key'], array_column( $filas, 'key' ), true ) ) {
+				$fila['key'] = '';
+			}
+			$mayor   = max( $mayor, (int) substr( $fila['key'], 1 ) );
+			$filas[] = $fila;
+		}
+		foreach ( $filas as $i => $fila ) {
+			if ( '' === $fila['key'] ) {
+				++$mayor;
+				$filas[ $i ]['key'] = 'r' . $mayor;
+			}
+		}
+		return array(
+			'rows'    => $filas,
+			'row_seq' => $mayor,
+		);
+	}
+
+
+
+
+
+
+
+	private static function row( $item ): array {
+		if ( ! is_array( $item ) ) {
+			return array(
+				'key'   => '',
+				'label' => is_scalar( $item ) ? trim( (string) $item ) : '',
+			);
+		}
+		$key = is_scalar( $item['key'] ?? null ) ? strtolower( trim( (string) $item['key'] ) ) : '';
+		return array(
+			'key'   => self::is_row_key( $key ) ? $key : '',
+			'label' => is_scalar( $item['label'] ?? null ) ? trim( (string) $item['label'] ) : '',
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function match_rows( string $text, array $previous ): array {
+		$lineas = array_map( 'trim', (array) preg_split( '/\r\n|\r|\n/', $text ) );
+		$antes  = array_values( array_filter( $previous, 'is_array' ) );
+		$claves = self::same_text( $lineas, $antes );
+		$usadas = array_flip( array_filter( $claves, 'strlen' ) );
+
+
+
+		$sitio       = array_flip( array_column( $antes, 'key' ) );
+		$en_su_sitio = count( $lineas ) >= count( $antes );
+		foreach ( $claves as $i => $key ) {
+			$en_su_sitio = $en_su_sitio && ( $sitio[ $key ] ?? -1 ) === $i;
+		}
+		$out = array();
+		foreach ( $lineas as $i => $linea ) {
+			if ( '' === $linea ) {
+				continue;
+			}
+			$suya = (string) ( $antes[ $i ]['key'] ?? '' );
+			if ( ! isset( $claves[ $i ] ) && $en_su_sitio && '' !== $suya && ! isset( $usadas[ $suya ] ) ) {
+				$claves[ $i ]    = $suya;
+				$usadas[ $suya ] = true;
+			}
+			$out[] = array(
+				'key'   => $claves[ $i ] ?? '',
+				'label' => $linea,
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function same_text( array $lines, array $previous ): array {
+		$libres = array_column( $previous, 'label', 'key' );
+		$out    = array();
+		foreach ( $lines as $i => $linea ) {
+			$key = '' !== $linea ? array_search( $linea, $libres, true ) : false;
+			if ( false !== $key ) {
+				$out[ $i ] = (string) $key;
+				unset( $libres[ $key ] );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function answer( array $question, $value ): array {
+		$dadas  = is_array( $value ) ? $value : array();
+		$mal    = ! is_array( $value ) && null !== $value && '' !== $value;
+		$obliga = ! empty( $question['required'] );
+		$out    = array();
+		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
+			$rk         = (string) $fila['key'];
+			$dada       = $dadas[ $rk ] ?? null;
+			$texto      = is_scalar( $dada ) ? trim( (string) $dada ) : '';
+			$n          = ProcedureQuestions::integer( $texto );
+			$bien       = null !== $n && $n >= 0;
+			$out[ $rk ] = $bien ? $n : $texto;
+
+			$mal = $mal || is_array( $dada ) || ( '' === $texto ? $obliga : ! $bien );
+		}
+		return array( $out, $mal );
+	}
+
+
+
+
+
+
+
+
+	public static function text( array $question, $answer ): string {
+		$dadas = is_array( $answer ) ? $answer : array();
+		$out   = array();
+		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
+			$valor = $dadas[ (string) $fila['key'] ] ?? '';
+			if ( is_scalar( $valor ) && '' !== (string) $valor ) {
+				$out[] = (string) $fila['label'] . ': ' . (string) $valor;
+			}
+		}
+		return implode( '; ', $out );
+	}
+
+
+
+
+
+
+
+	public static function columns( array $question ): array {
+		$out = array();
+		if ( ProcedureQuestions::TYPE_GRID !== ( $question['type'] ?? '' ) ) {
+			return $out;
+		}
+		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
+			$out[ (string) $question['key'] . ':' . (string) $fila['key'] ] = (string) $question['label'] . ' — ' . (string) $fila['label'];
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function expand( array $columns, array $questions ): array {
+		$rejillas = array();
+		foreach ( $questions as $pregunta ) {
+			$rejillas[ (string) ( $pregunta['key'] ?? '' ) ] = self::columns( $pregunta );
+		}
+		$out = array();
+		foreach ( $columns as $clave => $rotulo ) {
+			$out += array() !== ( $rejillas[ $clave ] ?? array() ) ? $rejillas[ $clave ] : array( $clave => $rotulo );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function cells( array $question, $answer ): array {
+		$dadas = is_array( $answer ) ? $answer : array();
+		$out   = array();
+		foreach ( (array) ( $question['rows'] ?? array() ) as $fila ) {
+			$valor = $dadas[ (string) $fila['key'] ] ?? '';
+			$out[ (string) $question['key'] . ':' . (string) $fila['key'] ] = is_scalar( $valor ) ? (string) $valor : '';
+		}
+		return $out;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 if ( ! class_exists( 'Prc\Domain\ProcedureQuestions', false ) ) {
 final class ProcedureQuestions {
 
 
 
 
-	public const MAX = 20;
+	public const MAX = 40;
+
+
+
+
+	public const MAX_ROWS = 30;
 
 
 
@@ -960,6 +1481,26 @@ final class ProcedureQuestions {
 
 
 
+	public const TYPE_NUMBER = 'number';
+
+
+
+
+	public const TYPE_DATE = 'date';
+
+
+
+
+	public const TYPE_GRID = 'grid';
+
+
+
+
+	private const INT_RE = '/^-?\d{1,9}$/';
+
+
+
+
 
 
 	public static function types(): array {
@@ -969,6 +1510,9 @@ final class ProcedureQuestions {
 			self::TYPE_MULTIPLE => 'Varias opciones',
 			self::TYPE_YESNO    => 'Sí o no',
 			self::TYPE_FILE     => 'Archivo',
+			self::TYPE_NUMBER   => 'Número',
+			self::TYPE_DATE     => 'Fecha',
+			self::TYPE_GRID     => 'Cantidades por fila',
 		);
 	}
 
@@ -998,20 +1542,59 @@ final class ProcedureQuestions {
 
 
 
+	public static function highest_key( array $keys ): int {
+		$mayor = 0;
+		foreach ( array_filter( array_map( 'strval', $keys ), array( self::class, 'is_key' ) ) as $clave ) {
+			$mayor = max( $mayor, (int) substr( $clave, 1 ) );
+		}
+		return $mayor;
+	}
 
 
 
 
 
 
-	public static function sanitize( $raw ): array {
+
+
+
+
+	public static function is_answer( $value ): bool {
+		if ( is_array( $value ) ) {
+			return array() !== array_filter( $value, array( self::class, 'is_answer' ) );
+		}
+		return '' !== $value && null !== $value;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( $raw, int &$seq = 0 ): array {
 		if ( ! is_array( $raw ) ) {
 			return array();
 		}
 
 		$out    = array();
 		$vistas = array();
-		$mayor  = 0;
+		$mayor  = max( 0, $seq );
 		foreach ( $raw as $item ) {
 			if ( ! is_array( $item ) ) {
 				continue;
@@ -1036,6 +1619,7 @@ final class ProcedureQuestions {
 				$out[ $i ]['key'] = 'q' . $mayor;
 			}
 		}
+		$seq = $mayor;
 		return $out;
 	}
 
@@ -1058,14 +1642,38 @@ final class ProcedureQuestions {
 			'help'     => self::text( $raw, 'help' ),
 			'type'     => $type,
 			'required' => ! empty( $raw['required'] ),
-			'choices'  => self::has_choices( $type ) ? self::choices( $raw['choices'] ?? array() ) : array(),
+			'choices'  => array(),
 		);
+		if ( self::has_choices( $type ) ) {
+			$question = array_merge( $question, QuestionPoints::choices( $type, $raw ) );
+		}
 		if ( self::TYPE_FILE === $type && ! empty( $raw['delivery'] ) ) {
 			$question['delivery']  = true;
 			$question['opens_at']  = self::text( $raw, 'opens_at' );
 			$question['closes_at'] = self::text( $raw, 'closes_at' );
 		}
+		if ( self::TYPE_NUMBER === $type ) {
+			$question['min'] = self::integer( $raw['min'] ?? null );
+			$question['max'] = self::integer( $raw['max'] ?? null );
+		}
+		if ( self::TYPE_GRID === $type ) {
+			$question += QuestionGrid::rows( $raw['rows'] ?? array(), (int) ( $raw['row_seq'] ?? 0 ) );
+		}
 		return $question;
+	}
+
+
+
+
+
+
+
+	public static function integer( $value ): ?int {
+		if ( is_int( $value ) ) {
+			return $value;
+		}
+		$texto = is_string( $value ) ? trim( $value ) : '';
+		return preg_match( self::INT_RE, $texto ) ? (int) $texto : null;
 	}
 
 
@@ -1161,13 +1769,16 @@ final class ProcedureQuestions {
 
 
 
+
+
+
+
 	public static function validate_answers( array $questions, array $answers ): array {
 		$errores = array();
 		$datos   = array();
 
 		foreach ( $questions as $pregunta ) {
-			$key   = (string) ( $pregunta['key'] ?? '' );
-			$valor = $answers[ $key ] ?? null;
+			$key = (string) ( $pregunta['key'] ?? '' );
 
 
 
@@ -1177,42 +1788,9 @@ final class ProcedureQuestions {
 				continue;
 			}
 
-			switch ( $pregunta['type'] ?? self::TYPE_TEXT ) {
-				case self::TYPE_YESNO:
-					$datos[ $key ] = self::yes( $valor );
-					if ( ! empty( $pregunta['required'] ) && ! $datos[ $key ] ) {
-						$errores[] = $key;
-					}
-					break;
-
-				case self::TYPE_SINGLE:
-					$elegida       = is_scalar( $valor ) ? trim( (string) $valor ) : '';
-					$datos[ $key ] = in_array( $elegida, (array) ( $pregunta['choices'] ?? array() ), true ) ? $elegida : '';
-					if ( ! empty( $pregunta['required'] ) && '' === $datos[ $key ] ) {
-						$errores[] = $key;
-					}
-					break;
-
-				case self::TYPE_MULTIPLE:
-					$limpias = array();
-					foreach ( is_array( $valor ) ? $valor : array() as $una ) {
-						$una = is_scalar( $una ) ? trim( (string) $una ) : '';
-						if ( in_array( $una, (array) ( $pregunta['choices'] ?? array() ), true ) && ! in_array( $una, $limpias, true ) ) {
-							$limpias[] = $una;
-						}
-					}
-					$datos[ $key ] = $limpias;
-					if ( ! empty( $pregunta['required'] ) && array() === $limpias ) {
-						$errores[] = $key;
-					}
-					break;
-
-				default:
-					$texto         = is_scalar( $valor ) ? trim( (string) $valor ) : '';
-					$datos[ $key ] = mb_substr( $texto, 0, self::TEXT_MAX );
-					if ( ! empty( $pregunta['required'] ) && '' === $datos[ $key ] ) {
-						$errores[] = $key;
-					}
+			list( $datos[ $key ], $mal ) = self::answer( $pregunta, $answers[ $key ] ?? null );
+			if ( $mal ) {
+				$errores[] = $key;
 			}
 		}
 
@@ -1230,9 +1808,72 @@ final class ProcedureQuestions {
 
 
 
+	private static function answer( array $question, $value ): array {
+		$tipo = (string) ( $question['type'] ?? self::TYPE_TEXT );
+		if ( self::has_choices( $tipo ) ) {
+			return QuestionPoints::answer( $question, $value );
+		}
+		if ( self::TYPE_NUMBER === $tipo ) {
+			return self::number_answer( $question, $value );
+		}
+		if ( self::TYPE_GRID === $tipo ) {
+			return QuestionGrid::answer( $question, $value );
+		}
+		$obliga = ! empty( $question['required'] );
+		if ( self::TYPE_YESNO === $tipo ) {
+			$si = self::yes( $value );
+			return array( $si, $obliga && ! $si );
+		}
+		$texto = is_scalar( $value ) ? trim( (string) $value ) : '';
+		if ( self::TYPE_DATE === $tipo ) {
+			return array( $texto, '' === $texto ? $obliga : ! ProcedureInput::is_valid_date( $texto ) );
+		}
+		$texto = mb_substr( $texto, 0, self::TEXT_MAX );
+		return array( $texto, $obliga && '' === $texto );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function number_answer( array $question, $value ): array {
+		$texto = is_scalar( $value ) ? trim( (string) $value ) : '';
+		if ( '' === $texto ) {
+			return array( '', ! empty( $question['required'] ) );
+		}
+		$numero = self::integer( $texto );
+		$minimo = self::integer( $question['min'] ?? null ) ?? 0;
+		$maximo = self::integer( $question['max'] ?? null );
+		if ( null === $numero || $numero < $minimo || ( null !== $maximo && $numero > $maximo ) ) {
+			return array( $texto, true );
+		}
+		return array( $numero, false );
+	}
+
+
+
+
+
+
+
+
 	public static function as_text( array $question, $answer ): string {
-		if ( self::TYPE_YESNO === ( $question['type'] ?? '' ) ) {
+		$tipo = $question['type'] ?? '';
+		if ( self::TYPE_YESNO === $tipo ) {
 			return self::yes( $answer ) ? 'Sí' : 'No';
+		}
+		if ( self::TYPE_GRID === $tipo ) {
+			return QuestionGrid::text( $question, $answer );
+		}
+		if ( self::TYPE_DATE === $tipo && is_string( $answer ) && ProcedureInput::is_valid_date( $answer ) ) {
+			return implode( '/', array_reverse( explode( '-', $answer ) ) );
 		}
 		if ( is_array( $answer ) ) {
 			return implode( ', ', array_map( 'strval', $answer ) );
@@ -1263,6 +1904,170 @@ final class ProcedureQuestions {
 	private static function text( array $raw, string $key ): string {
 		$value = $raw[ $key ] ?? '';
 		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\QuestionChanges', false ) ) {
+final class QuestionChanges {
+
+	public const MOVE_UP   = 'up';
+	public const MOVE_DOWN = 'down';
+
+
+
+
+
+
+
+
+
+
+
+	public static function move( array $questions, string $key, string $direction ): array {
+		$desde = array_search( $key, array_column( $questions, 'key' ), true );
+		$paso  = array(
+			self::MOVE_UP   => -1,
+			self::MOVE_DOWN => 1,
+		)[ $direction ] ?? 0;
+		$lista = array_values( $questions );
+		if ( false === $desde || 0 === $paso || ! isset( $lista[ $desde + $paso ] ) ) {
+			return $questions;
+		}
+		$otra                    = $lista[ $desde + $paso ];
+		$lista[ $desde + $paso ] = $lista[ $desde ];
+		$lista[ $desde ]         = $otra;
+		return $lista;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function refusal( array $before, array $after, array $answered ): string {
+		$tipos     = array_column( $before, 'type', 'key' );
+		$cambiadas = array();
+		foreach ( $after as $pregunta ) {
+			$key = (string) ( $pregunta['key'] ?? '' );
+
+			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
+				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado las preguntas.';
+			}
+			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
+				$cambiadas[] = '«' . (string) $pregunta['label'] . '»';
+			}
+		}
+		if ( array() === $cambiadas ) {
+			return '';
+		}
+		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
+			. ': ya hay solicitudes que la han contestado. Si necesita otro tipo, cree una pregunta nueva. No se han guardado las preguntas.';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function input_errors( array $raw, array $before = array() ): string {
+		$guardadas = array_column( $before, null, 'key' );
+		foreach ( $raw as $pregunta ) {
+			if ( '' === trim( (string) ( $pregunta['label'] ?? '' ) ) ) {
+				continue;
+			}
+			$rotulo = '«' . (string) ( $pregunta['label'] ?? '' ) . '»';
+			$tipo   = (string) ( $pregunta['type'] ?? '' );
+			$antes  = $guardadas[ (string) ( $pregunta['key'] ?? '' ) ] ?? array();
+			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '', self::known_lines( $antes ) ) : '';
+			if ( '' !== $mal ) {
+				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
+			}
+			foreach ( array(
+				'min' => 'mínimo',
+				'max' => 'máximo',
+			) as $limite => $nombre ) {
+				$valor = is_scalar( $pregunta[ $limite ] ?? null ) ? trim( (string) $pregunta[ $limite ] ) : '';
+				if ( ProcedureQuestions::TYPE_NUMBER === $tipo && '' !== $valor && null === ProcedureQuestions::integer( $valor ) ) {
+					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado las preguntas.';
+				}
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+	private static function known_lines( array $question ): array {
+		if ( array() === $question ) {
+			return array();
+		}
+		return array_merge( array_map( 'strval', (array) ( $question['choices'] ?? array() ) ), QuestionPoints::lines( $question ) );
+	}
+
+
+
+
+
+
+
+
+	private static function bad_points( $choices, array $known ): string {
+		foreach ( is_string( $choices ) ? (array) preg_split( '/\r\n|\r|\n/', $choices ) : array() as $linea ) {
+			$linea = trim( (string) $linea );
+			$cola  = trim( (string) substr( (string) strrchr( $linea, '|' ), 1 ) );
+			if ( in_array( $linea, $known, true ) ) {
+				continue;
+			}
+			if ( false !== strpos( $linea, '|' ) && preg_match( '/^[-+]?[\d.,]*\d[\d.,]*$/', $cola ) && ! preg_match( '/^\d{1,6}$/', $cola ) ) {
+				return $linea;
+			}
+		}
+		return '';
 	}
 }
 
@@ -3817,6 +4622,10 @@ final class ProcedureMetaRegistration {
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_questions' ),
 			),
+			ProcedureMetaKeys::QUESTIONS_SEQ        => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 			ProcedureMetaKeys::COMMITMENTS          => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_textarea_field',
@@ -4077,6 +4886,9 @@ final class ProcedureMetaRegistration {
 			$preguntas[ $i ]['label']   = sanitize_text_field( (string) $pregunta['label'] );
 			$preguntas[ $i ]['help']    = sanitize_text_field( (string) $pregunta['help'] );
 			$preguntas[ $i ]['choices'] = array_map( 'sanitize_text_field', (array) $pregunta['choices'] );
+			foreach ( (array) ( $pregunta['rows'] ?? array() ) as $j => $fila ) {
+				$preguntas[ $i ]['rows'][ $j ]['label'] = sanitize_text_field( (string) $fila['label'] );
+			}
 		}
 		return $preguntas;
 	}
@@ -4095,6 +4907,7 @@ namespace Prc\Meta;
 
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
 
 
@@ -4370,12 +5183,32 @@ final class ApplicationMetaRegistration {
 			if ( ! ProcedureQuestions::is_key( $key ) ) {
 				continue;
 			}
-			if ( is_bool( $respuesta ) ) {
+			if ( is_bool( $respuesta ) || is_int( $respuesta ) ) {
 				$out[ $key ] = $respuesta;
 			} elseif ( is_array( $respuesta ) ) {
-				$out[ $key ] = array_values( array_map( 'sanitize_text_field', array_filter( $respuesta, 'is_scalar' ) ) );
+				$out[ $key ] = self::answer_list( $respuesta );
 			} elseif ( is_scalar( $respuesta ) ) {
 				$out[ $key ] = sanitize_textarea_field( (string) $respuesta );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function answer_list( array $values ): array {
+		$out = array();
+		foreach ( array_filter( $values, 'is_scalar' ) as $clave => $valor ) {
+			$limpio = is_int( $valor ) ? $valor : sanitize_text_field( (string) $valor );
+			if ( QuestionGrid::is_row_key( (string) $clave ) ) {
+				$out[ (string) $clave ] = $limpio;
+			} else {
+				$out[] = $limpio;
 			}
 		}
 		return $out;
@@ -6770,6 +7603,8 @@ use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionGrid;
+use Prc\Domain\QuestionPoints;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
@@ -6999,6 +7834,29 @@ final class Applications {
 
 	public static function questions( int $procedure_id ): array {
 		return ProcedureQuestions::sanitize( get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, true ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function answered_keys( int $procedure_id, bool $empty_too = false ): array {
+		$out = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			$respuestas = (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ];
+			$respuestas = $empty_too ? $respuestas : array_filter( $respuestas, array( ProcedureQuestions::class, 'is_answer' ) );
+			$out       += array_fill_keys( array_map( 'strval', array_keys( $respuestas + ApplicationFiles::descriptors( (int) $solicitud->ID ) ) ), true );
+		}
+		return $out;
 	}
 
 
@@ -7331,8 +8189,10 @@ final class Applications {
 
 
 
+
+
 	public static function columns( array $questions ): array {
-		$out = array(
+		$out  = array(
 			'centre'            => 'Centro',
 			'code'              => 'Código',
 			'date'              => 'Fecha',
@@ -7345,6 +8205,7 @@ final class Applications {
 			'state'             => 'Estado de revisión',
 			'note'              => 'Nota',
 		);
+		$out += QuestionPoints::heading( $questions );
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -7405,6 +8266,7 @@ final class Applications {
 
 
 		$respuestas = (array) $meta[ ApplicationMetaKeys::ANSWERS ];
+		$fila      += QuestionPoints::cell( $questions, $respuestas );
 		$documentos = ApplicationFiles::descriptors( (int) $application->ID );
 		$adjuntos   = array();
 		foreach ( $questions as $pregunta ) {
@@ -7426,6 +8288,7 @@ final class Applications {
 				continue;
 			}
 			$fila[ $key ] = ProcedureQuestions::as_text( $pregunta, $respuestas[ $key ] ?? null );
+			$fila        += QuestionGrid::cells( $pregunta, $respuestas[ $key ] ?? null );
 		}
 		$fila[ self::KEY_FILES ] = $adjuntos;
 		return $fila;
@@ -8276,6 +9139,7 @@ final class ApplicationFiles {
 namespace Prc\PublicFront;
 
 use Prc\Domain\ProcedureInput;
+use Prc\Domain\QuestionGrid;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PostType\ApplicationPostType;
@@ -8335,7 +9199,7 @@ final class ApplicationExport {
 		'centre'       => array( 'centre', 'code' ),
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
-		'review'       => array( 'state', 'note' ),
+		'review'       => array( 'state', 'note', 'score' ),
 	);
 
 
@@ -8390,17 +9254,17 @@ final class ApplicationExport {
 
 
 
+
 	public static function groups( int $procedure_id ): array {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = Applications::columns( $preguntas );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
 		$out       = array();
+		$fijas     = array();
 		foreach ( self::GROUPS as $grupo => $claves ) {
 			$out[ $grupo ] = array_intersect_key( $todas, array_flip( $claves ) );
+			$fijas        += $out[ $grupo ];
 		}
-		$out['questions'] = array();
-		foreach ( $preguntas as $pregunta ) {
-			$out['questions'][ (string) $pregunta['key'] ] = (string) $pregunta['label'];
-		}
+		$out['questions'] = array_diff_key( $todas, $fijas );
 		return $out;
 	}
 
@@ -8412,8 +9276,9 @@ final class ApplicationExport {
 
 
 	private static function valid_columns( int $procedure_id, array $keys ): array {
-		$todas = Applications::columns( Applications::questions( $procedure_id ) );
-		$out   = array();
+		$preguntas = Applications::questions( $procedure_id );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
+		$out       = array();
 		foreach ( $keys as $clave ) {
 			if ( is_string( $clave ) && isset( $todas[ $clave ] ) ) {
 				$out[ $clave ] = $todas[ $clave ];
@@ -8439,7 +9304,7 @@ final class ApplicationExport {
 
 	public static function csv( int $procedure_id, array $columns = array(), string $shape = self::SHAPE_APPLICATION ): string {
 		$preguntas = Applications::questions( $procedure_id );
-		$todas     = Applications::columns( $preguntas );
+		$todas     = QuestionGrid::expand( Applications::columns( $preguntas ), $preguntas );
 		$columnas  = self::valid_columns( $procedure_id, $columns );
 
 		if ( array() === $columnas || count( $columnas ) === count( $todas ) ) {
@@ -11912,6 +12777,8 @@ final class Workspace {
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionPoints;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationExport;
@@ -12650,6 +13517,10 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
 	private static function questions_panel( array $m ): string {
 		$op    = ProcedureEditor::PANEL_QUESTIONS;
 		$filas = (array) $m['questions'];
@@ -12675,13 +13546,19 @@ final class ProcedureEditorView {
 				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
 				Para quitar una pregunta, borre su rótulo y guarde: lo que ya hubiera contestado un centro no se pierde.
+				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
 
 			<?php foreach ( $filas as $i => $pregunta ) : ?>
-				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'] );?>
+				<?php echo self::question_row( (int) $i, (array) $pregunta, (array) $m['q_types'], count( (array) $m['questions'] ) );?>
 			<?php endforeach; ?>
 
 			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
+		</form>
+		<form id="prc-q-mover" method="post" action="">
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_MOVE_QUESTION ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -12695,7 +13572,74 @@ final class ProcedureEditorView {
 
 
 
-	private static function question_row( int $i, array $p, array $tipos ): string {
+	private static function move_buttons( int $i, array $p, int $total ): string {
+		$botones = array(
+			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
+			QuestionChanges::MOVE_DOWN => array( 'Bajar', $i >= $total - 1 ),
+		);
+		$out     = '';
+		foreach ( $botones as $hacia => $boton ) {
+			$out .= sprintf(
+				'<button type="submit" class="%1$s" form="prc-q-mover" name="%2$s" value="%3$s" aria-label="%4$s"%5$s>%6$s</button> ',
+				esc_attr( Assets::button_class( true ) ),
+				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
+				esc_attr( (string) $p['key'] . ':' . $hacia ),
+				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
+				$boton[1] ? ' disabled' : '',
+				esc_html( $boton[0] )
+			);
+		}
+		return '<div class="prc-campo prc-pregunta__orden">' . $out . '</div>';
+	}
+
+
+
+
+
+
+
+
+	private static function type_fields( int $i, array $p ): string {
+		$campo = ProcedureEditor::FIELD_Q;
+		$filas = implode( "\n", array_map( 'strval', wp_list_pluck( (array) ( $p['rows'] ?? array() ), 'label' ) ) );
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo">
+			<?php
+			foreach ( array(
+				'min' => 'Mínimo',
+				'max' => 'Máximo',
+			) as $limite => $rotulo ) :
+				?>
+				<div class="prc-campo prc-campo--medio">
+					<label class="prc-campo__etiqueta" for="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>"><?php echo esc_html( $rotulo ); ?></label>
+					<input class="prc-control" type="number" step="1" id="prc-q-<?php echo esc_attr( $limite . '-' . $i ); ?>" name="<?php echo esc_attr( $campo . $limite ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
+						value="<?php echo esc_attr( (string) ( $p[ $limite ] ?? '' ) ); ?>" aria-describedby="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>" />
+				</div>
+			<?php endforeach; ?>
+		</div>
+		<p class="prc-campo__ayuda" id="prc-q-n-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Número»: un número entero. Sin mínimo, se admite desde 0; sin máximo, no hay tope.</p>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
+			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
+			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco.</p>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function question_row( int $i, array $p, array $tipos, int $total ): string {
 		$nueva  = '' === (string) $p['key'];
 		$campo  = ProcedureEditor::FIELD_Q;
 		$rotulo = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
@@ -12704,6 +13648,7 @@ final class ProcedureEditorView {
 		?>
 		<fieldset class="prc-seccion-campos prc-pregunta">
 			<legend class="prc-seccion__titulo"><?php echo esc_html( $rotulo ); ?></legend>
+			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total );?>
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
@@ -12728,9 +13673,11 @@ final class ProcedureEditorView {
 			</div>
 			<div class="prc-campo">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
-				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"><?php echo esc_textarea( implode( "\n", (array) $p['choices'] ) ); ?></textarea>
-				<p class="prc-campo__ayuda">Solo para «Una opción» y «Varias opciones».</p>
+				<textarea class="prc-control" id="prc-q-c-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'choices' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
+					aria-describedby="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( implode( "\n", QuestionPoints::lines( $p ) ) ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
+			<?php echo self::type_fields( $i, $p );?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-d-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'delivery' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1" <?php checked( ProcedureQuestions::is_delivery( $p ) ); ?> aria-describedby="prc-q-d-help-<?php echo esc_attr( (string) $i ); ?>" />
 				<label for="prc-q-d-<?php echo esc_attr( (string) $i ); ?>">Entrega con plazo propio (solo para «Archivo»)</label>
@@ -12841,6 +13788,7 @@ final class ProcedureEditorView {
 							<th class="prc-th" scope="col">Cargo</th>
 							<th class="prc-th" scope="col">Coordinación</th>
 						<?php endif; ?>
+						<?php echo self::score_cell( $m );?>
 						<th class="prc-th" scope="col">Revisión</th>
 						<th class="prc-th" scope="col">Acciones</th>
 					</tr>
@@ -12860,6 +13808,7 @@ final class ProcedureEditorView {
 								<td class="prc-celda" data-rotulo="Cargo"><?php echo esc_html( (string) $fila['position'] ); ?></td>
 					<td class="prc-celda" data-rotulo="Coordinación"><?php echo self::dash( trim( (string) $fila['coordinator'] . ' ' . (string) ( $fila['coordinator_dni'] ?? '' ) . ' ' . (string) $fila['coordinator_email'] ) );?></td>
 							<?php endif; ?>
+							<?php echo self::score_cell( $m, $fila );?>
 							<td class="prc-celda" data-rotulo="Revisión"><?php echo self::badge( (string) $fila['state_key'], (string) $fila['state'] );?></td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
 						</tr>
@@ -12869,6 +13818,26 @@ final class ProcedureEditorView {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function score_cell( array $m, ?array $fila = null ): string {
+		if ( ! isset( $m['app_cols']['score'] ) ) {
+			return '';
+		}
+		if ( null === $fila ) {
+			return '<th class="prc-th" scope="col">Puntos</th>';
+		}
+		return '<td class="prc-celda" data-rotulo="Puntos">' . esc_html( (string) ( $fila['score'] ?? '' ) ) . '</td>';
 	}
 
 
@@ -13469,6 +14438,8 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Domain\QuestionChanges;
+use Prc\Domain\QuestionGrid;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -13531,6 +14502,7 @@ final class ProcedureEditor {
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_NOTIFY              = 'notify';
+	public const OP_MOVE_QUESTION       = 'move_question';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -13578,6 +14550,11 @@ final class ProcedureEditor {
 
 
 
+	public const FIELD_Q_MOVE = 'prc_q_move';
+
+
+
+
 
 
 
@@ -13604,6 +14581,7 @@ final class ProcedureEditor {
 	private const OPS = array(
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
+		self::OP_MOVE_QUESTION,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_NOTIFY,
@@ -13626,6 +14604,7 @@ final class ProcedureEditor {
 		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Preguntas guardadas.',
+		'ordenadas'    => 'Orden de las preguntas guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
@@ -13909,11 +14888,11 @@ final class ProcedureEditor {
 			self::save_data( $procedure_id, $user_id );
 			return;
 		}
-		if ( self::PANEL_QUESTIONS === $op ) {
+		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
 			if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_QUESTIONS ) ) {
 				return;
 			}
-			self::save_questions( $procedure_id );
+			self::PANEL_QUESTIONS === $op ? self::save_questions( $procedure_id ) : self::move_question( $procedure_id );
 			return;
 		}
 		if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_LINKS ) ) {
@@ -14255,6 +15234,11 @@ final class ProcedureEditor {
 
 
 
+
+
+
+
+
 	private static function save_questions( int $procedure_id ): void {
 
 		$claves     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'key' ] ?? array() );
@@ -14266,12 +15250,18 @@ final class ProcedureEditor {
 		$deliveries = (array) wp_unslash( $_POST[ self::FIELD_Q . 'delivery' ] ?? array() );
 		$opens      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'opens_at' ] ?? array() );
 		$closes     = (array) wp_unslash( $_POST[ self::FIELD_Q . 'closes_at' ] ?? array() );
+		$minimos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'min' ] ?? array() );
+		$maximos    = (array) wp_unslash( $_POST[ self::FIELD_Q . 'max' ] ?? array() );
+		$filas      = (array) wp_unslash( $_POST[ self::FIELD_Q . 'rows' ] ?? array() );
 
 
-		$crudas = array();
+		$antes   = Applications::questions( $procedure_id );
+		$previas = array_column( $antes, null, 'key' );
+		$crudas  = array();
 		foreach ( $rotulos as $i => $rotulo ) {
+			$key      = isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '';
 			$crudas[] = array(
-				'key'       => isset( $claves[ $i ] ) ? sanitize_key( (string) $claves[ $i ] ) : '',
+				'key'       => $key,
 				'label'     => sanitize_text_field( (string) $rotulo ),
 				'help'      => sanitize_text_field( (string) ( $ayudas[ $i ] ?? '' ) ),
 				'type'      => isset( $tipos[ $i ] ) ? sanitize_key( (string) $tipos[ $i ] ) : ProcedureQuestions::TYPE_TEXT,
@@ -14280,18 +15270,79 @@ final class ProcedureEditor {
 				'delivery'  => ! empty( $deliveries[ $i ] ),
 				'opens_at'  => isset( $opens[ $i ] ) && is_string( $opens[ $i ] ) ? sanitize_text_field( $opens[ $i ] ) : '',
 				'closes_at' => isset( $closes[ $i ] ) && is_string( $closes[ $i ] ) ? sanitize_text_field( $closes[ $i ] ) : '',
+				'min'       => sanitize_text_field( (string) ( $minimos[ $i ] ?? '' ) ),
+				'max'       => sanitize_text_field( (string) ( $maximos[ $i ] ?? '' ) ),
+
+
+				'rows'      => QuestionGrid::match_rows(
+					implode( "\n", array_map( 'sanitize_text_field', (array) preg_split( '/\r\n|\r|\n/', (string) ( $filas[ $i ] ?? '' ) ) ) ),
+					(array) ( $previas[ $key ]['rows'] ?? array() )
+				),
+				'row_seq'   => (int) ( $previas[ $key ]['row_seq'] ?? 0 ),
 			);
 		}
 
-		$questions = ProcedureQuestions::sanitize( $crudas );
+		self::$rejected = QuestionChanges::input_errors( $crudas, $antes );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
+		$seq       = self::question_seq( $procedure_id, $antes );
+		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
 				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
 				return;
 			}
 		}
+		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ) );
+		if ( '' !== self::$rejected ) {
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, $seq );
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
 		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'preguntas' ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function question_seq( int $procedure_id, array $questions ): int {
+		$claves = array_column( $questions, 'key' );
+		if ( ! metadata_exists( 'post', $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ ) ) {
+			$claves = array_merge( $claves, array_keys( Applications::answered_keys( $procedure_id, true ) ) );
+		}
+		return max( (int) get_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS_SEQ, true ), ProcedureQuestions::highest_key( $claves ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function move_question( int $procedure_id ): void {
+		$pedido  = explode( ':', self::field( self::FIELD_Q_MOVE ) . ':' );
+		$antes   = Applications::questions( $procedure_id );
+		$despues = QuestionChanges::move( $antes, $pedido[0], $pedido[1] );
+		if ( $despues === $antes ) {
+			Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS ) );
+			return;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $despues ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_QUESTIONS, array( self::ARG_NOTICE => 'ordenadas' ) ) );
 	}
 
 
@@ -14543,9 +15594,15 @@ final class ProcedureEditor {
 	private static function export_request(): array {
 
 		$listas = array();
-		foreach ( array( self::FIELD_EXPORT_COLUMNS, self::FIELD_EXPORT_WHO ) as $campo ) {
+
+
+
+		foreach ( array(
+			self::FIELD_EXPORT_COLUMNS => 'sanitize_text_field',
+			self::FIELD_EXPORT_WHO     => 'sanitize_key',
+		) as $campo => $limpia ) {
 			$valor            = isset( $_POST[ $campo ] ) ? wp_unslash( $_POST[ $campo ] ) : array();
-			$listas[ $campo ] = is_array( $valor ) ? array_map( 'sanitize_key', array_filter( $valor, 'is_string' ) ) : array();
+			$listas[ $campo ] = is_array( $valor ) ? array_map( $limpia, array_filter( $valor, 'is_string' ) ) : array();
 		}
 		$todas = ! empty( $_POST[ self::FIELD_EXPORT_ALL ] );
 
@@ -15125,6 +16182,114 @@ final class ProcedureEditor {
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\ProcedureQuestions;
+use Prc\PublicFront\ApplyForm;
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\MeasuredQuestionView', false ) ) {
+final class MeasuredQuestionView {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function html( array $p, $valor ): string {
+		$key     = (string) $p['key'];
+		$id      = 'prc-q-' . $key;
+		$nombre  = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';
+		$obliga  = ! empty( $p['required'] );
+		$ayuda   = (string) $p['help'];
+		$pie     = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$rejilla = ProcedureQuestions::TYPE_GRID === (string) $p['type'];
+
+		$control = '';
+		if ( $rejilla ) {
+			$dadas = is_array( $valor ) ? $valor : array();
+			foreach ( (array) ( $p['rows'] ?? array() ) as $fila ) {
+				$rk       = (string) $fila['key'];
+				$control .= '<div class="prc-campo prc-campo--cuarto">'
+					. '<label class="prc-campo__etiqueta" for="' . esc_attr( $id . '-' . $rk ) . '">' . esc_html( (string) $fila['label'] ) . '</label>'
+					. self::number_input( $id . '-' . $rk, $nombre . '[' . $rk . ']', $dadas[ $rk ] ?? '', 0, null, $obliga )
+					. '</div>';
+			}
+			$control = '<div class="prc-opciones prc-rejilla" role="group" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
+		} elseif ( ProcedureQuestions::TYPE_NUMBER === (string) $p['type'] ) {
+			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie );
+		} else {
+			$control = '<input type="date" class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
+				. ( $obliga ? ' required' : '' ) . $pie . ' />';
+		}
+
+		return '<div class="prc-campo prc-pregunta ' . esc_attr( $rejilla ? 'prc-campo--completo' : 'prc-campo--medio' ) . '">'
+			. self::label( $rejilla ? $id . '-rotulo' : $id, (string) $p['label'], $obliga, $rejilla )
+			. $control
+			. ( '' !== $ayuda ? '<div class="prc-campo__ayuda" id="' . esc_attr( $id . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</div>' : '' )
+			. '</div>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '' ): string {
+		return '<input type="number" class="prc-control" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
+			. ' value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '" min="' . esc_attr( (string) $minimo ) . '"'
+			. ( null !== $maximo ? ' max="' . esc_attr( (string) $maximo ) . '"' : '' )
+			. ( $obliga ? ' required' : '' ) . $extra . ' />';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function label( string $id, string $rotulo, bool $obligatorio, bool $grupo ): string {
+		$atributo = $grupo ? ' id="' . esc_attr( $id ) . '"' : ' for="' . esc_attr( $id ) . '"';
+		$etiqueta = $grupo ? 'p' : 'label';
+		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
+			. esc_html( $rotulo )
+			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. '</' . $etiqueta . '>';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -15613,6 +16778,9 @@ final class ApplyFormView {
 
 
 	private static function question( array $p, array $answers, array $files = array() ): string {
+		if ( in_array( (string) $p['type'], array( ProcedureQuestions::TYPE_NUMBER, ProcedureQuestions::TYPE_DATE, ProcedureQuestions::TYPE_GRID ), true ) ) {
+			return MeasuredQuestionView::html( $p, $answers[ (string) $p['key'] ] ?? '' );
+		}
 		$key    = (string) $p['key'];
 		$subido = isset( $files[ $key ] ) && is_array( $files[ $key ] ) ? $files[ $key ] : array();
 		$nombre = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';

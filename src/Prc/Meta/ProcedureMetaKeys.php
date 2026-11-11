@@ -116,6 +116,12 @@ final class ProcedureMetaKeys {
 	public const QUESTIONS = 'prc_questions';
 
 	/**
+	 * El mayor número de pregunta que ha dado el procedimiento: nunca baja,
+	 * para que una pregunta nueva no herede la clave de una borrada (ADR-0040).
+	 */
+	public const QUESTIONS_SEQ = 'prc_questions_seq';
+
+	/**
 	 * Texto de compromiso que el centro acepta al solicitar. Vacío, no se pide.
 	 */
 	public const COMMITMENTS = 'prc_commitments';
@@ -193,6 +199,7 @@ final class ProcedureMetaKeys {
 			self::CUSTOM_CSS,
 			self::CUSTOM_JS,
 			self::QUESTIONS,
+			self::QUESTIONS_SEQ,
 			self::COMMITMENTS,
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,

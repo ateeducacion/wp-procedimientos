@@ -659,6 +659,48 @@ body.prc-app .prc-hoja {
 
 .prc-acciones { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* «Más acciones» del taller: tres puntos arriba a la derecha que despliegan
+   ver la ficha, duplicar y borrar. Un `details` nativo, como el menú de la
+   persona: sin guion se abre y se cierra igual. Cada opción mide al menos
+   44 px de alto, y la capa no pasa del ancho de la pantalla en el móvil. */
+.prc-mas { position: relative; margin-left: auto; }
+.prc-mas > summary { list-style: none; cursor: pointer; }
+.prc-mas > summary::-webkit-details-marker { display: none; }
+.prc-mas__boton { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; justify-content: center; font-size: 20px; line-height: 1; }
+.prc-mas__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 13rem;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  background: var(--prc-sup);
+  border: 1px solid var(--prc-linea);
+  border-radius: 12px;
+  box-shadow: var(--prc-e2);
+  z-index: 30;
+  display: grid;
+}
+.prc-mas__form { margin: 0; display: grid; }
+.prc-mas__opcion {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--prc-texto);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.prc-mas__opcion:hover { background: var(--prc-sup-2); color: var(--prc-pri); text-decoration: none; }
+.prc-mas__opcion--borrar, .prc-mas__opcion--borrar:hover { color: var(--prc-mal); }
+.prc-borrar { max-width: 40rem; }
+
 /* Dentro de una tabla, los botones de acción no se parten en varias líneas:
    la columna es estrecha y dos iconos apilados se leen como dos filas. Que la
    tabla se desplace en horizontal es lo que ya hace `.prc-tabla-caja`. */
@@ -1149,6 +1191,8 @@ body.prc-app .prc-btn-borrar {
   .prc-h1 { font-size: 24px; line-height: 26px; }
   .prc-sub { font-size: 20px; line-height: 22px; }
   .prc-h1-fila .prc-acciones { margin-left: 0; width: 100%; }
+  /* Los tres puntos siguen a la derecha, y su capa se abre hacia dentro. */
+  .prc-mas__menu { min-width: min(13rem, calc(100vw - 32px)); }
   .prc-solo-admin { padding: 14px 14px 2px; }
   /* En el móvil el pie no cabe: la pantalla es para el trabajo, y lo legal
      está a un toque en cualquier otra página del sitio. */

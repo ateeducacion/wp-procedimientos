@@ -503,4 +503,51 @@
 			botones( form, false );
 		} );
 	} );
+
+	/* --- 9. El menú «Más acciones» --------------------------------------- */
+
+	/*
+	 * `data-prc-menu` en un `<details>`: sin guion se abre y se cierra con su
+	 * `<summary>`, y todo lo de dentro funciona. Con guion, además, se cierra
+	 * como se espera de un menú: con Escape —devolviendo el foco a su botón—,
+	 * al pulsar fuera y al abrir otro. Mientras el diálogo de SweetAlert2 está
+	 * en pantalla, Escape es suyo: cierra el diálogo y no el menú.
+	 */
+	function menusAbiertos() {
+		return document.querySelectorAll( 'details[data-prc-menu][open]' );
+	}
+
+	// `toggle` no sube por el árbol: se escucha en captura.
+	document.addEventListener( 'toggle', function ( e ) {
+		var menu = e.target;
+		if ( ! menu || ! menu.matches || ! menu.matches( 'details[data-prc-menu]' ) || ! menu.open ) {
+			return;
+		}
+		Array.prototype.forEach.call( menusAbiertos(), function ( otro ) {
+			if ( otro !== menu ) {
+				otro.open = false;
+			}
+		} );
+	}, true );
+
+	document.addEventListener( 'keydown', function ( e ) {
+		if ( 'Escape' !== e.key || ( window.Swal && window.Swal.isVisible && window.Swal.isVisible() ) ) {
+			return;
+		}
+		Array.prototype.forEach.call( menusAbiertos(), function ( menu ) {
+			menu.open = false;
+			var boton = menu.querySelector( 'summary' );
+			if ( boton ) {
+				boton.focus();
+			}
+		} );
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		Array.prototype.forEach.call( menusAbiertos(), function ( menu ) {
+			if ( ! menu.contains( e.target ) ) {
+				menu.open = false;
+			}
+		} );
+	} );
 }() );

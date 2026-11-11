@@ -98,8 +98,8 @@ class Test_Meta_Registration extends WP_UnitTestCase {
 	 * La marca de histórico la pone el ámbito y solo la quita administración.
 	 */
 	public function test_the_archived_mark_follows_its_asymmetry() {
-		$area          = $this->area( 'Área de prueba' );
-		$mio           = $this->manager( array( $area ) );
+		$area = $this->area( 'Área de prueba' );
+		$mio  = $this->manager( array( $area ) );
 		// Cerrado: solo se marca lo que ya terminó.
 		$procedimiento = $this->procedure( $mio, array( $area ), array( ProcedureMetaKeys::APPLICATIONS_CLOSED => true ) );
 

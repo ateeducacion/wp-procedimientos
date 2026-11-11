@@ -28874,7 +28874,8 @@ final class MyCentreView {
 				$out .= '<span class="prc-nota-revision">' . esc_html( 'Hasta el ' . (string) $fila['people_until'] . ', incluido.' ) . '</span>';
 			}
 		} else {
-			$out .= '<span class="prc-nota-revision">La lista ya no se puede cambiar.</span>';
+			$porque = (string) ( $fila['people_why'] ?? '' );
+			$out   .= '<span class="prc-nota-revision">' . esc_html( '' !== $porque ? $porque : 'La lista ya no se puede cambiar.' ) . '</span>';
 		}
 		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
 	}
@@ -29167,11 +29168,15 @@ final class MyCentre {
 
 
 
+
+
+
+
 	private static function with_people( array $m ): array {
 		$cortas = array();
 		foreach ( (array) $m['rows'] as $fila ) {
 			$m['has_people'] = $m['has_people'] || ! empty( $fila['people'] );
-			if ( empty( $fila['people_complete'] ) ) {
+			if ( empty( $fila['people_complete'] ) && ! empty( $fila['people_open'] ) ) {
 				$cortas[] = (string) $fila['procedure_id'];
 			}
 		}
@@ -29181,6 +29186,7 @@ final class MyCentre {
 		);
 		return $m;
 	}
+
 
 
 
@@ -29205,7 +29211,8 @@ final class MyCentre {
 		}
 		$spec    = People::spec( $procedure_id );
 		$filas   = People::of( $application_id );
-		$abierta = ProcedureAccess::can_edit_people( get_current_user_id(), $application_id );
+		$porque  = ProcedureAccess::why_not_people( get_current_user_id(), $application_id );
+		$abierta = '' === $porque;
 		return array(
 			'people'          => true,
 			'people_url'      => PeopleForm::url( $application_id ),
@@ -29214,6 +29221,7 @@ final class MyCentre {
 			'people_max'      => (int) $spec['max'],
 			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
 			'people_open'     => $abierta,
+			'people_why'      => $porque,
 			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
 			'people_sort'     => (string) count( $filas ),
 		);

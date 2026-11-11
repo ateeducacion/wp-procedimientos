@@ -353,9 +353,10 @@ class Test_My_Centre extends WP_UnitTestCase {
 	/**
 	 * Un procedimiento abierto que pide una lista de entre dos y cuatro personas.
 	 *
+	 * @param array<string, mixed> $lista What changes in the list.
 	 * @return int
 	 */
-	private function con_lista(): int {
+	private function con_lista( array $lista = array() ): int {
 		return $this->procedimiento(
 			'Red con personas',
 			array(
@@ -371,7 +372,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 					),
 					'min'     => 2,
 					'max'     => 4,
-				),
+				) + $lista,
 			)
 		);
 	}
@@ -416,6 +417,51 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertStringContainsString( '2 de 2 a 4', $html );
 		$this->assertMatchesRegularExpression( '/href="[^"]*#' . PeopleForm::ANCHOR . '">Cambiar</', $html );
 		$this->assertStringNotContainsString( 'está incompleta', $html );
+	}
+
+	/**
+	 * Una lista que todavía no se abre no «ya no se puede cambiar»: la celda
+	 * da el motivo, y el aviso de arriba no la cuenta, porque el centro no
+	 * puede completarla ahora.
+	 */
+	public function test_a_list_not_open_yet_says_why_and_is_not_announced() {
+		$lista = $this->con_lista( array( 'admitted_only' => true ) );
+		$norte = $this->school_head( 'C0001' );
+		Applications::save( $lista, $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertFalse( $m['rows'][0]['people_complete'] );
+		$this->assertSame( 0, $m['incomplete']['count'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringNotContainsString( 'ya no se puede cambiar', $html );
+		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
+		$this->assertStringNotContainsString( 'está incompleta', $html );
+	}
+
+	/**
+	 * Ni una excluida ni una con la lista ya cerrada entran en el aviso:
+	 * no hay nada que el centro pueda completar.
+	 */
+	public function test_excluded_or_closed_lists_are_not_announced() {
+		$norte    = $this->school_head( 'C0001' );
+		$excluida = Applications::save( $this->con_lista(), $norte, $this->nucleo() );
+		update_post_meta( $excluida, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_EXCLUDED );
+		$cerrada = $this->con_lista(
+			array(
+				'opens_at'  => $this->dia( -5 ),
+				'closes_at' => $this->dia( -1 ),
+			)
+		);
+		Applications::save( $cerrada, $norte, $this->nucleo() );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertCount( 2, $m['rows'] );
+		$this->assertSame( 0, $m['incomplete']['count'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringContainsString( 'La solicitud está excluida: su lista de personas ya no se cambia.', $html );
+		$this->assertStringContainsString( 'El plazo de la lista de personas terminó el', $html );
 	}
 
 	/**

@@ -2382,6 +2382,31 @@ final class ProcedureInput {
 
 
 
+
+
+
+
+
+
+	public static function not_ready( int $course, array $questions ): array {
+		$faltan = array();
+		if ( $course <= 0 ) {
+			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
+		}
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+			}
+		}
+		return $faltan;
+	}
+
+
+
+
+
+
+
 	public static function term_ids( $raw ): array {
 		$out = array();
 		foreach ( self::listed( $raw ) as $valor ) {
@@ -3173,6 +3198,276 @@ final class PeopleSpec {
 	private static function text( array $raw, string $key ): string {
 		$value = $raw[ $key ] ?? '';
 		return is_scalar( $value ) ? trim( (string) $value ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\ProcedureCopy', false ) ) {
+final class ProcedureCopy {
+
+
+
+
+	public const COPY = 'copy';
+
+
+
+
+
+	public const TRANSFORM = 'transform';
+
+
+
+
+	public const NEVER = 'never';
+
+
+
+
+	public const SUFFIX = ' (copia)';
+
+
+
+
+
+
+	public static function policy(): array {
+		return array(
+
+			ProcedureMetaKeys::OPENS_AT             => self::NEVER,
+			ProcedureMetaKeys::CLOSES_AT            => self::NEVER,
+			ProcedureMetaKeys::AMEND_OPENS_AT       => self::NEVER,
+			ProcedureMetaKeys::AMEND_CLOSES_AT      => self::NEVER,
+			ProcedureMetaKeys::RESOLUTION_URL       => self::NEVER,
+			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::NEVER,
+			ProcedureMetaKeys::FINAL_LIST_URL       => self::NEVER,
+
+			ProcedureMetaKeys::ARCHIVED             => self::NEVER,
+			ProcedureMetaKeys::APPLICATIONS_CLOSED  => self::NEVER,
+
+			ProcedureMetaKeys::CONTACT_EMAILS       => self::COPY,
+			ProcedureMetaKeys::HEADER_COLOR         => self::COPY,
+			ProcedureMetaKeys::AUDIENCE             => self::COPY,
+			ProcedureMetaKeys::OWNERSHIP            => self::COPY,
+			ProcedureMetaKeys::CENTRE_KINDS         => self::COPY,
+			ProcedureMetaKeys::CENTRE_TYPES         => self::COPY,
+			ProcedureMetaKeys::ISLANDS              => self::COPY,
+			ProcedureMetaKeys::ALLOWED_CENTRES      => self::COPY,
+			ProcedureMetaKeys::REQUIRES_COORDINATOR => self::COPY,
+			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
+			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
+			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
+			ProcedureMetaKeys::NOTIFY               => self::COPY,
+			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
+			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
+			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::COPY,
+
+			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
+			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,
+			ProcedureMetaKeys::PEOPLE_SPEC          => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_COLUMNS     => self::TRANSFORM,
+
+			ProcedureMetaKeys::CUSTOM_JS            => self::TRANSFORM,
+		);
+	}
+
+
+
+
+
+
+
+	public static function rule( string $key ): string {
+		return self::policy()[ $key ] ?? '';
+	}
+
+
+
+
+
+
+
+	public static function title( string $title ): string {
+		$title = trim( $title );
+		$title = '' !== $title ? $title : 'Procedimiento sin título';
+
+		return substr( $title, -strlen( self::SUFFIX ) ) === self::SUFFIX ? $title : $title . self::SUFFIX;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function meta( array $source, bool $with_js ): array {
+		$meta = array();
+		foreach ( self::policy() as $key => $rule ) {
+			if ( self::COPY === $rule && array_key_exists( $key, $source ) ) {
+				$meta[ $key ] = $source[ $key ];
+			}
+		}
+
+		$preguntas = self::questions( $source[ ProcedureMetaKeys::QUESTIONS ] ?? array() );
+		if ( array_key_exists( ProcedureMetaKeys::QUESTIONS, $source ) ) {
+			$meta[ ProcedureMetaKeys::QUESTIONS ]     = $preguntas['questions'];
+			$meta[ ProcedureMetaKeys::QUESTIONS_SEQ ] = $preguntas['seq'];
+		}
+		if ( array_key_exists( ProcedureMetaKeys::PEOPLE_SPEC, $source ) ) {
+			$meta[ ProcedureMetaKeys::PEOPLE_SPEC ] = self::people_spec( $source[ ProcedureMetaKeys::PEOPLE_SPEC ] );
+		}
+		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
+			$meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $preguntas['map'] );
+		}
+
+		$js = $source[ ProcedureMetaKeys::CUSTOM_JS ] ?? '';
+		$js = is_string( $js ) ? $js : '';
+		if ( $with_js && '' !== $js ) {
+			$meta[ ProcedureMetaKeys::CUSTOM_JS ] = $js;
+		}
+
+		return array(
+			'meta'    => $meta,
+			'js_left' => ! $with_js && '' !== trim( $js ),
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function questions( $raw ): array {
+		$out = array();
+		$map = array();
+		foreach ( ProcedureQuestions::sanitize( $raw ) as $i => $pregunta ) {
+			$antes           = (string) $pregunta['key'];
+			$pregunta['key'] = 'q' . ( $i + 1 );
+			$map[ $antes ]   = $pregunta['key'];
+			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
+				$pregunta['opens_at']  = '';
+				$pregunta['closes_at'] = '';
+			}
+			if ( ProcedureQuestions::TYPE_GRID === $pregunta['type'] ) {
+				$filas               = self::renumber( (array) $pregunta['rows'], 'r' );
+				$pregunta['rows']    = $filas['items'];
+				$pregunta['row_seq'] = count( $filas['items'] );
+				foreach ( $filas['map'] as $fila => $nueva ) {
+					$map[ $antes . ':' . $fila ] = $pregunta['key'] . ':' . $nueva;
+				}
+			}
+			$out[] = $pregunta;
+		}
+		return array(
+			'questions' => $out,
+			'seq'       => count( $out ),
+			'map'       => $map,
+		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function people_spec( $raw ): array {
+		$spec   = PeopleSpec::sanitize( $raw );
+		$roles  = self::renumber( $spec['roles'], 'r' );
+		$groups = self::renumber( $spec['groups'], 'g' );
+
+		$spec['roles']     = $roles['items'];
+		$spec['role_seq']  = count( $roles['items'] );
+		$spec['groups']    = $groups['items'];
+		$spec['group_seq'] = count( $groups['items'] );
+		$spec['opens_at']  = '';
+		$spec['closes_at'] = '';
+		return $spec;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function observer_columns( $raw, array $map ): array {
+		$out = array();
+		foreach ( is_array( $raw ) ? $raw : array() as $columna ) {
+			$columna = is_string( $columna ) ? $columna : '';
+			if ( preg_match( '/^q\d+(:r\d+)?$/', $columna ) ) {
+				$columna = $map[ $columna ] ?? '';
+			}
+			if ( '' !== $columna && ! in_array( $columna, $out, true ) ) {
+				$out[] = $columna;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function renumber( array $items, string $prefix ): array {
+		$out = array();
+		$map = array();
+		foreach ( array_values( $items ) as $i => $item ) {
+			$nueva                        = $prefix . ( $i + 1 );
+			$map[ (string) $item['key'] ] = $nueva;
+			$item['key']                  = $nueva;
+			$out[]                        = $item;
+		}
+		return array(
+			'items' => $out,
+			'map'   => $map,
+		);
 	}
 }
 
@@ -5649,6 +5944,16 @@ final class ProcedureAccess {
 
 
 
+
+
+
+	private static $rest_checked = 0;
+
+
+
+
+
+
 	public static function register(): void {
 		add_filter( 'map_meta_cap', array( self::class, 'map_meta_cap' ), 10, 4 );
 		add_filter( 'rest_pre_insert_prc_procedure', array( self::class, 'validate_rest_areas' ), 10, 2 );
@@ -5656,6 +5961,9 @@ final class ProcedureAccess {
 		add_filter( 'wp_insert_post_data', array( self::class, 'guard_parent' ), 10, 2 );
 		add_action( 'save_post_' . ProcedurePostType::POST_TYPE, array( self::class, 'stamp_area' ), 20 );
 	}
+
+
+
 
 
 
@@ -5686,10 +5994,56 @@ final class ProcedureAccess {
 		$post_id = absint( $postarr['ID'] ?? 0 );
 		if ( $post_id > 0 ) {
 			$data['post_parent'] = (int) get_post_field( 'post_parent', $post_id );
+
+
+
+
+			if ( ProcedurePostType::POST_TYPE === $tipo ) {
+				$por_rest           = self::$rest_checked === $post_id;
+				self::$rest_checked = 0;
+				if ( ! $por_rest && self::is_unready_publication( $post_id, (string) ( $data['post_status'] ?? '' ), $postarr['tax_input'][ ProcedureTaxonomies::COURSE ] ?? null ) ) {
+					$data['post_status'] = 'draft';
+				}
+			}
 		} elseif ( ProcedurePostType::POST_TYPE === $tipo ) {
 			$data['post_parent'] = 0;
 		}
 		return $data;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function is_unready_publication( int $post_id, string $status, $course, ?array &$why = null ): bool {
+		$why        = array();
+		$publicados = array( 'publish', 'future' );
+		if ( ! in_array( $status, $publicados, true ) || ( $post_id > 0 && in_array( get_post_status( $post_id ), $publicados, true ) ) ) {
+			return false;
+		}
+		if ( null === $course ) {
+			$course = $post_id > 0 ? wp_get_post_terms( $post_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ) : array();
+		}
+		$curso = 0;
+		foreach ( is_array( $course ) ? $course : explode( ',', (string) $course ) as $valor ) {
+			$term = is_numeric( $valor ) ? get_term( (int) $valor, ProcedureTaxonomies::COURSE ) : get_term_by( 'name', trim( (string) $valor ), ProcedureTaxonomies::COURSE );
+			if ( $term instanceof \WP_Term && 0 === $curso ) {
+				$curso = (int) $term->term_id;
+			}
+		}
+		$preguntas = ProcedureQuestions::sanitize( $post_id > 0 ? get_post_meta( $post_id, ProcedureMetaKeys::QUESTIONS, true ) : array() );
+		$why       = ProcedureInput::not_ready( $curso, $preguntas );
+		return array() !== $why;
 	}
 
 
@@ -5719,26 +6073,30 @@ final class ProcedureAccess {
 			return $prepared;
 		}
 		$post_id = absint( $request->get_url_params()['id'] ?? 0 );
-		if ( ! $request->has_param( ProcedureTaxonomies::AREA ) ) {
-			if ( $post_id > 0 || self::can_edit_all_areas() ) {
-				return $prepared;
-			}
+		$final   = null;
+		if ( $request->has_param( ProcedureTaxonomies::AREA ) ) {
+			$final = self::resolve_area_assignment( $post_id, (array) $request->get_param( ProcedureTaxonomies::AREA ) );
+		} elseif ( 0 === $post_id && ! self::can_edit_all_areas() ) {
 			$assigned = self::user_areas();
-			if ( array() === $assigned ) {
-				return new \WP_Error( 'prc_area_forbidden', self::scope_assignment_message( get_current_user_id() ), array( 'status' => 403 ) );
-			}
-			$requested = $assigned;
-		} else {
-			$requested = (array) $request->get_param( ProcedureTaxonomies::AREA );
+			$final    = array() === $assigned
+				? new \WP_Error( 'prc_area_forbidden', self::scope_assignment_message( get_current_user_id() ), array( 'status' => 403 ) )
+				: self::resolve_area_assignment( 0, $assigned );
 		}
-		$final = self::resolve_area_assignment( $post_id, $requested );
 		if ( is_wp_error( $final ) ) {
 			return $final;
 		}
 		if ( 0 === $post_id && ! self::can_edit_all_areas() && in_array( $request->get_param( 'status' ), array( 'publish', 'future', 'private' ), true ) ) {
 			return new \WP_Error( 'prc_scope_draft_first', 'Cree el procedimiento como borrador antes de publicarlo, para que tenga ámbito desde el principio.', array( 'status' => 400 ) );
 		}
-		$request->set_param( ProcedureTaxonomies::AREA, $final );
+
+		$faltan = array();
+		if ( self::is_unready_publication( $post_id, (string) $request->get_param( 'status' ), $request->has_param( ProcedureTaxonomies::COURSE ) ? $request->get_param( ProcedureTaxonomies::COURSE ) : null, $faltan ) ) {
+			return new \WP_Error( 'prc_not_ready', 'Todavía no se puede publicar. ' . implode( ' ', $faltan ), array( 'status' => 400 ) );
+		}
+		self::$rest_checked = $post_id;
+		if ( null !== $final ) {
+			$request->set_param( ProcedureTaxonomies::AREA, $final );
+		}
 		return $prepared;
 	}
 
@@ -5983,31 +6341,6 @@ final class ProcedureAccess {
 
 
 
-	public static function scope_diagnostics(): array {
-		$rows = array();
-		foreach ( get_users() as $user ) {
-			if ( ! ( $user instanceof \WP_User ) || self::can_edit_all_areas( $user->ID ) ) {
-				continue;
-			}
-			if ( ! user_can( $user, self::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
-				continue;
-			}
-			$rows[] = array_merge(
-				array(
-					'user_id' => $user->ID,
-					'login'   => $user->user_login,
-				),
-				self::scope_assignment_state( $user->ID )
-			);
-		}
-		return $rows;
-	}
-
-
-
-
-
-
 
 
 
@@ -6176,6 +6509,36 @@ final class ProcedureAccess {
 			return false;
 		}
 		return self::in_scope( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool {
+		$areas = null;
+
+		if ( ProcedurePostType::POST_TYPE !== get_post_type( $post_id ) || 'trash' === get_post_status( $post_id ) || ! self::can_open( $user_id, $post_id ) || ! self::can_manage_procedures( $user_id ) ) {
+			return false;
+		}
+		$suyos = self::post_areas( $post_id );
+		$areas = self::can_edit_all_areas( $user_id ) ? $suyos : array_values( array_intersect( $suyos, self::scope_areas( $user_id ) ) );
+		$areas = array() !== $areas ? $areas : self::user_areas( $user_id );
+		return true;
 	}
 
 
@@ -16196,6 +16559,7 @@ namespace Prc\PublicFront\View;
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\Workspace;
 
@@ -16476,7 +16840,7 @@ final class WorkspaceView {
 					<tr class="prc-tabla__grupos">
 						<th scope="colgroup" colspan="6" class="prc-tabla__grupo prc-tabla__grupo--1">Detalles del procedimiento</th>
 						<th scope="colgroup" colspan="1" class="prc-tabla__grupo prc-tabla__grupo--2">Fecha límite</th>
-						<th scope="colgroup" colspan="3" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
+						<th scope="colgroup" colspan="4" class="prc-tabla__grupo prc-tabla__grupo--3">Gestión</th>
 					</tr>
 					<tr>
 						<th scope="col" class="prc-th--a prc-th--centro prc-th--color">
@@ -16492,6 +16856,7 @@ final class WorkspaceView {
 						<th scope="col" class="prc-th--c prc-th--gestiona">Gestiona</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Detalles</th>
 						<th scope="col" class="prc-th--c prc-th--centro">Solicitudes</th>
+						<th scope="col" class="prc-th--c prc-th--centro">Duplicar</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -16569,7 +16934,39 @@ final class WorkspaceView {
 				<?php self::action( (string) $row['applications_url'], 'view_list', 'Ver solicitudes' ); ?>
 				<span class="prc-accion__contador"><?php echo esc_html( (string) $row['applications'] ); ?></span>
 			</td>
+			<td class="prc-celda-accion" data-rotulo="Duplicar">
+				<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
+					<?php self::duplicate( $row ); ?>
+				<?php endif; ?>
+			</td>
 		</tr>
+		<?php
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function duplicate( array $row ): void {
+		$op = ProcedureEditor::OP_DUPLICATE;
+		?>
+		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
+			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar" data-prc-once>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
+			<button type="submit" class="prc-accion" title="Duplicar este procedimiento">
+				<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+				<span class="screen-reader-text">Duplicar este procedimiento</span>
+			</button>
+		</form>
 		<?php
 	}
 
@@ -16907,9 +17304,15 @@ final class Workspace {
 
 	private static function collect( int $user_id ): array {
 		$rows = array();
+
+
+
+		$crea = ProcedureAccess::can_manage_procedures( $user_id );
 		foreach ( self::scope( $user_id ) as $post ) {
 			if ( ProcedureAccess::can_open( $user_id, (int) $post->ID ) ) {
-				$rows[] = self::row( $post );
+				$fila                  = self::row( $post );
+				$fila['can_duplicate'] = $crea && 'trash' !== $post->post_status;
+				$rows[]                = $fila;
 			}
 		}
 		return $rows;
@@ -18069,6 +18472,8 @@ final class ProcedureEditorView {
 
 		echo Shell::notice( 'aviso', (string) $m['state_notice'] );
 
+		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) );
+
 
 
 		if ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
@@ -18249,11 +18654,53 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
 			<span class="prc-acciones">
 				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' );?>
+				<?php echo self::duplicate_form( $m );?>
 			</span>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function duplicate_form( array $m ): string {
+		if ( true !== $m['can_duplicate'] ) {
+			return '';
+		}
+		$op = ProcedureEditor::OP_DUPLICATE;
+		ob_start();
+		?>
+		<form class="prc-acciones" method="post" action=""
+			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar" data-prc-once>
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Duplicar</button>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	public static function duplicate_question( string $title ): string {
+		return sprintf(
+			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes.',
+			'' !== $title ? $title : 'Procedimiento sin título'
+		);
 	}
 
 
@@ -19487,6 +19934,7 @@ final class ProcedureEditor {
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
+	public const OP_DUPLICATE           = 'duplicate';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
@@ -19580,6 +20028,7 @@ final class ProcedureEditor {
 		self::OP_TOGGLE_APPLICATIONS,
 		self::OP_ARCHIVE,
 		self::OP_UNARCHIVE,
+		self::OP_DUPLICATE,
 	);
 
 
@@ -19786,6 +20235,12 @@ final class ProcedureEditor {
 		}
 		if ( ProcedurePostType::POST_TYPE !== get_post_type( $procedure_id ) ) {
 			self::$rejected = 'Ese procedimiento ya no existe.';
+			return;
+		}
+
+
+		if ( self::OP_DUPLICATE === $op ) {
+			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
 			return;
 		}
 		if ( self::OP_CUSTOM_CODE === $op ) {
@@ -20453,6 +20908,13 @@ final class ProcedureEditor {
 			self::$rejected = 'Su perfil no publica procedimientos: puede editarlo, pero no publicarlo.';
 			return;
 		}
+
+
+		$faltan = ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		if ( array() !== $faltan ) {
+			self::$rejected = 'Todavía no se puede publicar. ' . implode( ' ', $faltan );
+			return;
+		}
 		wp_update_post(
 			array(
 				'ID'          => $procedure_id,
@@ -20744,6 +21206,11 @@ final class ProcedureEditor {
 
 		$m = self::fill( $m, $procedimiento, $user_id, $pedido, $hecho );
 
+
+		$m['not_ready']     = 'publish' === $procedimiento->post_status ? array() : ProcedureInput::not_ready( self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ), Applications::questions( $procedure_id ) );
+		$m['can_publish']   = $m['can_publish'] && array() === $m['not_ready'];
+		$m['can_duplicate'] = ProcedureAccess::can_duplicate( $user_id, $procedure_id );
+
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 
 
@@ -20775,6 +21242,8 @@ final class ProcedureEditor {
 			'can_review'              => false,
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
+			'can_duplicate'           => false,
+			'not_ready'               => array(),
 			'can_unpublish'           => false,
 			'can_toggle_applications' => false,
 			'applications_closed'     => false,
@@ -20956,6 +21425,10 @@ final class ProcedureEditor {
 				'tipo'  => 'error',
 				'texto' => self::$rejected,
 			);
+		}
+		if ( ProcedureDuplicate::NOTICE === $hecho ) {
+
+			return ProcedureDuplicate::notice( $_GET );
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 
@@ -21229,6 +21702,196 @@ final class ProcedureEditor {
 
 
 		return EditLock::render( EditLock::claim( (array) $m['lock'] ) ) . ProcedureEditorView::html( $m );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\ProcedureCopy;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ProcedurePostType;
+use Prc\Taxonomy\ProcedureTaxonomies;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ProcedureDuplicate', false ) ) {
+final class ProcedureDuplicate {
+
+
+
+
+	public const NOTICE = 'duplicado';
+
+
+
+
+	public const ARG_SOURCE = 'origen';
+
+
+
+
+	public const ARG_NO_JS = 'sin_js';
+
+
+
+
+	public const ARG_NO_CONTACTS = 'sin_contactos';
+
+
+
+
+
+
+
+
+	public static function handle( int $procedure_id, int $user_id ): string {
+		$copia = self::duplicate( $procedure_id, $user_id );
+		if ( is_wp_error( $copia ) ) {
+			return $copia->get_error_message();
+		}
+		$args = array(
+			ProcedureEditor::ARG_NOTICE => self::NOTICE,
+			self::ARG_SOURCE            => $procedure_id,
+		);
+		if ( $copia['js_left'] ) {
+			$args[ self::ARG_NO_JS ] = 1;
+		}
+		if ( $copia['contacts_left'] ) {
+			$args[ self::ARG_NO_CONTACTS ] = 1;
+		}
+
+
+
+		EditLock::release( $procedure_id );
+		Shell::leave( ProcedureEditor::url( $copia['id'], ProcedureEditor::PANEL_DATA, $args ) );
+		return '';
+	}
+
+
+
+
+
+
+
+
+	public static function duplicate( int $procedure_id, int $user_id ) {
+		$areas = null;
+		if ( ! ProcedureAccess::can_duplicate( $user_id, $procedure_id, $areas ) ) {
+			return new \WP_Error(
+				'prc_duplicate_forbidden',
+				ProcedureAccess::can_open( $user_id, $procedure_id )
+					? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
+					: ProcedureAccess::why_not_editable( $user_id, $procedure_id )
+			);
+		}
+
+		if ( array() === $areas ) {
+			return new \WP_Error( 'prc_duplicate_area', 'El duplicado necesita al menos un ámbito, y ni el original ni su perfil tienen uno que pueda usar.' );
+		}
+
+		$original = get_post( $procedure_id );
+		$id       = wp_insert_post(
+			array(
+				'post_type'    => ProcedurePostType::POST_TYPE,
+				'post_title'   => wp_slash( ProcedureCopy::title( (string) $original->post_title ) ),
+				'post_content' => wp_slash( (string) $original->post_content ),
+				'post_excerpt' => wp_slash( (string) $original->post_excerpt ),
+				'post_status'  => 'draft',
+				'post_author'  => $user_id,
+			),
+			true
+		);
+		if ( is_wp_error( $id ) ) {
+			return new \WP_Error( 'prc_duplicate_failed', 'No se ha podido duplicar el procedimiento: ' . $id->get_error_message() );
+		}
+		$id = (int) $id;
+
+
+		wp_set_object_terms( $id, $areas, ProcedureTaxonomies::AREA, false );
+		$copia = ProcedureCopy::meta( self::source( $procedure_id ), ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) );
+
+
+		$sin_contactos = array() !== array_diff( ProcedureAccess::post_areas( $procedure_id ), $areas )
+			&& isset( $copia['meta'][ ProcedureMetaKeys::CONTACT_EMAILS ] );
+		if ( $sin_contactos ) {
+			unset( $copia['meta'][ ProcedureMetaKeys::CONTACT_EMAILS ] );
+		}
+		foreach ( $copia['meta'] as $clave => $valor ) {
+			update_post_meta( $id, $clave, wp_slash( $valor ) );
+		}
+		$imagen = (int) get_post_thumbnail_id( $procedure_id );
+		if ( $imagen > 0 ) {
+			update_post_meta( $id, '_thumbnail_id', $imagen );
+		}
+
+
+		do_action( 'prc_procedure_created', $id );
+
+		return array(
+			'id'            => $id,
+			'js_left'       => $copia['js_left'],
+			'contacts_left' => $sin_contactos,
+		);
+	}
+
+
+
+
+
+
+
+	private static function source( int $procedure_id ): array {
+		$out = array();
+		foreach ( array_keys( ProcedureCopy::policy() ) as $clave ) {
+			if ( metadata_exists( 'post', $procedure_id, $clave ) ) {
+				$out[ $clave ] = get_post_meta( $procedure_id, $clave, true );
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function notice( array $request ): array {
+		$origen = absint( $request[ self::ARG_SOURCE ] ?? 0 );
+		$texto  = ProcedureAccess::can_open( get_current_user_id(), $origen )
+			? 'Ha duplicado «' . get_post_field( 'post_title', $origen, 'raw' ) . '».'
+			: 'Ha duplicado el procedimiento.';
+		$texto .= ' Revise las fechas y el curso antes de publicarlo.'
+			. ' No se copian los plazos, el curso, los enlaces de la resolución y de los listados, ni las solicitudes.';
+		if ( ! empty( $request[ self::ARG_NO_CONTACTS ] ) ) {
+			$texto .= ' Los correos de contacto no se han copiado, porque el duplicado no tiene todos los ámbitos del original: indique los correos de contacto en «Datos».';
+		}
+		if ( ! empty( $request[ self::ARG_NO_JS ] ) ) {
+			$texto .= ' El JavaScript propio del original no se ha copiado: no tiene permiso para el código JavaScript de este procedimiento.';
+		}
+		return array(
+			'tipo'  => 'ok',
+			'texto' => $texto,
+		);
 	}
 }
 
@@ -25461,6 +26124,7 @@ use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationPeople;
+use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -25476,6 +26140,7 @@ use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleExport;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
+use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
@@ -26075,7 +26740,9 @@ final class Mailer {
 		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
 			$falta[] = 'Enlace a la resolución';
 		}
-		return $falta;
+
+		$curso = wp_get_post_terms( $procedure_id, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) );
+		return array_merge( $falta, ProcedureInput::not_ready( is_array( $curso ) ? (int) ( $curso[0] ?? 0 ) : 0, Applications::questions( $procedure_id ) ) );
 	}
 
 
@@ -26560,6 +27227,35 @@ final class Settings {
 
 
 
+
+	public static function scope_diagnostics(): array {
+		$rows = array();
+		foreach ( get_users() as $user ) {
+			if ( ! ( $user instanceof \WP_User ) || ProcedureAccess::can_edit_all_areas( $user->ID ) ) {
+				continue;
+			}
+			if ( ! user_can( $user, ProcedureAccess::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
+				continue;
+			}
+			$rows[] = array_merge(
+				array(
+					'user_id' => $user->ID,
+					'login'   => $user->user_login,
+				),
+				ProcedureAccess::scope_assignment_state( $user->ID )
+			);
+		}
+		return $rows;
+	}
+
+
+
+
+
+
+
+
+
 	private static function private_types_form(): void {
 		$tipos = get_option( CentreCatalog::OPTION_PRIVATE_TYPES, array() );
 		?>
@@ -26746,7 +27442,7 @@ final class Settings {
 			<table class="widefat striped" style="max-width:46rem">
 				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th></tr></thead>
 				<tbody>
-				<?php foreach ( ProcedureAccess::scope_diagnostics() as $row ) : ?>
+				<?php foreach ( self::scope_diagnostics() as $row ) : ?>
 					<tr>
 						<td><a href="<?php echo esc_url( get_edit_user_link( $row['user_id'] ) ); ?>"><?php echo esc_html( $row['login'] ); ?></a></td>
 						<td><?php echo esc_html( $row['state'] ); ?></td>
@@ -30468,6 +31164,50 @@ body.prc-app .prc-btn-borrar { --bs-btn-bg: var(--prc-mal-cont); --bs-btn-border
 				} );
 			}
 		}
+	} );
+
+	/* --- 8. Un solo envío ------------------------------------------------ */
+
+	/*
+	 * `data-prc-once` en el formulario: en cuanto el envío sale —ya
+	 * confirmado— se apagan sus botones y un segundo envío no sale. Es para lo
+	 * que, repetido, hace dos veces lo mismo: duplicar, por ejemplo. En
+	 * `window` y no en `document` para ir detrás de la confirmación, que para
+	 * el primer envío mientras pregunta. Sin guion se acepta el doble envío.
+	 * Al volver con «Atrás» de la caché del navegador se encienden otra vez.
+	 */
+	function botones( form, apagados ) {
+		Array.prototype.forEach.call( form.querySelectorAll( \'button[type="submit"], input[type="submit"]\' ), function ( boton ) {
+			boton.disabled = apagados;
+		} );
+	}
+
+	window.addEventListener( \'submit\', function ( e ) {
+		var form = e.target;
+		// Una vez por envío, aunque el guion se haya cargado dos veces.
+		if ( e.prcUnaVez || ! ( form instanceof HTMLFormElement ) || ! form.hasAttribute( \'data-prc-once\' ) ) {
+			return;
+		}
+		e.prcUnaVez = true;
+		if ( \'1\' === form.dataset.prcEnviado ) {
+			e.preventDefault();
+			return;
+		}
+		if ( e.defaultPrevented ) {
+			return;
+		}
+		form.dataset.prcEnviado = \'1\';
+		botones( form, true );
+	} );
+
+	window.addEventListener( \'pageshow\', function ( e ) {
+		if ( ! e.persisted ) {
+			return;
+		}
+		Array.prototype.forEach.call( document.querySelectorAll( \'form[data-prc-once]\' ), function ( form ) {
+			delete form.dataset.prcEnviado;
+			botones( form, false );
+		} );
 	} );
 }() );
 ',

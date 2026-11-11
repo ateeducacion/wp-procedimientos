@@ -703,3 +703,66 @@ describe( 'export dialog with a filter: the counts of the chosen scope', () => {
 		expect( document.getElementById( 'ct' ).hidden ).toBe( false );
 	} );
 } );
+
+describe( 'one submission for forms marked data-prc-once', () => {
+	const ONCE = `
+		<form id="d" data-prc-once data-prc-confirm="¿Duplicar «Red»? Se creará un borrador.">
+			<button id="b" type="submit">Duplicar</button>
+		</form>
+		<form id="libre"><button id="l" type="submit">Guardar</button></form>`;
+
+	it( 'disables the buttons once the submission leaves, and stops a second one', async () => {
+		document.body.innerHTML = ONCE;
+		window.confirm = vi.fn( () => true );
+		await load();
+		const form = document.getElementById( 'd' );
+
+		expect( submit( form, document.getElementById( 'b' ) ).defaultPrevented ).toBe( false );
+		expect( document.getElementById( 'b' ).disabled ).toBe( true );
+		expect( submit( form ).defaultPrevented ).toBe( true );
+	} );
+
+	it( 'leaves the form alone while the confirmation is cancelled', async () => {
+		document.body.innerHTML = ONCE;
+		window.confirm = vi.fn( () => false );
+		await load();
+		const form = document.getElementById( 'd' );
+
+		expect( submit( form ).defaultPrevented ).toBe( true );
+		expect( document.getElementById( 'b' ).disabled ).toBe( false );
+		window.confirm = vi.fn( () => true );
+		expect( submit( form ).defaultPrevented ).toBe( false );
+	} );
+
+	it( 'waits for SweetAlert2 and only disables the confirmed submission', async () => {
+		document.body.innerHTML = ONCE;
+		window.Swal = { fire: vi.fn( () => Promise.resolve( { isConfirmed: true } ) ) };
+		await load();
+		const form = document.getElementById( 'd' );
+		const button = document.getElementById( 'b' );
+		form.requestSubmit = vi.fn( () => submit( form, button ) );
+
+		expect( submit( form, button ).defaultPrevented ).toBe( true );
+		expect( button.disabled ).toBe( false );
+		await flush();
+		expect( form.requestSubmit ).toHaveBeenCalled();
+		expect( button.disabled ).toBe( true );
+	} );
+
+	it( 'does not touch a form without the mark, and comes back from the page cache', async () => {
+		document.body.innerHTML = ONCE;
+		window.confirm = vi.fn( () => true );
+		await load();
+
+		expect( submit( document.getElementById( 'libre' ) ).defaultPrevented ).toBe( false );
+		expect( document.getElementById( 'l' ).disabled ).toBe( false );
+
+		submit( document.getElementById( 'd' ) );
+		expect( document.getElementById( 'b' ).disabled ).toBe( true );
+		const vuelta = new Event( 'pageshow' );
+		vuelta.persisted = true;
+		window.dispatchEvent( vuelta );
+		expect( document.getElementById( 'b' ).disabled ).toBe( false );
+		expect( submit( document.getElementById( 'd' ) ).defaultPrevented ).toBe( false );
+	} );
+} );

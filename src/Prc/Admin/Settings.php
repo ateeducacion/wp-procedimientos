@@ -234,6 +234,35 @@ final class Settings {
 	}
 
 	/**
+	 * Read-only inventory of editorial accounts for deployment preparation.
+	 *
+	 * Vivía en `ProcedureAccess`, pero no decide ningún permiso: lo pinta esta
+	 * pantalla con lo que el guardián dice de cada perfil
+	 * ({@see ProcedureAccess::scope_assignment_state()}).
+	 *
+	 * @return array<int, array{user_id:int,login:string,state:string,ids:int[],invalid:string[],legacy:bool}>
+	 */
+	public static function scope_diagnostics(): array {
+		$rows = array();
+		foreach ( get_users() as $user ) {
+			if ( ! ( $user instanceof \WP_User ) || ProcedureAccess::can_edit_all_areas( $user->ID ) ) {
+				continue;
+			}
+			if ( ! user_can( $user, ProcedureAccess::CAP_MANAGE_PROCEDURES ) && ! array_intersect( array( 'editor', 'prc_manager' ), $user->roles ) ) {
+				continue;
+			}
+			$rows[] = array_merge(
+				array(
+					'user_id' => $user->ID,
+					'login'   => $user->user_login,
+				),
+				ProcedureAccess::scope_assignment_state( $user->ID )
+			);
+		}
+		return $rows;
+	}
+
+	/**
 	 * The form with the centre types that are private on this installation.
 	 *
 	 * La fuente del catálogo no trae titularidad: se deriva del tipo, y qué
@@ -427,7 +456,7 @@ final class Settings {
 			<table class="widefat striped" style="max-width:46rem">
 				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th></tr></thead>
 				<tbody>
-				<?php foreach ( ProcedureAccess::scope_diagnostics() as $row ) : ?>
+				<?php foreach ( self::scope_diagnostics() as $row ) : ?>
 					<tr>
 						<td><a href="<?php echo esc_url( get_edit_user_link( $row['user_id'] ) ); ?>"><?php echo esc_html( $row['login'] ); ?></a></td>
 						<td><?php echo esc_html( $row['state'] ); ?></td>

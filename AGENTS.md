@@ -103,6 +103,7 @@ src/Prc/
 ├── Domain/ProcedureInput.php               Valida el alta/edición del procedimiento. Puro
 ├── Domain/ApplicationInput.php             Valida la solicitud. Puro
 ├── Domain/PeopleSpec.php                   Lo que pide el procedimiento de la lista de personas y su ventana. Puro
+├── Domain/ProcedureCopy.php                Qué se lleva un duplicado: cada meta clasificada, claves renumeradas. Puro
 ├── Domain/ApplicationPeople.php            Valida cada persona de la lista; huella de la fila. Puro
 ├── Domain/ApplicationFilter.php            El filtro de la tabla de solicitudes por GET, su página y la búsqueda. Puro
 ├── Domain/ApplicationCompleteness.php      Si a una solicitud le faltan personas o entregas vencidas, y por qué. Puro
@@ -142,6 +143,7 @@ src/Prc/
 ├── PublicFront/View/ApplicationsPanelView.php Pinta la tabla de solicitudes: contadores, filtros, páginas y bloque
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
+├── PublicFront/ProcedureDuplicate.php      Duplicar un procedimiento: el borrador nuevo y su aviso
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla
 ├── PublicFront/View/PeopleView.php         Pinta la lista de personas: la del centro, la de la revisión y el panel del taller
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
@@ -297,6 +299,10 @@ escribe; ADR-0043).
   ([ADR-0040](docs/adr/ADR-0040-numero-fecha-rejilla-y-puntos-amplian-las-preguntas.md)).
   Solo el ámbito y el curso son taxonomías
   ([ADR-0012](docs/adr/ADR-0012-una-taxonomia-por-dimension.md)).
+- **Una meta nueva del procedimiento dice si se duplica.** Al añadirla a
+  `Meta/ProcedureMetaKeys.php` y a su registro, se clasifica en
+  `Domain/ProcedureCopy::policy()`: se copia, se transforma o nunca. Si no,
+  `tests/unit/test-procedure-copy.php` se pone en rojo.
 - **Toda escritura va por POST** con nonce y comprobación de capacidad, patrón
   «POST → redirect → GET» con el aviso en la URL (`?aviso=`). Borrar es enviar
   a la papelera (ADR-0007).

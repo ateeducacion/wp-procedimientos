@@ -52,6 +52,8 @@ final class ProcedureEditorView {
 		echo self::archived_notice( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		// Por qué media pantalla está apagada: lo dice el dominio, no la vista.
 		echo Shell::notice( 'aviso', (string) $m['state_notice'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+		// Lo que falta para publicar: el curso y las fechas de las entregas.
+		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 
 		// El interruptor de histórico va fuera de lo que se apaga: si estuviera
 		// dentro del panel bloqueado, marcar sería un viaje sin vuelta.
@@ -233,11 +235,53 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<span class="prc-acciones">
 				<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'Ver la ficha pública' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::duplicate_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</span>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Duplicar»: otro borrador como este, en cualquier estado.
+	 *
+	 * Va en la cabecera, fuera de lo que el solo lectura apaga: un histórico
+	 * o un procedimiento que otra persona tiene abierto también se duplican.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function duplicate_form( array $m ): string {
+		if ( true !== $m['can_duplicate'] ) {
+			return '';
+		}
+		$op = ProcedureEditor::OP_DUPLICATE;
+		ob_start();
+		?>
+		<form class="prc-acciones" method="post" action=""
+			data-prc-confirm="<?php echo esc_attr( self::duplicate_question( (string) $m['title'] ) ); ?>"
+			data-prc-confirm-ok="Duplicar" data-prc-once>
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' prc-mini' ); ?>">Duplicar</button>
+		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * What «Duplicar» asks before going on: the same words in the workshop and in «Gestión».
+	 *
+	 * @param string $title Title of the procedure.
+	 * @return string
+	 */
+	public static function duplicate_question( string $title ): string {
+		return sprintf(
+			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes.',
+			'' !== $title ? $title : 'Procedimiento sin título'
+		);
 	}
 
 	/**

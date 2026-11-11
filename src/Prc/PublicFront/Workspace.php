@@ -308,9 +308,15 @@ final class Workspace {
 	 */
 	private static function collect( int $user_id ): array {
 		$rows = array();
+		// Duplicar es abrir y poder crear (`ProcedureAccess::can_duplicate()`):
+		// abrir ya lo pregunta cada fila, y crear es de la persona, así que se
+		// pregunta una vez y no una por fila.
+		$crea = ProcedureAccess::can_manage_procedures( $user_id );
 		foreach ( self::scope( $user_id ) as $post ) {
 			if ( ProcedureAccess::can_open( $user_id, (int) $post->ID ) ) {
-				$rows[] = self::row( $post );
+				$fila                  = self::row( $post );
+				$fila['can_duplicate'] = $crea && 'trash' !== $post->post_status;
+				$rows[]                = $fila;
 			}
 		}
 		return $rows;

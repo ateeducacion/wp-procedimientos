@@ -96,7 +96,7 @@ final class WorkspaceView {
 				<p class="prc-acciones prc-taller__sin-alta"><?php echo esc_html( (string) $m['create_reason'] ); ?></p>
 			<?php endif; ?>
 		</div>
-		<p class="prc-sub"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
+		<p class="prc-taller__nota"><?php echo esc_html( (string) $m['subtitle'] ); ?></p>
 		<?php
 	}
 

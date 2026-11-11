@@ -496,3 +496,7 @@
 }
 
 .prc-respuestas dd { margin: 0; }
+
+/* «Otros correos de contacto (opcional)»: un rótulo para los dos campos. */
+.prc-form--taller .prc-campo--grupo { margin: 0; padding: 0; border: 0; min-width: 0; }
+.prc-form--taller .prc-campo--grupo .prc-control + .prc-control { margin-top: 8px; }

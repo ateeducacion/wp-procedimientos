@@ -196,15 +196,13 @@ final class ProcedureEditorView {
 	private static function new_procedure( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1">Crear un procedimiento</h1>
 		</div>
-		<h2 class="prc-sub"><strong>Formato Express</strong></h2>
 		<p class="prc-intro">
-			En este formulario <strong>solo aparecen los campos mínimos</strong> para crear el
-			procedimiento. Nace en borrador y no se ve fuera hasta que lo publique. Una vez creado
-			se abre su taller, y desde ahí se añaden <strong>los plazos, las preguntas y los
+			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -234,7 +232,7 @@ final class ProcedureEditorView {
 	private static function head( array $m ): string {
 		ob_start();
 		?>
-		<p class="prc-sub"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Mis procedimientos</a></p>
+		<p class="prc-miga"><a href="<?php echo esc_url( (string) $m['workspace_url'] ); ?>">&larr; Gestión de procedimientos</a></p>
 		<div class="prc-h1-fila">
 			<h1 class="prc-h1"><?php echo esc_html( '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título' ); ?></h1>
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -617,37 +615,35 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * «Más información»: los tres correos de contacto.
+	 * «Más información»: el correo de contacto, y los otros dos, opcionales.
+	 *
+	 * Los dos de más van juntos bajo un solo rótulo, «Otros correos de
+	 * contacto (opcional)»: «2.º correo» y «3.er correo» parecían dos campos
+	 * que había que rellenar.
 	 *
 	 * @param array<string, mixed> $v Field values.
 	 * @return string
 	 */
 	private static function email_fields( array $v ): string {
 		$correos = array_pad( array_values( (array) $v[ ProcedureMetaKeys::CONTACT_EMAILS ] ), ProcedureMetaKeys::CONTACT_EMAILS_MAX, '' );
-		$rotulos = array( 'Correo de contacto', '2.º correo', '3.er correo' );
 
 		ob_start();
 		?>
-		<?php foreach ( $rotulos as $i => $rotulo ) : ?>
-			<div class="prc-campo">
-				<label class="prc-campo__etiqueta" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>">
-					<?php echo esc_html( $rotulo ); ?>
-					<?php
-					if ( 0 === $i ) {
-						echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-					}
-					?>
-				</label>
+		<div class="prc-campo">
+			<label class="prc-campo__etiqueta" for="prc-contact-0">Correo de contacto <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></label>
+			<input class="prc-control" type="email" id="prc-contact-0" name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]" required
+				aria-describedby="prc-contact-ayuda" value="<?php echo esc_attr( (string) $correos[0] ); ?>" />
+			<p class="prc-campo__ayuda" id="prc-contact-ayuda">Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. Sale en la ficha pública.</p>
+		</div>
+		<fieldset class="prc-campo prc-campo--grupo">
+			<legend class="prc-campo__etiqueta">Otros correos de contacto (opcional)</legend>
+			<?php for ( $i = 1; $i < ProcedureMetaKeys::CONTACT_EMAILS_MAX; ++$i ) : ?>
+				<label class="screen-reader-text" for="prc-contact-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_html( sprintf( 'Otro correo de contacto %d', $i ) ); ?></label>
 				<input class="prc-control" type="email" id="prc-contact-<?php echo esc_attr( (string) $i ); ?>"
 					name="<?php echo esc_attr( ProcedureMetaKeys::CONTACT_EMAILS ); ?>[]"
-					<?php echo 0 === $i ? 'required' : ''; ?>
 					value="<?php echo esc_attr( (string) $correos[ $i ] ); ?>" />
-			</div>
-		<?php endforeach; ?>
-		<p class="prc-campo__ayuda">
-			Para las dudas de los centros sobre el procedimiento, no sobre el aplicativo. El
-			primero sale en la ficha pública; los otros dos son opcionales.
-		</p>
+			<?php endfor; ?>
+		</fieldset>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -671,7 +667,8 @@ final class ProcedureEditorView {
 		?>
 		<div class="prc-campo">
 			<fieldset>
-				<legend class="prc-campo__etiqueta">Color de cabecera <?php echo self::obl(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></legend>
+				<?php // Sin asterisco: ya viene uno elegido, y no hay forma de dejarlo vacío. ?>
+				<legend class="prc-campo__etiqueta">Color de cabecera</legend>
 				<div class="prc-paleta">
 					<?php foreach ( (array) $m['header_colors'] as $clave => $color ) : ?>
 						<label class="prc-muestra" style="--prc-muestra: <?php echo esc_attr( (string) $color['hex'] ); ?>">

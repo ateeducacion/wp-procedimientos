@@ -35346,7 +35346,9 @@ body.prc-app .prc-hoja {
 .prc-mas { position: relative; margin-left: auto; }
 .prc-mas > summary { list-style: none; cursor: pointer; }
 .prc-mas > summary::-webkit-details-marker { display: none; }
-.prc-mas__boton { display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; justify-content: center; font-size: 20px; line-height: 1; }
+/* Con más peso que `.prc-mini` y que `body.prc-app .btn`, que lo dejarían
+   en 36 o 38 px. */
+body.prc-app .prc-mas > .prc-mas__boton { box-sizing: border-box; display: inline-flex; align-items: center; min-width: 44px; min-height: 44px; justify-content: center; font-size: 20px; line-height: 1; }
 .prc-mas__menu {
   position: absolute;
   right: 0;

@@ -40,7 +40,8 @@ final class ProcedureDelete {
 	 *
 	 * La regla se vuelve a mirar aquí y no solo al pintar: entre pintar la
 	 * confirmación y enviarla pueden haber llegado una solicitud o la
-	 * publicación.
+	 * publicación. Si otra persona tiene el taller abierto, se para antes
+	 * con el 409 del bloqueo de edición.
 	 *
 	 * @param int    $procedure_id Procedure ID.
 	 * @param int    $user_id      Who deletes.
@@ -48,6 +49,8 @@ final class ProcedureDelete {
 	 * @return string Why it was refused; on success it leaves and returns nothing.
 	 */
 	public static function handle( int $procedure_id, int $user_id, string $typed ): string {
+		// No se le quita el procedimiento a quien lo tiene abierto: 409, como al guardar.
+		EditLock::require_available( $procedure_id );
 		$motivo = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
 		if ( '' !== $motivo ) {
 			return $motivo;

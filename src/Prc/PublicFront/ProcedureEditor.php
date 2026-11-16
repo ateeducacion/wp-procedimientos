@@ -430,10 +430,8 @@ final class ProcedureEditor {
 			self::$rejected = ProcedureDuplicate::handle( $procedure_id, $user_id );
 			return;
 		}
-		// Borrar sí cuenta con el bloqueo: no se le quita el procedimiento a
-		// quien lo tiene abierto. La regla la mira ProcedureDelete otra vez.
+		// Borrar sí cuenta con el bloqueo, y ProcedureDelete vuelve a mirar la regla.
 		if ( self::OP_DELETE === $op ) {
-			EditLock::require_available( $procedure_id );
 			self::$rejected = ProcedureDelete::handle( $procedure_id, $user_id, self::field( self::FIELD_CONFIRM ) );
 			return;
 		}
@@ -1649,15 +1647,13 @@ final class ProcedureEditor {
 		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-		// **Un borrador también se mira**: estando dentro y con permiso,
-		// WordPress lo sirve en vista previa.
-		$m['view_url']    = 'publish' === $procedimiento->post_status ? (string) get_permalink( $procedimiento ) : (string) get_preview_post_link( $procedimiento );
-		$m['values']      = self::values( $procedure_id );
-		$m['terms']       = self::term_lists( $user_id );
-		$m['questions']   = Applications::questions( $procedure_id );
-		$m['deliveries']  = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec'] = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']     = ObserveSettings::model( $procedure_id );
+		$m['view_url']       = ProcedureView::link( $procedimiento );
+		$m['values']         = self::values( $procedure_id );
+		$m['terms']          = self::term_lists( $user_id );
+		$m['questions']      = Applications::questions( $procedure_id );
+		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']        = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de

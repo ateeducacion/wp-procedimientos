@@ -1453,13 +1453,14 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
-			// Papelera y borrado definitivo tienen su propia regla (ADR-0044).
-			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
-		} elseif ( 'delete_post' === $cap ) {
-			// Solo un borrador sin solicitudes va a la papelera, también por el
-			// escritorio y la REST (adenda a la ADR-0007).
-			$permitido = ProcedureDeletion::allows( $user_id, $post_id );
+		if ( 'delete_post' === $cap ) {
+			// La papelera y el borrado definitivo tienen su propia regla: la de
+			// la solicitud (ADR-0044) y la del procedimiento, que solo deja un
+			// borrador sin solicitudes, también por el escritorio y la REST
+			// (adenda a la ADR-0007).
+			$permitido = ApplicationPostType::POST_TYPE === $tipo
+				? ApplicationActions::may_delete( $user_id, $post_id )
+				: ProcedureDeletion::allows( $user_id, $post_id );
 		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )

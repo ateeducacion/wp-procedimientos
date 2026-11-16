@@ -7916,13 +7916,14 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
-
-			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
-		} elseif ( 'delete_post' === $cap ) {
+		if ( 'delete_post' === $cap ) {
 
 
-			$permitido = ProcedureDeletion::allows( $user_id, $post_id );
+
+
+			$permitido = ApplicationPostType::POST_TYPE === $tipo
+				? ApplicationActions::may_delete( $user_id, $post_id )
+				: ProcedureDeletion::allows( $user_id, $post_id );
 		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )
@@ -21016,6 +21017,22 @@ final class ProcedureView {
 
 
 
+	public static function link( \WP_Post $procedure ): string {
+		if ( 'publish' === $procedure->post_status ) {
+			return (string) get_permalink( $procedure );
+		}
+		return (string) get_preview_post_link( $procedure );
+	}
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -23394,29 +23411,7 @@ final class ProcedureEditorView {
 			echo '<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Procedimiento en solo lectura</legend>';
 		}
 
-		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
-			echo self::questions_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_LINKS === $panel ) {
-			echo self::links_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			echo ApplicationsPanelView::html( $m );
-		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
-
-			echo self::deliveries_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::publish_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_NOTICES === $panel ) {
-			echo self::notices_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
-			echo PeopleView::spec_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_OBSERVE === $panel ) {
-			echo ObserveView::settings( $m );
-		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
-
-			echo self::custom_code_panel( $m );
-		} else {
-			echo self::data_panel( $m );
-		}
+		echo self::panel( $m, $panel );
 
 		if ( $cerrado ) {
 			echo '</fieldset>';
@@ -23428,6 +23423,28 @@ final class ProcedureEditorView {
 			echo self::archive_switch( $m );
 		}
 		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+
+
+
+
+
+
+
+	private static function panel( array $m, string $panel ): string {
+		return match ( $panel ) {
+			ProcedureEditor::PANEL_QUESTIONS => self::questions_panel( $m ),
+			ProcedureEditor::PANEL_LINKS => self::links_panel( $m ),
+			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
+			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
+			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
+			ProcedureEditor::PANEL_NOTICES => self::notices_panel( $m ),
+			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
+			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
+			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
+			default => self::data_panel( $m ),
+		};
 	}
 
 
@@ -25359,9 +25376,7 @@ final class ProcedureEditor {
 			return;
 		}
 
-
 		if ( self::OP_DELETE === $op ) {
-			EditLock::require_available( $procedure_id );
 			self::$rejected = ProcedureDelete::handle( $procedure_id, $user_id, self::field( self::FIELD_CONFIRM ) );
 			return;
 		}
@@ -26577,15 +26592,13 @@ final class ProcedureEditor {
 		$foreign_ids         = ProcedureAccess::can_edit_all_areas( $user_id ) ? array() : array_diff( ProcedureAccess::post_areas( $procedure_id ), ProcedureAccess::scope_areas( $user_id ) );
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
-
-
-		$m['view_url']    = 'publish' === $procedimiento->post_status ? (string) get_permalink( $procedimiento ) : (string) get_preview_post_link( $procedimiento );
-		$m['values']      = self::values( $procedure_id );
-		$m['terms']       = self::term_lists( $user_id );
-		$m['questions']   = Applications::questions( $procedure_id );
-		$m['deliveries']  = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
-		$m['people_spec'] = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']     = ObserveSettings::model( $procedure_id );
+		$m['view_url']       = ProcedureView::link( $procedimiento );
+		$m['values']         = self::values( $procedure_id );
+		$m['terms']          = self::term_lists( $user_id );
+		$m['questions']      = Applications::questions( $procedure_id );
+		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
+		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
+		$m['observe']        = ObserveSettings::model( $procedure_id );
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -27134,7 +27147,10 @@ final class ProcedureDelete {
 
 
 
+
 	public static function handle( int $procedure_id, int $user_id, string $typed ): string {
+
+		EditLock::require_available( $procedure_id );
 		$motivo = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
 		if ( '' !== $motivo ) {
 			return $motivo;

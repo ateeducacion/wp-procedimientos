@@ -75,29 +75,7 @@ final class ProcedureEditorView {
 			echo '<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Procedimiento en solo lectura</legend>';
 		}
 
-		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
-			echo self::questions_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_LINKS === $panel ) {
-			echo self::links_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
-			echo ApplicationsPanelView::html( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-			echo self::deliveries_panel( $m );
-		} elseif ( ProcedureEditor::PANEL_PUBLISH === $panel ) {
-			echo self::publish_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_NOTICES === $panel ) {
-			echo self::notices_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_PEOPLE === $panel ) {
-			echo PeopleView::spec_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_OBSERVE === $panel ) {
-			echo ObserveView::settings( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		} elseif ( ProcedureEditor::PANEL_CODE === $panel ) {
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-			echo self::custom_code_panel( $m );
-		} else {
-			echo self::data_panel( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
-		}
+		echo self::panel( $m, $panel ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 
 		if ( $cerrado ) {
 			echo '</fieldset>';
@@ -109,6 +87,28 @@ final class ProcedureEditorView {
 			echo self::archive_switch( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		}
 		return Shell::render( '', '', (string) ob_get_clean() );
+	}
+
+	/**
+	 * The open panel, by its slug; «Datos» when the slug is none of the others.
+	 *
+	 * @param array<string, mixed> $m     Model.
+	 * @param string               $panel Panel slug.
+	 * @return string
+	 */
+	private static function panel( array $m, string $panel ): string {
+		return match ( $panel ) {
+			ProcedureEditor::PANEL_QUESTIONS => self::questions_panel( $m ),
+			ProcedureEditor::PANEL_LINKS => self::links_panel( $m ),
+			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
+			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
+			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
+			ProcedureEditor::PANEL_NOTICES => self::notices_panel( $m ),
+			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
+			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
+			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
+			default => self::data_panel( $m ),
+		};
 	}
 
 	/**

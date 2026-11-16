@@ -19445,7 +19445,7 @@ final class HelpContent {
 				'id'    => 'mismas-preguntas',
 				'level' => 3,
 				'title' => 'Quiero las mismas preguntas que el curso pasado',
-				'html'  => '<p>Abra el procedimiento del curso pasado y pulse «Duplicar». Después, ponga el curso nuevo y las fechas.</p>',
+				'html'  => '<p>Abra el procedimiento del curso pasado, pulse el menú «⋮» de arriba a la derecha y elija «Duplicar». Después, ponga el curso nuevo y las fechas.</p>',
 				'shots' => array(),
 			),
 			array(

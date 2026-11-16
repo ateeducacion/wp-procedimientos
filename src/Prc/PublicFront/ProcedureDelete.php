@@ -15,8 +15,9 @@ use Prc\Access\ProcedureDeletion;
  *
  * Quién y cuándo lo decide {@see ProcedureDeletion}; aquí se comprueba la
  * palabra escrita, se envía a la papelera y se vuelve a «Gestión». Nunca se
- * borra para siempre: es `wp_trash_post()`, y lo recupera quien administra
- * el aplicativo.
+ * borra para siempre: es la papelera —también donde el sitio la tiene
+ * desactivada, {@see ApplicationOperations::send_to_trash()}—, y lo recupera
+ * quien administra el aplicativo.
  */
 final class ProcedureDelete {
 
@@ -58,7 +59,9 @@ final class ProcedureDelete {
 		if ( ! self::confirmed( $typed ) ) {
 			return 'Para borrarlo, escriba ' . self::WORD . ' en el campo de confirmación. No se ha borrado nada.';
 		}
-		if ( ! wp_trash_post( $procedure_id ) ) {
+		// Con la papelera del sitio desactivada, wp_trash_post() borraría para siempre.
+		ApplicationOperations::send_to_trash( $procedure_id );
+		if ( 'trash' !== get_post_status( $procedure_id ) ) {
 			return 'No se ha podido enviar el procedimiento a la papelera.';
 		}
 		// Quien borra deja el taller: su bloqueo se suelta ya, y solo si es suyo.

@@ -241,7 +241,82 @@ class Test_Delete_Procedure extends WP_UnitTestCase {
 		$wp_rest_server = null;
 	}
 
+	/**
+	 * Por el escritorio —editar, edición rápida o en bloque— tampoco: poner `trash` es borrar.
+	 *
+	 * Esos caminos solo preguntan por `edit_post` y terminan en
+	 * `wp_insert_post()` con el estado `trash`; `wp_update_post()` es la
+	 * misma costura.
+	 */
+	public function test_setting_the_trash_status_by_hand_follows_the_rule() {
+		$c         = $this->borrador();
+		$publicado = $this->procedure( $c['uid'], array( $c['area'] ), array(), array( 'post_status' => 'publish' ) );
+		$archivado = $this->procedure( $c['uid'], array( $c['area'] ), array( ProcedureMetaKeys::ARCHIVED => true ), array( 'post_status' => 'draft' ) );
+		$con       = $this->procedure( $c['uid'], array( $c['area'] ), array(), array( 'post_status' => 'draft' ) );
+		$this->application( $con, $this->school_head( 'C0001' ) );
+		$estados = array(
+			$publicado => 'publish',
+			$archivado => 'draft',
+			$con       => 'draft',
+		);
+
+		$this->acting_as( $c['uid'] );
+		foreach ( $estados as $id => $estado ) {
+			wp_update_post(
+				array(
+					'ID'          => $id,
+					'post_status' => 'trash',
+				)
+			);
+			$this->assertSame( $estado, get_post_status( $id ), 'gestión no lo envía a la papelera: ' . $id );
+		}
+		wp_update_post(
+			array(
+				'ID'          => $c['id'],
+				'post_status' => 'trash',
+			)
+		);
+		$this->assertSame( 'trash', get_post_status( $c['id'] ), 'un borrador sin solicitudes, sí' );
+
+		$this->acting_as( $this->administrator() );
+		foreach ( array_keys( $estados ) as $id ) {
+			wp_update_post(
+				array(
+					'ID'          => $id,
+					'post_status' => 'trash',
+				)
+			);
+			$this->assertSame( 'trash', get_post_status( $id ), 'administración, como antes: ' . $id );
+		}
+	}
+
 	// ─── el envío ──────────────────────────────────────────────────────────
+
+	/**
+	 * Con la papelera del sitio desactivada, borrar sigue siendo enviar a la papelera.
+	 */
+	public function test_with_the_bin_switched_off_it_still_goes_to_the_bin() {
+		add_filter( 'prc_trash_enabled', '__return_false' );
+		// Lo que hace wp_trash_post() con EMPTY_TRASH_DAYS a 0: borrar para siempre.
+		$borrar = static function ( $check, $post ) {
+			$pila = wp_debug_backtrace_summary( null, 0, false ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_wp_debug_backtrace_summary -- simula el núcleo.
+			if ( in_array( 'wp_trash_post', (array) $pila, true ) ) {
+				wp_delete_post( (int) $post->ID, true );
+				return false;
+			}
+			return $check;
+		};
+		add_filter( 'pre_trash_post', $borrar, 10, 2 );
+		$c   = $this->borrador();
+		$url = $this->borrar( $c['uid'], $c['id'] );
+		remove_filter( 'pre_trash_post', $borrar, 10 );
+		remove_filter( 'prc_trash_enabled', '__return_false' );
+
+		$this->assertIsString( $url );
+		$this->assertInstanceOf( WP_Post::class, get_post( $c['id'] ), 'nunca borrado para siempre' );
+		$this->assertSame( 'trash', get_post_status( $c['id'] ) );
+		$this->assertSame( 'draft', get_post_meta( $c['id'], '_wp_trash_meta_status', true ), 'se restaura como estaba' );
+	}
 
 	/**
 	 * Con BORRAR escrito —sin mirar mayúsculas ni espacios—, a la papelera y a «Gestión».

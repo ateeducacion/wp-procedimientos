@@ -97,6 +97,29 @@ final class ProcedureDeletion {
 	}
 
 	/**
+	 * The status a procedure write may set: `trash` only for who may delete it.
+	 *
+	 * Lo llama `ProcedureAccess::guard_parent()`, en `wp_insert_post_data`.
+	 * Poner el estado `trash` es borrar, pero `post.php` con
+	 * `post_status=trash`, la edición rápida y la edición en bloque solo
+	 * preguntan por `edit_post`, y `wp_insert_post()` lo escribe sin más. Aquí
+	 * se pregunta por `delete_post` ({@see allows()}): sin
+	 * él, se queda el estado que tenía. `wp_trash_post()` pasa por aquí y
+	 * sigue funcionando para quien sí puede borrarlo.
+	 *
+	 * @param int    $post_id Procedure ID.
+	 * @param string $status  Status the write asks for.
+	 * @return string
+	 */
+	public static function trash_or_keep( int $post_id, string $status ): string {
+		$antes = (string) get_post_status( $post_id );
+		if ( 'trash' !== $status || 'trash' === $antes || current_user_can( 'delete_post', $post_id ) ) {
+			return $status;
+		}
+		return $antes;
+	}
+
+	/**
 	 * Whether any application hangs from the procedure, in any status, the bin included.
 	 *
 	 * @param int $post_id Procedure ID.

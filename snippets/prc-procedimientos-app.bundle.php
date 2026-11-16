@@ -6666,6 +6666,7 @@ final class ProcedureAccess {
 				if ( ! $por_rest && self::is_unready_publication( $post_id, (string) ( $data['post_status'] ?? '' ), $postarr['tax_input'][ ProcedureTaxonomies::COURSE ] ?? null ) ) {
 					$data['post_status'] = 'draft';
 				}
+				$data['post_status'] = ProcedureDeletion::trash_or_keep( $post_id, (string) ( $data['post_status'] ?? '' ) );
 			}
 		} elseif ( ProcedurePostType::POST_TYPE === $tipo ) {
 			$data['post_parent'] = 0;
@@ -8773,6 +8774,29 @@ final class ProcedureDeletion {
 			return ProcedureAccess::can_edit( $user_id, $post_id );
 		}
 		return self::can_delete_procedure( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function trash_or_keep( int $post_id, string $status ): string {
+		$antes = (string) get_post_status( $post_id );
+		if ( 'trash' !== $status || 'trash' === $antes || current_user_can( 'delete_post', $post_id ) ) {
+			return $status;
+		}
+		return $antes;
 	}
 
 
@@ -14657,7 +14681,8 @@ final class ApplicationOperations {
 
 
 
-	private static function send_to_trash( int $application_id ): void {
+
+	public static function send_to_trash( int $application_id ): void {
 		if ( ApplicationActions::trash_enabled() ) {
 			wp_trash_post( $application_id );
 			return;
@@ -27117,6 +27142,7 @@ use Prc\Access\ProcedureDeletion;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\ProcedureDelete', false ) ) {
 final class ProcedureDelete {
 
@@ -27158,7 +27184,9 @@ final class ProcedureDelete {
 		if ( ! self::confirmed( $typed ) ) {
 			return 'Para borrarlo, escriba ' . self::WORD . ' en el campo de confirmación. No se ha borrado nada.';
 		}
-		if ( ! wp_trash_post( $procedure_id ) ) {
+
+		ApplicationOperations::send_to_trash( $procedure_id );
+		if ( 'trash' !== get_post_status( $procedure_id ) ) {
 			return 'No se ha podido enviar el procedimiento a la papelera.';
 		}
 

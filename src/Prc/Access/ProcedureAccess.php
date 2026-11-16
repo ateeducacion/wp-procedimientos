@@ -203,6 +203,7 @@ final class ProcedureAccess {
 				if ( ! $por_rest && self::is_unready_publication( $post_id, (string) ( $data['post_status'] ?? '' ), $postarr['tax_input'][ ProcedureTaxonomies::COURSE ] ?? null ) ) {
 					$data['post_status'] = 'draft';
 				}
+				$data['post_status'] = ProcedureDeletion::trash_or_keep( $post_id, (string) ( $data['post_status'] ?? '' ) );
 			}
 		} elseif ( ProcedurePostType::POST_TYPE === $tipo ) {
 			$data['post_parent'] = 0;

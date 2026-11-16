@@ -163,18 +163,19 @@ final class ApplicationOperations {
 	}
 
 	/**
-	 * Send an application to the bin, even where the core bin is switched off.
+	 * Send an application or a procedure to the bin, even where the core bin is switched off.
 	 *
 	 * Con la papelera activa es `wp_trash_post()`. Desactivada —`EMPTY_TRASH_DAYS`
 	 * a 0—, `wp_trash_post()` borraría para siempre la solicitud con sus
 	 * documentos y su historial; aquí se hace lo mismo que hace el núcleo con
 	 * la papelera activa, con los mismos filtros y acciones, para que retirar
-	 * siga siendo reversible (ADR-0044).
+	 * siga siendo reversible (ADR-0044). Borrar un procedimiento desde su
+	 * taller pasa por aquí por lo mismo: nunca es definitivo (ADR-0007).
 	 *
-	 * @param int $application_id Application ID.
+	 * @param int $application_id Application or procedure ID.
 	 * @return void
 	 */
-	private static function send_to_trash( int $application_id ): void {
+	public static function send_to_trash( int $application_id ): void {
 		if ( ApplicationActions::trash_enabled() ) {
 			wp_trash_post( $application_id );
 			return;

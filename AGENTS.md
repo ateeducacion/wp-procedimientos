@@ -114,6 +114,7 @@ src/Prc/
 ├── Access/ObserverScope.php                Zonas de quien consulta, sus centros del catálogo y lo que nunca se enseña
 ├── Access/ProcedureAccess.php              Único guardián: caps, ámbito, centro, zona, map_meta_cap, pre_get_posts
 ├── Access/ApplicationActions.php           Retirar, restaurar, prórroga y en nombre de un centro: las reglas que resuelve map_meta_cap (ADR-0044)
+├── Access/ProcedureDeletion.php           Quién borra un procedimiento y cuándo: borrador sin solicitudes; delete_post en map_meta_cap (ADR-0007)
 ├── Meta/ProcedureMetaRegistration.php      register_post_meta con tipo, sanitize y auth_callback
 ├── Meta/ApplicationMetaRegistration.php    Ídem para la solicitud
 ├── Meta/MetaSwap.php                       Escribe una meta solo si sigue como se leyó (comparar y cambiar)
@@ -153,6 +154,7 @@ src/Prc/
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
 ├── PublicFront/ProcedureDuplicate.php      Duplicar un procedimiento: el borrador nuevo y su aviso
+├── PublicFront/ProcedureDelete.php         Borrar un borrador desde el taller: la palabra BORRAR y la papelera
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla
 ├── PublicFront/View/PeopleView.php         Pinta la lista de personas: la del centro, la de la revisión y el panel del taller
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud

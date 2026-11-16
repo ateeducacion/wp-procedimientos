@@ -48,7 +48,9 @@ const SCREENS = {
  * `who` vacío significa **sin entrar**, que es como se ve una página pública y
  * como tiene que verse. `screens` dice en qué tamaños se captura esa escena.
  * `{ID}` es el procedimiento de demostración que se enseña: se pregunta al
- * sitio una vez y vale para el taller, la ficha y la solicitud.
+ * sitio una vez y vale para el taller, la ficha y la solicitud. `{DRAFT}` es
+ * un borrador sin solicitudes —el único que se puede borrar—, y se pregunta
+ * igual. `open` dice qué `summary` se pulsa antes de capturar.
  */
 const SCENES = [
 	// ── Lo público: los dos tamaños ───────────────────────────────────────
@@ -73,7 +75,7 @@ const SCENES = [
 	{
 		chapter: 'Quien gestiona',
 		title: 'Gestión de procedimientos',
-		note: 'El listado con el que se abre: los procedimientos de mis ámbitos por curso, con su estado y cuántas solicitudes tienen; «Nuevo procedimiento».',
+		note: 'El listado con el que se abre: los procedimientos de mis ámbitos por curso, con su estado, su plazo, a quién van dirigidos y cuántas solicitudes tienen; «Nuevo procedimiento». Sin columna de acciones: el título abre el taller, y ver la ficha, duplicar y borrar están en su menú «⋮».',
 		who: 'gestion',
 		go: '/gestion-de-procedimientos/',
 		screens: [ 'desktop' ],
@@ -101,6 +103,23 @@ const SCENES = [
 		note: 'Título, descripción, ámbito, curso, a quién va dirigido, los dos plazos, contacto, compromisos y si pide persona coordinadora.',
 		who: 'gestion',
 		go: '/editar-procedimiento/?procedimiento={ID}&panel=datos',
+		screens: [ 'desktop' ],
+	},
+	{
+		chapter: 'El taller del procedimiento',
+		title: 'Menú de acciones del procedimiento',
+		note: 'Un borrador sin solicitudes, con el menú «⋮» de arriba a la derecha desplegado: «Vista previa» (en uno publicado, «Ver la ficha»), «Duplicar» y «Borrar». «Borrar» solo sale en un borrador sin ninguna solicitud, tampoco retirada; en los demás el menú no lo lleva.',
+		who: 'gestion',
+		go: '/editar-procedimiento/?procedimiento={DRAFT}&panel=datos',
+		open: 'details.prc-mas > summary',
+		screens: [ 'desktop' ],
+	},
+	{
+		chapter: 'El taller del procedimiento',
+		title: 'Confirmar el borrado',
+		note: 'Lo que se ve al elegir «Borrar», igual con JavaScript que sin él: el título, la consecuencia —va a la papelera y quien administra el aplicativo puede recuperarlo— y un campo donde hay que escribir BORRAR. El servidor vuelve a comprobar la palabra y que siga siendo un borrador sin solicitudes.',
+		who: 'gestion',
+		go: '/editar-procedimiento/?procedimiento={DRAFT}&borrar=1',
 		screens: [ 'desktop' ],
 	},
 	{
@@ -230,6 +249,33 @@ async function procedureId( page ) {
 }
 
 /**
+ * The ID of a draft without applications: the one whose workshop offers «Borrar».
+ *
+ * Se recorren los borradores de «Gestión de procedimientos» y se abre su
+ * taller hasta dar con uno cuyo menú lleve «Borrar»: así la escena enseña lo
+ * que dice y no depende de cuántas solicitudes cuente la tabla, que no
+ * incluye las retiradas.
+ *
+ * @param {import('playwright').Page} page The tab, already logged in.
+ * @return {Promise<number>}
+ */
+async function draftId( page ) {
+	await page.goto( `${ BASE }/gestion-de-procedimientos/`, { waitUntil: 'domcontentloaded' } );
+	const ids = ( await page.$$eval( 'tr[data-estado="draft"]', ( filas ) =>
+		filas.map( ( fila ) => Number( fila.getAttribute( 'data-procedimiento' ) || 0 ) )
+	) ).filter( Boolean );
+	for ( const id of ids ) {
+		await page.goto( `${ BASE }/editar-procedimiento/?procedimiento=${ id }`, { waitUntil: 'domcontentloaded' } );
+		if ( await page.locator( '.prc-mas__opcion--borrar' ).count() ) {
+			return id;
+		}
+	}
+	throw new Error(
+		'No encuentro ningún borrador sin solicitudes que se pueda borrar: ¿está provisionado el entorno (scripts/seed-demo.php)?'
+	);
+}
+
+/**
  * A file-name-safe slug.
  *
  * @param {string} text Any text.
@@ -250,11 +296,11 @@ function slug( text ) {
  * @param {import('playwright').Browser} browser The browser.
  * @param {object}                       scene   The scene.
  * @param {string}                       screen  'desktop' or 'mobile'.
- * @param {number}                       id      Demo procedure ID.
+ * @param {object}                       ids     Demo procedure IDs: `{ID}` and `{DRAFT}`.
  * @param {number}                       n       Scene number, for the file name.
  * @return {Promise<object>} The scene with its result.
  */
-async function capture( browser, scene, screen, id, n ) {
+async function capture( browser, scene, screen, ids, n ) {
 	const context = await browser.newContext( { ...SCREENS[ screen ], locale: 'es-ES' } );
 	const page = await context.newPage();
 	// Ruta relativa a la raíz del informe, no solo el nombre: es la que usan
@@ -266,7 +312,7 @@ async function capture( browser, scene, screen, id, n ) {
 
 	try {
 		await logIn( page, scene.who );
-		const target = scene.go.replace( '{ID}', String( id ) );
+		const target = scene.go.replace( '{ID}', String( ids.id ) ).replace( '{DRAFT}', String( ids.draft ) );
 		const response = await page.goto( `${ BASE }${ target }`, { waitUntil: 'networkidle' } );
 		if ( response && response.status() >= 400 ) {
 			throw new Error( `la página respondió ${ response.status() }` );
@@ -300,6 +346,21 @@ async function capture( browser, scene, screen, id, n ) {
 			} );
 			if ( '' !== tapado ) {
 				throw new Error( tapado );
+			}
+		}
+		// Escena con un `details` abierto, como el menú «⋮» del taller.
+		if ( scene.open ) {
+			await page.locator( scene.open ).first().click();
+			await page.waitForTimeout( 250 );
+			const abierto = await page.evaluate(
+				( selector ) => {
+					const boton = document.querySelector( selector );
+					return !! ( boton && boton.parentElement && boton.parentElement.open );
+				},
+				scene.open
+			);
+			if ( ! abierto ) {
+				throw new Error( `«${ scene.open }» no se abrió` );
 			}
 		}
 		await page.screenshot( { path: path.join( OUT, img ), fullPage: true } );
@@ -393,11 +454,15 @@ try {
 	const context = await browser.newContext( SCREENS.desktop );
 	const page = await context.newPage();
 	await logIn( page, 'gestion' );
-	const id = await procedureId( page );
+	const ids = { id: await procedureId( page ), draft: 0 };
+	// El borrador solo se busca si alguna toma lo usa: cuesta abrir talleres.
+	if ( shots.some( ( { scene } ) => scene.go.includes( '{DRAFT}' ) ) ) {
+		ids.draft = await draftId( page );
+	}
 	await context.close();
 
 	for ( const [ i, { scene, screen } ] of shots.entries() ) {
-		const shot = await capture( browser, scene, screen, id, i + 1 );
+		const shot = await capture( browser, scene, screen, ids, i + 1 );
 		taken.push( shot );
 		console.log(
 			`${ shot.ok ? '✓' : '✗' } ${ String( i + 1 ).padStart( 2, '0' ) } ${ screen.padEnd( 8 ) } ${ shot.title }${

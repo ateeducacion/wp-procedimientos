@@ -701,7 +701,8 @@ body.prc-app .prc-mas > .prc-mas__boton { box-sizing: border-box; display: inlin
 }
 .prc-mas__opcion:hover { background: var(--prc-sup-2); color: var(--prc-pri); text-decoration: none; }
 .prc-mas__opcion--borrar, .prc-mas__opcion--borrar:hover { color: var(--prc-mal); }
-.prc-borrar { max-width: 40rem; }
+.prc-borrar { max-width: 40rem; margin-top: 24px; }
+.prc-borrar .prc-acciones { margin-top: 12px; }
 
 /* Dentro de una tabla, los botones de acción no se parten en varias líneas:
    la columna es estrecha y dos iconos apilados se leen como dos filas. Que la

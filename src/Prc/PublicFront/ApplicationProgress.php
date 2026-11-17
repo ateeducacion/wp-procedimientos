@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -147,19 +148,9 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
 		);
 		foreach ( $pending as $question ) {
-			$out[] = (string) $question['label'] . ', del ' . self::day( (string) $question['opens_at'] ) . ' al ' . self::day( (string) $question['closes_at'] );
+			$out[] = (string) $question['label'] . ', del ' . ApplicationActions::day( (string) $question['opens_at'] ) . ' al ' . ApplicationActions::day( (string) $question['closes_at'] );
 		}
 		return $out;
-	}
-
-	/**
-	 * A `Y-m-d` day as the screen says it: `d-m-Y`.
-	 *
-	 * @param string $day Day, `Y-m-d`.
-	 * @return string
-	 */
-	private static function day( string $day ): string {
-		return implode( '-', array_reverse( explode( '-', $day ) ) );
 	}
 
 	/**

@@ -50,10 +50,8 @@ final class ApplicationCompleteness {
 			$faltan = (int) $spec['min'] - count( $hay );
 			$out[]  = 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan );
 		}
-		$files = is_array( $files ) ? $files : array();
 		foreach ( self::overdue( $questions, $today ) as $pregunta ) {
-			$doc = $files[ (string) $pregunta['key'] ] ?? null;
-			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+			if ( ! self::delivered( $files, $pregunta ) ) {
 				$out[] = 'Falta: ' . (string) $pregunta['label'];
 			}
 		}
@@ -74,21 +72,15 @@ final class ApplicationCompleteness {
 	 * @return array<int, array<string, mixed>>
 	 */
 	public static function pending( array $questions, $files, string $today, string $review ): array {
-		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ! ProcedureInput::is_valid_date( $today ) ) {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
 			return array();
 		}
-		$files = is_array( $files ) ? $files : array();
-		$out   = array();
-		foreach ( $questions as $question ) {
-			if ( empty( $question['required'] ) || ! ProcedureQuestions::valid_delivery( $question ) || (string) $question['closes_at'] < $today ) {
-				continue;
-			}
-			$doc = $files[ (string) $question['key'] ] ?? null;
-			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
-				$out[] = $question;
-			}
-		}
-		return $out;
+		return array_values(
+			array_filter(
+				self::deliveries( $questions, $today, false ),
+				static fn( array $question ): bool => ! self::delivered( $files, $question )
+			)
+		);
 	}
 
 	/**
@@ -99,14 +91,41 @@ final class ApplicationCompleteness {
 	 * @return array<int, array<string, mixed>>
 	 */
 	public static function overdue( array $questions, string $today ): array {
+		return self::deliveries( $questions, $today, true );
+	}
+
+	/**
+	 * The required deliveries with a valid own deadline, over or not yet.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @param string                           $today     Today, `Y-m-d`.
+	 * @param bool                             $over      True for those whose deadline is over; false for the rest.
+	 * @return array<int, array<string, mixed>>
+	 */
+	private static function deliveries( array $questions, string $today, bool $over ): array {
+		if ( ! ProcedureInput::is_valid_date( $today ) ) {
+			return array();
+		}
 		$out = array();
 		foreach ( $questions as $pregunta ) {
 			if ( ! empty( $pregunta['required'] ) && ProcedureQuestions::valid_delivery( $pregunta )
-				&& ProcedureInput::is_valid_date( $today ) && (string) $pregunta['closes_at'] < $today ) {
+				&& ( (string) $pregunta['closes_at'] < $today ) === $over ) {
 				$out[] = $pregunta;
 			}
 		}
 		return $out;
+	}
+
+	/**
+	 * Whether the application has the document of this question.
+	 *
+	 * @param mixed                $files    Stored documents of the application, by question key.
+	 * @param array<string, mixed> $question Normalised question.
+	 * @return bool
+	 */
+	private static function delivered( $files, array $question ): bool {
+		$doc = is_array( $files ) ? ( $files[ (string) $question['key'] ] ?? null ) : null;
+		return is_array( $doc ) && isset( $doc['id'], $doc['stored'] );
 	}
 
 	/**

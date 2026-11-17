@@ -52,12 +52,13 @@ final class CentreCatalog {
 	/**
 	 * The catalogue already built in this request, and what it was built from.
 	 *
-	 * @var array{key:string|null, all:array<int, array<string, mixed>>, index:array<string, array<string, mixed>>|null}
+	 * @var array{key:string|null, all:array<int, array<string, mixed>>, index:array<string, array<string, mixed>>|null, by_zone:array<string, string[]>|null}
 	 */
 	private static $memo = array(
-		'key'   => null,
-		'all'   => array(),
-		'index' => null,
+		'key'     => null,
+		'all'     => array(),
+		'index'   => null,
+		'by_zone' => null,
 	);
 
 	/**
@@ -90,9 +91,10 @@ final class CentreCatalog {
 	 */
 	public static function flush(): void {
 		self::$memo = array(
-			'key'   => null,
-			'all'   => array(),
-			'index' => null,
+			'key'     => null,
+			'all'     => array(),
+			'index'   => null,
+			'by_zone' => null,
 		);
 		wp_cache_delete( 'last_changed', self::CACHE_GROUP );
 	}
@@ -143,9 +145,10 @@ final class CentreCatalog {
 			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
 		}
 		self::$memo = array(
-			'key'   => $clave,
-			'all'   => $out,
-			'index' => null,
+			'key'     => $clave,
+			'all'     => $out,
+			'index'   => null,
+			'by_zone' => null,
 		);
 		return $out;
 	}
@@ -169,20 +172,6 @@ final class CentreCatalog {
 	}
 
 	/**
-	 * What the catalogue built in this request was built from.
-	 *
-	 * Cambia cuando cambia el catálogo —su opción, quién contesta los
-	 * filtros o {@see flush()}—: quien memoriza algo calculado de él lo
-	 * compara para saber si sigue valiendo.
-	 *
-	 * @return string
-	 */
-	public static function version(): string {
-		self::all();
-		return (string) self::$memo['key'];
-	}
-
-	/**
 	 * The catalogue indexed by code, for whoever looks up many codes at once.
 	 *
 	 * @return array<string, array<string, mixed>>
@@ -193,6 +182,29 @@ final class CentreCatalog {
 			self::$memo['index'] = array_column( $todos, null, 'code' );
 		}
 		return self::$memo['index'];
+	}
+
+	/**
+	 * The codes of the centres of each zone, in catalogue order.
+	 *
+	 * Se construye una vez por petición, con el catálogo: quien consulta
+	 * pregunta por los centros de sus zonas en cada solicitud y no recorre el
+	 * catálogo entero cada vez. Se vacía con él.
+	 *
+	 * @return array<string, string[]>
+	 */
+	public static function by_zone(): array {
+		$todos = self::all();
+		if ( null === self::$memo['by_zone'] ) {
+			$out = array();
+			foreach ( $todos as $centro ) {
+				if ( '' !== (string) ( $centro['zone'] ?? '' ) ) {
+					$out[ (string) $centro['zone'] ][] = (string) $centro['code'];
+				}
+			}
+			self::$memo['by_zone'] = $out;
+		}
+		return self::$memo['by_zone'];
 	}
 
 	/**

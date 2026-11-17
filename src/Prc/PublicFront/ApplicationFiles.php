@@ -10,6 +10,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\MetaSwap;
 use Prc\PostType\ApplicationPostType;
 
 /**
@@ -361,35 +362,28 @@ final class ApplicationFiles {
 	 * Add the new descriptors to the stored ones, only if nobody wrote in between.
 	 *
 	 * Otra persona del centro puede entregar otro documento o reenviar la
-	 * solicitud a la vez: se escribe solo si la meta sigue como se leyó y, si
-	 * no, se relee y se vuelve a fusionar. Así una entrega no borra la otra.
+	 * solicitud a la vez: {@see MetaSwap} escribe solo si la meta sigue como
+	 * se leyó y, si no, se relee y se vuelve a fusionar. Así una entrega no
+	 * borra la otra.
 	 *
 	 * @param int                                 $application_id Application post ID.
 	 * @param array<string, array<string, mixed>> $added          New descriptors by question key.
 	 * @return array<string, array<string, mixed>>|null The descriptors that were there, or null when it could not be written.
 	 */
 	private static function merge_descriptors( int $application_id, array $added ): ?array {
-		for ( $try = 0; $try < 3; ++$try ) {
-			wp_cache_delete( $application_id, 'post_meta' );
-			$read   = get_metadata_raw( 'post', $application_id, ApplicationMetaKeys::FILES, true );
-			$before = self::descriptors( $application_id );
-			$value  = wp_slash( array_merge( $before, $added ) );
-			if ( null === $read || empty( $read ) ) {
-				// Sin meta, o vacía (que update_post_meta() no sabe comparar):
-				// se crea solo si nadie la creó entretanto.
-				if ( null !== $read ) {
-					delete_post_meta( $application_id, ApplicationMetaKeys::FILES );
-				}
-				$written = false !== add_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, true );
-			} else {
-				$written = false !== update_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, $read );
-			}
-			if ( $written ) {
-				wp_cache_delete( $application_id, 'post_meta' );
-				return $before;
-			}
-		}
-		return null;
+		$res = MetaSwap::change(
+			$application_id,
+			ApplicationMetaKeys::FILES,
+			static function ( $read ) use ( $added ): array {
+				$before = self::valid_descriptors( $read );
+				return array(
+					'value'  => array_merge( $before, $added ),
+					'before' => $before,
+				);
+			},
+			3
+		);
+		return $res['ok'] ? (array) $res['before'] : null;
 	}
 
 	/**
@@ -524,13 +518,18 @@ final class ApplicationFiles {
 		if ( $application_id <= 0 ) {
 			return array();
 		}
-		$datos = get_post_meta( $application_id, ApplicationMetaKeys::FILES, true );
-		if ( ! is_array( $datos ) ) {
-			return array();
-		}
+		return self::valid_descriptors( get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ) );
+	}
 
+	/**
+	 * The well-formed descriptors of a stored value, by question key.
+	 *
+	 * @param mixed $stored What the meta holds.
+	 * @return array<string, array<string, mixed>>
+	 */
+	private static function valid_descriptors( $stored ): array {
 		$out = array();
-		foreach ( $datos as $question_key => $descriptor ) {
+		foreach ( is_array( $stored ) ? $stored : array() as $question_key => $descriptor ) {
 			if ( is_array( $descriptor ) && isset( $descriptor['id'], $descriptor['stored'] ) ) {
 				$out[ (string) $question_key ] = $descriptor;
 			}

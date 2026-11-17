@@ -4542,10 +4542,8 @@ final class ApplicationCompleteness {
 			$faltan = (int) $spec['min'] - count( $hay );
 			$out[]  = 1 === $faltan ? 'Falta 1 persona' : sprintf( 'Faltan %d personas', $faltan );
 		}
-		$files = is_array( $files ) ? $files : array();
 		foreach ( self::overdue( $questions, $today ) as $pregunta ) {
-			$doc = $files[ (string) $pregunta['key'] ] ?? null;
-			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+			if ( ! self::delivered( $files, $pregunta ) ) {
 				$out[] = 'Falta: ' . (string) $pregunta['label'];
 			}
 		}
@@ -4566,18 +4564,45 @@ final class ApplicationCompleteness {
 
 
 	public static function pending( array $questions, $files, string $today, string $review ): array {
-		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ! ProcedureInput::is_valid_date( $today ) ) {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review ) {
 			return array();
 		}
-		$files = is_array( $files ) ? $files : array();
-		$out   = array();
-		foreach ( $questions as $question ) {
-			if ( empty( $question['required'] ) || ! ProcedureQuestions::valid_delivery( $question ) || (string) $question['closes_at'] < $today ) {
-				continue;
-			}
-			$doc = $files[ (string) $question['key'] ] ?? null;
-			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
-				$out[] = $question;
+		return array_values(
+			array_filter(
+				self::deliveries( $questions, $today, false ),
+				static fn( array $question ): bool => ! self::delivered( $files, $question )
+			)
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function overdue( array $questions, string $today ): array {
+		return self::deliveries( $questions, $today, true );
+	}
+
+
+
+
+
+
+
+
+
+	private static function deliveries( array $questions, string $today, bool $over ): array {
+		if ( ! ProcedureInput::is_valid_date( $today ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( $questions as $pregunta ) {
+			if ( ! empty( $pregunta['required'] ) && ProcedureQuestions::valid_delivery( $pregunta )
+				&& ( (string) $pregunta['closes_at'] < $today ) === $over ) {
+				$out[] = $pregunta;
 			}
 		}
 		return $out;
@@ -4590,15 +4615,9 @@ final class ApplicationCompleteness {
 
 
 
-	public static function overdue( array $questions, string $today ): array {
-		$out = array();
-		foreach ( $questions as $pregunta ) {
-			if ( ! empty( $pregunta['required'] ) && ProcedureQuestions::valid_delivery( $pregunta )
-				&& ProcedureInput::is_valid_date( $today ) && (string) $pregunta['closes_at'] < $today ) {
-				$out[] = $pregunta;
-			}
-		}
-		return $out;
+	private static function delivered( $files, array $question ): bool {
+		$doc = is_array( $files ) ? ( $files[ (string) $question['key'] ] ?? null ) : null;
+		return is_array( $doc ) && isset( $doc['id'], $doc['stored'] );
 	}
 
 
@@ -5689,9 +5708,10 @@ final class CentreCatalog {
 
 
 	private static $memo = array(
-		'key'   => null,
-		'all'   => array(),
-		'index' => null,
+		'key'     => null,
+		'all'     => array(),
+		'index'   => null,
+		'by_zone' => null,
 	);
 
 
@@ -5724,9 +5744,10 @@ final class CentreCatalog {
 
 	public static function flush(): void {
 		self::$memo = array(
-			'key'   => null,
-			'all'   => array(),
-			'index' => null,
+			'key'     => null,
+			'all'     => array(),
+			'index'   => null,
+			'by_zone' => null,
 		);
 		wp_cache_delete( 'last_changed', self::CACHE_GROUP );
 	}
@@ -5777,9 +5798,10 @@ final class CentreCatalog {
 			$out[ $i ]['zone_name'] = '' !== $centro['zone'] ? (string) ( $nombres[ $centro['zone'] ] ?? '' ) : '';
 		}
 		self::$memo = array(
-			'key'   => $clave,
-			'all'   => $out,
-			'index' => null,
+			'key'     => $clave,
+			'all'     => $out,
+			'index'   => null,
+			'by_zone' => null,
 		);
 		return $out;
 	}
@@ -5807,13 +5829,12 @@ final class CentreCatalog {
 
 
 
-
-
-
-
-	public static function version(): string {
-		self::all();
-		return (string) self::$memo['key'];
+	public static function index(): array {
+		$todos = self::all();
+		if ( null === self::$memo['index'] ) {
+			self::$memo['index'] = array_column( $todos, null, 'code' );
+		}
+		return self::$memo['index'];
 	}
 
 
@@ -5821,12 +5842,22 @@ final class CentreCatalog {
 
 
 
-	public static function index(): array {
+
+
+
+
+	public static function by_zone(): array {
 		$todos = self::all();
-		if ( null === self::$memo['index'] ) {
-			self::$memo['index'] = array_column( $todos, null, 'code' );
+		if ( null === self::$memo['by_zone'] ) {
+			$out = array();
+			foreach ( $todos as $centro ) {
+				if ( '' !== (string) ( $centro['zone'] ?? '' ) ) {
+					$out[ (string) $centro['zone'] ][] = (string) $centro['code'];
+				}
+			}
+			self::$memo['by_zone'] = $out;
 		}
-		return self::$memo['index'];
+		return self::$memo['by_zone'];
 	}
 
 
@@ -6306,8 +6337,6 @@ final class ObserverScope {
 		if ( '' === $zona || '' === $meta ) {
 			return array();
 		}
-
-
 		$ids = get_users(
 			array(
 				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
@@ -6317,36 +6346,17 @@ final class ObserverScope {
 			)
 		);
 		$ids = array_map( 'intval', (array) $ids );
-		if ( array() === $ids ) {
-			return array();
-		}
-		global $wpdb;
-		$huecos = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 
-		$filas = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ') ORDER BY umeta_id ASC',
-				array_merge( array( $meta ), $ids )
+
+		update_meta_cache( 'user', $ids );
+		return array_values(
+			array_filter(
+				$ids,
+				static function ( int $uid ) use ( $zona ): bool {
+					return in_array( $zona, self::zones_for( $uid ), true );
+				}
 			)
 		);
-
-
-
-
-		$seen = array();
-		$out  = array();
-		foreach ( (array) $filas as $fila ) {
-			$uid = (int) $fila->user_id;
-			if ( isset( $seen[ $uid ] ) ) {
-				continue;
-			}
-			$seen[ $uid ] = true;
-			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
-				$out[ $uid ] = $uid;
-			}
-		}
-		$out = array_values( $out );
-		return $out;
 	}
 
 
@@ -6566,17 +6576,6 @@ final class ProcedureAccess {
 
 	public const VIEW_OWN      = 'own';
 	public const VIEW_DOCUMENT = 'document';
-
-
-
-
-
-
-
-	private static $zone_codes = array(
-		'catalogue' => null,
-		'codes'     => array(),
-	);
 
 
 
@@ -7796,20 +7795,12 @@ final class ProcedureAccess {
 		}
 
 
-
-
-		$version = CentreCatalog::version();
-		if ( $version !== self::$zone_codes['catalogue'] ) {
-			self::$zone_codes = array(
-				'catalogue' => $version,
-				'codes'     => array(),
-			);
+		$por_zona = CentreCatalog::by_zone();
+		$out      = array();
+		foreach ( $zonas as $zona ) {
+			$out = array_merge( $out, $por_zona[ $zona ] ?? array() );
 		}
-		$key = implode( ',', $zonas );
-		if ( ! isset( self::$zone_codes['codes'][ $key ] ) ) {
-			self::$zone_codes['codes'][ $key ] = ObserverScope::codes_in( $zonas, CentreCatalog::index() );
-		}
-		return self::$zone_codes['codes'][ $key ];
+		return $out;
 	}
 
 
@@ -8085,7 +8076,10 @@ final class ApplicationActions {
 
 
 
-	private static $purging = false;
+
+
+
+	private static $purging = 0;
 
 
 
@@ -8360,11 +8354,11 @@ final class ApplicationActions {
 
 
 	public static function purge( int $application_id ): void {
-		self::$purging = true;
+		self::$purging = $application_id;
 		try {
 			wp_delete_post( $application_id, true );
 		} finally {
-			self::$purging = false;
+			self::$purging = 0;
 		}
 	}
 
@@ -8388,7 +8382,7 @@ final class ApplicationActions {
 		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
-		if ( self::$purging ) {
+		if ( (int) $post->ID === self::$purging ) {
 			return null;
 		}
 
@@ -8722,6 +8716,13 @@ final class ProcedureDeletion {
 
 
 
+	private static $has_applications = array();
+
+
+
+
+
+
 
 
 	public static function can_delete_procedure( int $user_id, int $post_id ): bool {
@@ -8835,12 +8836,11 @@ final class ProcedureDeletion {
 
 
 	public static function has_applications( int $post_id ): bool {
-		$key    = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
-		$cached = wp_cache_get( $key, 'prc_has_applications' );
-		if ( false !== $cached ) {
-			return 'yes' === $cached;
+		$key = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
+		if ( isset( self::$has_applications[ $key ] ) ) {
+			return self::$has_applications[ $key ];
 		}
-		$ids = get_posts(
+		$ids                            = get_posts(
 			array(
 				'post_type'        => ApplicationPostType::POST_TYPE,
 				'post_parent'      => $post_id,
@@ -8852,9 +8852,8 @@ final class ProcedureDeletion {
 				'suppress_filters' => true,
 			)
 		);
-		$has = is_array( $ids ) && array() !== $ids;
-		wp_cache_set( $key, $has ? 'yes' : 'no', 'prc_has_applications' );
-		return $has;
+		self::$has_applications[ $key ] = is_array( $ids ) && array() !== $ids;
+		return self::$has_applications[ $key ];
 	}
 }
 
@@ -9756,7 +9755,6 @@ final class MetaSwap {
 				return array( 'ok' => '' === (string) $res['error'] ) + $res;
 			}
 			if ( self::swap( $post_id, $key, $leido, $res['value'] ) ) {
-				wp_cache_delete( $post_id, 'post_meta' );
 				return array( 'ok' => true ) + $res;
 			}
 		}
@@ -9802,7 +9800,13 @@ final class MetaSwap {
 			)
 		);
 		wp_cache_delete( $post_id, 'post_meta' );
-		return is_int( $rows ) && $rows > 0;
+		if ( ! is_int( $rows ) || $rows <= 0 ) {
+			return false;
+		}
+
+
+		wp_cache_set_posts_last_changed();
+		return true;
 	}
 }
 
@@ -13550,6 +13554,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\MetaSwap;
 use Prc\PostType\ApplicationPostType;
 
 
@@ -13909,28 +13914,21 @@ final class ApplicationFiles {
 
 
 
+
 	private static function merge_descriptors( int $application_id, array $added ): ?array {
-		for ( $try = 0; $try < 3; ++$try ) {
-			wp_cache_delete( $application_id, 'post_meta' );
-			$read   = get_metadata_raw( 'post', $application_id, ApplicationMetaKeys::FILES, true );
-			$before = self::descriptors( $application_id );
-			$value  = wp_slash( array_merge( $before, $added ) );
-			if ( null === $read || empty( $read ) ) {
-
-
-				if ( null !== $read ) {
-					delete_post_meta( $application_id, ApplicationMetaKeys::FILES );
-				}
-				$written = false !== add_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, true );
-			} else {
-				$written = false !== update_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, $read );
-			}
-			if ( $written ) {
-				wp_cache_delete( $application_id, 'post_meta' );
-				return $before;
-			}
-		}
-		return null;
+		$res = MetaSwap::change(
+			$application_id,
+			ApplicationMetaKeys::FILES,
+			static function ( $read ) use ( $added ): array {
+				$before = self::valid_descriptors( $read );
+				return array(
+					'value'  => array_merge( $before, $added ),
+					'before' => $before,
+				);
+			},
+			3
+		);
+		return $res['ok'] ? (array) $res['before'] : null;
 	}
 
 
@@ -14065,13 +14063,18 @@ final class ApplicationFiles {
 		if ( $application_id <= 0 ) {
 			return array();
 		}
-		$datos = get_post_meta( $application_id, ApplicationMetaKeys::FILES, true );
-		if ( ! is_array( $datos ) ) {
-			return array();
-		}
+		return self::valid_descriptors( get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ) );
+	}
 
+
+
+
+
+
+
+	private static function valid_descriptors( $stored ): array {
 		$out = array();
-		foreach ( $datos as $question_key => $descriptor ) {
+		foreach ( is_array( $stored ) ? $stored : array() as $question_key => $descriptor ) {
 			if ( is_array( $descriptor ) && isset( $descriptor['id'], $descriptor['stored'] ) ) {
 				$out[ (string) $question_key ] = $descriptor;
 			}
@@ -14643,17 +14646,28 @@ final class ApplicationOperations {
 
 	public static function lost_race( int $id, bool $created = true ): bool {
 		$args = $created ? ApplicationActions::same_applicant( $id ) : null;
-		$ids  = null === $args ? array() : array_map( 'intval', (array) get_posts( $args ) );
-		$own  = array_values( array_filter( $ids, static fn( int $other ): bool => ! self::pending_for_school( $other ) ) );
-		$wins = array() !== $own ? $own[0] : ( $ids[0] ?? $id );
+		if ( null === $args ) {
+			return false;
+		}
+		$own       = array();
+		$on_behalf = array();
+		foreach ( array_map( 'intval', (array) get_posts( $args ) ) as $other ) {
+			if ( self::pending_for_school( $other ) ) {
+				$on_behalf[] = $other;
+			} else {
+				$own[] = $other;
+			}
+		}
+		$wins = $own[0] ?? $on_behalf[0] ?? $id;
 		if ( $wins !== $id ) {
 			ApplicationActions::purge( $id );
 			self::$refusal = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $wins, ApplicationMetaKeys::APPLICANT_TYPE, true ) ? self::DUPLICATE_TEACHER : self::DUPLICATE;
 			return true;
 		}
-		if ( ! self::pending_for_school( $id ) ) {
-			foreach ( array_diff( $ids, $own ) as $on_behalf ) {
-				ApplicationActions::purge( $on_behalf );
+
+		if ( in_array( $id, $own, true ) ) {
+			foreach ( $on_behalf as $other ) {
+				ApplicationActions::purge( $other );
 			}
 		}
 		return false;
@@ -16457,7 +16471,7 @@ final class ApplicationExport {
 			return;
 		}
 		$tally['people'][ $clave ] = $person;
-		$tally['emails'][ $email ] = $clave;
+		$tally['emails'][ $email ] = true;
 	}
 
 
@@ -21723,9 +21737,10 @@ final class Workspace {
 
 	public static function selection(): array {
 		$estado = self::input( self::VAR_STATE, 'all' );
+		$curso  = (int) self::input( self::VAR_COURSE );
 
 		return array(
-			'course' => self::NO_COURSE === (int) self::input( self::VAR_COURSE ) ? self::NO_COURSE : max( 0, (int) self::input( self::VAR_COURSE ) ),
+			'course' => self::NO_COURSE === $curso ? $curso : max( 0, $curso ),
 			'state'  => isset( self::state_filters()[ $estado ] ) ? $estado : 'all',
 			'q'      => self::input( self::VAR_SEARCH ),
 		);
@@ -21741,7 +21756,7 @@ final class Workspace {
 	public static function url( array $selection, array $changes = array() ): string {
 		$s    = array_merge( $selection, $changes );
 		$args = array();
-		if ( (int) $s['course'] > 0 || self::NO_COURSE === (int) $s['course'] ) {
+		if ( 0 !== (int) $s['course'] ) {
 			$args[ self::VAR_COURSE ] = (string) $s['course'];
 		}
 		if ( 'all' !== (string) $s['state'] ) {
@@ -30120,6 +30135,7 @@ final class PeopleForm {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -30261,19 +30277,9 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
 		);
 		foreach ( $pending as $question ) {
-			$out[] = (string) $question['label'] . ', del ' . self::day( (string) $question['opens_at'] ) . ' al ' . self::day( (string) $question['closes_at'] );
+			$out[] = (string) $question['label'] . ', del ' . ApplicationActions::day( (string) $question['opens_at'] ) . ' al ' . ApplicationActions::day( (string) $question['closes_at'] );
 		}
 		return $out;
-	}
-
-
-
-
-
-
-
-	private static function day( string $day ): string {
-		return implode( '-', array_reverse( explode( '-', $day ) ) );
 	}
 
 

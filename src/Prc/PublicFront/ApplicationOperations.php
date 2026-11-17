@@ -100,17 +100,28 @@ final class ApplicationOperations {
 	 */
 	public static function lost_race( int $id, bool $created = true ): bool {
 		$args = $created ? ApplicationActions::same_applicant( $id ) : null;
-		$ids  = null === $args ? array() : array_map( 'intval', (array) get_posts( $args ) );
-		$own  = array_values( array_filter( $ids, static fn( int $other ): bool => ! self::pending_for_school( $other ) ) );
-		$wins = array() !== $own ? $own[0] : ( $ids[0] ?? $id );
+		if ( null === $args ) {
+			return false;
+		}
+		$own       = array();
+		$on_behalf = array();
+		foreach ( array_map( 'intval', (array) get_posts( $args ) ) as $other ) {
+			if ( self::pending_for_school( $other ) ) {
+				$on_behalf[] = $other;
+			} else {
+				$own[] = $other;
+			}
+		}
+		$wins = $own[0] ?? $on_behalf[0] ?? $id;
 		if ( $wins !== $id ) {
 			ApplicationActions::purge( $id );
 			self::$refusal = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $wins, ApplicationMetaKeys::APPLICANT_TYPE, true ) ? self::DUPLICATE_TEACHER : self::DUPLICATE;
 			return true;
 		}
-		if ( ! self::pending_for_school( $id ) ) {
-			foreach ( array_diff( $ids, $own ) as $on_behalf ) {
-				ApplicationActions::purge( $on_behalf );
+		// Gana la del propio centro: la que se presentó en su nombre a la vez, fuera.
+		if ( in_array( $id, $own, true ) ) {
+			foreach ( $on_behalf as $other ) {
+				ApplicationActions::purge( $other );
 			}
 		}
 		return false;

@@ -105,17 +105,6 @@ final class ProcedureAccess {
 	public const VIEW_DOCUMENT = 'document';
 
 	/**
-	 * The centres of each set of zones, worked out in this request, and the
-	 * catalogue version they come from ({@see observer_codes()}).
-	 *
-	 * @var array{catalogue:string|null, codes:array<string, string[]>}
-	 */
-	private static $zone_codes = array(
-		'catalogue' => null,
-		'codes'     => array(),
-	);
-
-	/**
 	 * Why someone may not apply, by case: what {@see why_not_apply()} says.
 	 *
 	 * La cuenta genérica del centro y el perfil sin cargo de dirección son el
@@ -1331,22 +1320,14 @@ final class ProcedureAccess {
 		if ( array() === $zonas ) {
 			return array();
 		}
-		// Una vez por petición y por zonas, no en cada solicitud que se
-		// pregunta: el listado y read_post recorrerían el catálogo entero
-		// cada vez. La clave son las zonas leídas ahora, así que un cambio
-		// de zona se ve en el acto; un cambio del catálogo lo vacía.
-		$version = CentreCatalog::version();
-		if ( $version !== self::$zone_codes['catalogue'] ) {
-			self::$zone_codes = array(
-				'catalogue' => $version,
-				'codes'     => array(),
-			);
+		// El índice por zona del catálogo se construye una vez por petición:
+		// el listado y read_post no recorren el catálogo entero cada vez.
+		$por_zona = CentreCatalog::by_zone();
+		$out      = array();
+		foreach ( $zonas as $zona ) {
+			$out = array_merge( $out, $por_zona[ $zona ] ?? array() );
 		}
-		$key = implode( ',', $zonas );
-		if ( ! isset( self::$zone_codes['codes'][ $key ] ) ) {
-			self::$zone_codes['codes'][ $key ] = ObserverScope::codes_in( $zonas, CentreCatalog::index() );
-		}
-		return self::$zone_codes['codes'][ $key ];
+		return $out;
 	}
 
 	/**

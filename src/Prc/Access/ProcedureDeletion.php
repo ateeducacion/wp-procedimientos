@@ -37,6 +37,13 @@ final class ProcedureDeletion {
 	private const DRAFT_STATUSES = array( 'draft', 'pending', 'auto-draft' );
 
 	/**
+	 * What {@see has_applications()} found in this request, by procedure and posts stamp.
+	 *
+	 * @var array<string, bool>
+	 */
+	private static $has_applications = array();
+
+	/**
 	 * Whether the user may send this procedure to the bin from the application.
 	 *
 	 * @param int $user_id User ID.
@@ -147,19 +154,18 @@ final class ProcedureDeletion {
 	 * Whether any application hangs from the procedure, in any status, the bin included.
 	 *
 	 * `delete_post` lo pregunta en cada fila del listado del escritorio y en
-	 * cada pintado del taller: se recuerda por petición, y se vuelve a mirar
-	 * en cuanto cambia cualquier contenido (`last_changed` de `posts`).
+	 * cada pintado del taller: se recuerda en la petición, y se vuelve a
+	 * mirar en cuanto cambia cualquier contenido (`last_changed` de `posts`).
 	 *
 	 * @param int $post_id Procedure ID.
 	 * @return bool
 	 */
 	public static function has_applications( int $post_id ): bool {
-		$key    = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
-		$cached = wp_cache_get( $key, 'prc_has_applications' );
-		if ( false !== $cached ) {
-			return 'yes' === $cached;
+		$key = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
+		if ( isset( self::$has_applications[ $key ] ) ) {
+			return self::$has_applications[ $key ];
 		}
-		$ids = get_posts(
+		$ids                            = get_posts(
 			array(
 				'post_type'        => ApplicationPostType::POST_TYPE,
 				'post_parent'      => $post_id,
@@ -171,8 +177,7 @@ final class ProcedureDeletion {
 				'suppress_filters' => true,
 			)
 		);
-		$has = is_array( $ids ) && array() !== $ids;
-		wp_cache_set( $key, $has ? 'yes' : 'no', 'prc_has_applications' );
-		return $has;
+		self::$has_applications[ $key ] = is_array( $ids ) && array() !== $ids;
+		return self::$has_applications[ $key ];
 	}
 }

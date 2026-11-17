@@ -150,9 +150,10 @@ final class Workspace {
 	 */
 	public static function selection(): array {
 		$estado = self::input( self::VAR_STATE, 'all' );
+		$curso  = (int) self::input( self::VAR_COURSE );
 
 		return array(
-			'course' => self::NO_COURSE === (int) self::input( self::VAR_COURSE ) ? self::NO_COURSE : max( 0, (int) self::input( self::VAR_COURSE ) ),
+			'course' => self::NO_COURSE === $curso ? $curso : max( 0, $curso ),
 			'state'  => isset( self::state_filters()[ $estado ] ) ? $estado : 'all',
 			'q'      => self::input( self::VAR_SEARCH ),
 		);
@@ -168,7 +169,7 @@ final class Workspace {
 	public static function url( array $selection, array $changes = array() ): string {
 		$s    = array_merge( $selection, $changes );
 		$args = array();
-		if ( (int) $s['course'] > 0 || self::NO_COURSE === (int) $s['course'] ) {
+		if ( 0 !== (int) $s['course'] ) {
 			$args[ self::VAR_COURSE ] = (string) $s['course'];
 		}
 		if ( 'all' !== (string) $s['state'] ) {

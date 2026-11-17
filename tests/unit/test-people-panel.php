@@ -342,6 +342,57 @@ class Test_People_Panel extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un guardado rechazado repinta los papeles en su mismo índice, con la
+	 * fila en blanco del medio; reenviarlo corregido deja a cada papel con su
+	 * clave: el renombrado conserva la suya y el quitado desaparece.
+	 */
+	public function test_a_refused_save_keeps_blank_role_rows_in_place() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => "Coordinación\nApoyo\nParticipante | grupo" ) ) );
+		$this->assertSame( array( 'r1', 'r2', 'r3' ), array_column( People::spec( $procedimiento )['roles'], 'key' ) );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		$alta      = People::add(
+			$solicitud,
+			$director,
+			array(
+				'name'    => 'Ana',
+				'surname' => 'Pérez',
+				'dni'     => '12345678Z',
+				'email'   => 'ana@example.org',
+				'role'    => 'r3',
+				'group'   => 'g1',
+			)
+		);
+		$this->assertTrue( $alta['ok'], $alta['error'] );
+
+		$filas = array(
+			PeopleSpecPanel::FIELD_ROLES      => array( 'Coordinación', '', 'Participante de eje', '', '' ),
+			PeopleSpecPanel::FIELD_ROLE_GROUP => array( 2 => '1' ),
+		);
+		$this->assertNull(
+			$this->guardar(
+				$uid,
+				$procedimiento,
+				$this->campos(
+					$filas + array(
+						PeopleSpecPanel::FIELD_MIN => '5',
+						PeopleSpecPanel::FIELD_MAX => '2',
+					)
+				)
+			)
+		);
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[1]" value=""', $html, 'la fila en blanco sigue en su sitio' );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[2]" value="Participante de eje"', $html );
+
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos( $filas ) ) );
+		$spec = People::spec( $procedimiento );
+		$this->assertSame( array( 'r1', 'r3' ), array_column( $spec['roles'], 'key' ) );
+		$this->assertSame( array( 'Coordinación', 'Participante de eje' ), array_column( $spec['roles'], 'label' ) );
+	}
+
+	/**
 	 * Uno nuevo empieza con «Una sola persona por papel y grupo» marcada y
 	 * con un papel por persona; lo guardado manda.
 	 */

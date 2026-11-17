@@ -224,6 +224,11 @@ final class PeopleSpec {
 	 * The roles text as the workshop paints it: one row per role, with its
 	 * «Exige grupo» checkbox.
 	 *
+	 * Las líneas en blanco del medio se quedan como filas vacías: un papel
+	 * quitado en un envío rechazado sigue ocupando su sitio, y lo que se
+	 * reenvía empareja cada papel con su clave por la misma posición
+	 * ({@see QuestionGrid::match_rows()}). Solo sobran las del final.
+	 *
 	 * @param string $text One role per line, «| grupo» behind the ones that need a group.
 	 * @return array<int, array{label:string, needs_group:bool}>
 	 */
@@ -231,12 +236,15 @@ final class PeopleSpec {
 		$out = array();
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
 			list( $rotulo, $marca ) = self::split_role( (string) $linea );
-			if ( '' !== $rotulo ) {
-				$out[] = array(
-					'label'       => $rotulo,
-					'needs_group' => $marca,
-				);
-			}
+			$out[]                  = array(
+				'label'       => $rotulo,
+				'needs_group' => '' !== $rotulo && $marca,
+			);
+		}
+		$ultima = end( $out );
+		while ( false !== $ultima && '' === $ultima['label'] ) {
+			array_pop( $out );
+			$ultima = end( $out );
 		}
 		return $out;
 	}

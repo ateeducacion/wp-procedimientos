@@ -3213,16 +3213,24 @@ final class PeopleSpec {
 
 
 
+
+
+
+
+
 	public static function role_lines( string $text ): array {
 		$out = array();
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', $text ) as $linea ) {
 			list( $rotulo, $marca ) = self::split_role( (string) $linea );
-			if ( '' !== $rotulo ) {
-				$out[] = array(
-					'label'       => $rotulo,
-					'needs_group' => $marca,
-				);
-			}
+			$out[]                  = array(
+				'label'       => $rotulo,
+				'needs_group' => '' !== $rotulo && $marca,
+			);
+		}
+		$ultima = end( $out );
+		while ( false !== $ultima && '' === $ultima['label'] ) {
+			array_pop( $out );
+			$ultima = end( $out );
 		}
 		return $out;
 	}

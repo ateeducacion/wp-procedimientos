@@ -463,6 +463,20 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$html = \Prc\PublicFront\View\ObserveView::html( \Prc\PublicFront\Observe::model( array( \Prc\PublicFront\Observe::ARG_PROCEDURE => (string) $caso['procedure'] ) ) );
 		$this->assertStringContainsString( 'no tiene columnas que enseñar', $html );
 		$this->assertStringNotContainsString( '<table', $html );
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_EXPORT, true );
+		$modelo = \Prc\PublicFront\Observe::model( array( \Prc\PublicFront\Observe::ARG_PROCEDURE => (string) $caso['procedure'] ) );
+		$this->assertFalse( $modelo['can_export'], 'sin columnas no se ofrece exportar lo que se rechazaría' );
+		$panel = \Prc\PublicFront\ObserveSettings::model( $caso['procedure'] );
+		$this->assertTrue( $panel['gone'], 'el panel sabe que lo elegido desapareció' );
+		$html = \Prc\PublicFront\View\ObserveView::settings(
+			array(
+				'procedure_id' => $caso['procedure'],
+				'observe'      => $panel,
+			)
+		);
+		$this->assertStringContainsString( 'ya no existen', $html, 'y no dice que enseña las de por defecto' );
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array() );
+		$this->assertFalse( \Prc\PublicFront\ObserveSettings::model( $caso['procedure'] )['gone'], 'sin elegir nada, no' );
 
 		$personas = $this->caso(
 			array(

@@ -280,7 +280,11 @@ final class ObserveView {
 			</fieldset>
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Columnas que se enseñan</legend>
-				<p class="prc-intro">Sin ninguna marcada, se enseñan las de la solicitud, el centro y la coordinación.</p>
+				<?php if ( true === ( $c['gone'] ?? false ) ) : ?>
+					<p class="prc-intro">Las columnas que se eligieron ya no existen, así que ahora la consulta no enseña ninguna. Marque las que quiera enseñar: si guarda sin ninguna marcada, se enseñarán las de la solicitud, el centro y la coordinación.</p>
+				<?php else : ?>
+					<p class="prc-intro">Sin ninguna marcada, se enseñan las de la solicitud, el centro y la coordinación.</p>
+				<?php endif; ?>
 				<?php foreach ( (array) $c['groups'] as $grupo => $columnas ) : ?>
 					<p class="prc-campo__etiqueta"><?php echo esc_html( (string) ( $c['group_labels'][ $grupo ] ?? $grupo ) ); ?></p>
 					<div class="prc-opciones">

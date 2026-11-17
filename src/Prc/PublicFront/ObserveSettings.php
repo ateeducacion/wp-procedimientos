@@ -52,9 +52,10 @@ final class ObserveSettings {
 	/**
 	 * The columns the consultation of a procedure shows, in order.
 	 *
-	 * Las elegidas que existen hoy y se pueden enseñar; sin ninguna, las de
-	 * solicitud, centro y coordinación. Nunca el DNI ni la nota: se quitan
-	 * aquí aunque estuvieran escritos en la meta.
+	 * Las elegidas que existen hoy y se pueden enseñar; sin elegir ninguna,
+	 * las de solicitud, centro y coordinación. Si se eligieron y ya no existe
+	 * ninguna, ninguna: {@see ObserverScope::columns()}. Nunca el DNI ni la
+	 * nota: se quitan aquí aunque estuvieran escritos en la meta.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array<string, string> Column => heading.
@@ -67,15 +68,20 @@ final class ObserveSettings {
 	 * What the panel paints.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{observable:bool, columns:string[], groups:array<string, array<string, string>>, group_labels:array<string, string>, files:bool, export:bool, notify:bool, url:string}
+	 * @return array{observable:bool, columns:string[], gone:bool, groups:array<string, array<string, string>>, group_labels:array<string, string>, files:bool, export:bool, notify:bool, url:string}
 	 */
 	public static function model( int $procedure_id ): array {
-		$leer = static function ( string $clave ) use ( $procedure_id ): bool {
+		$leer     = static function ( string $clave ) use ( $procedure_id ): bool {
 			return (bool) get_post_meta( $procedure_id, $clave, true );
 		};
+		$columnas = array_keys( self::columns( $procedure_id ) );
+		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
 		return array(
 			'observable'   => $leer( ProcedureMetaKeys::OBSERVABLE ),
-			'columns'      => array_keys( self::columns( $procedure_id ) ),
+			'columns'      => $columnas,
+			// Se eligieron columnas y ya no existe ninguna: la consulta no
+			// enseña nada, y el panel sin marcar no puede decir lo contrario.
+			'gone'         => array() === $columnas && is_array( $elegidas ) && array() !== $elegidas,
 			'groups'       => self::offered( $procedure_id ),
 			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
 			'files'        => $leer( ProcedureMetaKeys::OBSERVER_FILES ),

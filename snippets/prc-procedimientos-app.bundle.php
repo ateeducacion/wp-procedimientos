@@ -24512,6 +24512,7 @@ final class ObserveSettings {
 
 
 
+
 	public static function columns( int $procedure_id ): array {
 		return ObserverScope::columns( get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true ), ApplicationExport::groups( $procedure_id ) );
 	}
@@ -24523,12 +24524,17 @@ final class ObserveSettings {
 
 
 	public static function model( int $procedure_id ): array {
-		$leer = static function ( string $clave ) use ( $procedure_id ): bool {
+		$leer     = static function ( string $clave ) use ( $procedure_id ): bool {
 			return (bool) get_post_meta( $procedure_id, $clave, true );
 		};
+		$columnas = array_keys( self::columns( $procedure_id ) );
+		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
 		return array(
 			'observable'   => $leer( ProcedureMetaKeys::OBSERVABLE ),
-			'columns'      => array_keys( self::columns( $procedure_id ) ),
+			'columns'      => $columnas,
+
+
+			'gone'         => array() === $columnas && is_array( $elegidas ) && array() !== $elegidas,
 			'groups'       => self::offered( $procedure_id ),
 			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
 			'files'        => $leer( ProcedureMetaKeys::OBSERVER_FILES ),
@@ -24873,7 +24879,11 @@ final class ObserveView {
 			</fieldset>
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Columnas que se enseñan</legend>
-				<p class="prc-intro">Sin ninguna marcada, se enseñan las de la solicitud, el centro y la coordinación.</p>
+				<?php if ( true === ( $c['gone'] ?? false ) ) : ?>
+					<p class="prc-intro">Las columnas que se eligieron ya no existen, así que ahora la consulta no enseña ninguna. Marque las que quiera enseñar: si guarda sin ninguna marcada, se enseñarán las de la solicitud, el centro y la coordinación.</p>
+				<?php else : ?>
+					<p class="prc-intro">Sin ninguna marcada, se enseñan las de la solicitud, el centro y la coordinación.</p>
+				<?php endif; ?>
 				<?php foreach ( (array) $c['groups'] as $grupo => $columnas ) : ?>
 					<p class="prc-campo__etiqueta"><?php echo esc_html( (string) ( $c['group_labels'][ $grupo ] ?? $grupo ) ); ?></p>
 					<div class="prc-opciones">
@@ -25202,7 +25212,8 @@ final class Observe {
 
 
 			'rows'         => self::rows( $procedure_id, $res['posts'], $columnas, (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_FILES, true ) ),
-			'can_export'   => self::may_export( $procedure_id ),
+
+			'can_export'   => self::may_export( $procedure_id ) && array() !== $columnas,
 			'nonce'        => self::nonce_action( $procedure_id ),
 			'table'        => array(
 				'filter'     => $filtro,

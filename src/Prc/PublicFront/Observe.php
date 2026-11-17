@@ -285,7 +285,8 @@ final class Observe {
 			// El enlace se pinta si el procedimiento deja descargar; quien
 			// decide cada descarga es ProcedureAccess::can_view_application().
 			'rows'         => self::rows( $procedure_id, $res['posts'], $columnas, (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_FILES, true ) ),
-			'can_export'   => self::may_export( $procedure_id ),
+			// Sin columnas no hay nada que exportar: csv() lo rechazaría.
+			'can_export'   => self::may_export( $procedure_id ) && array() !== $columnas,
 			'nonce'        => self::nonce_action( $procedure_id ),
 			'table'        => array(
 				'filter'     => $filtro,

@@ -465,6 +465,23 @@ class Test_My_Centre extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una excluida no está incompleta: su celda no dice «Faltan» aunque la
+	 * lista no llegue al mínimo, lo mismo que la pantalla de la solicitud.
+	 */
+	public function test_an_excluded_application_is_not_marked_short_of_people() {
+		$norte    = $this->school_head( 'C0001' );
+		$excluida = Applications::save( $this->con_lista(), $norte, $this->nucleo() );
+		update_post_meta( $excluida, ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_EXCLUDED );
+		$this->acting_as( $norte );
+
+		$m = MyCentre::model();
+		$this->assertTrue( $m['rows'][0]['people_complete'] );
+		$html = MyCentreView::html( $m );
+		$this->assertStringNotContainsString( 'Faltan', $html );
+		$this->assertStringContainsString( 'La solicitud está excluida: su lista de personas ya no se cambia.', $html );
+	}
+
+	/**
 	 * Sin ningún procedimiento con lista, la columna no sale.
 	 */
 	public function test_without_lists_there_is_no_people_column() {

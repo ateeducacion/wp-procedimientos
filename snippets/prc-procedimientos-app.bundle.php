@@ -29573,7 +29573,9 @@ final class MyCentre {
 
 
 
-	private static function people( int $application_id, int $procedure_id, bool $personas ): array {
+
+
+	private static function people( int $application_id, int $procedure_id, bool $personas, string $review ): array {
 		if ( ! $personas ) {
 			return array(
 				'people'          => false,
@@ -29593,7 +29595,7 @@ final class MyCentre {
 			'people_count'    => count( $filas ),
 			'people_min'      => (int) $spec['min'],
 			'people_max'      => (int) $spec['max'],
-			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
+			'people_complete' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ApplicationPeople::is_complete( $spec, $filas ),
 			'people_open'     => $abierta,
 			'people_why'      => $porque,
 			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
@@ -29628,7 +29630,7 @@ final class MyCentre {
 			? ApplyForm::url( $procedure_id )
 			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
 
-		return self::people( (int) $application->ID, $procedure_id, $personas ) + array(
+		return self::people( (int) $application->ID, $procedure_id, $personas, $revision ) + array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
 			'url'          => $url,

@@ -225,14 +225,16 @@ final class MyCentre {
 	 *
 	 * Cuántas hay y cuántas pide, si llega al mínimo y, mientras se pueda
 	 * cambiar, hasta cuándo (ADR-0041); si no se puede, por qué: no es lo
-	 * mismo «todavía no» que «ya no».
+	 * mismo «todavía no» que «ya no». Una excluida no está incompleta
+	 * ({@see \Prc\Domain\ApplicationCompleteness}): no le falta nadie.
 	 *
-	 * @param int  $application_id Application ID.
-	 * @param int  $procedure_id   Procedure ID.
-	 * @param bool $personas      Whether the procedure asks this application for a list.
+	 * @param int    $application_id Application ID.
+	 * @param int    $procedure_id   Procedure ID.
+	 * @param bool   $personas       Whether the procedure asks this application for a list.
+	 * @param string $review         Review state of the application.
 	 * @return array<string, mixed>
 	 */
-	private static function people( int $application_id, int $procedure_id, bool $personas ): array {
+	private static function people( int $application_id, int $procedure_id, bool $personas, string $review ): array {
 		if ( ! $personas ) {
 			return array(
 				'people'          => false,
@@ -252,7 +254,7 @@ final class MyCentre {
 			'people_count'    => count( $filas ),
 			'people_min'      => (int) $spec['min'],
 			'people_max'      => (int) $spec['max'],
-			'people_complete' => ApplicationPeople::is_complete( $spec, $filas ),
+			'people_complete' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ApplicationPeople::is_complete( $spec, $filas ),
 			'people_open'     => $abierta,
 			'people_why'      => $porque,
 			'people_until'    => $abierta ? self::day( PeopleSpec::until( $spec, (string) get_post_meta( $procedure_id, ProcedureMetaKeys::CLOSES_AT, true ), ProcedureState::today() ) ) : '',
@@ -287,7 +289,7 @@ final class MyCentre {
 			? ApplyForm::url( $procedure_id )
 			: ApplyForm::url_for_code( $procedure_id, (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ] );
 
-		return self::people( (int) $application->ID, $procedure_id, $personas ) + array(
+		return self::people( (int) $application->ID, $procedure_id, $personas, $revision ) + array(
 			'procedure_id' => (string) $procedure_id,
 			'title'        => (string) get_post_field( 'post_title', $procedure_id ),
 			'url'          => $url,

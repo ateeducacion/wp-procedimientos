@@ -65,8 +65,8 @@ final class ProcedureDeletion {
 			return 'Este procedimiento está marcado como histórico y no se borra: se sigue consultando y exportando.';
 		}
 		if ( ! ProcedureAccess::can_edit( $user_id, $post_id ) ) {
-			$motivo = ProcedureAccess::why_not_editable( $user_id, $post_id );
-			return '' !== $motivo ? $motivo : 'Su perfil no puede borrar este procedimiento.';
+			$reason = ProcedureAccess::why_not_editable( $user_id, $post_id );
+			return '' !== $reason ? $reason : 'Su perfil no puede borrar este procedimiento.';
 		}
 		if ( ! in_array( (string) get_post_status( $post_id ), self::DRAFT_STATUSES, true ) ) {
 			return 'Solo se borra un procedimiento en borrador. Si este ya no hace falta, devuélvalo antes a borrador desde «Publicación».';
@@ -112,20 +112,53 @@ final class ProcedureDeletion {
 	 * @return string
 	 */
 	public static function trash_or_keep( int $post_id, string $status ): string {
-		$antes = (string) get_post_status( $post_id );
-		if ( 'trash' !== $status || 'trash' === $antes || current_user_can( 'delete_post', $post_id ) ) {
+		$current = (string) get_post_status( $post_id );
+		if ( 'trash' !== $status || 'trash' === $current || current_user_can( 'delete_post', $post_id ) ) {
 			return $status;
 		}
-		return $antes;
+		return $current;
+	}
+
+	/**
+	 * Stop `wp_trash_post()` on a procedure the user may not delete, before it writes anything.
+	 *
+	 * Filtro `pre_trash_post`. {@see trash_or_keep()} para el estado en
+	 * `wp_insert_post_data`, pero `wp_trash_post()` ya ha escrito para entonces
+	 * sus metas de papelera y, aunque el estado se quede, dispara
+	 * `trashed_post` y devuelve el contenido como si lo hubiera enviado. Aquí
+	 * se para antes de todo. Sin nadie delante —cron, la provisión— no se mira,
+	 * como en `ProcedureAccess::guard_parent()`.
+	 *
+	 * @param mixed    $check Null to go on; anything else stops the core.
+	 * @param \WP_Post $post  Post about to be trashed.
+	 * @return mixed
+	 */
+	public static function veto_trash( $check, $post ) {
+		if ( null !== $check || ! $post instanceof \WP_Post || ProcedurePostType::POST_TYPE !== $post->post_type ) {
+			return $check;
+		}
+		if ( get_current_user_id() <= 0 || current_user_can( 'delete_post', $post->ID ) ) {
+			return $check;
+		}
+		return false;
 	}
 
 	/**
 	 * Whether any application hangs from the procedure, in any status, the bin included.
 	 *
+	 * `delete_post` lo pregunta en cada fila del listado del escritorio y en
+	 * cada pintado del taller: se recuerda por petición, y se vuelve a mirar
+	 * en cuanto cambia cualquier contenido (`last_changed` de `posts`).
+	 *
 	 * @param int $post_id Procedure ID.
 	 * @return bool
 	 */
 	public static function has_applications( int $post_id ): bool {
+		$key    = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
+		$cached = wp_cache_get( $key, 'prc_has_applications' );
+		if ( false !== $cached ) {
+			return 'yes' === $cached;
+		}
 		$ids = get_posts(
 			array(
 				'post_type'        => ApplicationPostType::POST_TYPE,
@@ -138,6 +171,8 @@ final class ProcedureDeletion {
 				'suppress_filters' => true,
 			)
 		);
-		return is_array( $ids ) && array() !== $ids;
+		$has = is_array( $ids ) && array() !== $ids;
+		wp_cache_set( $key, $has ? 'yes' : 'no', 'prc_has_applications' );
+		return $has;
 	}
 }

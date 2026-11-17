@@ -413,6 +413,73 @@ class Test_Delete_Procedure extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Lo borrado no caduca: el vaciado diario de la papelera no se lo lleva, con ella activa o sin ella.
+	 */
+	public function test_the_daily_purge_of_the_bin_does_not_take_a_deleted_procedure() {
+		$c = $this->borrador();
+		$this->assertIsString( $this->borrar( $c['uid'], $c['id'] ) );
+		$this->assertSame( '', get_post_meta( $c['id'], '_wp_trash_meta_time', true ), 'sin la fecha que mira el vaciado' );
+
+		add_filter( 'prc_trash_enabled', '__return_false' );
+		$otro = $this->procedure( $c['uid'], array( $c['area'] ), array(), array( 'post_status' => 'draft' ) );
+		$this->assertIsString( $this->borrar( $c['uid'], $otro ) );
+		remove_filter( 'prc_trash_enabled', '__return_false' );
+		$this->assertSame( '', get_post_meta( $otro, '_wp_trash_meta_time', true ), 'tampoco con la papelera desactivada' );
+
+		wp_scheduled_delete();
+		$this->assertSame( 'trash', get_post_status( $c['id'] ), 'sigue en la papelera' );
+		$this->assertSame( 'trash', get_post_status( $otro ) );
+	}
+
+	/**
+	 * `wp_trash_post()` sin permiso no escribe nada ni avisa de un envío que no hubo.
+	 */
+	public function test_wp_trash_post_without_permission_writes_nothing() {
+		$c         = $this->borrador();
+		$publicado = $this->procedure( $c['uid'], array( $c['area'] ), array(), array( 'post_status' => 'publish' ) );
+		$antes     = did_action( 'trashed_post' );
+
+		$this->acting_as( $c['uid'] );
+		$this->assertFalse( wp_trash_post( $publicado ) );
+		$this->assertSame( 'publish', get_post_status( $publicado ) );
+		$this->assertSame( array(), get_post_meta( $publicado, '_wp_trash_meta_status', false ), 'ni las metas de la papelera' );
+		$this->assertSame( $antes, did_action( 'trashed_post' ), 'ni la acción que escuchan el historial y el correo' );
+
+		$this->assertInstanceOf( WP_Post::class, wp_trash_post( $c['id'] ), 'un borrador sin solicitudes, sí' );
+		$this->assertSame( 'trash', get_post_status( $c['id'] ) );
+
+		// Sin nadie delante —cron, la provisión— no se mira.
+		$this->acting_as( 0 );
+		$this->assertInstanceOf( WP_Post::class, wp_trash_post( $publicado ) );
+	}
+
+	/**
+	 * El aviso nombra el procedimiento solo si está en la papelera: el enlace se escribe a mano.
+	 */
+	public function test_the_notice_names_only_a_procedure_that_is_in_the_bin() {
+		$c         = $this->borrador();
+		$publicado = $this->procedure( $c['uid'], array( $c['area'] ), array(), array( 'post_status' => 'publish' ) );
+		$this->acting_as( $c['uid'] );
+
+		$this->assertSame( 'Se ha enviado el procedimiento a la papelera.', ProcedureDelete::notice( array( ProcedureDelete::ARG_DELETED => (string) $publicado ) ) );
+
+		wp_trash_post( $c['id'] );
+		$this->assertSame( 'Se ha enviado «Red de prueba» a la papelera.', ProcedureDelete::notice( array( ProcedureDelete::ARG_DELETED => (string) $c['id'] ) ) );
+	}
+
+	/**
+	 * Si tiene solicitudes se recuerda por petición, pero una solicitud nueva se ve en el acto.
+	 */
+	public function test_has_applications_sees_a_new_application_at_once() {
+		$c = $this->borrador();
+		$this->assertFalse( ProcedureDeletion::has_applications( $c['id'] ) );
+		$this->assertFalse( ProcedureDeletion::has_applications( $c['id'] ), 'la segunda vez, igual' );
+
+		$this->application( $c['id'], $this->school_head( 'C0001' ) );
+		$this->assertTrue( ProcedureDeletion::has_applications( $c['id'] ) );
+	}
+
+	/**
 	 * Borrar suelta el bloqueo de quien borra; el de otra persona para el envío.
 	 */
 	public function test_deleting_releases_the_lock_of_who_deletes() {

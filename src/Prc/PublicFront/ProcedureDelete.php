@@ -52,9 +52,9 @@ final class ProcedureDelete {
 	public static function handle( int $procedure_id, int $user_id, string $typed ): string {
 		// No se le quita el procedimiento a quien lo tiene abierto: 409, como al guardar.
 		EditLock::require_available( $procedure_id );
-		$motivo = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
-		if ( '' !== $motivo ) {
-			return $motivo;
+		$reason = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
+		if ( '' !== $reason ) {
+			return $reason;
 		}
 		if ( ! self::confirmed( $typed ) ) {
 			return 'Para borrarlo, escriba ' . self::WORD . ' en el campo de confirmación. No se ha borrado nada.';
@@ -91,14 +91,15 @@ final class ProcedureDelete {
 	/**
 	 * What «Gestión» says after deleting.
 	 *
-	 * El procedimiento se nombra solo si quien mira todavía puede abrirlo.
+	 * El procedimiento se nombra solo si está de verdad en la papelera y quien
+	 * mira todavía puede abrirlo: el enlace se puede escribir a mano.
 	 *
 	 * @param array<string, mixed> $request The query args of the request.
 	 * @return string
 	 */
 	public static function notice( array $request ): string {
 		$id = absint( $request[ self::ARG_DELETED ] ?? 0 );
-		if ( $id > 0 && ProcedureAccess::can_open( get_current_user_id(), $id ) ) {
+		if ( $id > 0 && 'trash' === get_post_status( $id ) && ProcedureAccess::can_open( get_current_user_id(), $id ) ) {
 			return 'Se ha enviado «' . get_post_field( 'post_title', $id, 'raw' ) . '» a la papelera.';
 		}
 		return 'Se ha enviado el procedimiento a la papelera.';

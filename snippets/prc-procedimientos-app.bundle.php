@@ -6621,6 +6621,7 @@ final class ProcedureAccess {
 		add_filter( 'rest_pre_insert_prc_procedure', array( self::class, 'validate_rest_areas' ), 10, 2 );
 		add_action( 'admin_init', array( self::class, 'validate_admin_areas' ) );
 		add_filter( 'wp_insert_post_data', array( self::class, 'guard_parent' ), 10, 2 );
+		add_filter( 'pre_trash_post', array( ProcedureDeletion::class, 'veto_trash' ), 10, 2 );
 		add_action( 'save_post_' . ProcedurePostType::POST_TYPE, array( self::class, 'stamp_area' ), 20 );
 	}
 
@@ -8745,8 +8746,8 @@ final class ProcedureDeletion {
 			return 'Este procedimiento está marcado como histórico y no se borra: se sigue consultando y exportando.';
 		}
 		if ( ! ProcedureAccess::can_edit( $user_id, $post_id ) ) {
-			$motivo = ProcedureAccess::why_not_editable( $user_id, $post_id );
-			return '' !== $motivo ? $motivo : 'Su perfil no puede borrar este procedimiento.';
+			$reason = ProcedureAccess::why_not_editable( $user_id, $post_id );
+			return '' !== $reason ? $reason : 'Su perfil no puede borrar este procedimiento.';
 		}
 		if ( ! in_array( (string) get_post_status( $post_id ), self::DRAFT_STATUSES, true ) ) {
 			return 'Solo se borra un procedimiento en borrador. Si este ya no hace falta, devuélvalo antes a borrador desde «Publicación».';
@@ -8792,11 +8793,11 @@ final class ProcedureDeletion {
 
 
 	public static function trash_or_keep( int $post_id, string $status ): string {
-		$antes = (string) get_post_status( $post_id );
-		if ( 'trash' !== $status || 'trash' === $antes || current_user_can( 'delete_post', $post_id ) ) {
+		$current = (string) get_post_status( $post_id );
+		if ( 'trash' !== $status || 'trash' === $current || current_user_can( 'delete_post', $post_id ) ) {
 			return $status;
 		}
-		return $antes;
+		return $current;
 	}
 
 
@@ -8805,7 +8806,40 @@ final class ProcedureDeletion {
 
 
 
+
+
+
+
+
+
+
+
+	public static function veto_trash( $check, $post ) {
+		if ( null !== $check || ! $post instanceof \WP_Post || ProcedurePostType::POST_TYPE !== $post->post_type ) {
+			return $check;
+		}
+		if ( get_current_user_id() <= 0 || current_user_can( 'delete_post', $post->ID ) ) {
+			return $check;
+		}
+		return false;
+	}
+
+
+
+
+
+
+
+
+
+
+
 	public static function has_applications( int $post_id ): bool {
+		$key    = $post_id . ':' . wp_cache_get_last_changed( 'posts' );
+		$cached = wp_cache_get( $key, 'prc_has_applications' );
+		if ( false !== $cached ) {
+			return 'yes' === $cached;
+		}
 		$ids = get_posts(
 			array(
 				'post_type'        => ApplicationPostType::POST_TYPE,
@@ -8818,7 +8852,9 @@ final class ProcedureDeletion {
 				'suppress_filters' => true,
 			)
 		);
-		return is_array( $ids ) && array() !== $ids;
+		$has = is_array( $ids ) && array() !== $ids;
+		wp_cache_set( $key, $has ? 'yes' : 'no', 'prc_has_applications' );
+		return $has;
 	}
 }
 
@@ -14517,6 +14553,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ApplicationActions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
 
 
 
@@ -14722,13 +14759,18 @@ final class ApplicationOperations {
 
 	public static function on_trashed( $post_id ): void {
 		$post_id = (int) $post_id;
-		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
+		$type    = get_post_type( $post_id );
+		if ( ApplicationPostType::POST_TYPE !== $type && ProcedurePostType::POST_TYPE !== $type ) {
 			return;
 		}
 
 
 
+
 		delete_post_meta( $post_id, '_wp_trash_meta_time' );
+		if ( ApplicationPostType::POST_TYPE !== $type ) {
+			return;
+		}
 		$ctx = self::$context ?? array(
 			'user'   => get_current_user_id(),
 			'by'     => self::BY_DESK,
@@ -23627,27 +23669,27 @@ final class ProcedureEditorView {
 
 
 	private static function menu( array $m ): string {
-		$ver      = (string) $m['view_url'];
-		$duplicar = true === $m['can_duplicate'];
-		$borrar   = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
-		if ( '' === $ver && ! $duplicar && ! $borrar ) {
+		$view_url      = (string) $m['view_url'];
+		$can_duplicate = true === $m['can_duplicate'];
+		$can_delete    = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
+		if ( '' === $view_url && ! $can_duplicate && ! $can_delete ) {
 			return '';
 		}
-		$rotulo = 'Más acciones para este procedimiento';
+		$label = 'Más acciones para este procedimiento';
 		ob_start();
 		?>
 		<details class="prc-mas" data-prc-menu>
-			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
-				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
+			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $label ); ?>">
+				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $label ); ?></span>
 			</summary>
 			<div class="prc-mas__menu">
-				<?php if ( '' !== $ver ) : ?>
-					<a class="prc-mas__opcion" href="<?php echo esc_url( $ver ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
+				<?php if ( '' !== $view_url ) : ?>
+					<a class="prc-mas__opcion" href="<?php echo esc_url( $view_url ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
 				<?php endif; ?>
-				<?php if ( $duplicar ) : ?>
+				<?php if ( $can_duplicate ) : ?>
 					<?php echo self::duplicate_form( $m );?>
 				<?php endif; ?>
-				<?php if ( $borrar ) : ?>
+				<?php if ( $can_delete ) : ?>
 					<a class="prc-mas__opcion prc-mas__opcion--borrar" href="<?php echo esc_url( (string) $m['delete_url'] ); ?>">Borrar</a>
 				<?php endif; ?>
 			</div>
@@ -23688,13 +23730,13 @@ final class ProcedureEditorView {
 
 
 	private static function delete_confirmation( array $m ): string {
-		$op     = ProcedureEditor::OP_DELETE;
-		$id     = (int) $m['procedure_id'];
-		$titulo = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
+		$op    = ProcedureEditor::OP_DELETE;
+		$id    = (int) $m['procedure_id'];
+		$title = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
 		ob_start();
 		?>
 		<section class="prc-borrar" aria-labelledby="prc-borrar-titulo">
-			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $titulo . '»?' ); ?></h2>
+			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $title . '»?' ); ?></h2>
 			<p>Se envía a la papelera; quien administra el aplicativo puede recuperarlo. Deja de verse en «Gestión de procedimientos» y nadie podrá solicitarlo.</p>
 			<form class="prc-form" method="post" action="<?php echo esc_url( (string) $m['delete_url'] . '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>
@@ -25377,8 +25419,8 @@ final class ProcedureEditor {
 			return;
 		}
 
-		$fila = self::OP_DELETE === $op ? $procedure_id : 0;
-		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $fila ) ) {
+		$nonce_id = self::OP_DELETE === $op ? $procedure_id : 0;
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $nonce_id ) ) {
 			return;
 		}
 
@@ -27177,9 +27219,9 @@ final class ProcedureDelete {
 	public static function handle( int $procedure_id, int $user_id, string $typed ): string {
 
 		EditLock::require_available( $procedure_id );
-		$motivo = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
-		if ( '' !== $motivo ) {
-			return $motivo;
+		$reason = ProcedureDeletion::why_not_delete_procedure( $user_id, $procedure_id );
+		if ( '' !== $reason ) {
+			return $reason;
 		}
 		if ( ! self::confirmed( $typed ) ) {
 			return 'Para borrarlo, escriba ' . self::WORD . ' en el campo de confirmación. No se ha borrado nada.';
@@ -27221,9 +27263,10 @@ final class ProcedureDelete {
 
 
 
+
 	public static function notice( array $request ): string {
 		$id = absint( $request[ self::ARG_DELETED ] ?? 0 );
-		if ( $id > 0 && ProcedureAccess::can_open( get_current_user_id(), $id ) ) {
+		if ( $id > 0 && 'trash' === get_post_status( $id ) && ProcedureAccess::can_open( get_current_user_id(), $id ) ) {
 			return 'Se ha enviado «' . get_post_field( 'post_title', $id, 'raw' ) . '» a la papelera.';
 		}
 		return 'Se ha enviado el procedimiento a la papelera.';

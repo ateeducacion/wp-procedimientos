@@ -158,6 +158,7 @@ final class ProcedureAccess {
 		add_filter( 'rest_pre_insert_prc_procedure', array( self::class, 'validate_rest_areas' ), 10, 2 );
 		add_action( 'admin_init', array( self::class, 'validate_admin_areas' ) );
 		add_filter( 'wp_insert_post_data', array( self::class, 'guard_parent' ), 10, 2 );
+		add_filter( 'pre_trash_post', array( ProcedureDeletion::class, 'veto_trash' ), 10, 2 );
 		add_action( 'save_post_' . ProcedurePostType::POST_TYPE, array( self::class, 'stamp_area' ), 20 );
 	}
 

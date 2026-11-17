@@ -11,6 +11,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ApplicationActions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
 
 /**
  * Lo que escriben las actuaciones sobre una solicitud (PLAN-0003, PR 9;
@@ -208,20 +209,25 @@ final class ApplicationOperations {
 	}
 
 	/**
-	 * Tell whoever listens that an application has just gone to the bin.
+	 * Keep what went to the bin out of the automatic purge, and tell whoever listens about an application.
 	 *
 	 * @param int $post_id Post ID.
 	 * @return void
 	 */
 	public static function on_trashed( $post_id ): void {
 		$post_id = (int) $post_id;
-		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
+		$type    = get_post_type( $post_id );
+		if ( ApplicationPostType::POST_TYPE !== $type && ProcedurePostType::POST_TYPE !== $type ) {
 			return;
 		}
 		// La papelera del núcleo se vacía sola a los EMPTY_TRASH_DAYS días, y
 		// lo que mira es esta meta: sin ella, una retirada no caduca y no se
-		// pierden ni sus documentos ni su historial (ADR-0044).
+		// pierden ni sus documentos ni su historial (ADR-0044), y un
+		// procedimiento borrado sigue ahí para quien administra (ADR-0007).
 		delete_post_meta( $post_id, '_wp_trash_meta_time' );
+		if ( ApplicationPostType::POST_TYPE !== $type ) {
+			return;
+		}
 		$ctx = self::$context ?? array(
 			'user'   => get_current_user_id(),
 			'by'     => self::BY_DESK,

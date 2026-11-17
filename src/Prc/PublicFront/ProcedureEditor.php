@@ -407,8 +407,8 @@ final class ProcedureEditor {
 			return;
 		}
 		// Borrar lleva un nonce de cada procedimiento: el de uno no borra otro.
-		$fila = self::OP_DELETE === $op ? $procedure_id : 0;
-		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $fila ) ) {
+		$nonce_id = self::OP_DELETE === $op ? $procedure_id : 0;
+		if ( ! self::verify( $op, in_array( $op, self::ROW_OPS, true ) ? $row_id : $nonce_id ) ) {
 			return;
 		}
 

@@ -266,27 +266,27 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function menu( array $m ): string {
-		$ver      = (string) $m['view_url'];
-		$duplicar = true === $m['can_duplicate'];
-		$borrar   = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
-		if ( '' === $ver && ! $duplicar && ! $borrar ) {
+		$view_url      = (string) $m['view_url'];
+		$can_duplicate = true === $m['can_duplicate'];
+		$can_delete    = true === $m['can_delete'] && '' !== (string) $m['delete_url'];
+		if ( '' === $view_url && ! $can_duplicate && ! $can_delete ) {
 			return '';
 		}
-		$rotulo = 'Más acciones para este procedimiento';
+		$label = 'Más acciones para este procedimiento';
 		ob_start();
 		?>
 		<details class="prc-mas" data-prc-menu>
-			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $rotulo ); ?>">
-				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $rotulo ); ?></span>
+			<summary class="<?php echo esc_attr( Assets::button_class() . ' prc-mini prc-mas__boton' ); ?>" title="<?php echo esc_attr( $label ); ?>">
+				<span aria-hidden="true">&#8942;</span><span class="screen-reader-text"><?php echo esc_html( $label ); ?></span>
 			</summary>
 			<div class="prc-mas__menu">
-				<?php if ( '' !== $ver ) : ?>
-					<a class="prc-mas__opcion" href="<?php echo esc_url( $ver ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
+				<?php if ( '' !== $view_url ) : ?>
+					<a class="prc-mas__opcion" href="<?php echo esc_url( $view_url ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
 				<?php endif; ?>
-				<?php if ( $duplicar ) : ?>
+				<?php if ( $can_duplicate ) : ?>
 					<?php echo self::duplicate_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php endif; ?>
-				<?php if ( $borrar ) : ?>
+				<?php if ( $can_delete ) : ?>
 					<a class="prc-mas__opcion prc-mas__opcion--borrar" href="<?php echo esc_url( (string) $m['delete_url'] ); ?>">Borrar</a>
 				<?php endif; ?>
 			</div>
@@ -327,13 +327,13 @@ final class ProcedureEditorView {
 	 * @return string
 	 */
 	private static function delete_confirmation( array $m ): string {
-		$op     = ProcedureEditor::OP_DELETE;
-		$id     = (int) $m['procedure_id'];
-		$titulo = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
+		$op    = ProcedureEditor::OP_DELETE;
+		$id    = (int) $m['procedure_id'];
+		$title = '' !== (string) $m['title'] ? (string) $m['title'] : 'Procedimiento sin título';
 		ob_start();
 		?>
 		<section class="prc-borrar" aria-labelledby="prc-borrar-titulo">
-			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $titulo . '»?' ); ?></h2>
+			<h2 id="prc-borrar-titulo"><?php echo esc_html( '¿Borrar «' . $title . '»?' ); ?></h2>
 			<p>Se envía a la papelera; quien administra el aplicativo puede recuperarlo. Deja de verse en «Gestión de procedimientos» y nadie podrá solicitarlo.</p>
 			<form class="prc-form" method="post" action="<?php echo esc_url( (string) $m['delete_url'] . '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-once>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op, $id ), ProcedureEditor::nonce_name( $op, $id ), false ); ?>

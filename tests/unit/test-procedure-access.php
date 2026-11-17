@@ -1110,6 +1110,29 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un borrador no dice a quién va dirigido: responde lo mismo que un
+	 * identificador que no existe.
+	 */
+	public function test_why_not_apply_to_a_draft_does_not_say_who_it_is_for() {
+		$de_profesorado = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ),
+			array( 'post_status' => 'draft' )
+		);
+		$de_centros     = $this->procedure( $this->administrator(), array(), array(), array( 'post_status' => 'draft' ) );
+		$no_existe      = $this->procedure( $this->administrator() );
+		wp_delete_post( $no_existe, true );
+
+		foreach ( array( $this->school_head( 'C0001' ), $this->teacher() ) as $cuenta ) {
+			$ninguno = ProcedureAccess::why_not_apply( $cuenta, $no_existe );
+			$this->assertStringContainsString( 'todavía no está publicado', $ninguno );
+			$this->assertSame( $ninguno, ProcedureAccess::why_not_apply( $cuenta, $de_profesorado ) );
+			$this->assertSame( $ninguno, ProcedureAccess::why_not_apply( $cuenta, $de_centros ) );
+		}
+	}
+
+	/**
 	 * Docente sin código de centro.
 	 *
 	 * @return int User ID.

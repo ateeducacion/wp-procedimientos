@@ -7104,29 +7104,32 @@ final class ProcedureAccess {
 
 
 
+
 	public static function why_not_apply( int $user_id, int $post_id, string $code = '' ): string {
 		if ( self::can_apply( $user_id, $post_id, $code ) ) {
 			return '';
 		}
 		$aplica    = user_can( $user_id, self::CAP_APPLY );
 		$docente   = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
-		$docentes  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
-		$suyos     = CentreScope::codes_for( $user_id );
-		$admite    = self::centre_kinds( $post_id );
 		$publicado = ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'publish' === get_post_status( $post_id );
-		$casos     = array(
+
+
+		$docentes = $publicado && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
+		$suyos    = CentreScope::codes_for( $user_id );
+		$admite   = self::centre_kinds( $post_id );
+		$casos    = array(
 			'session'        => $user_id <= 0,
 			'role_teachers'  => ! $aplica && $docentes,
 			'role'           => ! $aplica,
+			'unpublished'    => $post_id > 0 && ! $publicado,
 			'teacher_closed' => $docentes && $docente,
 			'teachers_only'  => $docentes,
 			'heads_only'     => array() === $suyos && $docente && $post_id > 0,
 			'no_code'        => array() === $suyos || $post_id <= 0,
 			'foreign_code'   => '' !== $code && ! isset( $suyos[ $code ] ),
-			'unpublished'    => ! $publicado,
 			'kind'           => array() === array_intersect( $suyos, $admite ),
 		);
-		$caso      = (string) array_search( true, $casos, true );
+		$caso     = (string) array_search( true, $casos, true );
 		if ( '' !== $caso ) {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
 			return sprintf( self::REASONS[ $caso ], implode( ' y de ', $rotulos ) );

@@ -1051,10 +1051,11 @@ final class ProcedureAccess {
 	 * sin una palabra. Quién, no cuándo: el plazo lo dice el estado.
 	 *
 	 * Cada caso es una entrada de {@see REASONS} y el primero que se cumple
-	 * da el motivo, en este orden: la sesión, el perfil, a quién se dirige, el
-	 * centro de la cuenta, el código pedido, la publicación y la clase de
-	 * código. Si no es ninguno, son los acotados del procedimiento
-	 * ({@see CentreEligibility}): con `can_apply()` en falso, ningún código de
+	 * da el motivo, en este orden: la sesión, el perfil, la publicación, a
+	 * quién se dirige, el centro de la cuenta, el código pedido y la clase de
+	 * código. Un borrador responde como un identificador que no existe: no
+	 * dice a quién va dirigido. Si no es ninguno, son los acotados del
+	 * procedimiento ({@see CentreEligibility}): con `can_apply()` en falso, ningún código de
 	 * la cuenta los pasa, así que el motivo es el del primero. Los que dependen
 	 * del procedimiento terminan en su correo de contacto.
 	 *
@@ -1069,23 +1070,25 @@ final class ProcedureAccess {
 		}
 		$aplica    = user_can( $user_id, self::CAP_APPLY );
 		$docente   = user_can( $user_id, self::CAP_APPLY_AS_TEACHER );
-		$docentes  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
-		$suyos     = CentreScope::codes_for( $user_id );
-		$admite    = self::centre_kinds( $post_id );
 		$publicado = ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'publish' === get_post_status( $post_id );
-		$casos     = array(
+		// De un borrador no se lee a quién va dirigido: tiene que responder
+		// igual que un identificador que no existe.
+		$docentes = $publicado && ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $post_id, ProcedureMetaKeys::AUDIENCE, true );
+		$suyos    = CentreScope::codes_for( $user_id );
+		$admite   = self::centre_kinds( $post_id );
+		$casos    = array(
 			'session'        => $user_id <= 0,
 			'role_teachers'  => ! $aplica && $docentes,
 			'role'           => ! $aplica,
+			'unpublished'    => $post_id > 0 && ! $publicado,
 			'teacher_closed' => $docentes && $docente,
 			'teachers_only'  => $docentes,
 			'heads_only'     => array() === $suyos && $docente && $post_id > 0,
 			'no_code'        => array() === $suyos || $post_id <= 0,
 			'foreign_code'   => '' !== $code && ! isset( $suyos[ $code ] ),
-			'unpublished'    => ! $publicado,
 			'kind'           => array() === array_intersect( $suyos, $admite ),
 		);
-		$caso      = (string) array_search( true, $casos, true );
+		$caso     = (string) array_search( true, $casos, true );
 		if ( '' !== $caso ) {
 			$rotulos = array_map( 'lcfirst', array_intersect_key( ProcedureMetaKeys::centre_kinds(), array_flip( $admite ) ) );
 			return sprintf( self::REASONS[ $caso ], implode( ' y de ', $rotulos ) );

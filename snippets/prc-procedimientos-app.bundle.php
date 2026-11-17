@@ -18788,7 +18788,10 @@ final class ProcedureEditor {
 		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 
 
-		$m['centre_warnings'] = CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() );
+
+		$m['centre_warnings'] = self::PANEL_DATA === $m['panel']
+			? CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() )
+			: array();
 		return $m;
 	}
 

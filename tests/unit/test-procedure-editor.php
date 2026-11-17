@@ -596,6 +596,37 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Solo el panel «Datos» construye el catálogo para sus avisos: los demás
+	 * paneles no lo recorren.
+	 */
+	public function test_other_panels_do_not_build_the_catalogue() {
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+			)
+		);
+		$this->acting_as( $uid );
+		$llamadas = 0;
+		add_filter(
+			'prc_centres',
+			static function ( $centres ) use ( &$llamadas ) {
+				++$llamadas;
+				return $centres;
+			}
+		);
+
+		foreach ( array( ProcedureEditor::PANEL_QUESTIONS, ProcedureEditor::PANEL_PUBLISH ) as $panel ) {
+			\Prc\Domain\CentreCatalog::flush();
+			$this->modelo( $procedimiento, $panel );
+		}
+		$this->assertSame( 0, $llamadas, 'ni Preguntas ni Publicación leen el catálogo' );
+
+		\Prc\Domain\CentreCatalog::flush();
+		$this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA );
+		$this->assertSame( 1, $llamadas );
+	}
+
+	/**
 	 * Un procedimiento se convoca desde varios ámbitos, y se vuelven a leer todos.
 	 */
 	public function test_the_data_panel_saves_several_areas() {

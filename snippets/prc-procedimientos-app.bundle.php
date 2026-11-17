@@ -6670,6 +6670,27 @@ final class ProcedureAccess {
 
 
 
+	public static function why_not_duplicable( int $user_id, int $post_id ): string {
+		if ( self::can_duplicate( $user_id, $post_id ) ) {
+			return '';
+		}
+
+
+		if ( ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'trash' === get_post_status( $post_id ) && self::can_open( $user_id, $post_id ) ) {
+			return 'Ese procedimiento está en la papelera: restáurelo antes de duplicarlo.';
+		}
+		return self::can_open( $user_id, $post_id )
+			? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
+			: self::why_not_editable( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
 
 
 
@@ -22048,12 +22069,7 @@ final class ProcedureDuplicate {
 	public static function duplicate( int $procedure_id, int $user_id ) {
 		$areas = null;
 		if ( ! ProcedureAccess::can_duplicate( $user_id, $procedure_id, $areas ) ) {
-			return new \WP_Error(
-				'prc_duplicate_forbidden',
-				ProcedureAccess::can_open( $user_id, $procedure_id )
-					? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
-					: ProcedureAccess::why_not_editable( $user_id, $procedure_id )
-			);
+			return new \WP_Error( 'prc_duplicate_forbidden', ProcedureAccess::why_not_duplicable( $user_id, $procedure_id ) );
 		}
 
 		if ( array() === $areas ) {

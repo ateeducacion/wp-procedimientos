@@ -84,12 +84,7 @@ final class ProcedureDuplicate {
 	public static function duplicate( int $procedure_id, int $user_id ) {
 		$areas = null;
 		if ( ! ProcedureAccess::can_duplicate( $user_id, $procedure_id, $areas ) ) {
-			return new \WP_Error(
-				'prc_duplicate_forbidden',
-				ProcedureAccess::can_open( $user_id, $procedure_id )
-					? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
-					: ProcedureAccess::why_not_editable( $user_id, $procedure_id )
-			);
+			return new \WP_Error( 'prc_duplicate_forbidden', ProcedureAccess::why_not_duplicable( $user_id, $procedure_id ) );
 		}
 
 		if ( array() === $areas ) {

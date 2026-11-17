@@ -777,6 +777,27 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Why the user cannot duplicate this procedure, in words.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return string Empty when it can be duplicated.
+	 */
+	public static function why_not_duplicable( int $user_id, int $post_id ): string {
+		if ( self::can_duplicate( $user_id, $post_id ) ) {
+			return '';
+		}
+		// La papelera primero: quien puede crear no tiene que pedir permisos
+		// que ya tiene, sino restaurar el original.
+		if ( ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && 'trash' === get_post_status( $post_id ) && self::can_open( $user_id, $post_id ) ) {
+			return 'Ese procedimiento está en la papelera: restáurelo antes de duplicarlo.';
+		}
+		return self::can_open( $user_id, $post_id )
+			? 'Su perfil no puede crear procedimientos: hace falta gestionar procedimientos y tener un ámbito asignado.'
+			: self::why_not_editable( $user_id, $post_id );
+	}
+
+	/**
 	 * Whether the user may edit this procedure.
 	 *
 	 * La regla del ámbito y, por encima, el cierre: histórico no lo edita el

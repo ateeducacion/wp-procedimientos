@@ -508,6 +508,24 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Si el original se fue a la papelera con el formulario ya pintado, el
+	 * aviso dice que está en la papelera, no que el perfil no puede crear.
+	 */
+	public function test_a_trashed_procedure_says_why_it_is_not_duplicated() {
+		$area = $this->area( 'Área de prueba' );
+		$uid  = $this->manager( array( $area ) );
+		$id   = $this->completo( $uid, array( $area ) );
+		wp_trash_post( $id );
+
+		$error = ProcedureDuplicate::duplicate( $id, $uid );
+
+		$this->assertWPError( $error );
+		$this->assertStringContainsString( 'papelera', $error->get_error_message() );
+		$this->assertStringNotContainsString( 'Su perfil', $error->get_error_message() );
+		$this->assertSame( array(), $this->otros( array( $id ) ) );
+	}
+
+	/**
 	 * Con un subámbito: los ámbitos del duplicado son los del original que
 	 * quien duplica puede usar.
 	 */

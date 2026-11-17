@@ -25,7 +25,7 @@ if ( ! function_exists( 'prc_bootstrap5_versions' ) ) {
 	 *
 	 *   curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A
 	 *
-	 * Calculados el 2026-09-15. La versión está clavada en tres sitios a la
+	 * Calculados el 2026-11-17. La versión está clavada en tres sitios a la
 	 * vez: aquí, en la URL y en `package.json`. Si se sube una, se suben las
 	 * tres o el SRI deja de cuadrar.
 	 *
@@ -34,14 +34,14 @@ if ( ! function_exists( 'prc_bootstrap5_versions' ) ) {
 	function prc_bootstrap5_versions(): array {
 		return array(
 			'bootstrap-css'   => array(
-				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css',
-				'ver' => '5.3.8',
-				'sri' => 'sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB',
+				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/css/bootstrap.min.css',
+				'ver' => '5.3.9',
+				'sri' => 'sha384-yEPZ7jP9S0QKiUQ0m3jjsO4ProIW7wvR9gXkI7JOGa2XVsw53Yke2bsdkBbjmmiX',
 			),
 			'bootstrap-js'    => array(
-				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js',
-				'ver' => '5.3.8',
-				'sri' => 'sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI',
+				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.9/dist/js/bootstrap.bundle.min.js',
+				'ver' => '5.3.9',
+				'sri' => 'sha384-WyOxWvTyr1QaMPfiPJSv76iReVthorl5uWlFtZPyK0IEB0hGzo9y5Bp9mYanr8Bu',
 			),
 			'bootstrap-icons' => array(
 				'url' => 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.2/font/bootstrap-icons.min.css',

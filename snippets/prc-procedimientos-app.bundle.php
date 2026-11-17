@@ -1041,8 +1041,14 @@ final class QuestionPoints {
 
 
 
+
+
+
 	public static function lines( array $question ): array {
 		$textos = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
+		if ( ProcedureQuestions::TYPE_MULTIPLE !== ( $question['type'] ?? '' ) ) {
+			return $textos;
+		}
 		$puntos = isset( $question['points'] ) && is_array( $question['points'] ) ? $question['points'] : null;
 		if ( null === $puntos ) {
 			$barra = array_filter(

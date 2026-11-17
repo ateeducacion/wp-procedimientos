@@ -921,6 +921,37 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * «Una opción» no tiene puntos: su `|` es texto y el taller lo escribe
+	 * tal cual, sin « | 0», para que volver a guardar no cambie la opción.
+	 */
+	public function test_lines_leave_single_choices_untouched() {
+		$q = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Curso',
+					'type'    => 'single',
+					'choices' => array( 'Curso | 2024', 'Otro' ),
+				),
+			)
+		);
+
+		$this->assertSame( array( 'Curso | 2024', 'Otro' ), QuestionPoints::lines( $q[0] ) );
+
+		$otra = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Curso',
+					'type'    => 'single',
+					'choices' => implode( "\n", QuestionPoints::lines( $q[0] ) ),
+				),
+			)
+		);
+		$this->assertSame( array( 'Curso | 2024', 'Otro' ), $otra[0]['choices'], 'volver a guardar no cambia nada' );
+	}
+
+	/**
 	 * Solo se revisan los puntos de lo tecleado nuevo o cambiado, y no los de
 	 * una pregunta que se borra.
 	 */

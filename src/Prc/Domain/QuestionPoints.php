@@ -132,11 +132,17 @@ final class QuestionPoints {
 	 * el último `|` es siempre el de los puntos, el texto vuelve tal cual al
 	 * guardar y, todo a cero, sigue sin puntos.
 	 *
+	 * Solo «varias opciones» tiene puntos: en las demás el `|` es texto, y
+	 * las opciones se escriben tal cual, porque al guardar se leen tal cual.
+	 *
 	 * @param array<string, mixed> $question Normalised question.
 	 * @return string[]
 	 */
 	public static function lines( array $question ): array {
 		$textos = array_map( 'strval', (array) ( $question['choices'] ?? array() ) );
+		if ( ProcedureQuestions::TYPE_MULTIPLE !== ( $question['type'] ?? '' ) ) {
+			return $textos;
+		}
 		$puntos = isset( $question['points'] ) && is_array( $question['points'] ) ? $question['points'] : null;
 		if ( null === $puntos ) {
 			$barra = array_filter(

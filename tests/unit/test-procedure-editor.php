@@ -1808,6 +1808,45 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una opción de «Una opción» con `|` sobrevive a volver a guardar el
+	 * panel: el taller la pinta y la guarda tal cual, y lo contestado sigue
+	 * casando.
+	 */
+	public function test_a_single_choice_with_a_bar_survives_saving_the_panel() {
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'     => 'q1',
+						'label'   => 'Curso',
+						'type'    => ProcedureQuestions::TYPE_SINGLE,
+						'choices' => array( 'Curso | 2024', 'Otro' ),
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_TEXT,
+					),
+				),
+			)
+		);
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'Curso | 2024' ) ) );
+
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) );
+		$this->assertStringContainsString( "Curso | 2024\nOtro</textarea>", $html, 'el textarea pinta las opciones tal cual' );
+		$this->assertStringNotContainsString( '| 0', $html );
+
+		for ( $vez = 0; $vez < 2; $vez++ ) {
+			$this->assertNotNull(
+				$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'label' => array( 1 => 'Número de grupos' ) ) ) )
+			);
+		}
+		$this->assertSame( array( 'Curso | 2024', 'Otro' ), get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[0]['choices'] );
+		$this->assertSame( 'Curso | 2024', \Prc\PublicFront\Applications::rows( $procedimiento )[0]['q1'] );
+	}
+
+	/**
 	 * Una fila renombrada en su línea sigue con sus cantidades; una borrada
 	 * dejando su línea en blanco deja de salir y su clave no se reutiliza.
 	 */

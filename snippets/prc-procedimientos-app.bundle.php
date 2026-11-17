@@ -5543,6 +5543,10 @@ final class ObserverScope {
 
 
 
+
+
+
+
 	public static function columns( $chosen, array $groups ): array {
 		$permitidas = self::allowed( $groups );
 		$elegidas   = is_array( $chosen ) ? array_flip( array_filter( $chosen, 'is_string' ) ) : array();
@@ -5550,7 +5554,7 @@ final class ObserverScope {
 		foreach ( $permitidas as $columnas ) {
 			$out += array_intersect_key( $columnas, $elegidas );
 		}
-		if ( array() !== $out ) {
+		if ( array() !== $out || array() !== $elegidas ) {
 			return $out;
 		}
 		foreach ( self::DEFAULT_GROUPS as $grupo ) {
@@ -24658,6 +24662,8 @@ final class ObserveView {
 			echo '<p class="prc-vacio">Ninguna solicitud cumple el filtro.';
 			echo '' !== (string) $t['reset_url'] ? ' <a href="' . esc_url( (string) $t['reset_url'] ) . '">Quitar los filtros</a>' : '';
 			echo '</p>';
+		} elseif ( array() === (array) $m['columns'] ) {
+			echo '<p class="prc-vacio">Este procedimiento no tiene columnas que enseñar en la consulta. Si debería tenerlas, pídalo a quien lo gestiona.</p>';
 		} else {
 			echo self::table( (array) $m['columns'], (array) $m['rows'] );
 			echo ApplicationsPanelView::pager( $t );

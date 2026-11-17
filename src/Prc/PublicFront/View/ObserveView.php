@@ -124,6 +124,8 @@ final class ObserveView {
 			echo '<p class="prc-vacio">Ninguna solicitud cumple el filtro.';
 			echo '' !== (string) $t['reset_url'] ? ' <a href="' . esc_url( (string) $t['reset_url'] ) . '">Quitar los filtros</a>' : '';
 			echo '</p>';
+		} elseif ( array() === (array) $m['columns'] ) {
+			echo '<p class="prc-vacio">Este procedimiento no tiene columnas que enseñar en la consulta. Si debería tenerlas, pídalo a quien lo gestiona.</p>';
 		} else {
 			echo self::table( (array) $m['columns'], (array) $m['rows'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 			echo ApplicationsPanelView::pager( $t ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.

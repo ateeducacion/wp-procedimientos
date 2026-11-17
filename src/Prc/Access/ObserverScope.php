@@ -260,8 +260,12 @@ final class ObserverScope {
 
 	/**
 	 * The columns a consultation shows: the chosen ones that are allowed, in
-	 * the order of the groups; the allowed ones of the default groups when
-	 * none is. Pure.
+	 * the order of the groups; the allowed ones of the default groups only
+	 * when nothing was chosen. Pure.
+	 *
+	 * Si se eligió algo y ya no existe —una pregunta borrada, la lista de
+	 * personas apagada—, no se vuelve a las de por defecto: enseñaría más de
+	 * lo que nadie eligió. Sale vacía.
 	 *
 	 * @param mixed                                $chosen Stored choice: column keys.
 	 * @param array<string, array<string, string>> $groups Group => (column => heading), every one.
@@ -274,7 +278,7 @@ final class ObserverScope {
 		foreach ( $permitidas as $columnas ) {
 			$out += array_intersect_key( $columnas, $elegidas );
 		}
-		if ( array() !== $out ) {
+		if ( array() !== $out || array() !== $elegidas ) {
 			return $out;
 		}
 		foreach ( self::DEFAULT_GROUPS as $grupo ) {

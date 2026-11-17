@@ -432,6 +432,62 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->assertArrayNotHasKey( 'review', ObserverScope::allowed( $grupos ), 'un grupo que se queda vacío no se ofrece' );
 	}
 
+	/**
+	 * Si lo elegido deja de existir —se borra la pregunta, se apaga la lista
+	 * de personas—, la consulta no pasa a enseñar las columnas por defecto:
+	 * nadie eligió la coordinación.
+	 */
+	public function test_columns_do_not_widen_to_defaults_when_the_chosen_ones_disappear() {
+		$preguntas = array(
+			array(
+				'key'   => 'q1',
+				'label' => 'Memoria',
+				'type'  => 'text',
+			),
+			array(
+				'key'   => 'q2',
+				'label' => 'Modalidad',
+				'type'  => 'text',
+			),
+		);
+		$caso      = $this->caso( array( ProcedureMetaKeys::QUESTIONS => $preguntas ) );
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'q2' ) );
+		$this->assertSame( array( 'q2' ), array_keys( \Prc\PublicFront\ObserveSettings::columns( $caso['procedure'] ) ) );
+
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::QUESTIONS, array( $preguntas[0] ) );
+		$columnas = \Prc\PublicFront\ObserveSettings::columns( $caso['procedure'] );
+		$this->assertArrayNotHasKey( 'coordinator', $columnas );
+		$this->assertArrayNotHasKey( 'coordinator_email', $columnas );
+		$this->assertSame( array(), $columnas, 'lo elegido ya no existe: nada' );
+		$this->acting_as( $this->observer( array( 'Z0002' ) ) );
+		$html = \Prc\PublicFront\View\ObserveView::html( \Prc\PublicFront\Observe::model( array( \Prc\PublicFront\Observe::ARG_PROCEDURE => (string) $caso['procedure'] ) ) );
+		$this->assertStringContainsString( 'no tiene columnas que enseñar', $html );
+		$this->assertStringNotContainsString( '<table', $html );
+
+		$personas = $this->caso(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Docente',
+						),
+					),
+				),
+			)
+		);
+		update_post_meta( $personas['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, array( 'person_name' ) );
+		$this->assertSame( array( 'person_name' ), array_keys( \Prc\PublicFront\ObserveSettings::columns( $personas['procedure'] ) ) );
+		update_post_meta( $personas['procedure'], ProcedureMetaKeys::PEOPLE_SPEC, array( 'enabled' => false ) );
+		$columnas = \Prc\PublicFront\ObserveSettings::columns( $personas['procedure'] );
+		$this->assertArrayNotHasKey( 'coordinator', $columnas );
+		$this->assertArrayNotHasKey( 'coordinator_email', $columnas );
+
+		$this->assertSame( array(), ObserverScope::columns( array( 'q9' ), array( 'centre' => array( 'code' => 'Código' ) ) ), 'elegida y desaparecida: nada' );
+		$this->assertSame( array( 'code' => 'Código' ), ObserverScope::columns( array(), array( 'centre' => array( 'code' => 'Código' ) ) ), 'sin elegir, las de por defecto' );
+	}
+
 	// ─── documentos y exportación ──────────────────────────────────────────
 
 	/**

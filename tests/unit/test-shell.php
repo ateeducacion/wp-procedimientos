@@ -493,9 +493,9 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Un aviso se anuncia: el error y la advertencia interrumpen, lo hecho y
-	 * la nota esperan su turno. El del resultado lleva el ancla a la que
-	 * vuelve la redirección, y se le puede dar el foco.
+	 * Un aviso se anuncia: el error y la advertencia del resultado
+	 * interrumpen, lo hecho y la nota esperan su turno. El del resultado lleva
+	 * el ancla a la que vuelve la redirección, y se le puede dar el foco.
 	 */
 	public function test_the_notices_are_announced() {
 		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'error', 'No se pudo.' ) );

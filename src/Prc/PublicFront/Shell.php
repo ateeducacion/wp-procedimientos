@@ -984,11 +984,14 @@ final class Shell {
 	/**
 	 * The opening tag of a notice, for the ones that carry a link inside.
 	 *
-	 * El error —que solo sale tras un envío— y la advertencia del resultado se
-	 * anuncian en cuanto aparecen (`alert`); lo hecho, la nota y la advertencia
-	 * fija —la que se pinta en cada carga, como lo que falta para publicar—
-	 * esperan a que el lector termine (`status`): una alerta presente desde la
-	 * carga se vuelve a anunciar en cada navegación. El aviso del
+	 * El error y la advertencia del resultado se anuncian en cuanto aparecen
+	 * (`alert`); lo hecho, la nota y la advertencia fija —la que se pinta en
+	 * cada carga, como lo que falta para publicar— esperan a que el lector
+	 * termine (`status`): una alerta presente desde la carga se vuelve a
+	 * anunciar en cada navegación. El error sigue siendo `alert` sin ancla,
+	 * porque también lo es el rechazo de un envío que no redirige (retirar una
+	 * solicitud, la lista de personas) y el de una pantalla que no se puede
+	 * abrir, que es lo único que se pinta. El aviso del
 	 * resultado —el de la vuelta de un POST— lleva además el ancla a la que
 	 * llega la redirección ({@see leave()}) y admite el foco, para que quien
 	 * navega con teclado o lector de pantalla empiece a leer por él.

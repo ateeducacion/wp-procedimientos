@@ -11526,6 +11526,9 @@ final class Shell {
 
 
 
+
+
+
 	public static function notice_open( string $type, bool $anchor = false, string $tag = 'p' ): string {
 		$tonos = array(
 			'ok'    => 'success',

@@ -45,7 +45,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 |---|---|
 | Una convocatoria es una entrada de un formulario de más de cien campos que, por una acción del gestor de formularios, crea una página del constructor de páginas | CPT `prc_procedure`: la página pública es su `single`, pintado entero por `PublicFront/ProcedureView` |
 | El estado es un desplegable de siete valores que alguien tiene que acordarse de cambiar, cruzado a mano con la fecha límite para pintar ocho iconos | `Domain/ProcedureState` lo **deriva de las fechas** y de los enlaces; no es un término ni un campo |
-| El ámbito es un árbol de términos filtrado por una meta de usuario con dos fragmentos distintos, uno en servidor y otro en navegador | `prc_area` jerárquica en el contenido y la meta `prc_area` en la persona; lo decide un único guardián, `Access/ProcedureAccess` |
+| El ámbito es un árbol de términos filtrado por una meta de usuario con dos fragmentos distintos, uno en servidor y otro en navegador | `prc_area` jerárquica en el contenido y la opción de usuario `prc_area`, por sitio, en la persona (ADR-0046); lo decide un único guardián, `Access/ProcedureAccess` |
 | La solicitud de un centro es una entrada de otro formulario con la clave «convocatoria · centro» escrita en un campo de texto | CPT `prc_application` con `post_parent` = el procedimiento, **una por centro** (`Applications::find()` antes de crear) |
 | El centro de la persona es una meta de usuario que escribe un fragmento al iniciar sesión | `Access/CentreScope` lee la meta cuya clave devuelve `prc_centre_code_meta_key`; sin código válido, fail-closed |
 | Las opciones que pide la convocatoria: cuatro pares título/indicaciones, un subformulario y, si no basta, un formulario clonado | Núcleo fijo (`Domain/ApplicationInput`) más hasta veinte preguntas en `prc_questions` (`Domain/ProcedureQuestions`) |
@@ -216,7 +216,7 @@ es legal por fichero y **fatal** al concatenar. Por eso también está prohibido
 es protegerlo**: quedan abiertos el enlace directo a `post.php?post=N`, la
 edición rápida, la REST API y las acciones en bloque. La capa que protege es
 `map_meta_cap`. Se hacen las dos, en ese orden de importancia. Y son dos
-acotados, los dos fail-closed: por **ámbito** (la meta `prc_area` de quien
+acotados, los dos fail-closed: por **ámbito** (la opción de usuario `prc_area`, por sitio, de quien
 gestiona) y por **centro** (`Access/CentreScope`, para quien solicita).
 
 **Verlo funcionando:** `make bundle && make sync-snippets` y recarga

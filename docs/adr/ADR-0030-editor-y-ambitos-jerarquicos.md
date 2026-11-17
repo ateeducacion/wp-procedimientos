@@ -40,3 +40,12 @@ Un Editor de un servicio edita procedimientos del servicio y descendientes, pero
 El perfil conserva literalmente valores históricos ambiguos o inválidos al guardar otros campos. Una cadena escalar con un ID válido se reconoce y se normaliza a una lista unitaria al guardar el perfil; varias asignaciones válidas, o una válida junto a otra inexistente, bloquean acceso hasta que administración seleccione explícitamente un único ámbito o «Sin ámbito». Ajustes y diagnóstico enumera las cuentas editoriales con ese estado. No hay usuarios reales que requieran una migración masiva.
 
 `ProcedureAccess::resolve_area_assignment()` calcula una sola vez la asignación final: términos solicitados dentro del subárbol del Editor más los términos ajenos que ya organizaban el procedimiento. Retirar el último término propio se permite si queda un organizador ajeno; se rechaza si el contenido quedaría sin ámbito. Los organizadores ajenos se muestran en solo lectura. Administración mantiene la capacidad de reparar o publicar un procedimiento huérfano, por lo que no se declara una prohibición global para ese estado.
+
+## Adenda — 2026-11-17: el ámbito se guarda por sitio
+
+La meta `prc_area` de la persona pasa a guardarse por sitio, como opción de
+usuario (`{$wpdb->get_blog_prefix()}prc_area`), con la meta global como
+lectura de compatibilidad: [ADR-0046](ADR-0046-el-ambito-de-la-persona-se-guarda-por-sitio.md).
+El resto de esta decisión no cambia.
+
+Asistencia de IA: Claude Code (claude-opus-5-5).

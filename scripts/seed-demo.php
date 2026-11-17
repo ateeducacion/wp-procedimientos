@@ -373,7 +373,7 @@ if ( ! function_exists( 'prc_seed_account' ) ) {
 		foreach ( $account['areas'] as $slug ) {
 			$areas[] = prc_demo_term( 'prc_area', $slug );
 		}
-		update_user_meta( $user->ID, 'prc_area', $areas );
+		\Prc\Access\ProcedureAccess::set_user_areas( $user->ID, $areas );
 
 		// El código de centro va en la meta cuya clave da el filtro (ADR-0016).
 		$key = \Prc\Access\CentreScope::meta_key();

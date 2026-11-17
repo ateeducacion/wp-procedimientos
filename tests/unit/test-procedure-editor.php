@@ -396,7 +396,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$foreign = $this->area( 'Ámbito 2' );
 		$course  = $this->course( '2027-2028' );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
 		$post = $this->procedure( $editor, array( $mine, $foreign ) );
 		$this->assertNotNull( $this->submit( $editor, ProcedureEditor::PANEL_DATA, $post, 0, $this->datos( array( $mine ), $course ) ) );
 		$this->assertEqualsCanonicalizing( array( $mine, $foreign ), ProcedureAccess::post_areas( $post ) );

@@ -6,6 +6,7 @@
  */
 
 use Prc\Access\CentreScope;
+use Prc\Access\ProcedureAccess;
 
 /**
  * El snippet suelto de roles y perfiles.
@@ -158,7 +159,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		);
 		prc_save_profile_fields( $head );
 
-		$this->assertSame( '', get_user_meta( $head, 'prc_area', true ) );
+		$this->assertFalse( get_user_option( 'prc_area', $head ) );
 		$this->assertSame( '', CentreScope::code_for( $head ) );
 	}
 
@@ -180,7 +181,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		);
 		prc_save_profile_fields( $quien );
 
-		$this->assertSame( array( $area ), get_user_meta( $quien, 'prc_area', true ) );
+		$this->assertSame( array( $area ), get_user_option( 'prc_area', $quien ) );
 		$this->assertSame( '90000001', CentreScope::code_for( $quien ) );
 
 		// Vaciar el código lo borra: sin código, `prc_apply` no sirve para nada.
@@ -194,7 +195,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		$area   = $this->area( 'Servicio A' );
 		$other  = $this->area( 'Servicio B' );
 		$editor = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, 'prc_area', array( $area ) );
+		update_user_option( $editor, 'prc_area', array( $area ) );
 		$this->acting_as( $editor );
 		ob_start();
 		prc_render_profile_fields( get_user_by( 'id', $editor ) );
@@ -206,7 +207,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 			'prc_area'                => array( $other ),
 		);
 		prc_save_profile_fields( $editor );
-		$this->assertSame( array( $area ), get_user_meta( $editor, 'prc_area', true ) );
+		$this->assertSame( array( $area ), get_user_option( 'prc_area', $editor ) );
 		$this->acting_as( $this->administrator() );
 		ob_start();
 		prc_render_profile_fields( get_user_by( 'id', $editor ) );
@@ -226,7 +227,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 			'prc_profile_scope_nonce' => wp_create_nonce( 'prc_profile_scope_' . $editor ),
 			'prc_area'                => '__keep_unresolved__',
 		);
-		update_user_meta( $editor, 'prc_area', (string) $first );
+		update_user_option( $editor, 'prc_area', (string) $first );
 		ob_start();
 		prc_render_profile_fields( get_user_by( 'id', $editor ) );
 		$html = ob_get_clean();
@@ -234,21 +235,43 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '__keep_unresolved__', $html );
 		$_POST['prc_area'] = (string) $first;
 		prc_save_profile_fields( $editor );
-		$this->assertSame( array( $first ), get_user_meta( $editor, 'prc_area', true ) );
+		$this->assertSame( array( $first ), get_user_option( 'prc_area', $editor ) );
 		$_POST['prc_area'] = '__keep_unresolved__';
 		foreach ( array( array( $first, $second ), $first . ',' . $second, array( $first, 99999999 ) ) as $raw ) {
-			update_user_meta( $editor, 'prc_area', $raw );
+			update_user_option( $editor, 'prc_area', $raw );
 			ob_start();
 			prc_render_profile_fields( get_user_by( 'id', $editor ) );
 			$this->assertStringContainsString( '__keep_unresolved__', ob_get_clean() );
 			prc_save_profile_fields( $editor );
-			$this->assertSame( $raw, get_user_meta( $editor, 'prc_area', true ) );
+			$this->assertSame( $raw, get_user_option( 'prc_area', $editor ) );
 		}
 		$_POST['prc_area'] = (string) $first;
 		prc_save_profile_fields( $editor );
-		$this->assertSame( array( $first ), get_user_meta( $editor, 'prc_area', true ) );
+		$this->assertSame( array( $first ), get_user_option( 'prc_area', $editor ) );
 		$_POST['prc_area'] = '';
 		prc_save_profile_fields( $editor );
-		$this->assertSame( array(), get_user_meta( $editor, 'prc_area', true ) );
+		$this->assertSame( array(), get_user_option( 'prc_area', $editor ) );
+	}
+
+	/**
+	 * Guardar el ámbito lo deja en este sitio y borra la copia global
+	 * anterior, que en un multisitio valdría en todos los sitios (ADR-0046).
+	 */
+	public function test_saving_scope_migrates_legacy_global_meta_to_this_site() {
+		global $wpdb;
+		$area   = $this->area( 'Servicio de prueba' );
+		$editor = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
+		update_user_meta( $editor, 'prc_area', array( 99999999 ) );
+		$this->acting_as( $this->administrator() );
+		$_POST = array(
+			'prc_profile_scope_nonce' => wp_create_nonce( 'prc_profile_scope_' . $editor ),
+			'prc_profile_present'     => '1',
+			'prc_area'                => (string) $area,
+		);
+		prc_save_profile_fields( $editor );
+
+		$this->assertSame( array( $area ), get_user_meta( $editor, $wpdb->get_blog_prefix() . 'prc_area', true ) );
+		$this->assertFalse( metadata_exists( 'user', $editor, 'prc_area' ) );
+		$this->assertSame( array( $area ), ProcedureAccess::user_areas( $editor ) );
 	}
 }

@@ -2510,7 +2510,13 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 
 
 
+
 final class ProcedureAccess {
+
+
+
+
+
 
 
 
@@ -2813,6 +2819,62 @@ final class ProcedureAccess {
 
 
 
+
+
+	public static function user_area_meta_key(): string {
+		global $wpdb;
+		return $wpdb->get_blog_prefix() . self::USER_AREA_META;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function raw_user_areas( int $user_id ) {
+		return $user_id > 0 ? get_user_option( self::USER_AREA_META, $user_id ) : false;
+	}
+
+
+
+
+
+
+
+
+	public static function set_user_areas( int $user_id, array $term_ids ): void {
+		if ( $user_id <= 0 ) {
+			return;
+		}
+		update_user_option( $user_id, self::USER_AREA_META, array_values( array_map( 'intval', $term_ids ) ) );
+
+
+		delete_user_meta( $user_id, self::USER_AREA_META );
+	}
+
+
+
+
+
+
+
+	public static function has_only_global_areas( int $user_id ): bool {
+		if ( $user_id <= 0 || metadata_exists( 'user', $user_id, self::user_area_meta_key() ) ) {
+			return false;
+		}
+		return metadata_exists( 'user', $user_id, self::USER_AREA_META );
+	}
+
+
+
+
+
+
+
 	public static function scope_assignment_state( int $user_id = 0 ): array {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -2825,7 +2887,7 @@ final class ProcedureAccess {
 				'legacy'  => false,
 			);
 		}
-		$raw     = get_user_meta( $user_id, self::USER_AREA_META, true );
+		$raw     = self::raw_user_areas( $user_id );
 		$scalar  = is_scalar( $raw ) ? trim( (string) $raw ) : '';
 		$legacy  = ! is_array( $raw ) && '' !== $scalar;
 		$values  = is_array( $raw ) ? $raw : ( '' === $scalar ? array() : explode( ',', $scalar ) );
@@ -2867,6 +2929,10 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
 	public static function scope_diagnostics(): array {
 		$rows = array();
 		foreach ( get_users() as $user ) {
@@ -2881,7 +2947,8 @@ final class ProcedureAccess {
 					'user_id' => $user->ID,
 					'login'   => $user->user_login,
 				),
-				self::scope_assignment_state( $user->ID )
+				self::scope_assignment_state( $user->ID ),
+				array( 'global_only' => self::has_only_global_areas( $user->ID ) )
 			);
 		}
 		return $rows;
@@ -14831,9 +14898,9 @@ final class Settings {
 			<?php endif; ?>
 
 			<h2>Ámbitos de los perfiles editores</h2>
-			<p>Diagnóstico de solo lectura. Los perfiles ambiguos o inválidos no reciben acceso hasta que administración elija un ámbito en su perfil.</p>
+			<p>Diagnóstico de solo lectura. Los perfiles ambiguos o inválidos no reciben acceso hasta que administración elija un ámbito en su perfil. «Solo global» quiere decir que el ámbito se guardó antes de que se guardara por sitio: se sigue leyendo, pero en un multisitio vale en todos los sitios de la red; al guardar de nuevo su perfil queda solo en este sitio.</p>
 			<table class="widefat striped" style="max-width:46rem">
-				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th></tr></thead>
+				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th><th>Solo global</th></tr></thead>
 				<tbody>
 				<?php foreach ( ProcedureAccess::scope_diagnostics() as $row ) : ?>
 					<tr>
@@ -14842,6 +14909,7 @@ final class Settings {
 						<td><?php echo esc_html( implode( ', ', $row['ids'] ) ); ?></td>
 						<td><?php echo esc_html( implode( ', ', $row['invalid'] ) ); ?></td>
 						<td><?php echo $row['legacy'] ? 'Sí' : 'No'; ?></td>
+						<td><?php echo $row['global_only'] ? 'Sí' : 'No'; ?></td>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>

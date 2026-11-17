@@ -155,7 +155,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$area          = $this->area( 'Área de prueba' );
 		$procedimiento = $this->procedure( $this->administrator(), array( $area ) );
 		$head          = $this->school_head( 'C0001' );
-		update_user_meta( $head, ProcedureAccess::USER_AREA_META, array( $area ) );
+		update_user_option( $head, ProcedureAccess::USER_AREA_META, array( $area ) );
 
 		$this->assertFalse( ProcedureAccess::can_edit( $head, $procedimiento ) );
 		$this->assertFalse( ProcedureAccess::can_publish( $head, $procedimiento ) );
@@ -226,16 +226,16 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 
 		$first  = $this->area( 'Primer ámbito' );
 		$second = $this->area( 'Segundo ámbito' );
-		update_user_meta( $uid, ProcedureAccess::USER_AREA_META, array( $first, (string) $first, $second, 0, 'x' ) );
+		update_user_option( $uid, ProcedureAccess::USER_AREA_META, array( $first, (string) $first, $second, 0, 'x' ) );
 		$this->assertSame( array(), ProcedureAccess::user_areas( $uid ), 'dos ámbitos históricos no eligen uno por su cuenta' );
 
-		update_user_meta( $uid, ProcedureAccess::USER_AREA_META, $first . ',' . $second );
+		update_user_option( $uid, ProcedureAccess::USER_AREA_META, $first . ',' . $second );
 		$this->assertSame( array(), ProcedureAccess::user_areas( $uid ) );
 
-		update_user_meta( $uid, ProcedureAccess::USER_AREA_META, array( $first ) );
+		update_user_option( $uid, ProcedureAccess::USER_AREA_META, array( $first ) );
 		$this->assertSame( array( $first ), ProcedureAccess::user_areas( $uid ) );
 
-		update_user_meta( $uid, ProcedureAccess::USER_AREA_META, '   ' );
+		update_user_option( $uid, ProcedureAccess::USER_AREA_META, '   ' );
 		$this->assertSame( array(), ProcedureAccess::user_areas( $uid ) );
 	}
 
@@ -253,7 +253,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		wp_update_term( $sibling, ProcedureTaxonomies::AREA, array( 'parent' => $service ) );
 		wp_update_term( $other, ProcedureTaxonomies::AREA, array( 'parent' => $dg ) );
 		$editor = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
 		$this->assertEqualsCanonicalizing( array( $service, $area, $team, $sibling ), ProcedureAccess::scope_areas( $editor ) );
 		foreach ( array( $service, $area, $team, $sibling ) as $term ) {
 			$this->assertTrue( ProcedureAccess::may_assign_areas( array( $term ), $editor ) );
@@ -275,7 +275,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 			$this->assertFalse( ProcedureAccess::can_edit( $editor, $foreign ) );
 			$this->assertFalse( user_can( $editor, 'edit_post', $foreign ) );
 		}
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
 		$this->assertEqualsCanonicalizing( array( $area, $team ), ProcedureAccess::scope_areas( $editor ) );
 	}
 
@@ -544,7 +544,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$a2      = $this->area( 'Subámbito 2', $service );
 		$foreign = $this->area( 'Ámbito 2' );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
 		$post = $this->procedure( $this->administrator(), array( $a1, $foreign ) );
 		$this->assertEqualsCanonicalizing( array( $a2, $foreign ), ProcedureAccess::resolve_area_assignment( $post, array( $a2 ), $editor ) );
 		$this->assertSame( array( $foreign ), ProcedureAccess::resolve_area_assignment( $post, array(), $editor ) );
@@ -561,17 +561,17 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$other = $this->area( 'Ámbito 2' );
 		$user  = $this->manager();
 		foreach ( array( (string) $first, array( $first ) ) as $raw ) {
-			update_user_meta( $user, ProcedureAccess::USER_AREA_META, $raw );
+			update_user_option( $user, ProcedureAccess::USER_AREA_META, $raw );
 			$this->assertSame( 'resolved', ProcedureAccess::scope_assignment_state( $user )['state'] );
 			$this->assertSame( array( $first ), ProcedureAccess::user_areas( $user ) );
 		}
 		foreach ( array( array( $first, $other ), $first . ',' . $other ) as $raw ) {
-			update_user_meta( $user, ProcedureAccess::USER_AREA_META, $raw );
+			update_user_option( $user, ProcedureAccess::USER_AREA_META, $raw );
 			$this->assertSame( 'ambiguous', ProcedureAccess::scope_assignment_state( $user )['state'] );
 			$this->assertSame( array(), ProcedureAccess::user_areas( $user ) );
 		}
 		foreach ( array( array( $first, 99999999 ), '99999999' ) as $raw ) {
-			update_user_meta( $user, ProcedureAccess::USER_AREA_META, $raw );
+			update_user_option( $user, ProcedureAccess::USER_AREA_META, $raw );
 			$this->assertSame( 'invalid', ProcedureAccess::scope_assignment_state( $user )['state'] );
 			$this->assertSame( array(), ProcedureAccess::user_areas( $user ) );
 		}
@@ -582,7 +582,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$admin  = $this->administrator();
 		$editor = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
 		$area   = $this->area( 'Ámbito 1' );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
 		$post = $this->procedure( $admin, array( $area ) );
 		$this->assertSame( array(), ProcedureAccess::resolve_area_assignment( $post, array(), $admin ) );
 		$this->assertWPError( ProcedureAccess::resolve_area_assignment( $post, array(), $editor ) );
@@ -594,11 +594,58 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$other = $this->area( 'Ámbito 2' );
 		$user  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
 		$raw   = $area . ',' . $other;
-		update_user_meta( $user, ProcedureAccess::USER_AREA_META, $raw );
+		update_user_option( $user, ProcedureAccess::USER_AREA_META, $raw );
 		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
 		$this->assertSame( 'ambiguous', $rows[ $user ]['state'] );
 		$this->assertTrue( $rows[ $user ]['legacy'] );
-		$this->assertSame( $raw, get_user_meta( $user, ProcedureAccess::USER_AREA_META, true ) );
+		$this->assertSame( $raw, get_user_option( ProcedureAccess::USER_AREA_META, $user ) );
+	}
+
+	/** Writing the scope stores it per site and drops the legacy global copy (ADR-0046). */
+	public function test_set_user_areas_stores_per_site_key_and_removes_global() {
+		global $wpdb;
+		$area = $this->area( 'Ámbito 1' );
+		$user = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
+		update_user_meta( $user, ProcedureAccess::USER_AREA_META, array( $area ) );
+
+		ProcedureAccess::set_user_areas( $user, array( $area ) );
+
+		$this->assertSame( $wpdb->get_blog_prefix() . 'prc_area', ProcedureAccess::user_area_meta_key() );
+		$this->assertNotSame( ProcedureAccess::USER_AREA_META, ProcedureAccess::user_area_meta_key() );
+		$this->assertSame( array( $area ), get_user_meta( $user, ProcedureAccess::user_area_meta_key(), true ) );
+		$this->assertFalse( metadata_exists( 'user', $user, ProcedureAccess::USER_AREA_META ) );
+		$this->assertSame( array( $area ), ProcedureAccess::user_areas( $user ) );
+	}
+
+	/** A scope saved before ADR-0046 in the global meta keeps working without migration. */
+	public function test_legacy_global_scope_is_still_read() {
+		$area = $this->area( 'Ámbito 1' );
+		$user = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
+		update_user_meta( $user, ProcedureAccess::USER_AREA_META, array( $area ) );
+
+		$this->assertSame( array( $area ), ProcedureAccess::user_areas( $user ) );
+		$this->assertTrue( ProcedureAccess::has_only_global_areas( $user ) );
+		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$this->assertTrue( $rows[ $user ]['global_only'] );
+	}
+
+	/** The per-site scope wins over a leftover global one, even when it is empty. */
+	public function test_per_site_scope_wins_over_legacy_global() {
+		$mine   = $this->area( 'Ámbito 1' );
+		$global = $this->area( 'Ámbito 2' );
+		$user   = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
+		update_user_meta( $user, ProcedureAccess::USER_AREA_META, array( $global ) );
+		update_user_option( $user, ProcedureAccess::USER_AREA_META, array( $mine ) );
+
+		$this->assertSame( array( $mine ), ProcedureAccess::user_areas( $user ) );
+		$this->assertFalse( ProcedureAccess::has_only_global_areas( $user ) );
+		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$this->assertFalse( $rows[ $user ]['global_only'] );
+
+		// «Sin ámbito» en este sitio no hereda el de la red: falla en cerrado.
+		update_user_option( $user, ProcedureAccess::USER_AREA_META, array() );
+		$this->assertSame( array(), ProcedureAccess::user_areas( $user ) );
+		$this->assertFalse( ProcedureAccess::can_manage_procedures( $user ) );
 	}
 
 	// ─── el padre ──────────────────────────────────────────────────────────

@@ -137,7 +137,7 @@ class Test_Taxonomies extends WP_UnitTestCase {
 		$child   = $this->area( 'Subámbito', $service );
 		$other   = $this->area( 'Ámbito 2', $root );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $service ) );
 		$this->assertEqualsCanonicalizing( array( $service, $child ), array_keys( ProcedureTaxonomies::area_options( $editor ) ) );
 		$this->assertSame( 'Ámbito general › Ámbito 1 › Subámbito', ProcedureTaxonomies::area_options( $editor )[ $child ] );
 		$this->assertArrayNotHasKey( $other, ProcedureTaxonomies::area_options( $editor ) );

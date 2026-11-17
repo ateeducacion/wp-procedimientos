@@ -216,9 +216,9 @@ final class Settings {
 			<?php endif; ?>
 
 			<h2>Ámbitos de los perfiles editores</h2>
-			<p>Diagnóstico de solo lectura. Los perfiles ambiguos o inválidos no reciben acceso hasta que administración elija un ámbito en su perfil.</p>
+			<p>Diagnóstico de solo lectura. Los perfiles ambiguos o inválidos no reciben acceso hasta que administración elija un ámbito en su perfil. «Solo global» quiere decir que el ámbito se guardó antes de que se guardara por sitio: se sigue leyendo, pero en un multisitio vale en todos los sitios de la red; al guardar de nuevo su perfil queda solo en este sitio.</p>
 			<table class="widefat striped" style="max-width:46rem">
-				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th></tr></thead>
+				<thead><tr><th>Usuario</th><th>Estado</th><th>IDs válidos</th><th>IDs inválidos</th><th>Formato anterior</th><th>Solo global</th></tr></thead>
 				<tbody>
 				<?php foreach ( ProcedureAccess::scope_diagnostics() as $row ) : ?>
 					<tr>
@@ -227,6 +227,7 @@ final class Settings {
 						<td><?php echo esc_html( implode( ', ', $row['ids'] ) ); ?></td>
 						<td><?php echo esc_html( implode( ', ', $row['invalid'] ) ); ?></td>
 						<td><?php echo $row['legacy'] ? 'Sí' : 'No'; ?></td>
+						<td><?php echo $row['global_only'] ? 'Sí' : 'No'; ?></td>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>

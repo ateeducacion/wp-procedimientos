@@ -617,11 +617,13 @@ final class ApplicationExport {
 	 * la única forma de pedirlas todas sin marcar una a una. Columnas vacías
 	 * significa todas las de siempre. Las del catálogo del centro
 	 * ({@see CentreColumns}) no entran en «todas»: con `all`, se suman las
-	 * que estén marcadas (ADR-0042).
+	 * que estén marcadas (ADR-0042). `all` se devuelve aparte para que una
+	 * elección recordada siga siendo «todas»: al leerla otra vez, las de
+	 * siempre se despliegan con las columnas que haya entonces.
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param array<string, mixed> $raw          `all`, `columns`, `shape`, `format`, `who`.
-	 * @return array{columns:string[], shape:string, format:string, who:string[]}
+	 * @return array{all:bool, columns:string[], shape:string, format:string, who:string[]}
 	 */
 	public static function sanitize_choice( int $procedure_id, array $raw ): array {
 		$columnas = is_array( $raw['columns'] ?? null ) ? $raw['columns'] : array();
@@ -631,6 +633,7 @@ final class ApplicationExport {
 			$columnas = CentreColumns::all_plus( $columnas, array_keys( PeopleExport::all_columns( $procedure_id ) ) );
 		}
 		return array(
+			'all'     => ! empty( $raw['all'] ),
 			'columns' => array_keys( self::valid_columns( $procedure_id, $columnas ) ),
 			'shape'   => self::SHAPE_PERSON === ( $raw['shape'] ?? '' ) ? self::SHAPE_PERSON : self::SHAPE_APPLICATION,
 			'format'  => self::FORMAT_MOODLE === ( $raw['format'] ?? '' ) ? self::FORMAT_MOODLE : self::FORMAT_CSV,
@@ -645,7 +648,7 @@ final class ApplicationExport {
 	 *
 	 * @param int $user_id      Who.
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{columns:string[], shape:string, format:string, who:string[]}
+	 * @return array{all:bool, columns:string[], shape:string, format:string, who:string[]}
 	 */
 	public static function choice( int $user_id, int $procedure_id ): array {
 		$guardada = get_user_option( self::CHOICE_META . $procedure_id, $user_id );

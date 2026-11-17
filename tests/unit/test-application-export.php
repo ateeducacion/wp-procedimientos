@@ -335,6 +335,50 @@ class Test_Application_Export extends WP_UnitTestCase {
 	}
 
 	/**
+	 * «Todas» con una del catálogo se recuerda como «todas»: una pregunta
+	 * añadida después sale en el CSV y la casilla vuelve marcada.
+	 */
+	public function test_all_plus_catalogue_columns_is_remembered_as_all() {
+		$procedimiento = $this->procedimiento();
+		$quien         = $this->administrator();
+		ApplicationExport::remember(
+			$quien,
+			$procedimiento,
+			ApplicationExport::sanitize_choice(
+				$procedimiento,
+				array(
+					'all'     => '1',
+					'columns' => array( 'island' ),
+				)
+			)
+		);
+		$preguntas   = Applications::questions( $procedimiento );
+		$preguntas[] = array(
+			'key'   => 'q4',
+			'label' => 'Pregunta nueva',
+			'type'  => ProcedureQuestions::TYPE_TEXT,
+		);
+		update_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, $preguntas );
+
+		$eleccion = ApplicationExport::choice( $quien, $procedimiento );
+		$this->assertTrue( $eleccion['all'] );
+		$this->assertContains( 'q4', $eleccion['columns'] );
+		$this->assertContains( 'island', $eleccion['columns'] );
+		$this->assertStringContainsString( 'Pregunta nueva', ApplicationExport::csv( $procedimiento, $eleccion['columns'], $eleccion['shape'] ) );
+
+		$this->acting_as( $quien );
+		$this->solicitud( $procedimiento, 'C0001', array() );
+		$_GET  = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $procedimiento,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_APPLICATIONS,
+		);
+		$panel = ProcedureEditorView::html( ProcedureEditor::model() );
+		$this->assertMatchesRegularExpression( '/data-prc-export-all\s+checked/', $panel );
+		$this->assertMatchesRegularExpression( '/value="q4" data-prc-export-col\s+checked/', $panel );
+		$this->assertMatchesRegularExpression( '/value="island" data-prc-export-extra\s+checked/', $panel );
+	}
+
+	/**
 	 * `code` y `q3` devuelven solo esas dos columnas, en el orden pedido.
 	 */
 	public function test_code_and_q3_give_only_those_two_columns_in_that_order() {
@@ -877,6 +921,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 
 		$this->assertSame(
 			array(
+				'all'     => false,
 				'columns' => array( 'q3', 'code' ),
 				'shape'   => ApplicationExport::SHAPE_PERSON,
 				'format'  => ApplicationExport::FORMAT_MOODLE,
@@ -894,6 +939,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		);
 		$this->assertSame(
 			array(
+				'all'     => true,
 				'columns' => array(),
 				'shape'   => ApplicationExport::SHAPE_APPLICATION,
 				'format'  => ApplicationExport::FORMAT_CSV,

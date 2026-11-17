@@ -1262,6 +1262,7 @@ final class ProcedureEditorView {
 		$export   = (array) ( $m['export'] ?? array() );
 		$eleccion = (array) ( $export['choice'] ?? array() );
 		$columnas = (array) ( $eleccion['columns'] ?? array() );
+		$todas    = ! empty( $eleccion['all'] ) || array() === $columnas;
 		$quienes  = (array) ( $eleccion['who'] ?? array() );
 		$formato  = (string) ( $eleccion['format'] ?? ApplicationExport::FORMAT_CSV );
 		$forma    = (string) ( $eleccion['shape'] ?? ApplicationExport::SHAPE_APPLICATION );
@@ -1307,7 +1308,7 @@ final class ProcedureEditorView {
 					<fieldset class="prc-exportar__grupo">
 						<legend>Columnas</legend>
 						<label class="prc-casilla">
-							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( array() === $columnas ); ?> />
+							<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_ALL ); ?>" value="1" data-prc-export-all <?php checked( $todas ); ?> />
 							Todas las columnas
 						</label>
 						<p class="prc-campo__ayuda">Marcada, se exportan todas las de siempre y no se miran las de abajo, salvo las del catálogo del centro (isla, municipio, tipo, titularidad y <?php echo esc_html( mb_strtolower( CentreColumns::zone_label() ) ); ?>), que solo salen si se marcan.</p>
@@ -1326,7 +1327,7 @@ final class ProcedureEditorView {
 									$extra = in_array( (string) $clave, CentreColumns::KEYS, true );
 									?>
 									<label class="prc-casilla">
-										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && array() === $columnas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
+										<input type="checkbox" name="<?php echo esc_attr( ProcedureEditor::FIELD_EXPORT_COLUMNS ); ?>[]" value="<?php echo esc_attr( (string) $clave ); ?>" <?php echo $extra ? 'data-prc-export-extra' : 'data-prc-export-col'; ?> <?php checked( ( ! $extra && $todas ) || in_array( (string) $clave, $columnas, true ) ); ?> />
 										<?php echo esc_html( (string) $rotulo ); ?>
 									</label>
 								<?php endforeach; ?>

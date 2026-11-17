@@ -5,6 +5,7 @@
  * @package Prc
  */
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -1026,6 +1027,95 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 			)
 		);
 		$this->assertStringContainsString( 'todavía no está publicado', ProcedureAccess::why_not_apply( $this->school_head( 'C0001' ), $procedimiento ) );
+	}
+
+	/**
+	 * Un docente sin centro, en un procedimiento de centros: lo presenta la
+	 * dirección, no se le pide un código de centro.
+	 */
+	public function test_why_not_apply_as_a_teacher_without_a_school_to_a_schools_procedure() {
+		$procedimiento = $this->procedure( $this->administrator() );
+
+		$porque = ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento );
+		$this->assertStringContainsString( 'lo presenta la dirección del centro, no cada docente', $porque );
+		$this->assertStringNotContainsString( 'código de centro', $porque );
+	}
+
+	/**
+	 * Sin `prc_apply`, en un procedimiento de profesorado: entre con su cuenta personal.
+	 */
+	public function test_why_not_apply_without_apply_capability_to_a_teachers_procedure() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+		$sin_cargo     = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		$porque = ProcedureAccess::why_not_apply( $sin_cargo, $procedimiento );
+		$this->assertStringContainsString( 'cada docente con su cuenta personal', $porque );
+		$this->assertStringContainsString( 'si ha entrado con otra, salga', $porque );
+	}
+
+	/**
+	 * Un docente que pide un código en un procedimiento de profesorado no puede.
+	 */
+	public function test_why_not_apply_as_a_teacher_with_a_code_to_a_teachers_procedure() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento ) );
+		$this->assertStringContainsString( 'no está disponible para su cuenta', ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento, 'C0001' ) );
+	}
+
+	/**
+	 * Pedir con un código de la cuenta cuya clase el procedimiento no admite:
+	 * el motivo general, con el centro y el correo de contacto.
+	 */
+	public function test_why_not_apply_with_a_code_of_a_kind_the_procedure_does_not_take() {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Centro de prueba Norte',
+					),
+					array(
+						'code' => 'G0001',
+						'name' => 'Agrupación rural de prueba',
+						'kind' => ProcedureMetaKeys::KIND_RURAL_GROUP,
+					),
+				);
+			}
+		);
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array(
+				ProcedureMetaKeys::CENTRE_KINDS   => array( ProcedureMetaKeys::KIND_SCHOOL ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+		$coordina      = $this->school_head( 'C0001' );
+		update_user_meta( $coordina, CentreScope::group_meta_key(), 'G0001' );
+
+		$this->assertSame(
+			'Su centro (Agrupación rural de prueba, G0001) no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha. Si cree que es un error, escriba a contacto@example.org.',
+			ProcedureAccess::why_not_apply( $coordina, $procedimiento, 'G0001' )
+		);
+	}
+
+	/**
+	 * Docente sin código de centro.
+	 *
+	 * @return int User ID.
+	 */
+	private function teacher(): int {
+		return (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
 	}
 
 	/**

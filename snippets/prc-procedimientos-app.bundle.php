@@ -5440,15 +5440,24 @@ final class ObserverScope {
 
 		$filas = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ')',
+				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ') ORDER BY umeta_id ASC',
 				array_merge( array( $meta ), $ids )
 			)
 		);
 
-		$out = array();
+
+
+
+		$seen = array();
+		$out  = array();
 		foreach ( (array) $filas as $fila ) {
+			$uid = (int) $fila->user_id;
+			if ( isset( $seen[ $uid ] ) ) {
+				continue;
+			}
+			$seen[ $uid ] = true;
 			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
-				$out[ (int) $fila->user_id ] = (int) $fila->user_id;
+				$out[ $uid ] = $uid;
 			}
 		}
 		$out = array_values( $out );

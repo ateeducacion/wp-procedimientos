@@ -616,4 +616,21 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->assertSame( array(), ObserverScope::observers_of( 'C9999' ), 'fuera del catálogo, nadie' );
 		$this->assertSame( array(), ObserverScope::observers_of( '' ) );
 	}
+
+	/**
+	 * El aviso a la zona llega a quien la zona deja consultar: con la meta en
+	 * varias filas, solo cuenta la primera, como en el acceso.
+	 */
+	public function test_zone_observers_match_the_zones_that_grant_access() {
+		$caso = $this->caso();
+		$uid  = $this->observer();
+		add_user_meta( $uid, ObserverScope::META_KEY, 'Z0001' );
+		add_user_meta( $uid, ObserverScope::META_KEY, 'Z0002' );
+
+		$this->assertSame( array( 'Z0001' ), ObserverScope::zones_for( $uid ) );
+		$this->assertFalse( ProcedureAccess::can_observe_application( $uid, $caso['c2'] ) );
+		$this->assertFalse( user_can( $uid, 'read_post', $caso['c2'] ) );
+		$this->assertNotContains( $uid, ObserverScope::observers_of( 'C0002' ), 'ni el aviso de una zona que no consulta' );
+		$this->assertContains( $uid, ObserverScope::observers_of( 'C0001' ) );
+	}
 }

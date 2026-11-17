@@ -3240,10 +3240,21 @@ final class ProcedureAccess {
 
 		$candidatos = get_users(
 			array(
-				'capability'   => self::CAP_MANAGE_PROCEDURES,
-				'fields'       => 'all_with_meta',
-				'meta_key'     => self::USER_AREA_META,
-				'meta_compare' => 'EXISTS',
+				'capability' => self::CAP_MANAGE_PROCEDURES,
+				'fields'     => 'all_with_meta',
+
+
+				'meta_query' => array(
+					'relation' => 'OR',
+					array(
+						'key'     => self::user_area_meta_key(),
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => self::USER_AREA_META,
+						'compare' => 'EXISTS',
+					),
+				),
 			)
 		);
 		$out        = array();

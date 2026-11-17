@@ -544,10 +544,21 @@ final class ProcedureAccess {
 		// ámbito— no vuelve a la base de datos.
 		$candidatos = get_users(
 			array(
-				'capability'   => self::CAP_MANAGE_PROCEDURES,
-				'fields'       => 'all_with_meta',
-				'meta_key'     => self::USER_AREA_META, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- solo quien tiene un ámbito en el perfil puede gestionarlo.
-				'meta_compare' => 'EXISTS',
+				'capability' => self::CAP_MANAGE_PROCEDURES,
+				'fields'     => 'all_with_meta',
+				// Solo quien tiene un ámbito en el perfil puede gestionarlo: el
+				// de este sitio o, sin él, la copia global de antes de la ADR-0032.
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- ídem.
+					'relation' => 'OR',
+					array(
+						'key'     => self::user_area_meta_key(),
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => self::USER_AREA_META,
+						'compare' => 'EXISTS',
+					),
+				),
 			)
 		);
 		$out        = array();

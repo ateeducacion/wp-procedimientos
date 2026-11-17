@@ -169,6 +169,20 @@ final class CentreCatalog {
 	}
 
 	/**
+	 * What the catalogue built in this request was built from.
+	 *
+	 * Cambia cuando cambia el catálogo —su opción, quién contesta los
+	 * filtros o {@see flush()}—: quien memoriza algo calculado de él lo
+	 * compara para saber si sigue valiendo.
+	 *
+	 * @return string
+	 */
+	public static function version(): string {
+		self::all();
+		return (string) self::$memo['key'];
+	}
+
+	/**
 	 * The catalogue indexed by code, for whoever looks up many codes at once.
 	 *
 	 * @return array<string, array<string, mixed>>

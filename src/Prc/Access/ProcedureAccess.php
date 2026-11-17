@@ -97,6 +97,17 @@ final class ProcedureAccess {
 	public const VIEW_DOCUMENT = 'document';
 
 	/**
+	 * The centres of each set of zones, worked out in this request, and the
+	 * catalogue version they come from ({@see observer_codes()}).
+	 *
+	 * @var array{catalogue:string|null, codes:array<string, string[]>}
+	 */
+	private static $zone_codes = array(
+		'catalogue' => null,
+		'codes'     => array(),
+	);
+
+	/**
 	 * Register filters.
 	 *
 	 * @return void
@@ -1156,7 +1167,25 @@ final class ProcedureAccess {
 	 */
 	public static function observer_codes( int $user_id ): array {
 		$zonas = self::observer_zones( $user_id );
-		return array() === $zonas ? array() : ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+		if ( array() === $zonas ) {
+			return array();
+		}
+		// Una vez por petición y por zonas, no en cada solicitud que se
+		// pregunta: el listado y read_post recorrerían el catálogo entero
+		// cada vez. La clave son las zonas leídas ahora, así que un cambio
+		// de zona se ve en el acto; un cambio del catálogo lo vacía.
+		$version = CentreCatalog::version();
+		if ( $version !== self::$zone_codes['catalogue'] ) {
+			self::$zone_codes = array(
+				'catalogue' => $version,
+				'codes'     => array(),
+			);
+		}
+		$key = implode( ',', $zonas );
+		if ( ! isset( self::$zone_codes['codes'][ $key ] ) ) {
+			self::$zone_codes['codes'][ $key ] = ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+		}
+		return self::$zone_codes['codes'][ $key ];
 	}
 
 	/**

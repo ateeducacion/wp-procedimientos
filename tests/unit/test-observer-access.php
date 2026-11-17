@@ -633,4 +633,50 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		$this->assertNotContains( $uid, ObserverScope::observers_of( 'C0002' ), 'ni el aviso de una zona que no consulta' );
 		$this->assertContains( $uid, ObserverScope::observers_of( 'C0001' ) );
 	}
+
+	/**
+	 * Los centros de las zonas se calculan una vez por petición y por zonas,
+	 * no en cada pregunta; un cambio de zona o del catálogo se ve en el acto.
+	 */
+	public function test_observer_codes_are_worked_out_once_and_follow_changes() {
+		$uid = $this->observer( array( 'Z0002' ) );
+		$this->assertSame( array( 'C0002', 'C0003' ), ProcedureAccess::observer_codes( $uid ) );
+
+		// Se envenena lo memorizado: si la segunda llamada recorre el catálogo, no lo ve.
+		$poison = static function ( array $codes ): void {
+			\Closure::bind(
+				static function () use ( $codes ): void {
+					foreach ( array_keys( self::$zone_codes['codes'] ) as $key ) {
+						self::$zone_codes['codes'][ $key ] = $codes;
+					}
+				},
+				null,
+				ProcedureAccess::class
+			)();
+		};
+		$poison( array( 'MEMO' ) );
+		$this->assertSame( array( 'MEMO' ), ProcedureAccess::observer_codes( $uid ), 'la segunda vez no recorre el catálogo' );
+
+		update_user_meta( $uid, ObserverScope::meta_key(), array( 'Z0001' ) );
+		$this->assertSame( array( 'C0001' ), ProcedureAccess::observer_codes( $uid ), 'un cambio de zona, en el acto' );
+
+		$poison( array( 'MEMO' ) );
+		add_filter(
+			'prc_centres',
+			static function ( array $centres ): array {
+				$centres[] = array(
+					'code' => 'C0004',
+					'name' => 'CEIP Cuatro',
+					'zone' => 'Z0001',
+				);
+				return $centres;
+			},
+			20
+		);
+		$this->assertSame( array( 'C0001', 'C0004' ), ProcedureAccess::observer_codes( $uid ), 'un cambio del catálogo, también' );
+
+		$poison( array( 'MEMO' ) );
+		CentreCatalog::flush();
+		$this->assertSame( array( 'C0001', 'C0004' ), ProcedureAccess::observer_codes( $uid ), 'y al vaciar el catálogo' );
+	}
 }

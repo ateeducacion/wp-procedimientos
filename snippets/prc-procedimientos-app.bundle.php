@@ -4936,6 +4936,20 @@ final class CentreCatalog {
 
 
 
+
+
+
+
+	public static function version(): string {
+		self::all();
+		return (string) self::$memo['key'];
+	}
+
+
+
+
+
+
 	public static function index(): array {
 		$todos = self::all();
 		if ( null === self::$memo['index'] ) {
@@ -5673,6 +5687,17 @@ final class ProcedureAccess {
 
 	public const VIEW_OWN      = 'own';
 	public const VIEW_DOCUMENT = 'document';
+
+
+
+
+
+
+
+	private static $zone_codes = array(
+		'catalogue' => null,
+		'codes'     => array(),
+	);
 
 
 
@@ -6734,7 +6759,25 @@ final class ProcedureAccess {
 
 	public static function observer_codes( int $user_id ): array {
 		$zonas = self::observer_zones( $user_id );
-		return array() === $zonas ? array() : ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+		if ( array() === $zonas ) {
+			return array();
+		}
+
+
+
+
+		$version = CentreCatalog::version();
+		if ( $version !== self::$zone_codes['catalogue'] ) {
+			self::$zone_codes = array(
+				'catalogue' => $version,
+				'codes'     => array(),
+			);
+		}
+		$key = implode( ',', $zonas );
+		if ( ! isset( self::$zone_codes['codes'][ $key ] ) ) {
+			self::$zone_codes['codes'][ $key ] = ObserverScope::codes_in( $zonas, CentreCatalog::index() );
+		}
+		return self::$zone_codes['codes'][ $key ];
 	}
 
 

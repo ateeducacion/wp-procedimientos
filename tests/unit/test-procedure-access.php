@@ -1034,41 +1034,41 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	 * dirección, no se le pide un código de centro.
 	 */
 	public function test_why_not_apply_as_a_teacher_without_a_school_to_a_schools_procedure() {
-		$procedimiento = $this->procedure( $this->administrator() );
+		$procedure = $this->procedure( $this->administrator() );
 
-		$porque = ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento );
-		$this->assertStringContainsString( 'lo presenta la dirección del centro, no cada docente', $porque );
-		$this->assertStringNotContainsString( 'código de centro', $porque );
+		$reason = ProcedureAccess::why_not_apply( $this->teacher(), $procedure );
+		$this->assertStringContainsString( 'lo presenta la dirección del centro, no cada docente', $reason );
+		$this->assertStringNotContainsString( 'código de centro', $reason );
 	}
 
 	/**
 	 * Sin `prc_apply`, en un procedimiento de profesorado: entre con su cuenta personal.
 	 */
 	public function test_why_not_apply_without_apply_capability_to_a_teachers_procedure() {
-		$procedimiento = $this->procedure(
+		$procedure = $this->procedure(
 			$this->administrator(),
 			array(),
 			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
 		);
-		$sin_cargo     = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$no_role   = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
 
-		$porque = ProcedureAccess::why_not_apply( $sin_cargo, $procedimiento );
-		$this->assertStringContainsString( 'cada docente con su cuenta personal', $porque );
-		$this->assertStringContainsString( 'si ha entrado con otra, salga', $porque );
+		$reason = ProcedureAccess::why_not_apply( $no_role, $procedure );
+		$this->assertStringContainsString( 'cada docente con su cuenta personal', $reason );
+		$this->assertStringContainsString( 'si ha entrado con otra, salga', $reason );
 	}
 
 	/**
 	 * Un docente que pide un código en un procedimiento de profesorado no puede.
 	 */
 	public function test_why_not_apply_as_a_teacher_with_a_code_to_a_teachers_procedure() {
-		$procedimiento = $this->procedure(
+		$procedure = $this->procedure(
 			$this->administrator(),
 			array(),
 			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
 		);
 
-		$this->assertSame( '', ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento ) );
-		$this->assertStringContainsString( 'no está disponible para su cuenta', ProcedureAccess::why_not_apply( $this->teacher(), $procedimiento, 'C0001' ) );
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $this->teacher(), $procedure ) );
+		$this->assertStringContainsString( 'no está disponible para su cuenta', ProcedureAccess::why_not_apply( $this->teacher(), $procedure, 'C0001' ) );
 	}
 
 	/**
@@ -1092,7 +1092,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 				);
 			}
 		);
-		$procedimiento = $this->procedure(
+		$procedure = $this->procedure(
 			$this->administrator(),
 			array(),
 			array(
@@ -1100,12 +1100,12 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
 			)
 		);
-		$coordina      = $this->school_head( 'C0001' );
-		update_user_meta( $coordina, CentreScope::group_meta_key(), 'G0001' );
+		$head      = $this->school_head( 'C0001' );
+		update_user_meta( $head, CentreScope::group_meta_key(), 'G0001' );
 
 		$this->assertSame(
 			'Su centro (Agrupación rural de prueba, G0001) no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha. Si cree que es un error, escriba a contacto@example.org.',
-			ProcedureAccess::why_not_apply( $coordina, $procedimiento, 'G0001' )
+			ProcedureAccess::why_not_apply( $head, $procedure, 'G0001' )
 		);
 	}
 
@@ -1114,21 +1114,21 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 	 * identificador que no existe.
 	 */
 	public function test_why_not_apply_to_a_draft_does_not_say_who_it_is_for() {
-		$de_profesorado = $this->procedure(
+		$teachers_draft = $this->procedure(
 			$this->administrator(),
 			array(),
 			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ),
 			array( 'post_status' => 'draft' )
 		);
-		$de_centros     = $this->procedure( $this->administrator(), array(), array(), array( 'post_status' => 'draft' ) );
-		$no_existe      = $this->procedure( $this->administrator() );
-		wp_delete_post( $no_existe, true );
+		$schools_draft  = $this->procedure( $this->administrator(), array(), array(), array( 'post_status' => 'draft' ) );
+		$missing        = $this->procedure( $this->administrator() );
+		wp_delete_post( $missing, true );
 
-		foreach ( array( $this->school_head( 'C0001' ), $this->teacher() ) as $cuenta ) {
-			$ninguno = ProcedureAccess::why_not_apply( $cuenta, $no_existe );
-			$this->assertStringContainsString( 'todavía no está publicado', $ninguno );
-			$this->assertSame( $ninguno, ProcedureAccess::why_not_apply( $cuenta, $de_profesorado ) );
-			$this->assertSame( $ninguno, ProcedureAccess::why_not_apply( $cuenta, $de_centros ) );
+		foreach ( array( $this->school_head( 'C0001' ), $this->teacher() ) as $account ) {
+			$expected = ProcedureAccess::why_not_apply( $account, $missing );
+			$this->assertStringContainsString( 'todavía no está publicado', $expected );
+			$this->assertSame( $expected, ProcedureAccess::why_not_apply( $account, $teachers_draft ) );
+			$this->assertSame( $expected, ProcedureAccess::why_not_apply( $account, $schools_draft ) );
 		}
 	}
 

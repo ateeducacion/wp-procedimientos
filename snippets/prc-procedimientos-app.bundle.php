@@ -7105,6 +7105,7 @@ final class ProcedureAccess {
 
 
 
+
 	public static function why_not_apply( int $user_id, int $post_id, string $code = '' ): string {
 		if ( self::can_apply( $user_id, $post_id, $code ) ) {
 			return '';

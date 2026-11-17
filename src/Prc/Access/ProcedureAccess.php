@@ -1055,9 +1055,10 @@ final class ProcedureAccess {
 	 * quién se dirige, el centro de la cuenta, el código pedido y la clase de
 	 * código. Un borrador responde como un identificador que no existe: no
 	 * dice a quién va dirigido. Si no es ninguno, son los acotados del
-	 * procedimiento ({@see CentreEligibility}): con `can_apply()` en falso, ningún código de
-	 * la cuenta los pasa, así que el motivo es el del primero. Los que dependen
-	 * del procedimiento terminan en su correo de contacto.
+	 * procedimiento ({@see CentreEligibility}): con `can_apply()` en falso,
+	 * ningún código de la cuenta los pasa, así que el motivo es el del
+	 * primero. Los que dependen del procedimiento terminan en su correo de
+	 * contacto.
 	 *
 	 * @param int    $user_id User ID (0 = nobody).
 	 * @param int    $post_id Procedure ID (0 = just the account).

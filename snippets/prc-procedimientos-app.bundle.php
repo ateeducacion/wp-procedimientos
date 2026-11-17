@@ -16271,7 +16271,7 @@ final class Messages {
 					array_merge(
 						array( 'Se ha entregado un documento del procedimiento «' . $titulo . '».', '' ),
 						self::field( 'Centro', self::text( $ctx, 'centre' ) ),
-						self::field( 'Presentada por', self::text( $ctx, 'applicant' ) ),
+						self::field( 'Entregado por', self::text( $ctx, 'applicant' ) ),
 						self::field( 'Documento', self::text( $ctx, 'document' ) ),
 						self::field( 'Fichero', self::text( $ctx, 'file' ) ),
 						self::field( 'Fecha', self::text( $ctx, 'date' ) ),
@@ -16850,6 +16850,7 @@ final class Mailer {
 
 
 
+
 	public static function on_delivery_saved( $application_id, $question_key = '', $user_id = 0 ): void {
 		self::safely(
 			static function () use ( $application_id, $question_key, $user_id ): void {
@@ -16866,9 +16867,11 @@ final class Mailer {
 				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
 				unset( $ctx['answers'] );
 
-				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
-				$destinos[] = self::email_of( (int) $user_id );
-				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
+				self::send( self::EVENT_DELIVERY_RECEIVED, array( self::email_of( (int) $user_id ) ), $ctx );
+
+
+				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_DELIVERIES );
+				self::send( self::EVENT_DELIVERY_RECEIVED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);
 	}

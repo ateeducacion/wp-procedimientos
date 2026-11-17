@@ -118,7 +118,7 @@ final class Messages {
 					array_merge(
 						array( 'Se ha entregado un documento del procedimiento «' . $titulo . '».', '' ),
 						self::field( 'Centro', self::text( $ctx, 'centre' ) ),
-						self::field( 'Presentada por', self::text( $ctx, 'applicant' ) ),
+						self::field( 'Entregado por', self::text( $ctx, 'applicant' ) ),
 						self::field( 'Documento', self::text( $ctx, 'document' ) ),
 						self::field( 'Fichero', self::text( $ctx, 'file' ) ),
 						self::field( 'Fecha', self::text( $ctx, 'date' ) ),

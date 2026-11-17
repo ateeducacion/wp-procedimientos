@@ -403,8 +403,9 @@ final class Mailer {
 	/**
 	 * A document with its own deadline has just been delivered.
 	 *
-	 * A quien entrega, que puede no ser quien presentó la solicitud, y a
-	 * los contactos del procedimiento.
+	 * A quien entrega, que puede no ser quien presentó la solicitud, con el
+	 * enlace a su pantalla; y a los contactos del procedimiento, con el
+	 * enlace a las entregas del taller.
 	 *
 	 * @param int    $application_id Application ID.
 	 * @param string $question_key   Key of the delivery question.
@@ -427,9 +428,11 @@ final class Mailer {
 				$ctx['date'] = (string) wp_date( 'd-m-Y H:i' );
 				unset( $ctx['answers'] );
 
-				$destinos   = self::contacts( (int) $ctx['procedure_id'] );
-				$destinos[] = self::email_of( (int) $user_id );
-				self::send( self::EVENT_DELIVERY_RECEIVED, $destinos, $ctx );
+				self::send( self::EVENT_DELIVERY_RECEIVED, array( self::email_of( (int) $user_id ) ), $ctx );
+
+				// Los contactos no abren la pantalla del centro: van al taller, a sus entregas.
+				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_DELIVERIES );
+				self::send( self::EVENT_DELIVERY_RECEIVED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);
 	}

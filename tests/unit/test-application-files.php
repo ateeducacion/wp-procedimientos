@@ -1592,6 +1592,48 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'memoria.pdf', (string) $enviados[0]['message'] );
 	}
 
+	/**
+	 * The contacts get the workshop's deliveries panel, not the applicant's
+	 * screen; whoever delivers gets their own screen, and the line says who
+	 * delivered, not who submitted.
+	 */
+	public function test_the_delivery_mail_to_the_contacts_links_the_workshop() {
+		$data = $this->delivery_fixture();
+		update_post_meta( $data['procedure'], ProcedureMetaKeys::CONTACT_EMAILS, array( 'ambito@example.org' ) );
+		$otra = $this->school_head( 'C0001' );
+		wp_update_user(
+			array(
+				'ID'           => $otra,
+				'user_email'   => 'jefatura@example.org',
+				'display_name' => 'Jefatura de prueba',
+			)
+		);
+		$enviados = array();
+		add_filter(
+			'pre_wp_mail',
+			static function ( $corto, array $atts ) use ( &$enviados ): bool {
+				unset( $corto );
+				$enviados[ (string) $atts['to'] ] = (string) $atts['message'];
+				return true;
+			},
+			10,
+			2
+		);
+
+		$this->assertTrue( ApplicationFiles::deliver( $data['application'], 'q1', array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ), $otra ) );
+
+		$taller    = ProcedureEditor::url( $data['procedure'], ProcedureEditor::PANEL_DELIVERIES );
+		$solicitud = ApplyForm::url( $data['procedure'] );
+		$this->assertArrayHasKey( 'ambito@example.org', $enviados );
+		$this->assertArrayHasKey( 'jefatura@example.org', $enviados );
+		$this->assertStringContainsString( $taller, $enviados['ambito@example.org'] );
+		$this->assertStringNotContainsString( $solicitud, $enviados['ambito@example.org'] );
+		$this->assertStringContainsString( $solicitud, $enviados['jefatura@example.org'] );
+		$this->assertStringNotContainsString( $taller, $enviados['jefatura@example.org'] );
+		$this->assertStringContainsString( 'Entregado por: Jefatura de prueba', $enviados['ambito@example.org'] );
+		$this->assertStringNotContainsString( 'Presentada por', $enviados['ambito@example.org'] );
+	}
+
 	/** A resolved procedure accepts its document without reopening or resetting review. */
 	public function test_a_resolved_procedure_accepts_a_delivery_without_changing_the_application() {
 		$data   = $this->delivery_fixture();

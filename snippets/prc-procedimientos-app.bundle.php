@@ -8440,6 +8440,9 @@ final class ApplicationExport {
 
 
 
+
+
+
 	public const CHOICE_META = 'prc_export_';
 
 
@@ -8479,7 +8482,8 @@ final class ApplicationExport {
 	public static function on_delete( int $post_id, $post = null ): void {
 		$tipo = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
 		if ( ProcedurePostType::POST_TYPE === $tipo ) {
-			delete_metadata( 'user', 0, self::CHOICE_META . $post_id, '', true );
+			global $wpdb;
+			delete_metadata( 'user', 0, $wpdb->get_blog_prefix() . self::CHOICE_META . $post_id, '', true );
 		}
 	}
 
@@ -8993,7 +8997,7 @@ final class ApplicationExport {
 
 
 	public static function choice( int $user_id, int $procedure_id ): array {
-		$guardada = get_user_meta( $user_id, self::CHOICE_META . $procedure_id, true );
+		$guardada = get_user_option( self::CHOICE_META . $procedure_id, $user_id );
 		return self::sanitize_choice( $procedure_id, is_array( $guardada ) ? $guardada : array() );
 	}
 
@@ -9007,7 +9011,7 @@ final class ApplicationExport {
 
 	public static function remember( int $user_id, int $procedure_id, array $choice ): void {
 		if ( $user_id > 0 && $procedure_id > 0 ) {
-			update_user_meta( $user_id, self::CHOICE_META . $procedure_id, self::sanitize_choice( $procedure_id, $choice ) );
+			update_user_option( $user_id, self::CHOICE_META . $procedure_id, self::sanitize_choice( $procedure_id, $choice ) );
 		}
 	}
 

@@ -772,7 +772,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 
 	/**
 	 * La descarga a medida va por POST, y la elección se recuerda por persona y
-	 * procedimiento en `prc_export_{id}`.
+	 * procedimiento en la opción de usuario `prc_export_{id}`, con el prefijo del sitio.
 	 */
 	public function test_the_download_follows_the_choice_and_remembers_it() {
 		$procedimiento = $this->procedimiento();
@@ -790,11 +790,11 @@ class Test_Application_Export extends WP_UnitTestCase {
 		);
 		$this->assertSame( "\xEF\xBB\xBF\"Código\";\"Modalidad\"\r\n\"C0001\";\"B\"\r\n", $csv );
 
-		$guardada = get_user_meta( $quien, ApplicationExport::CHOICE_META . $procedimiento, true );
+		$guardada = get_user_option( ApplicationExport::CHOICE_META . $procedimiento, $quien );
 		$this->assertSame( array( 'code', 'q3' ), $guardada['columns'] );
 		$this->assertSame( ApplicationExport::SHAPE_PERSON, $guardada['shape'] );
 		$this->assertSame( $guardada, ApplicationExport::choice( $quien, $procedimiento ) );
-		$this->assertSame( '', get_user_meta( $this->administrator(), ApplicationExport::CHOICE_META . $procedimiento, true ), 'es de cada persona' );
+		$this->assertFalse( get_user_option( ApplicationExport::CHOICE_META . $procedimiento, $this->administrator() ), 'es de cada persona' );
 
 		$usuarios = $this->exportar(
 			$quien,
@@ -919,11 +919,38 @@ class Test_Application_Export extends WP_UnitTestCase {
 		ApplicationExport::remember( $una, $otro, $eleccion );
 
 		wp_trash_post( $procedimiento );
-		$this->assertNotSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $procedimiento, true ), 'la papelera no borra nada' );
+		$this->assertNotFalse( get_user_option( ApplicationExport::CHOICE_META . $procedimiento, $una ), 'la papelera no borra nada' );
 
 		wp_delete_post( $procedimiento, true );
-		$this->assertSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $procedimiento, true ) );
-		$this->assertSame( '', get_user_meta( $dos, ApplicationExport::CHOICE_META . $procedimiento, true ) );
-		$this->assertNotSame( '', get_user_meta( $una, ApplicationExport::CHOICE_META . $otro, true ), 'la de otro procedimiento se queda' );
+		$this->assertFalse( get_user_option( ApplicationExport::CHOICE_META . $procedimiento, $una ) );
+		$this->assertFalse( get_user_option( ApplicationExport::CHOICE_META . $procedimiento, $dos ) );
+		$this->assertNotFalse( get_user_option( ApplicationExport::CHOICE_META . $otro, $una ), 'la de otro procedimiento se queda' );
+	}
+
+	/**
+	 * La elección recordada es de cada sitio: en un multisitio las metas de
+	 * usuario son de toda la red y los ID de entrada, de cada sitio. Se guarda
+	 * con el prefijo del sitio, y borrar el procedimiento solo borra la de ese
+	 * sitio.
+	 */
+	public function test_the_remembered_choice_is_per_site() {
+		global $wpdb;
+		$procedimiento = $this->procedimiento();
+		$quien         = $this->administrator();
+		$clave         = ApplicationExport::CHOICE_META . $procedimiento;
+		ApplicationExport::remember( $quien, $procedimiento, array( 'columns' => array( 'code' ) ) );
+
+		$this->assertSame( '', get_user_meta( $quien, $clave, true ), 'sin el prefijo del sitio no hay nada' );
+		$this->assertSame( array( 'code' ), get_user_option( $clave, $quien )['columns'] );
+		$this->assertSame( array( 'code' ), ApplicationExport::choice( $quien, $procedimiento )['columns'] );
+
+		// La de otro sitio con el mismo ID de procedimiento.
+		$otro_sitio = 'wp_999_' . $clave;
+		update_user_meta( $quien, $otro_sitio, array( 'columns' => array( 'centre' ) ) );
+		$this->assertNotSame( $wpdb->get_blog_prefix() . $clave, $otro_sitio );
+
+		wp_delete_post( $procedimiento, true );
+		$this->assertFalse( get_user_option( $clave, $quien ) );
+		$this->assertNotSame( '', get_user_meta( $quien, $otro_sitio, true ), 'la del otro sitio se queda' );
 	}
 }

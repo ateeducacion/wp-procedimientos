@@ -222,3 +222,8 @@ y se pone a sí misma en la coordinación daría dos filas con un correo, y la
 subida de usuarios de Moodle no crea dos cuentas con el mismo correo salvo que
 se active `allowaccountssameemail`. Se queda la primera y la otra se cuenta;
 el diálogo la avisa como «con el usuario o el correo en conflicto».
+
+La elección recordada del diálogo, `prc_export_{id}`, es una **opción de
+usuario** (`update_user_option()`), con el prefijo de cada sitio: en un
+multisitio las metas de usuario son de toda la red y los ID de entrada, de cada
+sitio. Borrar el procedimiento solo borra la de su sitio.

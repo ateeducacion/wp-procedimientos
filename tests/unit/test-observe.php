@@ -889,4 +889,37 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->assertCount( 10, Observe::model( array() )['procedures'] );
 		$this->assertLessThan( 10, $ten - $two, 'con ocho procedimientos más, no ocho veces más consultas' );
 	}
+
+	/**
+	 * Sin la columna del estado, un filtro por estado armado a mano no se
+	 * aplica: ni en la tabla ni en la exportación se deduce qué centros
+	 * están excluidos.
+	 */
+	public function test_a_crafted_review_filter_is_ignored_without_the_state_column() {
+		$caso = $this->caso( array( ProcedureMetaKeys::OBSERVER_EXPORT => true ) );
+		update_post_meta( $caso['c2'], ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_EXCLUDED );
+		update_post_meta( $caso['c3'], ApplicationMetaKeys::REVIEW_STATE, ApplicationMetaKeys::REVIEW_ADMITTED );
+		$uid = $this->observer( array( 'Z0002' ) );
+		$this->acting_as( $uid );
+
+		$modelo = Observe::model(
+			array(
+				Observe::ARG_PROCEDURE        => (string) $caso['procedure'],
+				ApplicationFilter::ARG_REVIEW => ApplicationMetaKeys::REVIEW_EXCLUDED,
+			)
+		);
+		$this->assertArrayNotHasKey( 'state', $modelo['columns'] );
+		$this->assertSame( '', $modelo['table']['filter']['review'] );
+		$this->assertSame( 2, $modelo['table']['all'] );
+		$this->assertSame( 2, $modelo['table']['total'] );
+		$this->assertCount( 2, $modelo['rows'] );
+
+		$csv = (string) Observe::csv( $uid, $caso['procedure'], array( ApplicationFilter::ARG_REVIEW => ApplicationMetaKeys::REVIEW_EXCLUDED ) );
+		$this->assertStringContainsString( 'IES Dos', $csv );
+		$this->assertStringContainsString( 'CEO Tres', $csv );
+
+		$csv = $this->exportar( $uid, $caso['procedure'], array( ApplicationFilter::ARG_REVIEW => ApplicationMetaKeys::REVIEW_ADMITTED ) );
+		$this->assertStringContainsString( 'IES Dos', $csv, 'tampoco por el POST de exportar' );
+		$this->assertStringContainsString( 'CEO Tres', $csv );
+	}
 }

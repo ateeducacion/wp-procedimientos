@@ -314,25 +314,27 @@ final class PeopleSpec {
 	/**
 	 * Whether the list can take over the coordination the form used to ask for.
 	 *
-	 * Los papeles son texto libre: la lista recoge la coordinación solo si
-	 * tiene un papel cuyo rótulo la nombra y un mínimo que obliga a dar de
-	 * alta a alguien. Si no, la coordinación se sigue pidiendo en el
-	 * formulario, y no se pierde un dato que era obligatorio.
+	 * Los papeles son texto libre y la lista no tiene un mínimo por papel: la
+	 * lista recoge la coordinación solo si **todos** sus papeles la nombran y
+	 * su mínimo cubre las personas coordinadoras que se piden. Así no se
+	 * completa con quien no coordina. Si no, la coordinación se sigue pidiendo
+	 * en el formulario, y no se pierde un dato que era obligatorio.
 	 *
-	 * @param array<string, mixed> $spec Specification.
+	 * @param array<string, mixed> $spec   Specification.
+	 * @param int                  $wanted How many coordinators the procedure asks for.
 	 * @return bool
 	 */
-	public static function collects_coordination( array $spec ): bool {
+	public static function collects_coordination( array $spec, int $wanted ): bool {
 		$spec = self::sanitize( $spec );
-		if ( true !== $spec['enabled'] || (int) $spec['min'] < 1 ) {
+		if ( true !== $spec['enabled'] || (int) $spec['min'] < max( 1, $wanted ) || array() === (array) $spec['roles'] ) {
 			return false;
 		}
-		foreach ( (array) $spec['roles'] as $papel ) {
-			if ( false !== strpos( strtolower( (string) $papel['label'] ), 'coordina' ) ) {
-				return true;
+		foreach ( (array) $spec['roles'] as $role ) {
+			if ( false === strpos( strtolower( (string) $role['label'] ), 'coordina' ) ) {
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	/**

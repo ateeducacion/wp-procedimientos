@@ -722,6 +722,40 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Dos personas coordinadoras pedidas y una lista que se completa con una
+	 * sola persona de cualquier papel: la lista no las garantiza, así que el
+	 * formulario las sigue pidiendo.
+	 */
+	public function test_two_coordinators_stay_in_the_form_with_a_list_of_one() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 2,
+				ProcedureMetaKeys::PEOPLE_SPEC       => array(
+					'roles' => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación',
+						),
+						array(
+							'key'   => 'r2',
+							'label' => 'Participante',
+						),
+					),
+					'min'   => 1,
+				) + $this->lista_de_personas(),
+			)
+		);
+		$spec      = Applications::spec( $procedure );
+		$this->assertFalse( $spec['coordinators_in_list'] );
+		$this->assertSame( 2, $spec['coordinator_count'] );
+		$this->assertTrue( $spec['requires_coordinator'] );
+
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
+		$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', ApplyForm::render() );
+	}
+
+	/**
 	 * Con la lista que solo gestionan las admitidas, la nota de la
 	 * coordinación no promete un plazo que todavía no corre.
 	 */

@@ -569,4 +569,26 @@ class Test_Application_People extends WP_UnitTestCase {
 		$this->assertSame( 'Ana Pérez Díaz · ana@example.org · Participante · Eje 1', $texto );
 		$this->assertStringNotContainsString( '12345678Z', $texto );
 	}
+
+	/**
+	 * La lista recoge la coordinación solo si obliga a dar de alta a tantas
+	 * personas coordinadoras como se piden: un mínimo que las cubre y ningún
+	 * papel con el que completarlo sin coordinar.
+	 */
+	public function test_collects_coordination_needs_a_minimum_that_covers_the_coordinators() {
+		$solo_coordinacion = array(
+			'roles' => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Coordinación',
+				),
+			),
+		);
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 1 ) ), 2 ), 'un mínimo de 1 no cubre dos personas coordinadoras' );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 2 ) ), 2 ), 'con «Participante» el mínimo se completa sin coordinar' );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 1 ) + $solo_coordinacion ), 2 ) );
+		$this->assertTrue( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 2 ) + $solo_coordinacion ), 2 ) );
+		$this->assertTrue( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 3 ) + $solo_coordinacion ), 1 ) );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 0 ) + $solo_coordinacion ), 1 ), 'sin mínimo no se recoge nada' );
+	}
 }

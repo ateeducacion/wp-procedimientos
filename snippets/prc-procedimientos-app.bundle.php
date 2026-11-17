@@ -3190,17 +3190,19 @@ final class PeopleSpec {
 
 
 
-	public static function collects_coordination( array $spec ): bool {
+
+
+	public static function collects_coordination( array $spec, int $wanted ): bool {
 		$spec = self::sanitize( $spec );
-		if ( true !== $spec['enabled'] || (int) $spec['min'] < 1 ) {
+		if ( true !== $spec['enabled'] || (int) $spec['min'] < max( 1, $wanted ) || array() === (array) $spec['roles'] ) {
 			return false;
 		}
-		foreach ( (array) $spec['roles'] as $papel ) {
-			if ( false !== strpos( strtolower( (string) $papel['label'] ), 'coordina' ) ) {
-				return true;
+		foreach ( (array) $spec['roles'] as $role ) {
+			if ( false === strpos( strtolower( (string) $role['label'] ), 'coordina' ) ) {
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 
@@ -12163,7 +12165,7 @@ final class Applications {
 
 
 
-		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ) );
+		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ), $pide );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
 			'coordinator_count'    => $en_lista ? 0 : $pide,

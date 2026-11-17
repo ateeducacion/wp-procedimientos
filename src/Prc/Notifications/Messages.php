@@ -175,7 +175,7 @@ final class Messages {
 				'Se ha presentado la solicitud n.º ' . $numero . ' al procedimiento «' . $titulo . '» el ' . self::text( $ctx, 'submitted' )
 					. ( '' !== $quien ? ', por ' . $quien : '' ) . ( '' !== $centro ? ', para ' . $centro : '' ) . '. Guarde este correo: es su justificante.',
 				'',
-				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
+				self::receipt_state( $falta, self::lines( $ctx, 'pending' ) ),
 			);
 			$hasta  = self::text( $ctx, 'people_until' );
 			$porque = self::text( $ctx, 'people_why' );
@@ -196,6 +196,23 @@ final class Messages {
 				array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
 			),
 		);
+	}
+
+	/**
+	 * The «Estado» line of the receipt.
+	 *
+	 * Completa solo si no falta nada y tampoco queda una entrega obligatoria
+	 * por hacer en su plazo.
+	 *
+	 * @param array<int, string> $falta  What is missing.
+	 * @param array<int, string> $quedan Required deliveries still to be made, with their window.
+	 * @return string
+	 */
+	private static function receipt_state( array $falta, array $quedan ): string {
+		if ( array() !== $falta ) {
+			return 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		}
+		return array() === $quedan ? 'Estado: completa.' : 'Estado: presentada; le queda entregar: ' . implode( '; ', $quedan ) . '.';
 	}
 
 	/**

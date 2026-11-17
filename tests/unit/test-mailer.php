@@ -327,6 +327,32 @@ class Test_Mailer extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una entrega obligatoria que todavía no ha vencido: el acuse no dice
+	 * «completa», dice qué queda por entregar y en qué plazo.
+	 */
+	public function test_the_receipt_does_not_say_complete_with_a_pending_delivery() {
+		$procedimiento = $this->procedimiento();
+		$preguntas     = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+		$preguntas[]   = array(
+			'label'     => 'Memoria final',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'delivery'  => true,
+			'required'  => true,
+			'opens_at'  => $this->dia( 10 ),
+			'closes_at' => $this->dia( 20 ),
+		);
+		update_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, $preguntas );
+		Applications::save( $procedimiento, $this->direccion(), $this->nucleo() );
+
+		$cuerpo = (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'];
+		$this->assertStringNotContainsString( 'Estado: completa.', $cuerpo );
+		$this->assertStringContainsString(
+			'Estado: presentada; le queda entregar: Memoria final, del ' . implode( '-', array_reverse( explode( '-', $this->dia( 10 ) ) ) ) . ' al ' . implode( '-', array_reverse( explode( '-', $this->dia( 20 ) ) ) ) . '.',
+			$cuerpo
+		);
+	}
+
+	/**
 	 * Con una lista que solo gestionan las admitidas, el justificante no
 	 * promete lo que la pantalla rechaza: dice por qué todavía no.
 	 */

@@ -185,14 +185,18 @@ final class ApplicationProgressView {
 	}
 
 	/**
-	 * «Completa» or «Incompleta» and what it lacks, in one line.
+	 * «Completa», «Incompleta» and what it lacks, or what is still to be delivered, in one line.
 	 *
 	 * @param array<string, mixed> $p What ApplicationProgress::model() returned.
 	 * @return string
 	 */
 	private static function completeness( array $p ): string {
-		$falta = (array) ( $p['missing'] ?? array() );
-		return array() === $falta ? 'Completa: no le falta nada.' : 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		$falta  = (array) ( $p['missing'] ?? array() );
+		$quedan = (array) ( $p['pending'] ?? array() );
+		if ( array() !== $falta ) {
+			return 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		}
+		return array() === $quedan ? 'Completa: no le falta nada.' : 'Presentada; le queda entregar: ' . implode( '; ', $quedan ) . '.';
 	}
 
 	/**

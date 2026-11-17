@@ -4218,6 +4218,37 @@ final class ApplicationCompleteness {
 
 
 
+
+
+
+
+
+
+	public static function pending( array $questions, $files, string $today, string $review ): array {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ! ProcedureInput::is_valid_date( $today ) ) {
+			return array();
+		}
+		$files = is_array( $files ) ? $files : array();
+		$out   = array();
+		foreach ( $questions as $question ) {
+			if ( empty( $question['required'] ) || ! ProcedureQuestions::valid_delivery( $question ) || (string) $question['closes_at'] < $today ) {
+				continue;
+			}
+			$doc = $files[ (string) $question['key'] ] ?? null;
+			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+				$out[] = $question;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
 	public static function overdue( array $questions, string $today ): array {
 		$out = array();
 		foreach ( $questions as $pregunta ) {
@@ -26842,8 +26873,12 @@ final class ApplicationProgressView {
 
 
 	private static function completeness( array $p ): string {
-		$falta = (array) ( $p['missing'] ?? array() );
-		return array() === $falta ? 'Completa: no le falta nada.' : 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		$falta  = (array) ( $p['missing'] ?? array() );
+		$quedan = (array) ( $p['pending'] ?? array() );
+		if ( array() !== $falta ) {
+			return 'Incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		}
+		return array() === $quedan ? 'Completa: no le falta nada.' : 'Presentada; le queda entregar: ' . implode( '; ', $quedan ) . '.';
 	}
 
 
@@ -28921,6 +28956,7 @@ final class ApplicationProgress {
 			'steps'          => self::steps( $m, $people ),
 			'application'    => $id,
 			'missing'        => $falta,
+			'pending'        => $id > 0 ? self::pending( $id ) : array(),
 			'show_complete'  => $id > 0 && ! $excluida,
 			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
 			'people_min'     => (int) ( $people['min'] ?? 0 ),
@@ -28956,6 +28992,37 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 			ApplicationOperations::pending_for_school( $application_id )
 		);
+	}
+
+
+
+
+
+
+
+	public static function pending( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$out          = array();
+		$pending      = ApplicationCompleteness::pending(
+			Applications::questions( $procedure_id ),
+			get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ),
+			ProcedureState::today(),
+			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
+		);
+		foreach ( $pending as $question ) {
+			$out[] = (string) $question['label'] . ', del ' . self::day( (string) $question['opens_at'] ) . ' al ' . self::day( (string) $question['closes_at'] );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function day( string $day ): string {
+		return implode( '-', array_reverse( explode( '-', $day ) ) );
 	}
 
 
@@ -29031,8 +29098,13 @@ final class ApplicationProgress {
 		}
 		$verbo = 'Solicitud ' . self::VERB[ $hecho ];
 		if ( array() === (array) $p['missing'] ) {
-			$out['texto'] = ( 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo )
-				. '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.';
+			$cabeza = 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo;
+
+
+			$quedan       = (array) ( $p['pending'] ?? array() );
+			$out['texto'] = array() === $quedan
+				? $cabeza . '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.'
+				: $cabeza . '. Le queda entregar: ' . implode( '; ', $quedan ) . '.';
 			return $out;
 		}
 		$out['tipo'] = 'aviso';
@@ -30919,7 +30991,7 @@ final class Messages {
 				'Se ha presentado la solicitud n.º ' . $numero . ' al procedimiento «' . $titulo . '» el ' . self::text( $ctx, 'submitted' )
 					. ( '' !== $quien ? ', por ' . $quien : '' ) . ( '' !== $centro ? ', para ' . $centro : '' ) . '. Guarde este correo: es su justificante.',
 				'',
-				array() === $falta ? 'Estado: completa.' : 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.',
+				self::receipt_state( $falta, self::lines( $ctx, 'pending' ) ),
 			);
 			$hasta  = self::text( $ctx, 'people_until' );
 			$porque = self::text( $ctx, 'people_why' );
@@ -30940,6 +31012,23 @@ final class Messages {
 				array( '', 'Este correo es un acuse automático: no hace falta responderlo.' )
 			),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function receipt_state( array $falta, array $quedan ): string {
+		if ( array() !== $falta ) {
+			return 'Estado: presentada, pero incompleta: ' . lcfirst( implode( '; ', $falta ) ) . '.';
+		}
+		return array() === $quedan ? 'Estado: completa.' : 'Estado: presentada; le queda entregar: ' . implode( '; ', $quedan ) . '.';
 	}
 
 
@@ -31864,6 +31953,7 @@ final class Mailer {
 			'number'       => (string) $application_id,
 			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
 			'missing'      => ApplicationProgress::missing( $application_id ),
+			'pending'      => ApplicationProgress::pending( $application_id ),
 			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',
 			'people_url'   => (string) $ctx['url'] . '#' . PeopleForm::ANCHOR,
 			'people_why'   => $porque,

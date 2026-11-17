@@ -356,4 +356,42 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$this->assertStringContainsString( '(el procedimiento pide al menos 2). La lista de personas se abre el ' . $dia . '.', $html );
 		$this->assertStringNotContainsString( 'Hágalo abajo', $html );
 	}
+
+	/**
+	 * Una entrega obligatoria que todavía no ha vencido no falta, pero queda
+	 * por hacer: ni el aviso ni la tarjeta dicen que no hay nada más que
+	 * hacer; nombran la entrega y su plazo.
+	 */
+	public function test_a_pending_required_delivery_is_not_called_complete() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array(
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( -1 ),
+				ProcedureMetaKeys::CLOSES_AT => $this->dia( 5 ),
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'label'     => 'Memoria final',
+						'type'      => ProcedureQuestions::TYPE_FILE,
+						'delivery'  => true,
+						'required'  => true,
+						'opens_at'  => $this->dia( 10 ),
+						'closes_at' => $this->dia( 20 ),
+					),
+				),
+			),
+			array( 'post_title' => 'Red de prueba' )
+		);
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+		$plazo = 'Memoria final, del ' . implode( '-', array_reverse( explode( '-', $this->dia( 10 ) ) ) ) . ' al ' . implode( '-', array_reverse( explode( '-', $this->dia( 20 ) ) ) );
+
+		$this->assertSame( array( $plazo ), ApplicationProgress::pending( $solicitud ) );
+		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
+		$this->assertStringNotContainsString( 'no tiene que hacer nada más', $html );
+		$this->assertStringNotContainsString( 'Completa: no le falta nada.', $html );
+		$this->assertStringContainsString( 'Solicitud presentada el ' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . '. Le queda entregar: ' . $plazo . '.', $html );
+		$this->assertStringContainsString( 'Presentada; le queda entregar: ' . $plazo . '.', $html );
+	}
 }

@@ -73,6 +73,7 @@ final class ApplicationProgress {
 			'steps'          => self::steps( $m, $people ),
 			'application'    => $id,
 			'missing'        => $falta,
+			'pending'        => $id > 0 ? self::pending( $id ) : array(),
 			'show_complete'  => $id > 0 && ! $excluida,
 			'people_missing' => $id > 0 && ! empty( $people['show'] ) && empty( $people['complete'] ),
 			'people_min'     => (int) ( $people['min'] ?? 0 ),
@@ -108,6 +109,37 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 			ApplicationOperations::pending_for_school( $application_id )
 		);
+	}
+
+	/**
+	 * The required deliveries still to be made, each with its window in words.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return string[] «Memoria final, del 10-12-2026 al 20-12-2026»; empty when there is none.
+	 */
+	public static function pending( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$out          = array();
+		$pending      = ApplicationCompleteness::pending(
+			Applications::questions( $procedure_id ),
+			get_post_meta( $application_id, ApplicationMetaKeys::FILES, true ),
+			ProcedureState::today(),
+			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true )
+		);
+		foreach ( $pending as $question ) {
+			$out[] = (string) $question['label'] . ', del ' . self::day( (string) $question['opens_at'] ) . ' al ' . self::day( (string) $question['closes_at'] );
+		}
+		return $out;
+	}
+
+	/**
+	 * A `Y-m-d` day as the screen says it: `d-m-Y`.
+	 *
+	 * @param string $day Day, `Y-m-d`.
+	 * @return string
+	 */
+	private static function day( string $day ): string {
+		return implode( '-', array_reverse( explode( '-', $day ) ) );
 	}
 
 	/**
@@ -183,8 +215,13 @@ final class ApplicationProgress {
 		}
 		$verbo = 'Solicitud ' . self::VERB[ $hecho ];
 		if ( array() === (array) $p['missing'] ) {
-			$out['texto'] = ( 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo )
-				. '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.';
+			$cabeza = 'presentada' === $hecho ? $verbo . ' el ' . (string) $p['submitted'] : $verbo;
+			// Una entrega que todavía no vence no falta, pero queda por hacer:
+			// no se dice que no hay nada más que hacer.
+			$quedan       = (array) ( $p['pending'] ?? array() );
+			$out['texto'] = array() === $quedan
+				? $cabeza . '. Está completa: no tiene que hacer nada más. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.'
+				: $cabeza . '. Le queda entregar: ' . implode( '; ', $quedan ) . '.';
 			return $out;
 		}
 		$out['tipo'] = 'aviso';

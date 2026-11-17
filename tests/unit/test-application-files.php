@@ -490,6 +490,49 @@ class Test_Application_Files extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Dos entregas a la vez sobre la misma solicitud no se pisan.
+	 *
+	 * Mientras esta guarda la suya, otra petición escribe otro descriptor: el
+	 * de esta se añade al que hay, no al que se leyó antes.
+	 */
+	public function test_a_concurrent_store_does_not_drop_another_descriptor() {
+		$data = $this->una_solicitud_con_pregunta_de_fichero();
+		$id   = $data['application'];
+		ApplicationFiles::store_all( $id, array( 'q1' => $this->un_pdf( 'vieja.pdf' ) ) );
+		$other = array(
+			'id'     => str_repeat( 'c', 32 ),
+			'name'   => 'memoria.pdf',
+			'mime'   => 'application/pdf',
+			'size'   => 10,
+			'sha256' => str_repeat( 'd', 64 ),
+			'stored' => 'cc/dd/' . str_repeat( 'c', 32 ) . '.pdf',
+		);
+
+		$done  = false;
+		$sneak = static function ( $check, $object_id, $meta_key ) use ( &$done, $id, $other ) {
+			if ( ! $done && $id === (int) $object_id && ApplicationMetaKeys::FILES === $meta_key ) {
+				$done = true;
+				// Otra petición entrega «Memoria» justo ahora, por debajo.
+				$stored       = get_metadata_raw( 'post', $id, ApplicationMetaKeys::FILES, true );
+				$stored['q3'] = $other;
+				update_post_meta( $id, ApplicationMetaKeys::FILES, $stored );
+			}
+			return $check;
+		};
+		add_filter( 'update_post_metadata', $sneak, 10, 3 );
+		$ok = ApplicationFiles::store_all( $id, array( 'q1' => $this->un_pdf( 'nueva.pdf' ) ) );
+		remove_filter( 'update_post_metadata', $sneak, 10 );
+
+		$this->assertTrue( $done, 'La otra escritura se coló.' );
+		$this->assertTrue( $ok );
+		wp_cache_delete( $id, 'post_meta' );
+		$now = ApplicationFiles::descriptors( $id );
+		$this->assertSame( 'nueva.pdf', $now['q1']['name'] );
+		$this->assertArrayHasKey( 'q3', $now, 'El descriptor de la otra entrega sigue ahí.' );
+		$this->assertSame( $other, $now['q3'] );
+	}
+
+	/**
 	 * Sustituir un documento guarda primero el nuevo y borra después el viejo.
 	 */
 	public function test_replacing_a_document_keeps_the_old_one_until_the_new_one_is_in() {

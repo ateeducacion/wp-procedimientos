@@ -7680,8 +7680,8 @@ final class ApplicationFiles {
 			$nuevos[ (string) $question_key ] = $descriptor;
 		}
 
-		$antes = self::descriptors( $application_id );
-		if ( ! update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) ) ) {
+		$antes = self::merge_descriptors( $application_id, $nuevos );
+		if ( null === $antes ) {
 			foreach ( $nuevos as $descriptor ) {
 				self::erase( $descriptor );
 			}
@@ -7696,6 +7696,41 @@ final class ApplicationFiles {
 			}
 		}
 		return true;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function merge_descriptors( int $application_id, array $added ): ?array {
+		for ( $try = 0; $try < 3; ++$try ) {
+			wp_cache_delete( $application_id, 'post_meta' );
+			$read   = get_metadata_raw( 'post', $application_id, ApplicationMetaKeys::FILES, true );
+			$before = self::descriptors( $application_id );
+			$value  = wp_slash( array_merge( $before, $added ) );
+			if ( null === $read || empty( $read ) ) {
+
+
+				if ( null !== $read ) {
+					delete_post_meta( $application_id, ApplicationMetaKeys::FILES );
+				}
+				$written = false !== add_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, true );
+			} else {
+				$written = false !== update_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, $read );
+			}
+			if ( $written ) {
+				wp_cache_delete( $application_id, 'post_meta' );
+				return $before;
+			}
+		}
+		return null;
 	}
 
 

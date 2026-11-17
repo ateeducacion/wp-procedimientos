@@ -1221,6 +1221,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$m = $this->modelo( $procedimiento );
 		$this->assertFalse( $m['can_publish'] );
 		$this->assertStringContainsString( 'Falta el curso', implode( ' ', $m['not_ready'] ) );
+		$datos = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA ) );
+		$this->assertMatchesRegularExpression( '/<p class="[^"]*alert-warning[^"]*" role="status">[^<]*Falta el curso/', $datos, 'lo que falta para publicar es fijo: no es una alerta' );
+		$this->assertStringNotContainsString( 'role="alert"', $datos );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_PUBLISH, $procedimiento ) );
 		$this->assertSame( 'draft', get_post_status( $procedimiento ) );
 		$this->olvidar_rechazo();

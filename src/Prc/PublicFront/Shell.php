@@ -984,8 +984,11 @@ final class Shell {
 	/**
 	 * The opening tag of a notice, for the ones that carry a link inside.
 	 *
-	 * El error y la advertencia se anuncian en cuanto aparecen (`alert`); lo
-	 * hecho y la nota esperan a que el lector termine (`status`). El aviso del
+	 * El error —que solo sale tras un envío— y la advertencia del resultado se
+	 * anuncian en cuanto aparecen (`alert`); lo hecho, la nota y la advertencia
+	 * fija —la que se pinta en cada carga, como lo que falta para publicar—
+	 * esperan a que el lector termine (`status`): una alerta presente desde la
+	 * carga se vuelve a anunciar en cada navegación. El aviso del
 	 * resultado —el de la vuelta de un POST— lleva además el ancla a la que
 	 * llega la redirección ({@see leave()}) y admite el foco, para que quien
 	 * navega con teclado o lector de pantalla empiece a leer por él.
@@ -1002,7 +1005,7 @@ final class Shell {
 			'error' => 'danger',
 		);
 		$tono  = $tonos[ $type ] ?? 'info';
-		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
+		$papel = 'danger' === $tono || ( $anchor && 'warning' === $tono ) ? 'alert' : 'status';
 		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
 		return '<' . ( 'div' === $tag ? 'div' : 'p' ) . ' class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}

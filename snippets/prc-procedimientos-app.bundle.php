@@ -11523,6 +11523,9 @@ final class Shell {
 
 
 
+
+
+
 	public static function notice_open( string $type, bool $anchor = false, string $tag = 'p' ): string {
 		$tonos = array(
 			'ok'    => 'success',
@@ -11530,7 +11533,7 @@ final class Shell {
 			'error' => 'danger',
 		);
 		$tono  = $tonos[ $type ] ?? 'info';
-		$papel = in_array( $tono, array( 'warning', 'danger' ), true ) ? 'alert' : 'status';
+		$papel = 'danger' === $tono || ( $anchor && 'warning' === $tono ) ? 'alert' : 'status';
 		$ancla = $anchor ? ' id="' . self::NOTICE_ANCHOR . '" tabindex="-1"' : '';
 		return '<' . ( 'div' === $tag ? 'div' : 'p' ) . ' class="' . esc_attr( Assets::alert_class( $tono ) ) . '" role="' . $papel . '"' . $ancla . '>';
 	}

@@ -479,13 +479,27 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una advertencia fija —la que sale en cada carga y no responde a nada que
+	 * haya hecho la persona— no es una alerta: el lector la volvería a
+	 * anunciar en cada navegación. El error, que solo sale tras un envío, y la
+	 * advertencia del resultado sí lo son.
+	 */
+	public function test_static_warnings_are_not_alerts() {
+		$this->assertStringNotContainsString( 'role="alert"', Shell::notice( 'aviso', 'x' ) );
+		$this->assertStringContainsString( 'role="status"', Shell::notice( 'aviso', 'x' ) );
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'aviso', 'x', true ) );
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'error', 'x', true ) );
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'error', 'x' ) );
+	}
+
+	/**
 	 * Un aviso se anuncia: el error y la advertencia interrumpen, lo hecho y
 	 * la nota esperan su turno. El del resultado lleva el ancla a la que
 	 * vuelve la redirección, y se le puede dar el foco.
 	 */
 	public function test_the_notices_are_announced() {
 		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'error', 'No se pudo.' ) );
-		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'aviso', 'Cuidado.' ) );
+		$this->assertStringContainsString( 'role="alert"', Shell::notice( 'aviso', 'Cuidado.', true ) );
 		$this->assertStringContainsString( 'role="status"', Shell::notice( 'ok', 'Guardado.' ) );
 		$this->assertStringContainsString( 'role="status"', Shell::notice( 'info', 'Nota.' ) );
 

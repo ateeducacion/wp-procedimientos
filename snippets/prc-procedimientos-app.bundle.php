@@ -23582,14 +23582,21 @@ final class Settings {
 			'catalogue' => 0,
 			'private'   => 0,
 		);
-		$ids = get_posts(
-			array(
-				'post_type'      => ProcedurePostType::POST_TYPE,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-				'no_found_rows'  => true,
-			)
+
+
+
+
+		$ids = wp_list_pluck(
+			get_posts(
+				array(
+					'post_type'              => ProcedurePostType::POST_TYPE,
+					'post_status'            => 'publish',
+					'posts_per_page'         => -1,
+					'no_found_rows'          => true,
+					'update_post_term_cache' => false,
+				)
+			),
+			'ID'
 		);
 		foreach ( $ids as $id ) {
 			if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( (int) $id, ProcedureMetaKeys::AUDIENCE, true ) ) {

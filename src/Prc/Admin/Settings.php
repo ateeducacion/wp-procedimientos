@@ -213,14 +213,21 @@ final class Settings {
 			'catalogue' => 0,
 			'private'   => 0,
 		);
-		$ids = get_posts(
-			array(
-				'post_type'      => ProcedurePostType::POST_TYPE,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-				'no_found_rows'  => true,
-			)
+		// Las entradas enteras y no solo los ID: así se cargan de una vez las
+		// metas y las propias entradas, que WordPress mira para el valor por
+		// defecto de una meta registrada. Con 'fields' => 'ids' sería una
+		// consulta por procedimiento.
+		$ids = wp_list_pluck(
+			get_posts(
+				array(
+					'post_type'              => ProcedurePostType::POST_TYPE,
+					'post_status'            => 'publish',
+					'posts_per_page'         => -1,
+					'no_found_rows'          => true,
+					'update_post_term_cache' => false,
+				)
+			),
+			'ID'
 		);
 		foreach ( $ids as $id ) {
 			if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( (int) $id, ProcedureMetaKeys::AUDIENCE, true ) ) {

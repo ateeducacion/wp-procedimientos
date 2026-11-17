@@ -1147,6 +1147,24 @@ class Test_Centres extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Contar los procedimientos que dependen del catálogo lee sus metas de una
+	 * vez, no con una consulta por procedimiento.
+	 */
+	public function test_dependents_reads_metas_in_one_query(): void {
+		global $wpdb;
+		$admin = $this->administrator();
+		for ( $i = 0; $i < 20; $i++ ) {
+			$this->procedure( $admin, array(), array( \Prc\Meta\ProcedureMetaKeys::OWNERSHIP => array( 'public' ) ) );
+		}
+		wp_cache_flush();
+
+		$antes  = $wpdb->num_queries;
+		$cuenta = Settings::dependents();
+		$this->assertSame( 20, $cuenta['catalogue'] );
+		$this->assertLessThan( 5, $wpdb->num_queries - $antes );
+	}
+
+	/**
 	 * El diagnóstico mira lo que sirve el dominio y cuenta qué procedimientos
 	 * publicados dependen del catálogo y de los tipos privados.
 	 */

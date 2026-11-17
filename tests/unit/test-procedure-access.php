@@ -601,7 +601,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertSame( $raw, get_user_option( ProcedureAccess::USER_AREA_META, $user ) );
 	}
 
-	/** Writing the scope stores it per site and drops the legacy global copy (ADR-0046). */
+	/** Writing the scope stores it per site and drops the legacy global copy (ADR-0032). */
 	public function test_set_user_areas_stores_per_site_key_and_removes_global() {
 		global $wpdb;
 		$area = $this->area( 'Ámbito 1' );
@@ -617,7 +617,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertSame( array( $area ), ProcedureAccess::user_areas( $user ) );
 	}
 
-	/** A scope saved before ADR-0046 in the global meta keeps working without migration. */
+	/** A scope saved before ADR-0032 in the global meta keeps working without migration. */
 	public function test_legacy_global_scope_is_still_read() {
 		$area = $this->area( 'Ámbito 1' );
 		$user = (int) self::factory()->user->create( array( 'role' => 'editor' ) );

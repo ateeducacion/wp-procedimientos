@@ -206,7 +206,7 @@ el procedimiento, y la pertenencia de la persona es la **opción de usuario
 |---|---|
 | Ámbito del procedimiento | término de `prc_area` en el `prc_procedure` |
 | Ámbito de la solicitud | el de su procedimiento (`post_parent`); la solicitud no lleva término |
-| Ámbitos de la persona | opción de usuario `prc_area`, por sitio (`{prefijo del sitio}prc_area`), array de `term_id`; si no la hay, se lee la meta global `prc_area` de antes ([ADR-0046](adr/ADR-0046-el-ambito-de-la-persona-se-guarda-por-sitio.md)) |
+| Ámbitos de la persona | opción de usuario `prc_area`, por sitio (`{prefijo del sitio}prc_area`), array de `term_id`; si no la hay, se lee la meta global `prc_area` de antes ([ADR-0032](adr/ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md)) |
 | Quién escribe ese campo | solo `prc_manage_app` o `edit_users` |
 | Quién decide | `ProcedureAccess`, y solo ella |
 

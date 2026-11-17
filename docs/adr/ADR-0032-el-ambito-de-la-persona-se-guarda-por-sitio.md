@@ -1,5 +1,5 @@
 ---
-id: ADR-0046
+id: ADR-0032
 title: "El ámbito de la persona se guarda por sitio"
 status: Propuesta
 date: 2026-11-17
@@ -15,7 +15,7 @@ ai_assistance:
   model: "claude-opus-5-5"
 ---
 
-# ADR-0046: El ámbito de la persona se guarda por sitio
+# ADR-0032: El ámbito de la persona se guarda por sitio
 
 ## Estado
 

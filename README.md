@@ -123,7 +123,7 @@ El acotado es **fail-closed** por los dos lados
 [ADR-0016](docs/adr/ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md)):
 quien gestiona lleva un único ámbito en la opción de usuario `prc_area`,
 guardada por sitio
-([ADR-0046](docs/adr/ADR-0046-el-ambito-de-la-persona-se-guarda-por-sitio.md)) (ese
+([ADR-0032](docs/adr/ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md)) (ese
 término incluye a sus descendientes) y sin ámbito no edita
 nada; quien solicita lleva el código de su centro en una meta cuya clave
 devuelve el filtro `prc_centre_code_meta_key`, y sin código no solicita nada.

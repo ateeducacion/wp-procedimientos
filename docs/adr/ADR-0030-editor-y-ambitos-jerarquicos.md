@@ -45,7 +45,7 @@ El perfil conserva literalmente valores históricos ambiguos o inválidos al gua
 
 La meta `prc_area` de la persona pasa a guardarse por sitio, como opción de
 usuario (`{$wpdb->get_blog_prefix()}prc_area`), con la meta global como
-lectura de compatibilidad: [ADR-0046](ADR-0046-el-ambito-de-la-persona-se-guarda-por-sitio.md).
+lectura de compatibilidad: [ADR-0032](ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md).
 El resto de esta decisión no cambia.
 
 Asistencia de IA: Claude Code (claude-opus-5-5).

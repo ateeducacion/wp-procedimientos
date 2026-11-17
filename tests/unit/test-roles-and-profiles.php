@@ -255,7 +255,7 @@ class Test_Roles_And_Profiles extends WP_UnitTestCase {
 
 	/**
 	 * Guardar el ámbito lo deja en este sitio y borra la copia global
-	 * anterior, que en un multisitio valdría en todos los sitios (ADR-0046).
+	 * anterior, que en un multisitio valdría en todos los sitios (ADR-0032).
 	 */
 	public function test_saving_scope_migrates_legacy_global_meta_to_this_site() {
 		global $wpdb;

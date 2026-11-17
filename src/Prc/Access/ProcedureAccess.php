@@ -23,7 +23,7 @@ use Prc\Taxonomy\ProcedureTaxonomies;
  * Dos acotados y los dos fallan en cerrado (ADR-0014, ADR-0016):
  *
  * - **Por ámbito**: la opción de usuario `prc_area`, guardada por sitio
- *   (ADR-0046), lleva uno o varios términos de `prc_area`, y un término
+ *   (ADR-0032), lleva uno o varios términos de `prc_area`, y un término
  *   incluye a sus descendientes. Sin ámbito y sin
  *   `prc_manage_all_areas`, no se edita ni se ve nada en el taller.
  * - **Por centro**: {@see CentreScope::code_for()}. Sin código, `prc_apply`
@@ -39,7 +39,7 @@ final class ProcedureAccess {
 	 *
 	 * Se guarda por sitio con update_user_option(), como
 	 * `{$wpdb->get_blog_prefix()}prc_area`: la taxonomía es de cada sitio y el
-	 * mismo term_id significa otro ámbito en otro subsitio (ADR-0046). Use
+	 * mismo term_id significa otro ámbito en otro subsitio (ADR-0032). Use
 	 * user_area_meta_key() for the stored key and set_user_areas() to write.
 	 */
 	public const USER_AREA_META = 'prc_area';
@@ -338,7 +338,7 @@ final class ProcedureAccess {
 	 * The user meta key that holds the ámbito on the current site.
 	 *
 	 * Para buscar personas por ámbito (WP_User_Query, SQL): la clave sin
-	 * prefijo es la copia global anterior a la ADR-0046.
+	 * prefijo es la copia global anterior a la ADR-0032.
 	 *
 	 * @return string Prefixed meta key, e.g. `wp_2_prc_area`.
 	 */
@@ -449,7 +449,7 @@ final class ProcedureAccess {
 	 * Read-only inventory of editorial accounts for deployment preparation.
 	 *
 	 * `global_only` marca a quien aún tiene el ámbito solo en la meta global
-	 * anterior a la ADR-0046: se lee, pero vale en todos los sitios de la red
+	 * anterior a la ADR-0032: se lee, pero vale en todos los sitios de la red
 	 * hasta que administración vuelva a guardar su perfil.
 	 *
 	 * @return array<int, array{user_id:int,login:string,state:string,ids:int[],invalid:string[],legacy:bool,global_only:bool}>

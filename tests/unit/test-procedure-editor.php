@@ -1847,6 +1847,58 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Una pregunta de archivo con un documento ya subido cuenta como
+	 * contestada aunque no tenga respuesta en `prc_answers`: su tipo no cambia.
+	 */
+	public function test_the_type_of_a_file_question_with_a_document_is_refused() {
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Grupos',
+						'type'  => ProcedureQuestions::TYPE_TEXT,
+					),
+					array(
+						'key'   => 'q2',
+						'label' => 'Proyecto',
+						'type'  => ProcedureQuestions::TYPE_FILE,
+					),
+				),
+			)
+		);
+		$solicitud                     = $this->application(
+			$procedimiento,
+			$this->school_head( 'C0001' ),
+			'',
+			array(
+				ApplicationMetaKeys::FILES => array(
+					'q2' => array(
+						'id'     => str_repeat( 'a', 32 ),
+						'stored' => 'ab/cd/' . str_repeat( 'b', 32 ) . '.pdf',
+						'sha256' => str_repeat( 'c', 64 ),
+						'name'   => 'proyecto.pdf',
+						'mime'   => 'application/pdf',
+						'size'   => 10,
+					),
+				),
+			)
+		);
+		$this->assertSame( array( 'q2' ), array_keys( \Prc\PublicFront\ApplicationFiles::descriptors( $solicitud ) ), 'el documento está y no hay respuesta' );
+		$this->assertEmpty( get_post_meta( $solicitud, ApplicationMetaKeys::ANSWERS, true ) );
+		$antes = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'type' => array( 1 => ProcedureQuestions::TYPE_TEXT ) ) ) ),
+			'no se guarda ni vuelve'
+		);
+		$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+		$flash = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash'];
+		$this->assertSame( 'error', $flash['tipo'] );
+		$this->assertStringContainsString( 'No se puede cambiar el tipo de «Proyecto»', $flash['texto'] );
+	}
+
+	/**
 	 * Una fila renombrada en su línea sigue con sus cantidades; una borrada
 	 * dejando su línea en blanco deja de salir y su clave no se reutiliza.
 	 */

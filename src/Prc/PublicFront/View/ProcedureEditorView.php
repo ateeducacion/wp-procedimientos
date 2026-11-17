@@ -1195,7 +1195,8 @@ final class ProcedureEditorView {
 	 * Cada motivo con su rótulo: sin correo válido, incompletas (sin nombre,
 	 * apellidos o usuario), en conflicto (el mismo usuario con otro correo o
 	 * el mismo correo con otro usuario) y usuario no válido para la
-	 * plataforma. Una persona repetida con el mismo correo no es una omisión.
+	 * plataforma. Una persona repetida con el mismo usuario y el mismo correo
+	 * no es una omisión.
 	 *
 	 * @param array<string, mixed> $quien One source: `label`, `count`, `email`, `incomplete`, `conflict`, `invalid`.
 	 * @return string

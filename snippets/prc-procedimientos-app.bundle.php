@@ -13255,6 +13255,7 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function who_label( array $quien ): string {
 		$cuenta  = (int) ( $quien['count'] ?? 0 );
 		$motivos = array(

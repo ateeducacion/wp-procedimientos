@@ -316,7 +316,7 @@ final class ApplicationExport {
 	 *
 	 * @param iterable                $batches Applications, a batch (array of \WP_Post) at a time.
 	 * @param array<string, string[]> $groups  Group => sources.
-	 * @return array<string, array{people:array<string, array<string, mixed>>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}>
+	 * @return array<string, array{people:array<string, array<string, mixed>>, emails:array<string, string>, left_out:array{email:int, incomplete:int, conflict:int, invalid:int}}>
 	 */
 	private static function tally( iterable $batches, array $groups ): array {
 		$out = array();

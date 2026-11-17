@@ -864,4 +864,29 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->acting_as( $this->school_head( 'C0002' ) );
 		$this->assertArrayNotHasKey( 'observe', Shell::sections() );
 	}
+
+	/**
+	 * El listado de la consulta no hace consultas por cada procedimiento:
+	 * los posts, sus metas y sus ámbitos se leen de una vez.
+	 */
+	public function test_the_list_does_not_query_per_procedure() {
+		$area = $this->area( 'Ámbito convocante' );
+		$uid  = $this->observer( array( 'Z0002' ) );
+		$this->acting_as( $uid );
+		$count = function ( int $how_many ) use ( $area ): int {
+			global $wpdb;
+			for ( $i = 0; $i < $how_many; $i++ ) {
+				$pid = $this->procedure( $this->administrator(), array( $area ), array( ProcedureMetaKeys::OBSERVABLE => true ) );
+				$this->application( $pid, $this->school_head( 'C0002' ) );
+			}
+			wp_cache_flush();
+			$before = $wpdb->num_queries;
+			Observe::model( array() );
+			return $wpdb->num_queries - $before;
+		};
+		$two   = $count( 2 );
+		$ten   = $count( 8 );
+		$this->assertCount( 10, Observe::model( array() )['procedures'] );
+		$this->assertLessThan( 10, $ten - $two, 'con ocho procedimientos más, no ocho veces más consultas' );
+	}
 }

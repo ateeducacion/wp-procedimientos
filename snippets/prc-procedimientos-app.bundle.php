@@ -25074,6 +25074,9 @@ final class Observe {
 		if ( array() === $ids ) {
 			return array();
 		}
+
+
+		_prime_post_caches( $ids, true, true );
 		$codigos = self::codes_by_procedure( $ids );
 		$out     = array();
 		foreach ( $ids as $id ) {

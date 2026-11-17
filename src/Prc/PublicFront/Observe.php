@@ -203,6 +203,9 @@ final class Observe {
 		if ( array() === $ids ) {
 			return array();
 		}
+		// Posts, metas y ámbitos de una vez: el guardián, el estado y el
+		// título los leen después por cada uno, y así salen de la caché.
+		_prime_post_caches( $ids, true, true );
 		$codigos = self::codes_by_procedure( $ids );
 		$out     = array();
 		foreach ( $ids as $id ) {

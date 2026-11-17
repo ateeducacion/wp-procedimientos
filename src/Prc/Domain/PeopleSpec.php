@@ -264,8 +264,8 @@ final class PeopleSpec {
 	 * @return string Empty when there is no new clash.
 	 */
 	public static function coordination_clash( array $before, array $after, int $count_before, int $count_after ): string {
-		$ya_estaba = $count_before > 0 && self::collects_coordination( $before );
-		if ( $ya_estaba || $count_after <= 0 || ! self::collects_coordination( $after ) ) {
+		$ya_estaba = $count_before > 0 && self::collects_coordination( $before, $count_before );
+		if ( $ya_estaba || $count_after <= 0 || ! self::collects_coordination( $after, $count_after ) ) {
 			return '';
 		}
 		return $count_after !== $count_before

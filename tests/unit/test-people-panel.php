@@ -442,13 +442,14 @@ class Test_People_Panel extends WP_UnitTestCase {
 	 */
 	public function test_coordination_is_not_asked_in_both_places() {
 		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
-		$this->assertNull( $this->guardar( $uid, $procedimiento, $this->campos() ) );
+		// La lista recoge la coordinación cuando todos sus papeles la nombran.
+		$this->assertNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => 'Coordinación' ) ) ) );
 		$this->assertFalse( People::spec( $procedimiento )['enabled'] );
 		$html = $this->pestana( $uid, $procedimiento );
 		$this->assertStringContainsString( 'En «Datos» se piden personas coordinadoras', $html );
 
-		// Sin papel de coordinación, la lista no la recoge: no hay choque.
-		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => 'Participante | grupo' ) ) ) );
+		// Con un papel que no es de coordinación, la lista no la recoge: no hay choque.
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos() ) );
 
 		// Un procedimiento de antes con las dos cosas se sigue guardando.
 		update_post_meta(

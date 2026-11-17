@@ -397,7 +397,7 @@ final class Applications {
 		}
 		// Una por centro (ADR-0018): si otra petición creó la suya entre la
 		// búsqueda y la escritura, se queda la más antigua y esta se borra.
-		if ( $created && ApplicationOperations::lost_race( $id, $procedure_id, $centro['code'] ) ) {
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
 			return 0;
 		}
 		// Una presentada en su nombre (PLAN-0003, PR 9) la presenta de verdad
@@ -421,6 +421,7 @@ final class Applications {
 		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 0;
 		}
+		ApplicationOperations::forget_refusal();
 		$created = null === self::find_for_teacher( $procedure_id, $user_id );
 		$id      = self::save_post(
 			$procedure_id,
@@ -451,6 +452,11 @@ final class Applications {
 			) as $key => $value
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
+		}
+		// Una por persona: si otra petición creó la suya entretanto, se
+		// queda la más antigua y esta se borra.
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
+			return 0;
 		}
 		self::saved( $id, $created, $user_id, $antes );
 		return $id;

@@ -54,6 +54,11 @@ final class ApplicationOperations {
 	public const DUPLICATE = 'Ya hay una solicitud de este centro en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
 
 	/**
+	 * Why a new individual application was not kept: the same teacher got in first.
+	 */
+	public const DUPLICATE_TEACHER = 'Ya tiene una solicitud en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
+
+	/**
 	 * Why the last save did not keep anything, when it is not a plain failure.
 	 *
 	 * @var string
@@ -73,41 +78,41 @@ final class ApplicationOperations {
 	// ─── una por centro ───────────────────────────────────────────────────
 
 	/**
-	 * Whether a brand new application lost the race to another of the same school.
+	 * Whether a brand new application lost the race to another of the same school —or teacher—.
 	 *
 	 * La unicidad es una búsqueda, no un índice (ADR-0018): dos envíos a la vez
-	 * pueden crear dos. Después de crear se vuelve a mirar, y si hay otra
-	 * publicada de ese centro con un ID más bajo, la nueva se borra para
-	 * siempre —no tiene historial ni avisos todavía— y {@see why_not_saved()}
-	 * dice por qué.
+	 * pueden crear dos. Después de crear se vuelve a mirar quién se queda:
 	 *
-	 * @param int    $id           The application just created, its centre code already written.
-	 * @param int    $procedure_id Procedure post ID.
-	 * @param string $code         School code.
+	 * - la que presentó el propio centro gana siempre a una presentada en su
+	 *   nombre y todavía sin completar: la del centro trae sus respuestas y
+	 *   sus documentos; la otra está vacía;
+	 * - entre dos de la misma clase, la de ID más bajo.
+	 *
+	 * La que pierde se borra para siempre —no tiene historial ni avisos
+	 * todavía— y {@see why_not_saved()} dice por qué. Si gana una del centro,
+	 * se lleva también por delante la presentada en su nombre que se coló a
+	 * la vez; nunca la del centro.
+	 *
+	 * @param int  $id      The application just saved, its centre code —or teacher type— already written.
+	 * @param bool $created Whether the save created it; one that already existed never loses.
 	 * @return bool Whether it lost, and is gone.
 	 */
-	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
-		$ids = get_posts(
-			array(
-				'post_type'        => ApplicationPostType::POST_TYPE,
-				'post_parent'      => $procedure_id,
-				'post_status'      => 'publish',
-				'numberposts'      => 1,
-				'orderby'          => 'ID',
-				'order'            => 'ASC',
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una por centro (ADR-0018).
-				'meta_value'       => $code, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
-				'suppress_filters' => true,
-			)
-		);
-		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
-			return false;
+	public static function lost_race( int $id, bool $created = true ): bool {
+		$args = $created ? ApplicationActions::same_applicant( $id ) : null;
+		$ids  = null === $args ? array() : array_map( 'intval', (array) get_posts( $args ) );
+		$own  = array_values( array_filter( $ids, static fn( int $other ): bool => ! self::pending_for_school( $other ) ) );
+		$wins = array() !== $own ? $own[0] : ( $ids[0] ?? $id );
+		if ( $wins !== $id ) {
+			ApplicationActions::purge( $id );
+			self::$refusal = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $wins, ApplicationMetaKeys::APPLICANT_TYPE, true ) ? self::DUPLICATE_TEACHER : self::DUPLICATE;
+			return true;
 		}
-		ApplicationActions::purge( $id );
-		self::$refusal = self::DUPLICATE;
-		return true;
+		if ( ! self::pending_for_school( $id ) ) {
+			foreach ( array_diff( $ids, $own ) as $on_behalf ) {
+				ApplicationActions::purge( $on_behalf );
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -432,8 +437,9 @@ final class ApplicationOperations {
 		) as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
-		// Una por centro: si el centro presentó la suya entretanto, gana la suya.
-		if ( self::lost_race( $id, $procedure_id, $codigo ) ) {
+		// Una por centro: si el centro presentó la suya entretanto, gana la suya
+		// (lost_race()).
+		if ( self::lost_race( $id ) ) {
 			return 0;
 		}
 

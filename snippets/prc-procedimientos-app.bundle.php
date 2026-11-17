@@ -7883,12 +7883,36 @@ final class ApplicationActions {
 
 
 	public static function live_twin( int $application_id ): ?int {
+		$args = self::same_applicant( $application_id );
+		if ( null === $args ) {
+			return null;
+		}
+		$ids = get_posts(
+			$args + array(
+				'post__not_in' => array( $application_id ),
+				'numberposts'  => 1,
+			)
+		);
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function same_applicant( int $application_id ): ?array {
 		$args = array(
 			'post_type'        => ApplicationPostType::POST_TYPE,
 			'post_parent'      => (int) wp_get_post_parent_id( $application_id ),
 			'post_status'      => 'publish',
-			'post__not_in'     => array( $application_id ),
-			'numberposts'      => 1,
+			'numberposts'      => -1,
+			'orderby'          => 'ID',
+			'order'            => 'ASC',
 			'fields'           => 'ids',
 			'no_found_rows'    => true,
 			'suppress_filters' => true,
@@ -7897,16 +7921,15 @@ final class ApplicationActions {
 			$args['author']     = (int) get_post_field( 'post_author', $application_id );
 			$args['meta_key']   = ApplicationMetaKeys::APPLICANT_TYPE;
 			$args['meta_value'] = ApplicationMetaKeys::TYPE_TEACHER;
-		} else {
-			$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
-			if ( '' === $codigo ) {
-				return null;
-			}
-			$args['meta_key']   = ApplicationMetaKeys::CENTRE_CODE;
-			$args['meta_value'] = $codigo;
+			return $args;
 		}
-		$ids = get_posts( $args );
-		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+		$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( '' === $codigo ) {
+			return null;
+		}
+		$args['meta_key']   = ApplicationMetaKeys::CENTRE_CODE;
+		$args['meta_value'] = $codigo;
+		return $args;
 	}
 
 
@@ -12035,7 +12058,7 @@ final class Applications {
 		}
 
 
-		if ( $created && ApplicationOperations::lost_race( $id, $procedure_id, $centro['code'] ) ) {
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
 			return 0;
 		}
 
@@ -12059,6 +12082,7 @@ final class Applications {
 		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 0;
 		}
+		ApplicationOperations::forget_refusal();
 		$created = null === self::find_for_teacher( $procedure_id, $user_id );
 		$id      = self::save_post(
 			$procedure_id,
@@ -12089,6 +12113,11 @@ final class Applications {
 			) as $key => $value
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
+		}
+
+
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
+			return 0;
 		}
 		self::saved( $id, $created, $user_id, $antes );
 		return $id;
@@ -13542,6 +13571,11 @@ final class ApplicationOperations {
 
 
 
+	public const DUPLICATE_TEACHER = 'Ya tiene una solicitud en este procedimiento, así que no se ha creado otra. Vuelva a abrir la solicitud para ver la que hay.';
+
+
+
+
 
 
 	private static $refusal = '';
@@ -13572,28 +13606,28 @@ final class ApplicationOperations {
 
 
 
-	public static function lost_race( int $id, int $procedure_id, string $code ): bool {
-		$ids = get_posts(
-			array(
-				'post_type'        => ApplicationPostType::POST_TYPE,
-				'post_parent'      => $procedure_id,
-				'post_status'      => 'publish',
-				'numberposts'      => 1,
-				'orderby'          => 'ID',
-				'order'            => 'ASC',
-				'fields'           => 'ids',
-				'no_found_rows'    => true,
-				'meta_key'         => ApplicationMetaKeys::CENTRE_CODE,
-				'meta_value'       => $code,
-				'suppress_filters' => true,
-			)
-		);
-		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
-			return false;
+
+
+
+
+
+
+	public static function lost_race( int $id, bool $created = true ): bool {
+		$args = $created ? ApplicationActions::same_applicant( $id ) : null;
+		$ids  = null === $args ? array() : array_map( 'intval', (array) get_posts( $args ) );
+		$own  = array_values( array_filter( $ids, static fn( int $other ): bool => ! self::pending_for_school( $other ) ) );
+		$wins = array() !== $own ? $own[0] : ( $ids[0] ?? $id );
+		if ( $wins !== $id ) {
+			ApplicationActions::purge( $id );
+			self::$refusal = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $wins, ApplicationMetaKeys::APPLICANT_TYPE, true ) ? self::DUPLICATE_TEACHER : self::DUPLICATE;
+			return true;
 		}
-		ApplicationActions::purge( $id );
-		self::$refusal = self::DUPLICATE;
-		return true;
+		if ( ! self::pending_for_school( $id ) ) {
+			foreach ( array_diff( $ids, $own ) as $on_behalf ) {
+				ApplicationActions::purge( $on_behalf );
+			}
+		}
+		return false;
 	}
 
 
@@ -13919,7 +13953,8 @@ final class ApplicationOperations {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
 
-		if ( self::lost_race( $id, $procedure_id, $codigo ) ) {
+
+		if ( self::lost_race( $id ) ) {
 			return 0;
 		}
 

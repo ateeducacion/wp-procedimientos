@@ -1049,19 +1049,20 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	 * Hace que, la próxima vez que se cree una solicitud, otra petición
 	 * «gane» y cree antes la gemela de ese centro.
 	 *
-	 * @param int    $procedure Procedure ID.
-	 * @param int    $author    Author of the twin.
-	 * @param string $code      School code.
+	 * @param int                  $procedure Procedure ID.
+	 * @param int                  $author    Author of the twin.
+	 * @param string               $code      School code.
+	 * @param array<string, mixed> $meta      More meta of the twin.
 	 * @return void
 	 */
-	private function gemela_en_medio( int $procedure, int $author, string $code ): void {
+	private function gemela_en_medio( int $procedure, int $author, string $code, array $meta = array() ): void {
 		$pendiente = true;
 		add_filter(
 			'wp_insert_post_data',
-			function ( array $data ) use ( &$pendiente, $procedure, $author, $code ): array {
+			function ( array $data ) use ( &$pendiente, $procedure, $author, $code, $meta ): array {
 				if ( $pendiente && 'prc_application' === $data['post_type'] ) {
 					$pendiente = false;
-					$this->application( $procedure, $author, $code );
+					$this->application( $procedure, $author, $code, $meta );
 				}
 				return $data;
 			}
@@ -1103,6 +1104,117 @@ class Test_Application_Actions extends WP_UnitTestCase {
 
 		// Sin carrera, se guarda como siempre.
 		$this->assertGreaterThan( 0, Applications::save( $c['procedure'], $this->school_head( 'C0001' ), array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) ) );
+	}
+
+	/**
+	 * Una presentada en nombre del centro, todavía sin completar.
+	 *
+	 * @param array<string, int> $c    The case.
+	 * @param string             $code School code.
+	 * @return int
+	 */
+	private function en_nombre( array $c, string $code ): int {
+		return $this->application( $c['procedure'], $c['reviewer'], $code, array( ApplicationMetaKeys::CREATED_BY => $c['reviewer'] ) );
+	}
+
+	/**
+	 * En la carrera de una por centro, la que presentó el propio centro gana
+	 * siempre a una presentada en su nombre, tenga el ID que tenga: la del
+	 * centro trae sus respuestas y sus documentos; la otra está vacía.
+	 */
+	public function test_the_school_own_one_beats_one_on_its_behalf_in_the_race() {
+		// En nombre, antes (ID más bajo); la del centro, después.
+		$c         = $this->caso();
+		$en_nombre = $this->en_nombre( $c, 'C0002' );
+		$propia    = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$this->assertFalse( ApplicationOperations::lost_race( $propia ) );
+		$this->assertFalse( get_post_status( $en_nombre ), 'la del centro se lleva por delante la vacía' );
+		$this->assertSame( 'publish', get_post_status( $propia ) );
+
+		// Si la en nombre mira antes, pierde ella.
+		$c         = $this->caso();
+		$en_nombre = $this->en_nombre( $c, 'C0002' );
+		$propia    = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$this->assertTrue( ApplicationOperations::lost_race( $en_nombre ) );
+		$this->assertFalse( get_post_status( $en_nombre ) );
+		$this->assertFalse( ApplicationOperations::lost_race( $propia ) );
+		$this->assertSame( 'publish', get_post_status( $propia ) );
+
+		// La del centro antes (ID más bajo): la en nombre pierde.
+		$c         = $this->caso();
+		$propia    = $this->application( $c['procedure'], $this->school_head( 'C0002' ), 'C0002' );
+		$en_nombre = $this->en_nombre( $c, 'C0002' );
+		$this->assertTrue( ApplicationOperations::lost_race( $en_nombre ) );
+		$this->assertFalse( ApplicationOperations::lost_race( $propia ) );
+		$this->assertSame( 'publish', get_post_status( $propia ) );
+
+		// Por el guardado del centro, de punta a punta.
+		$c   = $this->caso();
+		$sur = $this->school_head( 'C0002' );
+		$this->gemela_en_medio( $c['procedure'], $c['reviewer'], 'C0002', array( ApplicationMetaKeys::CREATED_BY => $c['reviewer'] ) );
+		$id = Applications::save( $c['procedure'], $sur, array( 'position' => ApplicationMetaKeys::POSITION_HEAD ) );
+		$this->assertGreaterThan( 0, $id, 'el centro no pierde su solicitud' );
+		$this->assertSame( 1, $this->de_centro( $c['procedure'], 'C0002' ) );
+		$this->assertSame( $id, Applications::find( $c['procedure'], 'C0002' ) );
+	}
+
+	/**
+	 * Dos en nombre del mismo centro a la vez: se queda una, la de ID más
+	 * bajo, y no se borran las dos.
+	 */
+	public function test_two_on_behalf_at_once_keep_one() {
+		$c    = $this->caso();
+		$una  = $this->en_nombre( $c, 'C0002' );
+		$otra = $this->en_nombre( $c, 'C0002' );
+		$this->assertFalse( ApplicationOperations::lost_race( $una ) );
+		$this->assertSame( 'publish', get_post_status( $otra ), 'la más baja no borra a la otra' );
+		$this->assertTrue( ApplicationOperations::lost_race( $otra ) );
+		$this->assertSame( 'publish', get_post_status( $una ) );
+		$this->assertFalse( get_post_status( $otra ) );
+	}
+
+	/**
+	 * Un procedimiento de profesorado del mismo ámbito, con el plazo abierto.
+	 *
+	 * @param array<string, int> $c The case.
+	 * @return int
+	 */
+	private function docentes( array $c ): int {
+		return $this->procedure(
+			$c['reviewer'],
+			array( $c['area'] ),
+			array(
+				ProcedureMetaKeys::AUDIENCE  => ProcedureMetaKeys::AUDIENCE_TEACHERS,
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( -5 ),
+				ProcedureMetaKeys::CLOSES_AT => $this->dia( 5 ),
+			)
+		);
+	}
+
+	/**
+	 * Una por persona en un procedimiento de profesorado, también con dos
+	 * envíos a la vez.
+	 */
+	public function test_a_teacher_twin_created_in_between_loses_the_race() {
+		$c        = $this->caso();
+		$docentes = $this->docentes( $c );
+		$docente  = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$this->gemela_en_medio(
+			$docentes,
+			$docente,
+			'',
+			array(
+				ApplicationMetaKeys::APPLICANT_TYPE => ApplicationMetaKeys::TYPE_TEACHER,
+				ApplicationMetaKeys::CENTRE_CODE    => '',
+			)
+		);
+		$this->assertSame( 0, Applications::save_teacher( $docentes, $docente, array( 'answers' => array() ) ) );
+		$this->assertSame( ApplicationOperations::DUPLICATE_TEACHER, ApplicationOperations::why_not_saved( 'otro' ) );
+		$this->assertCount( 1, Applications::for_teacher( $docente ) );
+
+		// Sin carrera, se guarda como siempre, y otro docente también.
+		$this->assertSame( Applications::find_for_teacher( $docentes, $docente ), Applications::save_teacher( $docentes, $docente, array( 'answers' => array() ) ) );
+		$this->assertGreaterThan( 0, Applications::save_teacher( $docentes, (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) ), array( 'answers' => array() ) ) );
 	}
 
 	/**

@@ -406,12 +406,36 @@ final class ApplicationActions {
 	 * @return int|null The other one; null when there is none.
 	 */
 	public static function live_twin( int $application_id ): ?int {
+		$args = self::same_applicant( $application_id );
+		if ( null === $args ) {
+			return null;
+		}
+		$ids = get_posts(
+			$args + array(
+				'post__not_in' => array( $application_id ),
+				'numberposts'  => 1,
+			)
+		);
+		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+	}
+
+	/**
+	 * The query for the live applications of the same school —or teacher— to the same procedure.
+	 *
+	 * Una por centro (ADR-0018); en un procedimiento de profesorado, una por
+	 * persona: el mismo criterio que {@see \Prc\PublicFront\Applications::find_for_teacher()}.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return array<string, mixed>|null `get_posts()` arguments, oldest first; null for an application without a school code.
+	 */
+	public static function same_applicant( int $application_id ): ?array {
 		$args = array(
 			'post_type'        => ApplicationPostType::POST_TYPE,
 			'post_parent'      => (int) wp_get_post_parent_id( $application_id ),
 			'post_status'      => 'publish',
-			'post__not_in'     => array( $application_id ),
-			'numberposts'      => 1,
+			'numberposts'      => -1,
+			'orderby'          => 'ID',
+			'order'            => 'ASC',
 			'fields'           => 'ids',
 			'no_found_rows'    => true,
 			'suppress_filters' => true,
@@ -420,16 +444,15 @@ final class ApplicationActions {
 			$args['author']     = (int) get_post_field( 'post_author', $application_id );
 			$args['meta_key']   = ApplicationMetaKeys::APPLICANT_TYPE; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una solicitud individual se identifica por su autor y tipo.
 			$args['meta_value'] = ApplicationMetaKeys::TYPE_TEACHER; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
-		} else {
-			$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
-			if ( '' === $codigo ) {
-				return null;
-			}
-			$args['meta_key']   = ApplicationMetaKeys::CENTRE_CODE; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una por centro (ADR-0018).
-			$args['meta_value'] = $codigo; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
+			return $args;
 		}
-		$ids = get_posts( $args );
-		return is_array( $ids ) && array() !== $ids ? (int) $ids[0] : null;
+		$codigo = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true );
+		if ( '' === $codigo ) {
+			return null;
+		}
+		$args['meta_key']   = ApplicationMetaKeys::CENTRE_CODE; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- una por centro (ADR-0018).
+		$args['meta_value'] = $codigo; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
+		return $args;
 	}
 
 	// ─── presentar en nombre de un centro (quien revisa) ───────────────────

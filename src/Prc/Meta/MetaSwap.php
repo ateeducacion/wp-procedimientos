@@ -15,17 +15,19 @@ namespace Prc\Meta;
  * la escritura lleva el valor que se leyó y la base de datos solo la hace si
  * la fila sigue teniéndolo:
  *
- * - con la meta ya guardada, `update_post_meta( …, $nuevo, $leido )`, que
- *   actualiza `WHERE meta_value = $leido` y devuelve `false` si no casa;
+ * - con la meta ya guardada, un único `UPDATE … WHERE meta_value = $leido`
+ *   con comparación binaria —distingue mayúsculas y tildes—, que no escribe
+ *   si no casa. No pasa por `update_post_meta()`, que sin fila guardada la
+ *   vuelve a crear sin mirar el valor anterior, y compara con la collation de
+ *   la tabla, que no distingue mayúsculas;
  * - sin la meta, `add_post_meta( …, true )`, que no añade si otra petición la
- *   creó entretanto;
- * - para dejarla vacía, `delete_post_meta( …, $leido )`, que tampoco borra si
- *   ya no casa.
+ *   creó entretanto.
+ *
+ * Una lista vacía se guarda vacía, no se borra: así una escritura que llegue
+ * después de vaciarla no casa y no resucita lo que se quitó.
  *
  * Si no casa, se relee, se vuelve a calcular el cambio —y a validarlo— y se
- * reintenta. Queda un hueco: si otra petición **borra** la meta entre la
- * lectura y la escritura, `update_post_meta()` la vuelve a crear con lo
- * calculado sobre lo leído. Solo pasa cuando la otra vació la lista entera.
+ * reintenta.
  */
 final class MetaSwap {
 
@@ -73,23 +75,36 @@ final class MetaSwap {
 	 * @param int    $post_id Post ID.
 	 * @param string $key     Meta key.
 	 * @param mixed  $read    What was read; null when there was no meta.
-	 * @param mixed  $value   What to write; an empty array removes the meta.
+	 * @param mixed  $value   What to write; an empty array is stored empty.
 	 * @return bool Whether it was written.
 	 */
 	private static function swap( int $post_id, string $key, $read, $value ): bool {
+		global $wpdb;
 		if ( null === $read ) {
 			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
 		}
-		if ( empty( $read ) ) {
-			// Una meta guardada vacía no se puede comparar: `update_post_meta()`
-			// toma un valor anterior vacío como «sin condición». Se quita y se
-			// crea de nuevo, otra vez solo si nadie la creó entretanto.
-			delete_post_meta( $post_id, $key );
-			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
+		$value = sanitize_meta( $key, $value, 'post', (string) get_post_type( $post_id ) );
+		// Same short-circuit update_metadata() offers.
+		$check = apply_filters( 'update_post_metadata', null, $post_id, $key, $value, $read ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- core hook.
+		if ( null !== $check ) {
+			return (bool) $check;
 		}
-		if ( array() === $value ) {
-			return false !== delete_post_meta( $post_id, $key, wp_slash( $read ) );
+		$stored = maybe_serialize( $value );
+		$prev   = maybe_serialize( $read );
+		if ( $stored === $prev ) {
+			return true;
 		}
-		return false !== update_post_meta( $post_id, $key, wp_slash( $value ), $read );
+		$rows = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- compare-and-swap; the cache is cleared below.
+			$wpdb->prepare(
+				'UPDATE %i SET meta_value = %s WHERE post_id = %d AND meta_key = %s AND CAST(meta_value AS BINARY) = CAST(%s AS BINARY)',
+				$wpdb->postmeta,
+				$stored,
+				$post_id,
+				$key,
+				$prev
+			)
+		);
+		wp_cache_delete( $post_id, 'post_meta' );
+		return is_int( $rows ) && $rows > 0;
 	}
 }

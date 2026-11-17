@@ -6143,6 +6143,8 @@ namespace Prc\Meta;
 
 
 
+
+
 if ( ! class_exists( 'Prc\Meta\MetaSwap', false ) ) {
 final class MetaSwap {
 
@@ -6194,20 +6196,33 @@ final class MetaSwap {
 
 
 	private static function swap( int $post_id, string $key, $read, $value ): bool {
+		global $wpdb;
 		if ( null === $read ) {
 			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
 		}
-		if ( empty( $read ) ) {
+		$value = sanitize_meta( $key, $value, 'post', (string) get_post_type( $post_id ) );
 
-
-
-			delete_post_meta( $post_id, $key );
-			return array() === $value || false !== add_post_meta( $post_id, $key, wp_slash( $value ), true );
+		$check = apply_filters( 'update_post_metadata', null, $post_id, $key, $value, $read );
+		if ( null !== $check ) {
+			return (bool) $check;
 		}
-		if ( array() === $value ) {
-			return false !== delete_post_meta( $post_id, $key, wp_slash( $read ) );
+		$stored = maybe_serialize( $value );
+		$prev   = maybe_serialize( $read );
+		if ( $stored === $prev ) {
+			return true;
 		}
-		return false !== update_post_meta( $post_id, $key, wp_slash( $value ), $read );
+		$rows = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE %i SET meta_value = %s WHERE post_id = %d AND meta_key = %s AND CAST(meta_value AS BINARY) = CAST(%s AS BINARY)',
+				$wpdb->postmeta,
+				$stored,
+				$post_id,
+				$key,
+				$prev
+			)
+		);
+		wp_cache_delete( $post_id, 'post_meta' );
+		return is_int( $rows ) && $rows > 0;
 	}
 }
 

@@ -621,6 +621,104 @@ class Test_People_List extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Carrera con una baja de la última persona: otra cuenta borra la lista
+	 * entre la lectura y la escritura. El alta no la vuelve a crear con lo
+	 * leído: la persona dada de baja no reaparece.
+	 */
+	public function test_removing_the_last_person_is_not_undone_by_a_write_in_between() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$this->assertTrue( People::add( $solicitud, $director, $this->persona() )['ok'] );
+
+		$hechas = 0;
+		add_filter(
+			'update_post_metadata',
+			static function ( $corto, $object_id, $meta_key ) use ( $solicitud, &$hechas ) {
+				global $wpdb;
+				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $hechas++ ) {
+					$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
+						$wpdb->postmeta,
+						array(
+							'post_id'  => $solicitud,
+							'meta_key' => ApplicationMetaKeys::PEOPLE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+						)
+					);
+				}
+				return $corto;
+			},
+			10,
+			3
+		);
+
+		$res     = People::add(
+			$solicitud,
+			$director,
+			$this->persona(
+				array(
+					'name'  => 'Luis',
+					'dni'   => '11111111H',
+					'email' => 'luis@example.org',
+				)
+			)
+		);
+		$nombres = array_column( People::of( $solicitud ), 'name' );
+		$this->assertNotContains( 'Ana', $nombres, 'la persona dada de baja no reaparece' );
+		if ( $res['ok'] ) {
+			$this->assertSame( array( 'Luis' ), $nombres );
+		}
+	}
+
+	/**
+	 * Carrera con un cambio solo de mayúsculas: la comparación es exacta, y la
+	 * corrección de la otra cuenta no se pisa.
+	 */
+	public function test_a_case_only_change_in_between_is_not_overwritten() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$this->assertTrue( People::add( $solicitud, $director, $this->persona( array( 'name' => 'ana' ) ) )['ok'] );
+		$corregida            = People::of( $solicitud );
+		$corregida[0]['name'] = 'Ana';
+
+		$hechas = 0;
+		add_filter(
+			'update_post_metadata',
+			static function ( $corto, $object_id, $meta_key ) use ( $solicitud, $corregida, &$hechas ) {
+				global $wpdb;
+				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $hechas++ ) {
+					$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
+						$wpdb->postmeta,
+						array( 'meta_value' => maybe_serialize( $corregida ) ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+						array(
+							'post_id'  => $solicitud,
+							'meta_key' => ApplicationMetaKeys::PEOPLE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+						)
+					);
+				}
+				return $corto;
+			},
+			10,
+			3
+		);
+
+		$this->assertTrue(
+			People::add(
+				$solicitud,
+				$director,
+				$this->persona(
+					array(
+						'name'  => 'Luis',
+						'dni'   => '11111111H',
+						'email' => 'luis@example.org',
+					)
+				)
+			)['ok']
+		);
+		$this->assertSame( array( 'Ana', 'Luis' ), array_column( People::of( $solicitud ), 'name' ) );
+	}
+
+	/**
 	 * Un «cambio» que deja la fila igual no escribe, no anota y no avisa.
 	 */
 	public function test_a_change_without_differences_does_nothing() {

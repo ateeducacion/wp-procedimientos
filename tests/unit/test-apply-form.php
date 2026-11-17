@@ -1423,6 +1423,76 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El número y la rejilla obligatorios que faltan, y el DNI de la segunda
+	 * persona coordinadora, quedan marcados en su sitio, y el aviso de arriba
+	 * enlaza al id que de verdad se pinta: el grupo entero, en la rejilla.
+	 */
+	public function test_measured_questions_and_second_coordinator_are_marked() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 2,
+				ProcedureMetaKeys::QUESTIONS         => array(
+					array(
+						'key'      => 'q1',
+						'label'    => 'Grupos',
+						'type'     => ProcedureQuestions::TYPE_NUMBER,
+						'required' => true,
+					),
+					array(
+						'key'      => 'q2',
+						'label'    => 'Alumnado',
+						'type'     => ProcedureQuestions::TYPE_GRID,
+						'required' => true,
+						'rows'     => "Infantil\nPrimaria",
+					),
+				),
+			)
+		);
+		$direccion     = $this->school_head( 'C0001' );
+		$this->assertNull(
+			$this->enviar(
+				$direccion,
+				$procedimiento,
+				array(
+					ApplyForm::FIELD_COORDINATORS => array(
+						array(
+							'name'    => 'Ana',
+							'surname' => 'Pérez',
+							'dni'     => '12345678Z',
+							'email'   => 'ana@example.org',
+						),
+						array(
+							'name'    => 'Luis',
+							'surname' => 'Díaz',
+							'dni'     => '',
+							'email'   => 'luis@example.org',
+						),
+					),
+				)
+			)
+		);
+		$this->acting_as( $direccion );
+		$html = $this->pintar( $procedimiento );
+
+		// El número: la clase, aria-invalid y su error.
+		$this->assertMatchesRegularExpression( '/<input type="number" class="prc-control is-invalid"[^>]*id="prc-q-q1"[^>]*aria-describedby="prc-q-q1-error"[^>]*aria-invalid="true"/s', $html );
+		$this->assertStringContainsString( 'id="prc-q-q1-error"', $html );
+
+		// La rejilla: el grupo entero, con su id y su error.
+		$this->assertMatchesRegularExpression( '/<div class="prc-opciones prc-rejilla" role="group" id="prc-q-q2"[^>]*aria-describedby="prc-q-q2-error"[^>]*aria-invalid="true"/', $html );
+		$this->assertStringContainsString( 'id="prc-q-q2-error"', $html );
+
+		// La segunda coordinadora: marcada ella, no la primera.
+		$this->assertMatchesRegularExpression( '/id="prc-coordinator-dni-1"[^>]*aria-describedby="[^"]*prc-coordinator-dni-1-error"[^>]*aria-invalid="true"/s', $html );
+		$this->assertStringNotContainsString( 'id="prc-coordinator-dni-0-error"', $html, 'la primera estaba bien' );
+
+		// Y el aviso de arriba enlaza a cada uno.
+		$this->assertStringContainsString( '<a href="#prc-coordinator-dni-1">el DNI o NIE de la persona coordinadora 2</a>', $html );
+		$this->assertStringContainsString( '<a href="#prc-q-q1">', $html );
+		$this->assertStringContainsString( '<a href="#prc-q-q2">', $html );
+	}
+
+	/**
 	 * Un envío rechazado no redirige: la página vuelve a pintarse con el
 	 * formulario apuntando al aviso, y el navegador lleva allí el foco.
 	 */

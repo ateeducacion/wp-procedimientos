@@ -922,4 +922,47 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'IES Dos', $csv, 'tampoco por el POST de exportar' );
 		$this->assertStringContainsString( 'CEO Tres', $csv );
 	}
+
+	/**
+	 * La consulta no enseña ni filtra las incompletas: no lee las personas ni
+	 * los documentos del censo para calcularlas. El taller, sí.
+	 */
+	public function test_the_consultation_does_not_compute_incompleteness() {
+		$caso    = $this->caso(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Docente',
+						),
+					),
+				),
+			)
+		);
+		$queries = array();
+		$capture = static function ( $sql ) use ( &$queries ) {
+			$queries[] = (string) $sql;
+			return $sql;
+		};
+		$reads   = static function () use ( &$queries ): int {
+			return count(
+				array_filter(
+					$queries,
+					static function ( string $sql ): bool {
+						return false !== strpos( $sql, "'" . ApplicationMetaKeys::PEOPLE . "'" );
+					}
+				)
+			);
+		};
+		$this->assertTrue( \Prc\PublicFront\ApplicationQuery::run( $caso['procedure'], ApplicationFilter::sanitize( array() ) )['may_be_incomplete'], 'el taller sí las mira' );
+
+		$this->acting_as( $this->observer( array( 'Z0002' ) ) );
+		add_filter( 'query', $capture );
+		$modelo = Observe::model( array( Observe::ARG_PROCEDURE => (string) $caso['procedure'] ) );
+		remove_filter( 'query', $capture );
+		$this->assertSame( 2, $modelo['table']['all'] );
+		$this->assertSame( 0, $reads(), 'la consulta no lee la lista de personas del censo' );
+	}
 }

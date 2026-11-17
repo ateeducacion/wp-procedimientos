@@ -13668,8 +13668,9 @@ final class ApplicationQuery {
 
 
 
-	public static function run( int $procedure_id, array $filter, array $scope = array() ): array {
-		$census = self::census( $procedure_id, $scope );
+
+	public static function run( int $procedure_id, array $filter, array $scope = array(), bool $incomplete = true ): array {
+		$census = self::census( $procedure_id, $scope, $incomplete );
 
 		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
 		$opciones = self::options( $census['stored'], $catalogo );
@@ -13708,8 +13709,9 @@ final class ApplicationQuery {
 
 
 
-	public static function ids( int $procedure_id, array $filter, array $scope = array() ): array {
-		return self::run( $procedure_id, $filter, $scope )['ids'];
+
+	public static function ids( int $procedure_id, array $filter, array $scope = array(), bool $incomplete = true ): array {
+		return self::run( $procedure_id, $filter, $scope, $incomplete )['ids'];
 	}
 
 
@@ -13734,7 +13736,8 @@ final class ApplicationQuery {
 
 
 
-	private static function census( int $procedure_id, array $scope ): array {
+
+	private static function census( int $procedure_id, array $scope, bool $incomplete = true ): array {
 		$vacio = array(
 			'posts'  => array(),
 			'stored' => array(),
@@ -13768,7 +13771,7 @@ final class ApplicationQuery {
 			$por_id[ (int) $post->ID ] = $post;
 		}
 		$claves = self::CENSUS;
-		$mirar  = self::can_be_incomplete( $procedure_id );
+		$mirar  = $incomplete && self::can_be_incomplete( $procedure_id );
 		if ( $mirar ) {
 			$claves[] = ApplicationMetaKeys::PEOPLE;
 			$claves[] = ApplicationMetaKeys::FILES;
@@ -25140,7 +25143,7 @@ final class Observe {
 
 	private static function table( int $user_id, int $procedure_id, array $scope, array $request ): array {
 		$columnas = ObserveSettings::columns( $procedure_id );
-		$res      = ApplicationQuery::run( $procedure_id, self::filter( $request, $columnas ), $scope );
+		$res      = ApplicationQuery::run( $procedure_id, self::filter( $request, $columnas ), $scope, false );
 		$filtro   = $res['filter'];
 		$url      = static function ( array $changes = array() ) use ( $procedure_id, $filtro ): string {
 			return self::url( $procedure_id, array_map( 'rawurlencode', ApplicationFilter::query( $filtro, $changes ) ) );
@@ -25321,7 +25324,7 @@ final class Observe {
 		if ( array() === $columnas ) {
 			return null;
 		}
-		$ids = ApplicationQuery::ids( $procedure_id, self::filter( $source, $columnas ), $ambito );
+		$ids = ApplicationQuery::ids( $procedure_id, self::filter( $source, $columnas ), $ambito, false );
 		return ApplicationExport::csv( $procedure_id, array_keys( $columnas ), ApplicationExport::SHAPE_APPLICATION, $ids );
 	}
 

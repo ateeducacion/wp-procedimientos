@@ -269,7 +269,7 @@ final class Observe {
 	 */
 	private static function table( int $user_id, int $procedure_id, array $scope, array $request ): array {
 		$columnas = ObserveSettings::columns( $procedure_id );
-		$res      = ApplicationQuery::run( $procedure_id, self::filter( $request, $columnas ), $scope );
+		$res      = ApplicationQuery::run( $procedure_id, self::filter( $request, $columnas ), $scope, false );
 		$filtro   = $res['filter'];
 		$url      = static function ( array $changes = array() ) use ( $procedure_id, $filtro ): string {
 			return self::url( $procedure_id, array_map( 'rawurlencode', ApplicationFilter::query( $filtro, $changes ) ) );
@@ -450,7 +450,7 @@ final class Observe {
 		if ( array() === $columnas ) {
 			return null;
 		}
-		$ids = ApplicationQuery::ids( $procedure_id, self::filter( $source, $columnas ), $ambito );
+		$ids = ApplicationQuery::ids( $procedure_id, self::filter( $source, $columnas ), $ambito, false );
 		return ApplicationExport::csv( $procedure_id, array_keys( $columnas ), ApplicationExport::SHAPE_APPLICATION, $ids );
 	}
 

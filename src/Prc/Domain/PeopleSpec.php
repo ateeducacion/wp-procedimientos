@@ -243,14 +243,19 @@ final class PeopleSpec {
 	 *
 	 * Quitar un papel o un grupo que alguna solicitud usa se rechaza: las
 	 * personas dadas de alta con él se quedarían sin rótulo. Renombrarlo sí
-	 * se puede, porque la clave no cambia.
+	 * se puede, porque la clave no cambia. Tampoco se puede pedir una sola
+	 * persona por papel y grupo si alguna solicitud ya tiene dos: esas filas
+	 * ya no se podrían cambiar.
 	 *
 	 * @param array<string, mixed>               $before The stored specification.
 	 * @param array<string, mixed>               $after  The new one.
-	 * @param array<string, array<string, bool>> $used   `roles` and `groups`: key => true.
+	 * @param array<string, array<string, bool>> $used   `roles` and `groups`: key => true; `shared`: «role|group» => true.
 	 * @return string Empty when nothing used goes away.
 	 */
 	public static function refusal( array $before, array $after, array $used ): string {
+		if ( ! empty( $after['unique_per_group'] ) && empty( $before['unique_per_group'] ) && ! empty( $used['shared'] ) ) {
+			return 'Alguna solicitud ya tiene más de una persona con el mismo papel en el mismo grupo: no se puede pedir una sola por papel y grupo hasta que cada centro lo corrija. No se ha guardado nada.';
+		}
 		foreach ( array(
 			'roles'  => 'El papel',
 			'groups' => 'El grupo',

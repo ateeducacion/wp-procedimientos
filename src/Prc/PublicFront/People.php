@@ -285,24 +285,34 @@ final class People {
 	}
 
 	/**
-	 * Which roles and groups some application of the procedure uses.
+	 * Which roles and groups some application of the procedure uses, and
+	 * which role and group some application has more than one person in.
 	 *
-	 * Es lo que decide si el taller puede quitar uno ({@see PeopleSpec::refusal()}).
+	 * Es lo que decide si el taller puede quitar un papel o un grupo, o
+	 * pedir una sola persona por papel y grupo ({@see PeopleSpec::refusal()}).
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{roles:array<string, bool>, groups:array<string, bool>}
+	 * @return array{roles:array<string, bool>, groups:array<string, bool>, shared:array<string, bool>} `shared` is keyed by «role|group».
 	 */
 	public static function used_keys( int $procedure_id ): array {
 		$out = array(
 			'roles'  => array(),
 			'groups' => array(),
+			'shared' => array(),
 		);
-		foreach ( Applications::for_procedure( $procedure_id ) as $solicitud ) {
-			foreach ( self::of( (int) $solicitud->ID ) as $fila ) {
-				$out['roles'][ $fila['role'] ] = true;
-				if ( '' !== $fila['group'] ) {
-					$out['groups'][ $fila['group'] ] = true;
+		foreach ( Applications::for_procedure( $procedure_id ) as $application ) {
+			$seen = array();
+			foreach ( self::of( (int) $application->ID ) as $row ) {
+				$out['roles'][ $row['role'] ] = true;
+				if ( '' === $row['group'] ) {
+					continue;
 				}
+				$out['groups'][ $row['group'] ] = true;
+				$place                          = $row['role'] . '|' . $row['group'];
+				if ( isset( $seen[ $place ] ) ) {
+					$out['shared'][ $place ] = true;
+				}
+				$seen[ $place ] = true;
 			}
 		}
 		return $out;

@@ -2927,7 +2927,12 @@ final class PeopleSpec {
 
 
 
+
+
 	public static function refusal( array $before, array $after, array $used ): string {
+		if ( ! empty( $after['unique_per_group'] ) && empty( $before['unique_per_group'] ) && ! empty( $used['shared'] ) ) {
+			return 'Alguna solicitud ya tiene más de una persona con el mismo papel en el mismo grupo: no se puede pedir una sola por papel y grupo hasta que cada centro lo corrija. No se ha guardado nada.';
+		}
 		foreach ( array(
 			'roles'  => 'El papel',
 			'groups' => 'El grupo',
@@ -10670,17 +10675,27 @@ final class People {
 
 
 
+
+
 	public static function used_keys( int $procedure_id ): array {
 		$out = array(
 			'roles'  => array(),
 			'groups' => array(),
+			'shared' => array(),
 		);
-		foreach ( Applications::for_procedure( $procedure_id ) as $solicitud ) {
-			foreach ( self::of( (int) $solicitud->ID ) as $fila ) {
-				$out['roles'][ $fila['role'] ] = true;
-				if ( '' !== $fila['group'] ) {
-					$out['groups'][ $fila['group'] ] = true;
+		foreach ( Applications::for_procedure( $procedure_id ) as $application ) {
+			$seen = array();
+			foreach ( self::of( (int) $application->ID ) as $row ) {
+				$out['roles'][ $row['role'] ] = true;
+				if ( '' === $row['group'] ) {
+					continue;
 				}
+				$out['groups'][ $row['group'] ] = true;
+				$place                          = $row['role'] . '|' . $row['group'];
+				if ( isset( $seen[ $place ] ) ) {
+					$out['shared'][ $place ] = true;
+				}
+				$seen[ $place ] = true;
 			}
 		}
 		return $out;

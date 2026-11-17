@@ -184,6 +184,45 @@ class Test_People_Panel extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Activar «una sola persona por papel y grupo» con dos personas ya en el
+	 * mismo papel y grupo se rechaza: esas filas ya no se podrían cambiar.
+	 */
+	public function test_switching_on_one_per_group_with_duplicates_is_refused() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->guardar( $uid, $procedimiento, $this->campos() );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		foreach ( array(
+			array( 'Ana', '12345678Z', 'ana@example.org' ),
+			array( 'Luis', '11111111H', 'luis@example.org' ),
+		) as list( $name, $dni, $email ) ) {
+			$added = People::add(
+				$solicitud,
+				$director,
+				array(
+					'name'    => $name,
+					'surname' => 'Pérez',
+					'dni'     => $dni,
+					'email'   => $email,
+					'role'    => 'r2',
+					'group'   => 'g1',
+				)
+			);
+			$this->assertTrue( $added['ok'], $added['error'] );
+		}
+
+		$this->assertNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_UNIQUE => '1' ) ) ) );
+		$this->assertFalse( People::spec( $procedimiento )['unique_per_group'], 'no se ha guardado nada' );
+
+		// Con cada persona en su grupo, sí.
+		$luis  = People::of( $solicitud )[1];
+		$moved = People::change( $solicitud, $director, $luis['id'], ApplicationPeople::fingerprint( $luis ), array( 'group' => 'g2' ) + $luis );
+		$this->assertTrue( $moved['ok'], $moved['error'] );
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_UNIQUE => '1' ) ) ) );
+		$this->assertTrue( People::spec( $procedimiento )['unique_per_group'] );
+	}
+
+	/**
 	 * Un procedimiento de profesorado no tiene lista; quien gestiona otro
 	 * ámbito no la toca.
 	 */

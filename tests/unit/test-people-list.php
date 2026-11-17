@@ -498,6 +498,7 @@ class Test_People_List extends WP_UnitTestCase {
 			array(
 				'roles'  => array( 'r2' => true ),
 				'groups' => array( 'g1' => true ),
+				'shared' => array(),
 			),
 			People::used_keys( $procedimiento )
 		);

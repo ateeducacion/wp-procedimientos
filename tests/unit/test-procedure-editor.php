@@ -1362,6 +1362,45 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	// ─── permisos, nonces y bloqueo ────────────────────────────────────────
 
 	/**
+	 * El rechazo de «Marcar como histórico».
+	 *
+	 * @return string
+	 */
+	private function rechazo(): string {
+		return (string) \Closure::bind(
+			static function (): string {
+				return self::$rejected;
+			},
+			null,
+			ProcedureEditor::class
+		)();
+	}
+
+	/**
+	 * Quien gestiona otro ámbito oye «no es suyo», no el estado de un
+	 * procedimiento ajeno; con el propio vivo, oye por qué no se marca. En
+	 * ningún caso se escribe la marca.
+	 */
+	public function test_archiving_a_procedure_of_another_area_says_it_is_not_yours() {
+		list( , , $procedimiento ) = $this->mio( array( ProcedureMetaKeys::APPLICATIONS_CLOSED => true ) );
+		$ajena                     = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
+
+		$this->assertNull( $this->submit( $ajena, ProcedureEditor::OP_ARCHIVE, $procedimiento ) );
+		$this->assertStringContainsString( 'no es suyo: solo lo marca', $this->rechazo() );
+		$this->assertStringNotContainsString( 'cerrado o resuelto', $this->rechazo() );
+		$this->assertFalse( ProcedureAccess::is_archived( $procedimiento ) );
+		$this->assertFalse( metadata_exists( 'post', $procedimiento, ProcedureMetaKeys::ARCHIVED ) );
+		$this->olvidar_rechazo();
+
+		list( , $propio, $vivo ) = $this->mio();
+		$this->assertNull( $this->submit( $propio, ProcedureEditor::OP_ARCHIVE, $vivo ) );
+		$this->assertStringContainsString( 'Solo se marca como histórico un procedimiento cerrado o resuelto', $this->rechazo() );
+		$this->assertStringNotContainsString( 'no es suyo', $this->rechazo() );
+		$this->assertFalse( ProcedureAccess::is_archived( $vivo ) );
+		$this->assertFalse( metadata_exists( 'post', $vivo, ProcedureMetaKeys::ARCHIVED ) );
+	}
+
+	/**
 	 * Sin permiso sobre el procedimiento no se muta NADA.
 	 */
 	public function test_without_permission_nothing_is_mutated() {

@@ -479,7 +479,9 @@ final class ApplicationOperations {
 	 *
 	 * Quien la completa pasa a ser quien la presenta (`post_author`): es a
 	 * quien van el acuse y los avisos de revisión. Quién la creó sigue en
-	 * `prc_created_by`.
+	 * `prc_created_by`, y cuándo la presentó el centro queda en
+	 * `prc_adopted_at`: el justificante no le atribuye la fecha en que se
+	 * registró en su nombre.
 	 *
 	 * @param int $application_id Application ID.
 	 * @param int $user_id        Account of the school that saves it.
@@ -496,7 +498,11 @@ final class ApplicationOperations {
 			),
 			true
 		);
-		return ! is_wp_error( $hecho ) && (int) $hecho > 0;
+		if ( is_wp_error( $hecho ) || (int) $hecho <= 0 ) {
+			return false;
+		}
+		update_post_meta( $application_id, ApplicationMetaKeys::ADOPTED_AT, time() );
+		return true;
 	}
 
 	/**

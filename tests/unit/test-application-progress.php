@@ -10,7 +10,9 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\ApplicationProgress;
+use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleForm;
@@ -393,5 +395,86 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Completa: no le falta nada.', $html );
 		$this->assertStringContainsString( 'Solicitud presentada el ' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . '. Le queda entregar: ' . $plazo . '.', $html );
 		$this->assertStringContainsString( 'Presentada; le queda entregar: ' . $plazo . '.', $html );
+	}
+
+	/**
+	 * Presentada en nombre del centro (ADR-0044) y sin completar: el centro
+	 * todavía no ha presentado nada, así que no hay justificante y el paso
+	 * de los datos no está hecho.
+	 */
+	public function test_an_application_submitted_on_behalf_has_no_receipt_until_the_school_completes_it() {
+		$procedimiento = $this->procedimiento();
+		$solicitud     = ApplicationOperations::submit_for( $procedimiento, $this->administrator(), 'C0001', $this->dia( 5 ) );
+		$this->assertGreaterThan( 0, $solicitud );
+		$this->acting_as( $this->school_head( 'C0001' ) );
+
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringNotContainsString( 'Ver e imprimir el justificante', $html );
+		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--falta" aria-current="step">.*?Datos de la solicitud.*?Falta/s', $html );
+		$this->assertStringNotContainsString( 'Presentada el ', $html );
+		$this->assertStringContainsString( 'Registrada en su nombre el ', $html );
+
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		$this->assertStringNotContainsString( 'Justificante de presentación', $html );
+	}
+
+	/**
+	 * Cuando el centro la completa, la presenta él: el justificante y el
+	 * acuse dicen ese momento, no el día en que se registró en su nombre,
+	 * que sale aparte.
+	 */
+	public function test_an_adopted_application_receipt_says_when_the_school_completed_it() {
+		$procedimiento = $this->procedimiento( false );
+		$solicitud     = ApplicationOperations::submit_for( $procedimiento, $this->administrator(), 'C0001', $this->dia( 5 ) );
+		$antes         = gmdate( 'Y-m-d H:i:s', time() - 3 * DAY_IN_SECONDS );
+		wp_update_post(
+			array(
+				'ID'            => $solicitud,
+				'post_date'     => get_date_from_gmt( $antes ),
+				'post_date_gmt' => $antes,
+			)
+		);
+		$registrada = ApplicationProgress::when( (int) get_post_timestamp( $solicitud ) );
+		$correos    = array();
+		add_filter(
+			'pre_wp_mail',
+			static function ( $nada, array $atts ) use ( &$correos ) {
+				$correos[] = $atts;
+				return $nada;
+			},
+			5,
+			2
+		);
+		$director = $this->school_head( 'C0001' );
+		$this->assertSame(
+			$solicitud,
+			Applications::save(
+				$procedimiento,
+				$director,
+				array(
+					'position'    => ApplicationMetaKeys::POSITION_HEAD,
+					'coordinator' => array(),
+					'answers'     => array(),
+				)
+			)
+		);
+		$this->acting_as( $director );
+
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		$this->assertStringContainsString( 'Justificante de presentación', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( $registrada, '/' ) . '/', $html, 'presentada no es el día en que se registró' );
+		$this->assertMatchesRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( (string) wp_date( 'd-m-Y' ), '/' ) . '/', $html );
+		$this->assertStringContainsString( 'El ' . $registrada . ', por quien gestiona el procedimiento.', $html );
+
+		$acuse = array_values(
+			array_filter(
+				$correos,
+				static function ( array $correo ): bool {
+					return false !== strpos( (string) $correo['subject'], 'Solicitud presentada' );
+				}
+			)
+		);
+		$this->assertCount( 1, $acuse );
+		$this->assertStringNotContainsString( ' el ' . $registrada, (string) $acuse[0]['message'] );
 	}
 }

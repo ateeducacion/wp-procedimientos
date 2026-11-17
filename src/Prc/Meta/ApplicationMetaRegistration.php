@@ -96,6 +96,10 @@ final class ApplicationMetaRegistration {
 				'type'     => 'integer',
 				'sanitize' => 'absint',
 			),
+			ApplicationMetaKeys::ADOPTED_AT         => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 		);
 	}
 

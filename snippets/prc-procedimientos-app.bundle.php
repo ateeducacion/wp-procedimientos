@@ -592,6 +592,12 @@ final class ApplicationMetaKeys {
 
 	public const CREATED_BY = 'prc_created_by';
 
+
+
+
+
+	public const ADOPTED_AT = 'prc_adopted_at';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -624,6 +630,7 @@ final class ApplicationMetaKeys {
 			self::LATE_UNTIL,
 			self::INTERNAL_NOTE,
 			self::CREATED_BY,
+			self::ADOPTED_AT,
 		);
 	}
 
@@ -8888,6 +8895,10 @@ final class ApplicationMetaRegistration {
 				'type'     => 'integer',
 				'sanitize' => 'absint',
 			),
+			ApplicationMetaKeys::ADOPTED_AT         => array(
+				'type'     => 'integer',
+				'sanitize' => 'absint',
+			),
 		);
 	}
 
@@ -14254,6 +14265,8 @@ final class ApplicationOperations {
 
 
 
+
+
 	public static function adopt( int $application_id, int $user_id ): bool {
 		if ( $user_id <= 0 || ! self::pending_for_school( $application_id ) ) {
 			return false;
@@ -14265,7 +14278,11 @@ final class ApplicationOperations {
 			),
 			true
 		);
-		return ! is_wp_error( $hecho ) && (int) $hecho > 0;
+		if ( is_wp_error( $hecho ) || (int) $hecho <= 0 ) {
+			return false;
+		}
+		update_post_meta( $application_id, ApplicationMetaKeys::ADOPTED_AT, time() );
+		return true;
 	}
 
 
@@ -26849,7 +26866,10 @@ final class ApplicationProgressView {
 
 
 	public static function status( array $p ): string {
-		$out = '<span class="prc-solicitud-estado__fecha">' . esc_html( 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.' ) . '</span>';
+		$fecha = ! empty( $p['pending_school'] )
+			? 'Registrada en su nombre el ' . (string) ( $p['on_behalf'] ?? '' ) . ': complete los datos y guárdela para presentarla.'
+			: 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.';
+		$out   = '<span class="prc-solicitud-estado__fecha">' . esc_html( $fecha ) . '</span>';
 		if ( ! empty( $p['show_complete'] ) ) {
 			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
 		}
@@ -26898,13 +26918,14 @@ final class ApplicationProgressView {
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
 		$datos   = array(
-			'N.º de solicitud'    => (string) (int) $p['application'],
-			'Procedimiento'       => (string) $m['title'],
-			'Centro'              => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
-			'Presentada'          => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
-			'Última modificación' => (string) $p['modified'],
-			'Estado de revisión'  => (string) ( $s['state_label'] ?? '' ),
-			'Estado'              => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'N.º de solicitud'        => (string) (int) $p['application'],
+			'Procedimiento'           => (string) $m['title'],
+			'Centro'                  => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Presentada'              => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
+			'Registrada en su nombre' => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
+			'Última modificación'     => (string) $p['modified'],
+			'Estado de revisión'      => (string) ( $s['state_label'] ?? '' ),
+			'Estado'                  => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
 		);
 
 		ob_start();
@@ -28952,8 +28973,12 @@ final class ApplicationProgress {
 		$excluida = ApplicationMetaKeys::REVIEW_EXCLUDED === (string) ( $app['state'] ?? '' );
 		$falta    = $id > 0 ? self::missing( $id ) : array();
 		$autor    = $id > 0 ? get_userdata( (int) get_post_field( 'post_author', $id ) ) : false;
-		$out      = array(
-			'steps'          => self::steps( $m, $people ),
+
+
+		$en_espera  = $id > 0 && ApplicationOperations::pending_for_school( $id );
+		$con_recibo = $id > 0 && ! $en_espera;
+		$out        = array(
+			'steps'          => self::steps( $m, $people, $en_espera ),
 			'application'    => $id,
 			'missing'        => $falta,
 			'pending'        => $id > 0 ? self::pending( $id ) : array(),
@@ -28963,13 +28988,15 @@ final class ApplicationProgress {
 			'people_until'   => (string) ( $people['until'] ?? '' ),
 			'people_open'    => ! empty( $people['can_edit'] ),
 			'people_why'     => (string) ( $people['why'] ?? '' ),
-			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
+			'submitted'      => $id > 0 ? self::when( self::submitted_at( $id ) ) : '',
+			'pending_school' => $en_espera,
+			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
-			'receipt_url'    => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
+			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 
-			'receipt'        => $id > 0 && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
+			'receipt'        => $con_recibo && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
 		);
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
@@ -28992,6 +29019,20 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 			ApplicationOperations::pending_for_school( $application_id )
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function submitted_at( int $application_id ): int {
+		$adoptada = (int) get_post_meta( $application_id, ApplicationMetaKeys::ADOPTED_AT, true );
+		return $adoptada > 0 ? $adoptada : (int) get_post_timestamp( $application_id );
 	}
 
 
@@ -29037,7 +29078,8 @@ final class ApplicationProgress {
 
 
 
-	private static function steps( array $m, array $people ): array {
+
+	private static function steps( array $m, array $people, bool $waiting ): array {
 		$app = (array) ( $m['application'] ?? array() );
 		$hay = array() !== $app;
 		if ( ! $hay && empty( $m['can_submit'] ) ) {
@@ -29047,7 +29089,7 @@ final class ApplicationProgress {
 			array(
 				'label'  => 'Datos de la solicitud',
 				'anchor' => self::ANCHOR_FORM,
-				'done'   => $hay,
+				'done'   => $hay && ! $waiting,
 			),
 		);
 		if ( ! empty( $people['show'] ) ) {
@@ -31951,7 +31993,7 @@ final class Mailer {
 			: '';
 		return array(
 			'number'       => (string) $application_id,
-			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
+			'submitted'    => ApplicationProgress::when( ApplicationProgress::submitted_at( $application_id ) ),
 			'missing'      => ApplicationProgress::missing( $application_id ),
 			'pending'      => ApplicationProgress::pending( $application_id ),
 			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',

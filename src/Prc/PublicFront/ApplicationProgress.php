@@ -69,8 +69,12 @@ final class ApplicationProgress {
 		$excluida = ApplicationMetaKeys::REVIEW_EXCLUDED === (string) ( $app['state'] ?? '' );
 		$falta    = $id > 0 ? self::missing( $id ) : array();
 		$autor    = $id > 0 ? get_userdata( (int) get_post_field( 'post_author', $id ) ) : false;
-		$out      = array(
-			'steps'          => self::steps( $m, $people ),
+		// Registrada en su nombre y sin completar (ADR-0044): el centro todavía
+		// no ha presentado nada, así que no hay justificante que dar.
+		$en_espera  = $id > 0 && ApplicationOperations::pending_for_school( $id );
+		$con_recibo = $id > 0 && ! $en_espera;
+		$out        = array(
+			'steps'          => self::steps( $m, $people, $en_espera ),
 			'application'    => $id,
 			'missing'        => $falta,
 			'pending'        => $id > 0 ? self::pending( $id ) : array(),
@@ -80,13 +84,15 @@ final class ApplicationProgress {
 			'people_until'   => (string) ( $people['until'] ?? '' ),
 			'people_open'    => ! empty( $people['can_edit'] ),
 			'people_why'     => (string) ( $people['why'] ?? '' ),
-			'submitted'      => $id > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
+			'submitted'      => $id > 0 ? self::when( self::submitted_at( $id ) ) : '',
+			'pending_school' => $en_espera,
+			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
-			'receipt_url'    => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
+			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige pintar en solo lectura lo que la pantalla ya enseña.
-			'receipt'        => $id > 0 && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
+			'receipt'        => $con_recibo && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
 		);
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
@@ -109,6 +115,20 @@ final class ApplicationProgress {
 			(string) get_post_meta( $application_id, ApplicationMetaKeys::REVIEW_STATE, true ),
 			ApplicationOperations::pending_for_school( $application_id )
 		);
+	}
+
+	/**
+	 * When the application was submitted, as its receipt says.
+	 *
+	 * La registrada en nombre del centro la presenta el centro cuando la
+	 * completa (`prc_adopted_at`), no el día en que se registró.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return int Unix time.
+	 */
+	public static function submitted_at( int $application_id ): int {
+		$adoptada = (int) get_post_meta( $application_id, ApplicationMetaKeys::ADOPTED_AT, true );
+		return $adoptada > 0 ? $adoptada : (int) get_post_timestamp( $application_id );
 	}
 
 	/**
@@ -150,11 +170,12 @@ final class ApplicationProgress {
 	 * hace que falte nada. Sin solicitud y sin poder presentarla, no hay
 	 * camino que enseñar.
 	 *
-	 * @param array<string, mixed> $m      Model of the screen.
-	 * @param array<string, mixed> $people Model of the list of people.
+	 * @param array<string, mixed> $m       Model of the screen.
+	 * @param array<string, mixed> $people  Model of the list of people.
+	 * @param bool                 $waiting Whether it was registered on behalf of the school and the school has not completed it.
 	 * @return array<int, array{label:string, anchor:string, done:bool}>
 	 */
-	private static function steps( array $m, array $people ): array {
+	private static function steps( array $m, array $people, bool $waiting ): array {
 		$app = (array) ( $m['application'] ?? array() );
 		$hay = array() !== $app;
 		if ( ! $hay && empty( $m['can_submit'] ) ) {
@@ -164,7 +185,7 @@ final class ApplicationProgress {
 			array(
 				'label'  => 'Datos de la solicitud',
 				'anchor' => self::ANCHOR_FORM,
-				'done'   => $hay,
+				'done'   => $hay && ! $waiting,
 			),
 		);
 		if ( ! empty( $people['show'] ) ) {

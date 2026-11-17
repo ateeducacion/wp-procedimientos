@@ -167,7 +167,10 @@ final class ApplicationProgressView {
 	 * @return string
 	 */
 	public static function status( array $p ): string {
-		$out = '<span class="prc-solicitud-estado__fecha">' . esc_html( 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.' ) . '</span>';
+		$fecha = ! empty( $p['pending_school'] )
+			? 'Registrada en su nombre el ' . (string) ( $p['on_behalf'] ?? '' ) . ': complete los datos y guárdela para presentarla.'
+			: 'Presentada el ' . (string) ( $p['submitted'] ?? '' ) . '.';
+		$out   = '<span class="prc-solicitud-estado__fecha">' . esc_html( $fecha ) . '</span>';
 		if ( ! empty( $p['show_complete'] ) ) {
 			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
 		}
@@ -216,13 +219,14 @@ final class ApplicationProgressView {
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
 		$datos   = array(
-			'N.º de solicitud'    => (string) (int) $p['application'],
-			'Procedimiento'       => (string) $m['title'],
-			'Centro'              => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
-			'Presentada'          => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
-			'Última modificación' => (string) $p['modified'],
-			'Estado de revisión'  => (string) ( $s['state_label'] ?? '' ),
-			'Estado'              => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'N.º de solicitud'        => (string) (int) $p['application'],
+			'Procedimiento'           => (string) $m['title'],
+			'Centro'                  => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Presentada'              => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
+			'Registrada en su nombre' => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
+			'Última modificación'     => (string) $p['modified'],
+			'Estado de revisión'      => (string) ( $s['state_label'] ?? '' ),
+			'Estado'                  => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
 		);
 
 		ob_start();

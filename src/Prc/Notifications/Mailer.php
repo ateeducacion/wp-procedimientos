@@ -696,7 +696,7 @@ final class Mailer {
 			: '';
 		return array(
 			'number'       => (string) $application_id,
-			'submitted'    => ApplicationProgress::when( (int) get_post_timestamp( $application_id ) ),
+			'submitted'    => ApplicationProgress::when( ApplicationProgress::submitted_at( $application_id ) ),
 			'missing'      => ApplicationProgress::missing( $application_id ),
 			'pending'      => ApplicationProgress::pending( $application_id ),
 			'people_until' => '' !== $hasta ? implode( '-', array_reverse( explode( '-', $hasta ) ) ) : '',

@@ -7064,6 +7064,13 @@ final class Applications {
 					'post_author' => $user_id,
 					'post_status' => 'publish',
 					'post_title'  => wp_slash( $titulo ),
+
+
+
+					'meta_input'  => array(
+						ApplicationMetaKeys::APPLICANT_TYPE => $type,
+						ApplicationMetaKeys::CENTRE_CODE => wp_slash( $centro['code'] ),
+					),
 				),
 				true
 			);

@@ -441,6 +441,55 @@ class Test_Application_Files extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Mientras se guardan los documentos, la solicitud nueva ya se encuentra.
+	 *
+	 * Guardar un documento grande tarda: si el código del centro o el tipo de
+	 * solicitud se escribieran después, un segundo envío del mismo centro no
+	 * vería la primera y crearía otra (ADR-0018).
+	 */
+	public function test_the_identity_of_a_new_application_is_written_before_its_documents() {
+		$this->app();
+		$area      = $this->area( 'Innovación' );
+		$head      = $this->school_head( 'C0001' );
+		$procedure = $this->procedure( $this->administrator(), array( $area ), array( ProcedureMetaKeys::QUESTIONS => $this->preguntas() ) );
+
+		$seen = array();
+		$spy  = static function ( $meta_id, $object_id, $meta_key ) use ( &$seen, $procedure ): void {
+			if ( ApplicationMetaKeys::FILES === $meta_key ) {
+				$seen[] = array( (int) $object_id, Applications::find( $procedure, 'C0001' ) );
+			}
+		};
+		add_action( 'added_post_meta', $spy, 10, 3 );
+		$id = Applications::save( $procedure, $head, array( 'answers' => array() ), '', array( 'q1' => $this->un_pdf() ) );
+		remove_action( 'added_post_meta', $spy, 10 );
+
+		$this->assertGreaterThan( 0, $id );
+		$this->assertSame( array( array( $id, $id ) ), $seen, 'Al guardar el documento, find() ya da con la solicitud.' );
+
+		$teacher    = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$individual = $this->procedure(
+			$this->administrator(),
+			array( $area ),
+			array(
+				ProcedureMetaKeys::QUESTIONS => $this->preguntas(),
+				ProcedureMetaKeys::AUDIENCE  => ProcedureMetaKeys::AUDIENCE_TEACHERS,
+			)
+		);
+		$seen       = array();
+		$spy        = static function ( $meta_id, $object_id, $meta_key ) use ( &$seen, $individual, $teacher ): void {
+			if ( ApplicationMetaKeys::FILES === $meta_key ) {
+				$seen[] = array( (int) $object_id, Applications::find_for_teacher( $individual, $teacher ) );
+			}
+		};
+		add_action( 'added_post_meta', $spy, 10, 3 );
+		$own = Applications::save_teacher( $individual, $teacher, array( 'answers' => array() ), array( 'q1' => $this->un_pdf() ) );
+		remove_action( 'added_post_meta', $spy, 10 );
+
+		$this->assertGreaterThan( 0, $own );
+		$this->assertSame( array( array( $own, $own ) ), $seen, 'Y find_for_teacher() también.' );
+	}
+
+	/**
 	 * Sustituir un documento guarda primero el nuevo y borra después el viejo.
 	 */
 	public function test_replacing_a_document_keeps_the_old_one_until_the_new_one_is_in() {

@@ -421,6 +421,13 @@ final class Applications {
 					'post_author' => $user_id,
 					'post_status' => 'publish',
 					'post_title'  => wp_slash( $titulo ),
+					// Lo que find() y find_for_teacher() buscan va en el propio
+					// alta: guardar los documentos tarda, y en ese rato un segundo
+					// envío del mismo centro tiene que ver esta solicitud (ADR-0018).
+					'meta_input'  => array(
+						ApplicationMetaKeys::APPLICANT_TYPE => $type,
+						ApplicationMetaKeys::CENTRE_CODE => wp_slash( $centro['code'] ),
+					),
 				),
 				true
 			);

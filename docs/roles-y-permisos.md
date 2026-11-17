@@ -198,15 +198,15 @@ esta tabla dice quién; aquella, cuándo.
 ### El acotado por ámbito
 
 El ámbito convocante es un **término de la taxonomía `prc_area`** puesto en
-el procedimiento, y la pertenencia de la persona es la **meta de usuario
-`prc_area`** con uno o varios `term_id`. No es un rol:
+el procedimiento, y la pertenencia de la persona es la **opción de usuario
+`prc_area`**, guardada por sitio, con uno o varios `term_id`. No es un rol:
 [ADR-0014](adr/ADR-0014-el-ambito-es-un-alcance-no-un-rol.md).
 
 | Pieza | Dónde |
 |---|---|
 | Ámbito del procedimiento | término de `prc_area` en el `prc_procedure` |
 | Ámbito de la solicitud | el de su procedimiento (`post_parent`); la solicitud no lleva término |
-| Ámbitos de la persona | meta de usuario `prc_area`, array de `term_id` |
+| Ámbitos de la persona | opción de usuario `prc_area`, por sitio (`{prefijo del sitio}prc_area`), array de `term_id`; si no la hay, se lee la meta global `prc_area` de antes ([ADR-0032](adr/ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md)) |
 | Quién escribe ese campo | solo `prc_manage_app` o `edit_users` |
 | Quién decide | `ProcedureAccess`, y solo ella |
 

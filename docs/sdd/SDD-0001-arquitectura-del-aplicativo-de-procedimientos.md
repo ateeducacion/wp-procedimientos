@@ -258,8 +258,9 @@ Capacidades del aplicativo:
 
 Acotados, ambos **fail-closed**:
 
-- **Por ámbito**: la meta de usuario `prc_area` (uno o varios IDs de término
-  de `prc_area`; un término incluye sus descendientes). Sin ámbito y sin
+- **Por ámbito**: la opción de usuario `prc_area`, guardada por sitio con
+  `update_user_option()` (ADR-0032; uno o varios IDs de término de
+  `prc_area`; un término incluye sus descendientes). Sin ámbito y sin
   `prc_manage_all_areas`, no se edita ni se ve nada en el taller.
 - **Por centro**: `Access\CentreScope::code_for( $user_id )` lee la meta cuya
   clave devuelve el filtro `prc_centre_code_meta_key` (por defecto

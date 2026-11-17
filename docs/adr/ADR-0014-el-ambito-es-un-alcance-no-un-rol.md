@@ -204,3 +204,12 @@ meta de usuario `prc_area` en la persona. Lo comprueba un único guardián,
   y su propia decisión
   ([ADR-0016](ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md));
   el guardián es el mismo.
+
+## Adenda — 2026-11-17: el ámbito se guarda por sitio
+
+La meta `prc_area` de la persona pasa a guardarse por sitio, como opción de
+usuario (`{$wpdb->get_blog_prefix()}prc_area`), con la meta global como
+lectura de compatibilidad: [ADR-0032](ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md).
+El resto de esta decisión no cambia.
+
+Asistencia de IA: Claude Code (claude-opus-5-5).

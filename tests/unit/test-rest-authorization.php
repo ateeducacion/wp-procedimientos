@@ -123,7 +123,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$mine    = $this->area( 'Servicio A' );
 		$foreign = $this->area( 'Servicio B' );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
 		$post     = $this->procedure( $editor, array( $mine ) );
 		$response = $this->request( $editor, 'POST', '/wp/v2/prc_procedure/' . $post, array( 'prc_area' => array( $foreign ) ) );
 		$this->assertSame( 403, $response->get_status() );
@@ -135,7 +135,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$mine    = $this->area( 'Servicio A' );
 		$foreign = $this->area( 'Servicio B' );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
 		$post     = $this->procedure( $editor, array( $mine, $foreign ) );
 		$response = $this->request( $editor, 'POST', '/wp/v2/prc_procedure/' . $post, array( 'prc_area' => array( $mine ) ) );
 		$this->assertSame( 200, $response->get_status() );
@@ -147,7 +147,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		$mine    = $this->area( 'Servicio A' );
 		$foreign = $this->area( 'Servicio B' );
 		$editor  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $mine ) );
 		$post = $this->procedure( $editor, array( $mine ) );
 		wp_set_current_user( $editor );
 		$result = ProcedureAccess::admin_area_assignment(
@@ -281,7 +281,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			)
 		);
 		foreach ( array( array(), array( $area, $other ), array( 99999999 ) ) as $raw ) {
-			update_user_meta( $editor, ProcedureAccess::USER_AREA_META, $raw );
+			update_user_option( $editor, ProcedureAccess::USER_AREA_META, $raw );
 			foreach ( array( 'draft', 'publish' ) as $status ) {
 				$response = $this->request(
 					$editor,
@@ -308,7 +308,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 				);
 			}
 		}
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
 		$draft = $this->request(
 			$editor,
 			'POST',
@@ -350,7 +350,7 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 	public function test_rest_publish_transition_has_scope() {
 		$area   = $this->area( 'Ámbito 1' );
 		$editor = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
-		update_user_meta( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
+		update_user_option( $editor, ProcedureAccess::USER_AREA_META, array( $area ) );
 		$seen  = array();
 		$watch = static function ( $new_status, $old_status, $post ) use ( &$seen ) {
 			if ( ProcedurePostType::POST_TYPE === $post->post_type && 'publish' === $new_status ) {

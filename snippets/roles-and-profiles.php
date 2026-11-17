@@ -345,7 +345,11 @@ if ( ! function_exists( 'prc_save_profile_fields' ) ) {
 					$term_id = absint( $raw );
 					$term    = $term_id > 0 ? get_term( $term_id, 'prc_area' ) : null;
 					if ( 0 === $term_id || $term instanceof WP_Term ) {
-						update_user_meta( $user_id, 'prc_area', $term_id > 0 ? array( $term_id ) : array() );
+						// Por sitio (ADR-0032): los term_id son de la taxonomía de
+						// este sitio. Se borra la copia global anterior, que valdría
+						// en todos los sitios de la red.
+						update_user_option( $user_id, 'prc_area', $term_id > 0 ? array( $term_id ) : array() );
+						delete_user_meta( $user_id, 'prc_area' );
 					}
 				}
 			}

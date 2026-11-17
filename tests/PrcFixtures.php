@@ -98,7 +98,7 @@ trait Prc_Fixtures {
 	protected function manager( array $areas = array() ): int {
 		$this->app();
 		$id = (int) self::factory()->user->create( array( 'role' => 'prc_manager' ) );
-		update_user_meta( $id, ProcedureAccess::USER_AREA_META, array_map( 'intval', $areas ) );
+		ProcedureAccess::set_user_areas( $id, $areas );
 		return $id;
 	}
 

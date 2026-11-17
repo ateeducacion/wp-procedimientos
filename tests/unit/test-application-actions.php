@@ -7,6 +7,7 @@
  */
 
 use Prc\Access\ApplicationActions;
+use Prc\Access\CentreScope;
 use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationFilter;
@@ -847,6 +848,28 @@ class Test_Application_Actions extends WP_UnitTestCase {
 
 		update_post_meta( $c['application'], ApplicationMetaKeys::LATE_UNTIL, $this->dia( -1 ) );
 		$this->assertNull( $enviar( $c['head'] ), 'vencida, no deja editar' );
+	}
+
+	/**
+	 * El aviso de prórroga va solo a quien la presentó mientras siga siendo
+	 * suya: ni a quien revisa, en una presentada en nombre del centro, ni a
+	 * quien ya no es del centro.
+	 */
+	public function test_the_extension_mail_goes_only_to_whoever_still_owns_it() {
+		$c  = $this->caso( false );
+		$id = ApplicationOperations::submit_for( $c['procedure'], $c['reviewer'], 'C0002', $this->dia( 3 ) );
+		$this->assertGreaterThan( 0, $id );
+		$this->enviados = array();
+		$this->assertTrue( ApplicationOperations::extend( $id, $c['reviewer'], $this->dia( 6 ) ) );
+		$this->assertSame( array(), $this->enviados, 'en nombre del centro: no sale nada' );
+
+		update_user_meta( $c['head'], CentreScope::meta_key(), 'C0002' );
+		$this->assertTrue( ApplicationOperations::extend( $c['application'], $c['reviewer'], $this->dia( 4 ) ) );
+		$this->assertSame( array(), $this->enviados, 'quien ya no es del centro no la recibe' );
+
+		update_user_meta( $c['head'], CentreScope::meta_key(), 'C0001' );
+		$this->assertTrue( ApplicationOperations::extend( $c['application'], $c['reviewer'], $this->dia( 5 ) ) );
+		$this->assertSame( array( 'direccion@example.org' ), $this->destinos(), 'y de vuelta en su centro, sí' );
 	}
 
 	/**

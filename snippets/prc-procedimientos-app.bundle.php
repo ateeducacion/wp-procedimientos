@@ -8650,6 +8650,8 @@ final class ApplicationExport {
 
 
 
+
+
 	public static function people( int $procedure_id, array $who = array() ): array {
 		$cuenta = self::tally( self::batches( $procedure_id ), array( 'all' => self::sources( $who ) ) )['all'];
 		return array(
@@ -8705,6 +8707,7 @@ final class ApplicationExport {
 		foreach ( array_keys( $groups ) as $grupo ) {
 			$out[ $grupo ] = array(
 				'people'   => array(),
+				'emails'   => array(),
 				'left_out' => array(
 					'email'      => 0,
 					'incomplete' => 0,
@@ -8752,11 +8755,21 @@ final class ApplicationExport {
 			return;
 		}
 		$clave = self::lower( $person['username'] );
-		if ( ! isset( $tally['people'][ $clave ] ) ) {
-			$tally['people'][ $clave ] = $person;
-		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
-			++$tally['left_out']['conflict'];
+		$email = self::lower( (string) $person['email'] );
+		if ( isset( $tally['people'][ $clave ] ) ) {
+			if ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== $email ) {
+				++$tally['left_out']['conflict'];
+			}
+			return;
 		}
+
+
+		if ( isset( $tally['emails'][ $email ] ) ) {
+			++$tally['left_out']['conflict'];
+			return;
+		}
+		$tally['people'][ $clave ] = $person;
+		$tally['emails'][ $email ] = $clave;
 	}
 
 
@@ -13243,7 +13256,7 @@ final class ProcedureEditorView {
 		$motivos = array(
 			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
 			'incomplete' => array( '%d incompleta', '%d incompletas' ),
-			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'conflict'   => array( '%d con el usuario o el correo en conflicto', '%d con el usuario o el correo en conflicto' ),
 			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
 		);
 		$fuera   = array();

@@ -432,6 +432,36 @@ class Test_Application_Export extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El mismo correo con otro usuario —la dirección que presenta con su
+	 * cuenta y se pone a sí misma en la coordinación— no da una segunda fila:
+	 * la plataforma no admite dos cuentas con un correo. Se queda la primera y
+	 * la otra se cuenta como conflicto.
+	 */
+	public function test_the_same_email_under_another_username_is_not_a_second_row() {
+		$procedimiento = $this->procedimiento();
+		$solicitud     = $this->solicitud(
+			$procedimiento,
+			'C0001',
+			array( $this->persona( 'Dora', 'Díaz', 'DIR@example.org' ) ),
+			array(),
+			array(
+				'user_email' => 'dir@example.org',
+				'first_name' => 'Dora',
+				'last_name'  => 'Díaz',
+			)
+		);
+		global $wpdb;
+		$cuenta = (int) get_post_field( 'post_author', $solicitud );
+		$wpdb->update( $wpdb->users, array( 'user_login' => 'dir12345' ), array( 'ID' => $cuenta ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		clean_user_cache( $cuenta );
+
+		$personas = ApplicationExport::people( $procedimiento, array() );
+		$this->assertCount( 1, $personas['people'] );
+		$this->assertSame( 1, $personas['left_out']['conflict'] );
+		$this->assertSame( 1, substr_count( strtolower( ApplicationExport::moodle( $procedimiento ) ), 'dir@example.org' ), 'el correo no se repite' );
+	}
+
+	/**
 	 * Sin nombre o sin apellidos no se crea una cuenta: la fila no sale y se
 	 * cuenta como incompleta. Un hueco de coordinación vacío no cuenta.
 	 */

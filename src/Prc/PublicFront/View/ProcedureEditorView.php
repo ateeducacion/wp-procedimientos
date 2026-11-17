@@ -1193,9 +1193,9 @@ final class ProcedureEditorView {
 	 * Who goes in the user upload file, with how many and who is left out, and why.
 	 *
 	 * Cada motivo con su rótulo: sin correo válido, incompletas (sin nombre,
-	 * apellidos o usuario), usuario en conflicto (el mismo usuario con otro
-	 * correo) y usuario no válido para la plataforma. Una persona repetida con
-	 * el mismo correo no es una omisión.
+	 * apellidos o usuario), en conflicto (el mismo usuario con otro correo o
+	 * el mismo correo con otro usuario) y usuario no válido para la
+	 * plataforma. Una persona repetida con el mismo correo no es una omisión.
 	 *
 	 * @param array<string, mixed> $quien One source: `label`, `count`, `email`, `incomplete`, `conflict`, `invalid`.
 	 * @return string
@@ -1205,7 +1205,7 @@ final class ProcedureEditorView {
 		$motivos = array(
 			'email'      => array( '%d sin correo válido', '%d sin correo válido' ),
 			'incomplete' => array( '%d incompleta', '%d incompletas' ),
-			'conflict'   => array( '%d con el usuario en conflicto', '%d con el usuario en conflicto' ),
+			'conflict'   => array( '%d con el usuario o el correo en conflicto', '%d con el usuario o el correo en conflicto' ),
 			'invalid'    => array( '%d con un usuario no válido para la plataforma', '%d con un usuario no válido para la plataforma' ),
 		);
 		$fuera   = array();

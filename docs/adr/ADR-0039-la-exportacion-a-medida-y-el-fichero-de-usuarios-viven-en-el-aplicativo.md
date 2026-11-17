@@ -213,3 +213,12 @@ usuario es una lista de claves de columnas, no datos de nadie.
 - Una cuenta de quien presenta sin nombre ni apellidos deja de salir en el
   fichero de usuarios hasta que alguien se los ponga: es preferible a crear
   en Moodle una cuenta llamada como su usuario.
+
+## Adenda — 2026-11-17
+
+El **usuario en conflicto** cuenta también el mismo correo con **otro**
+`username`, sin distinguir mayúsculas: la dirección que presenta con su cuenta
+y se pone a sí misma en la coordinación daría dos filas con un correo, y la
+subida de usuarios de Moodle no crea dos cuentas con el mismo correo salvo que
+se active `allowaccountssameemail`. Se queda la primera y la otra se cuenta;
+el diálogo la avisa como «con el usuario o el correo en conflicto».

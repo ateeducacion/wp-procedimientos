@@ -246,9 +246,11 @@ final class ApplicationExport {
 	 *   nombre cuyo nombre público es el usuario, una coordinación antigua de
 	 *   una sola palabra, o el filtro que devuelve vacío—: Moodle no crea esa
 	 *   cuenta;
-	 * - `conflict`: el mismo usuario con **otro** correo. No se funde en
-	 *   silencio: se queda la primera y esta se cuenta. Con el mismo correo es
-	 *   la misma persona, y no cuenta;
+	 * - `conflict`: el mismo usuario con **otro** correo, o el mismo correo
+	 *   con **otro** usuario —la plataforma no admite dos cuentas con un
+	 *   correo—. No se funde en silencio: se queda la primera y esta se
+	 *   cuenta. Con el mismo usuario y el mismo correo es la misma persona, y
+	 *   no cuenta;
 	 * - `invalid`: un usuario que la plataforma no acepta —fuera de
 	 *   `[a-z0-9_.@-]` o que no empieza por letra o cifra— o un correo que
 	 *   empieza por `=`, `+`, `-`, `@`, tabulador o retorno. Ese correo pasa
@@ -317,6 +319,7 @@ final class ApplicationExport {
 		foreach ( array_keys( $groups ) as $grupo ) {
 			$out[ $grupo ] = array(
 				'people'   => array(),
+				'emails'   => array(),
 				'left_out' => array(
 					'email'      => 0,
 					'incomplete' => 0,
@@ -364,11 +367,21 @@ final class ApplicationExport {
 			return;
 		}
 		$clave = self::lower( $person['username'] );
-		if ( ! isset( $tally['people'][ $clave ] ) ) {
-			$tally['people'][ $clave ] = $person;
-		} elseif ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== self::lower( (string) $person['email'] ) ) {
-			++$tally['left_out']['conflict'];
+		$email = self::lower( (string) $person['email'] );
+		if ( isset( $tally['people'][ $clave ] ) ) {
+			if ( self::lower( (string) $tally['people'][ $clave ]['email'] ) !== $email ) {
+				++$tally['left_out']['conflict'];
+			}
+			return;
 		}
+		// La plataforma no admite dos cuentas con el mismo correo: el mismo
+		// correo con otro usuario se queda fuera y se cuenta como conflicto.
+		if ( isset( $tally['emails'][ $email ] ) ) {
+			++$tally['left_out']['conflict'];
+			return;
+		}
+		$tally['people'][ $clave ] = $person;
+		$tally['emails'][ $email ] = $clave;
 	}
 
 	/**

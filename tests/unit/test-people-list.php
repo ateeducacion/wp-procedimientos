@@ -631,12 +631,12 @@ class Test_People_List extends WP_UnitTestCase {
 		$solicitud     = $this->application( $procedimiento, $director );
 		$this->assertTrue( People::add( $solicitud, $director, $this->persona() )['ok'] );
 
-		$hechas = 0;
+		$done = 0;
 		add_filter(
 			'update_post_metadata',
-			static function ( $corto, $object_id, $meta_key ) use ( $solicitud, &$hechas ) {
+			static function ( $short, $object_id, $meta_key ) use ( $solicitud, &$done ) {
 				global $wpdb;
-				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $hechas++ ) {
+				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $done++ ) {
 					$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
 						$wpdb->postmeta,
 						array(
@@ -645,13 +645,13 @@ class Test_People_List extends WP_UnitTestCase {
 						)
 					);
 				}
-				return $corto;
+				return $short;
 			},
 			10,
 			3
 		);
 
-		$res     = People::add(
+		$res   = People::add(
 			$solicitud,
 			$director,
 			$this->persona(
@@ -662,10 +662,10 @@ class Test_People_List extends WP_UnitTestCase {
 				)
 			)
 		);
-		$nombres = array_column( People::of( $solicitud ), 'name' );
-		$this->assertNotContains( 'Ana', $nombres, 'la persona dada de baja no reaparece' );
+		$names = array_column( People::of( $solicitud ), 'name' );
+		$this->assertNotContains( 'Ana', $names, 'la persona dada de baja no reaparece' );
 		if ( $res['ok'] ) {
-			$this->assertSame( array( 'Luis' ), $nombres );
+			$this->assertSame( array( 'Luis' ), $names );
 		}
 	}
 
@@ -678,25 +678,25 @@ class Test_People_List extends WP_UnitTestCase {
 		$director      = $this->school_head( 'C0001' );
 		$solicitud     = $this->application( $procedimiento, $director );
 		$this->assertTrue( People::add( $solicitud, $director, $this->persona( array( 'name' => 'ana' ) ) )['ok'] );
-		$corregida            = People::of( $solicitud );
-		$corregida[0]['name'] = 'Ana';
+		$fixed            = People::of( $solicitud );
+		$fixed[0]['name'] = 'Ana';
 
-		$hechas = 0;
+		$done = 0;
 		add_filter(
 			'update_post_metadata',
-			static function ( $corto, $object_id, $meta_key ) use ( $solicitud, $corregida, &$hechas ) {
+			static function ( $short, $object_id, $meta_key ) use ( $solicitud, $fixed, &$done ) {
 				global $wpdb;
-				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $hechas++ ) {
+				if ( (int) $object_id === $solicitud && ApplicationMetaKeys::PEOPLE === $meta_key && 0 === $done++ ) {
 					$wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- simula otra petición.
 						$wpdb->postmeta,
-						array( 'meta_value' => maybe_serialize( $corregida ) ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+						array( 'meta_value' => maybe_serialize( $fixed ) ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 						array(
 							'post_id'  => $solicitud,
 							'meta_key' => ApplicationMetaKeys::PEOPLE, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 						)
 					);
 				}
-				return $corto;
+				return $short;
 			},
 			10,
 			3

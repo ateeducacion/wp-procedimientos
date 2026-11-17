@@ -213,15 +213,21 @@ final class Applications {
 	}
 
 	/**
-	 * Every meta of one application, in its stored shape.
+	 * Every meta of one application, in its stored shape, but the history and
+	 * the list of people.
+	 *
+	 * El historial y la lista de personas tienen su propio lector
+	 * (`ApplicationLog::all()`, `People::of()`): leerlos aquí deserializaría
+	 * hasta quinientas entradas por solicitud en cada tabla, exportación o
+	 * correo, y nadie las usa.
 	 *
 	 * @param int $application_id Application post ID.
 	 * @return array<string, mixed> Keyed by ApplicationMetaKeys.
 	 */
 	public static function meta( int $application_id ): array {
 		$out = array();
-		foreach ( ApplicationMetaKeys::all() as $clave ) {
-			$out[ $clave ] = get_post_meta( $application_id, $clave, true );
+		foreach ( array_diff( ApplicationMetaKeys::all(), array( ApplicationMetaKeys::LOG, ApplicationMetaKeys::PEOPLE ) ) as $key ) {
+			$out[ $key ] = get_post_meta( $application_id, $key, true );
 		}
 		$out[ ApplicationMetaKeys::COORDINATOR ] = is_array( $out[ ApplicationMetaKeys::COORDINATOR ] )
 			? $out[ ApplicationMetaKeys::COORDINATOR ]

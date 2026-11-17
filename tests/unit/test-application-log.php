@@ -8,6 +8,7 @@
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationLog;
+use Prc\PublicFront\Applications;
 
 /**
  * El historial de una solicitud: quién, cuándo y qué (ADR-0041).
@@ -156,5 +157,32 @@ class Test_Application_Log extends WP_UnitTestCase {
 		$registradas = get_registered_meta_keys( 'post', ApplicationPostType::POST_TYPE );
 		$this->assertFalse( $registradas[ ApplicationMetaKeys::LOG ]['show_in_rest'] );
 		$this->assertFalse( $registradas[ ApplicationMetaKeys::PEOPLE ]['show_in_rest'] );
+	}
+
+	/**
+	 * Leer una solicitud para pintarla, exportarla o escribir un correo no
+	 * lee el historial ni la lista de personas: cada una tiene su lector.
+	 */
+	public function test_application_meta_does_not_read_the_history() {
+		$id = $this->solicitud();
+		ApplicationLog::add( $id, 'test_event', array() );
+		$read_keys = array();
+		add_filter(
+			'get_post_metadata',
+			static function ( $short, $object_id, $meta_key ) use ( $id, &$read_keys ) {
+				if ( (int) $object_id === $id ) {
+					$read_keys[] = $meta_key;
+				}
+				return $short;
+			},
+			10,
+			3
+		);
+
+		$meta = Applications::meta( $id );
+		$this->assertArrayNotHasKey( ApplicationMetaKeys::LOG, $meta );
+		$this->assertArrayNotHasKey( ApplicationMetaKeys::PEOPLE, $meta );
+		$this->assertNotContains( ApplicationMetaKeys::LOG, $read_keys );
+		$this->assertNotContains( ApplicationMetaKeys::PEOPLE, $read_keys );
 	}
 }

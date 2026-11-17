@@ -8822,10 +8822,16 @@ final class Applications {
 
 
 
+
+
+
+
+
+
 	public static function meta( int $application_id ): array {
 		$out = array();
-		foreach ( ApplicationMetaKeys::all() as $clave ) {
-			$out[ $clave ] = get_post_meta( $application_id, $clave, true );
+		foreach ( array_diff( ApplicationMetaKeys::all(), array( ApplicationMetaKeys::LOG, ApplicationMetaKeys::PEOPLE ) ) as $key ) {
+			$out[ $key ] = get_post_meta( $application_id, $key, true );
 		}
 		$out[ ApplicationMetaKeys::COORDINATOR ] = is_array( $out[ ApplicationMetaKeys::COORDINATOR ] )
 			? $out[ ApplicationMetaKeys::COORDINATOR ]

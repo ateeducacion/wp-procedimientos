@@ -760,6 +760,38 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * En un procedimiento de profesorado la solicitud es de cada docente: la
+	 * retira quien la presentó, y se restaura mientras esa persona no tenga
+	 * otra; la de otro docente no cuenta.
+	 */
+	public function test_a_teacher_withdraws_and_is_restored_only_without_another() {
+		$c        = $this->caso();
+		$docentes = $this->docentes( $c );
+		$a        = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$b        = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+		$suya     = Applications::save_teacher( $docentes, $a, array( 'answers' => array() ) );
+		$this->assertGreaterThan( 0, $suya );
+		$this->assertGreaterThan( 0, Applications::save_teacher( $docentes, $b, array( 'answers' => array() ) ) );
+
+		$this->assertSame( '', ApplicationActions::why_not_withdraw( $a, $suya ) );
+		$this->assertNotSame( '', ApplicationActions::why_not_withdraw( $b, $suya ), 'otro docente no la retira' );
+		$this->assertNotNull( $this->retirar( $a, $suya ), $this->rechazo_retirar() );
+		$this->assertSame( 'trash', get_post_status( $suya ) );
+
+		$this->assertSame( '', ApplicationActions::why_not_restore( $c['reviewer'], $suya ), 'la de otro docente no cuenta' );
+		$this->assertNull( ApplicationActions::live_twin( $suya ) );
+
+		$nueva = Applications::save_teacher( $docentes, $a, array( 'answers' => array() ) );
+		$this->assertGreaterThan( 0, $nueva );
+		$this->assertNotSame( $suya, $nueva );
+		$this->assertSame( $nueva, ApplicationActions::live_twin( $suya ) );
+		$this->assertNotSame( '', ApplicationActions::why_not_restore( $c['reviewer'], $suya ) );
+		$this->acting_as( $c['reviewer'] );
+		wp_untrash_post( $suya );
+		$this->assertSame( 'trash', get_post_status( $suya ) );
+	}
+
+	/**
 	 * Restaurar es de quien revisa ese ámbito: ni quien solicita, ni quien
 	 * consulta, ni otro ámbito.
 	 */

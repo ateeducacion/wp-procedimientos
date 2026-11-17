@@ -1649,7 +1649,8 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertNotNull( $this->deliver_document( $data, array( ApplyForm::FIELD_POSITION => ApplicationMetaKeys::POSITION_OTHER ) ) );
 		$after = Applications::meta( $data['application'] );
 		// La entrega queda en el historial de la solicitud (PLAN-0003, PR 9).
-		$this->assertSame( 'delivery', end( $after[ ApplicationMetaKeys::LOG ] )['event'] );
+		$log = (array) get_post_meta( $data['application'], ApplicationMetaKeys::LOG, true );
+		$this->assertSame( 'delivery', end( $log )['event'] );
 		unset( $before[ ApplicationMetaKeys::FILES ], $after[ ApplicationMetaKeys::FILES ], $before[ ApplicationMetaKeys::LOG ], $after[ ApplicationMetaKeys::LOG ] );
 		$this->assertSame( $before, $after );
 		$this->assertSame( array( 'q1' ), array_keys( ApplicationFiles::descriptors( $data['application'] ) ) );

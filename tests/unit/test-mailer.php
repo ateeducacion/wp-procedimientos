@@ -318,6 +318,58 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertSame( array( 'direccion@example.org' ), $this->destinos( $this->con_asunto( 'Solicitud presentada' ) ), 'el acuse no se copia' );
 	}
 
+	/**
+	 * El DNI o NIE de la coordinación no viaja en ningún correo: ni en el
+	 * acuse, ni en la modificación, ni en el aviso a los contactos y a la
+	 * copia, ni en la revisión, ni en la entrega.
+	 */
+	public function test_the_coordinator_dni_never_travels_in_a_mail() {
+		update_option( Mailer::OPTION_COPY, 'copia@example.org' );
+		$preguntas     = (array) get_post_meta( $this->procedimiento(), ProcedureMetaKeys::QUESTIONS, true );
+		$preguntas[]   = array(
+			'key'       => 'q9',
+			'label'     => 'Memoria',
+			'type'      => ProcedureQuestions::TYPE_FILE,
+			'delivery'  => true,
+			'opens_at'  => $this->dia( 0 ),
+			'closes_at' => $this->dia( 1 ),
+		);
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COORDINATOR_COUNT => 1,
+				ProcedureMetaKeys::QUESTIONS         => $preguntas,
+			)
+		);
+		$uid           = $this->direccion();
+		$nucleo        = $this->nucleo();
+
+		$nucleo['coordinator'] = array(
+			array(
+				'name'  => 'Ana Pérez Díaz',
+				'dni'   => '12345678Z',
+				'email' => 'ana@example.org',
+			),
+		);
+
+		$id = Applications::save( $procedimiento, $uid, $nucleo );
+		$this->assertGreaterThan( 0, $id );
+		$this->assertSame( '12345678Z', Applications::meta( $id )[ ApplicationMetaKeys::COORDINATOR ][0]['dni'], 'el DNI se guarda' );
+		Applications::save( $procedimiento, $uid, $nucleo );
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_AMEND, 'Falta el acta del claustro.' );
+		Applications::review( $id, ApplicationMetaKeys::REVIEW_EXCLUDED, 'Fuera de plazo.' );
+		Mailer::on_delivery_saved( $id, 'q9', $uid );
+
+		foreach ( array( 'Solicitud presentada', 'Nueva solicitud', 'Solicitud modificada', 'Revisión de su solicitud', 'Documento entregado' ) as $asunto ) {
+			$this->assertNotEmpty( $this->con_asunto( $asunto ), 'sale «' . $asunto . '»' );
+		}
+		$this->assertContains( 'copia@example.org', $this->destinos( $this->enviados ) );
+		$this->assertStringContainsString( 'Ana Pérez Díaz', (string) $this->con_asunto( 'Solicitud presentada' )[0]['message'], 'la coordinación sí sale, por su nombre' );
+		foreach ( $this->enviados as $correo ) {
+			$this->assertStringNotContainsString( '12345678Z', (string) $correo['subject'] );
+			$this->assertStringNotContainsString( '12345678Z', (string) $correo['message'], 'el DNI no va en «' . $correo['subject'] . '»' );
+		}
+	}
+
 	// ─── lo que lo apaga ───────────────────────────────────────────────────
 
 	/**

@@ -676,3 +676,15 @@ solicitud pasa de `ApplyForm::window()` a
 
 Asistencia de IA: Claude Code, claude-opus-5-5. Evidencia y comprobación:
 ADR-0044 y `tests/unit/test-application-actions.php`.
+
+## Adenda — 2026-11-17
+
+### Un procedimiento sin publicar avisa en vez de dar 404
+
+Donde arriba se lee que la ficha pública es el `single` de `prc_procedure`,
+añádase: si quien la abre no puede verla porque está en borrador, pendiente,
+programada o privada, no recibe el 404 del tema sino un aviso propio,
+`PublicFront/DraftNotice`, con un enlace de acceso para responsables, o, con
+sesión y sin permiso, el nombre de la cuenta y «Entrar con otra cuenta». No
+dice el título ni nada del procedimiento, y lo de la papelera sigue dando el
+404 ([ADR-0047](../adr/ADR-0047-un-procedimiento-en-borrador-avisa-en-vez-de-dar-404.md)).

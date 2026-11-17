@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046, ADR-0047]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -131,3 +131,4 @@ envía a la papelera desde el aplicativo—, la
 | [ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md) | Actuar sobre una solicitud —retirarla, restaurarla, prorrogarla o presentarla en nombre de un centro— y su historial | Propuesta | 2026-11-10 |
 | [ADR-0045](ADR-0045-la-ayuda-es-una-pantalla-del-aplicativo-con-el-contenido-en-codigo.md) | La ayuda es una pantalla del aplicativo, con el contenido en código y la ayuda técnica en configuración | Propuesta | 2026-11-10 |
 | [ADR-0046](ADR-0046-el-bundle-protege-cada-declaracion-de-clase.md) | El bundle protege cada declaración de clase | Propuesta | 2026-11-06 |
+| [ADR-0047](ADR-0047-un-procedimiento-en-borrador-avisa-en-vez-de-dar-404.md) | Un procedimiento en borrador avisa en vez de dar 404 | Propuesta | 2026-11-17 |

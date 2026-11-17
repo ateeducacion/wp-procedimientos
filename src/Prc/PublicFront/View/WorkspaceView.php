@@ -120,7 +120,7 @@ final class WorkspaceView {
 			<?php if ( (int) $m['page_id'] > 0 ) : ?>
 				<input type="hidden" name="page_id" value="<?php echo esc_attr( (string) $m['page_id'] ); ?>" />
 			<?php endif; ?>
-			<?php if ( (int) $s['course'] > 0 ) : ?>
+			<?php if ( 0 !== (int) $s['course'] ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( Workspace::VAR_COURSE ); ?>" value="<?php echo esc_attr( (string) $s['course'] ); ?>" />
 			<?php endif; ?>
 			<label class="screen-reader-text" for="prc-buscar">Buscar en la tabla</label>

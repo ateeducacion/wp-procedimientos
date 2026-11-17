@@ -10094,7 +10094,7 @@ final class WorkspaceView {
 			<?php if ( (int) $m['page_id'] > 0 ) : ?>
 				<input type="hidden" name="page_id" value="<?php echo esc_attr( (string) $m['page_id'] ); ?>" />
 			<?php endif; ?>
-			<?php if ( (int) $s['course'] > 0 ) : ?>
+			<?php if ( 0 !== (int) $s['course'] ) : ?>
 				<input type="hidden" name="<?php echo esc_attr( Workspace::VAR_COURSE ); ?>" value="<?php echo esc_attr( (string) $s['course'] ); ?>" />
 			<?php endif; ?>
 			<label class="screen-reader-text" for="prc-buscar">Buscar en la tabla</label>
@@ -10431,6 +10431,11 @@ final class Workspace {
 
 
 
+	public const NO_COURSE = -1;
+
+
+
+
 	public const VAR_STATE = 'prc_filter_state';
 
 
@@ -10532,7 +10537,7 @@ final class Workspace {
 		$estado = self::input( self::VAR_STATE, 'all' );
 
 		return array(
-			'course' => max( 0, (int) self::input( self::VAR_COURSE ) ),
+			'course' => self::NO_COURSE === (int) self::input( self::VAR_COURSE ) ? self::NO_COURSE : max( 0, (int) self::input( self::VAR_COURSE ) ),
 			'state'  => isset( self::state_filters()[ $estado ] ) ? $estado : 'all',
 			'q'      => self::input( self::VAR_SEARCH ),
 		);
@@ -10548,7 +10553,7 @@ final class Workspace {
 	public static function url( array $selection, array $changes = array() ): string {
 		$s    = array_merge( $selection, $changes );
 		$args = array();
-		if ( (int) $s['course'] > 0 ) {
+		if ( (int) $s['course'] > 0 || self::NO_COURSE === (int) $s['course'] ) {
 			$args[ self::VAR_COURSE ] = (string) $s['course'];
 		}
 		if ( 'all' !== (string) $s['state'] ) {
@@ -10593,7 +10598,7 @@ final class Workspace {
 		$rows         = self::collect( $user_id );
 		$m['courses'] = self::courses( $rows );
 		$s            = self::selection();
-		$en_url       = $s['course'] > 0;
+		$en_url       = 0 !== $s['course'];
 		$s['course']  = self::course_shown( $s['course'], $m['courses'] );
 		$rows         = self::narrow( $rows, $s );
 
@@ -10820,12 +10825,12 @@ final class Workspace {
 
 	private static function narrow( array $rows, array $s ): array {
 		$curso = (int) $s['course'];
-		if ( $curso > 0 ) {
+		if ( 0 !== $curso ) {
 			$rows = array_values(
 				array_filter(
 					$rows,
 					static function ( array $row ) use ( $curso ): bool {
-						return isset( $row['courses'][ $curso ] );
+						return self::NO_COURSE === $curso ? array() === $row['courses'] : isset( $row['courses'][ $curso ] );
 					}
 				)
 			);
@@ -10942,13 +10947,21 @@ final class Workspace {
 
 
 	private static function courses( array $rows ): array {
-		$out = array();
+		$out  = array();
+		$none = false;
 		foreach ( $rows as $row ) {
+			$none = $none || array() === $row['courses'];
 			foreach ( $row['courses'] as $term_id => $nombre ) {
 				$out[ $term_id ] = $nombre;
 			}
 		}
 		arsort( $out, SORT_NATURAL );
+
+
+
+		if ( $none && array() !== $out ) {
+			$out[ self::NO_COURSE ] = 'Sin curso';
+		}
 		return $out;
 	}
 

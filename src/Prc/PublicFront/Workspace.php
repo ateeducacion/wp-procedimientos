@@ -44,6 +44,11 @@ final class Workspace {
 	public const VAR_COURSE = 'prc_filter_course';
 
 	/**
+	 * The course tab of the procedures that have none: never a term ID.
+	 */
+	public const NO_COURSE = -1;
+
+	/**
 	 * Query var of the state filter.
 	 */
 	public const VAR_STATE = 'prc_filter_state';
@@ -147,7 +152,7 @@ final class Workspace {
 		$estado = self::input( self::VAR_STATE, 'all' );
 
 		return array(
-			'course' => max( 0, (int) self::input( self::VAR_COURSE ) ),
+			'course' => self::NO_COURSE === (int) self::input( self::VAR_COURSE ) ? self::NO_COURSE : max( 0, (int) self::input( self::VAR_COURSE ) ),
 			'state'  => isset( self::state_filters()[ $estado ] ) ? $estado : 'all',
 			'q'      => self::input( self::VAR_SEARCH ),
 		);
@@ -163,7 +168,7 @@ final class Workspace {
 	public static function url( array $selection, array $changes = array() ): string {
 		$s    = array_merge( $selection, $changes );
 		$args = array();
-		if ( (int) $s['course'] > 0 ) {
+		if ( (int) $s['course'] > 0 || self::NO_COURSE === (int) $s['course'] ) {
 			$args[ self::VAR_COURSE ] = (string) $s['course'];
 		}
 		if ( 'all' !== (string) $s['state'] ) {
@@ -208,7 +213,7 @@ final class Workspace {
 		$rows         = self::collect( $user_id );
 		$m['courses'] = self::courses( $rows );
 		$s            = self::selection();
-		$en_url       = $s['course'] > 0;
+		$en_url       = 0 !== $s['course'];
 		$s['course']  = self::course_shown( $s['course'], $m['courses'] );
 		$rows         = self::narrow( $rows, $s );
 
@@ -435,12 +440,12 @@ final class Workspace {
 	 */
 	private static function narrow( array $rows, array $s ): array {
 		$curso = (int) $s['course'];
-		if ( $curso > 0 ) {
+		if ( 0 !== $curso ) {
 			$rows = array_values(
 				array_filter(
 					$rows,
 					static function ( array $row ) use ( $curso ): bool {
-						return isset( $row['courses'][ $curso ] );
+						return self::NO_COURSE === $curso ? array() === $row['courses'] : isset( $row['courses'][ $curso ] );
 					}
 				)
 			);
@@ -557,13 +562,21 @@ final class Workspace {
 	 * @return array<int, string> term_id => nombre.
 	 */
 	private static function courses( array $rows ): array {
-		$out = array();
+		$out  = array();
+		$none = false;
 		foreach ( $rows as $row ) {
+			$none = $none || array() === $row['courses'];
 			foreach ( $row['courses'] as $term_id => $nombre ) {
 				$out[ $term_id ] = $nombre;
 			}
 		}
 		arsort( $out, SORT_NATURAL );
+		// Un procedimiento sin curso (alta desde el escritorio o por REST, o
+		// curso borrado) tiene su pestaña, la última: si no, no saldría nunca.
+		// Sin ningún curso no hay pestañas ni se acota.
+		if ( $none && array() !== $out ) {
+			$out[ self::NO_COURSE ] = 'Sin curso';
+		}
 		return $out;
 	}
 

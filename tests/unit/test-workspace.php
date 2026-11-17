@@ -271,6 +271,37 @@ class Test_Workspace extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un procedimiento sin curso tiene su pestaña: no desaparece de la lista.
+	 *
+	 * Uno dado de alta desde el escritorio o por REST, o cuyo curso se borró,
+	 * no tiene término de curso; acotar siempre por un curso lo dejaría fuera.
+	 */
+	public function test_a_procedure_without_course_is_still_reachable() {
+		$area   = $this->area( 'Área de prueba' );
+		$course = $this->course( '2026-2027' );
+		$who    = $this->manager( array( $area ) );
+
+		$with = $this->procedure( $who, array( $area ), $this->abierto(), array( 'post_title' => 'La de este curso' ) );
+		$this->procedure( $who, array( $area ), $this->abierto(), array( 'post_title' => 'La que no tiene curso' ) );
+		wp_set_object_terms( $with, array( $course ), ProcedureTaxonomies::COURSE );
+
+		$this->acting_as( $who );
+		$m = Workspace::model();
+		$this->assertSame( array( 'La de este curso' ), $this->titulos( $m ), 'sin pedir nada, el curso más reciente' );
+		$this->assertSame( array( $course, Workspace::NO_COURSE ), array_keys( $m['courses'] ) );
+		$this->assertSame( 'Sin curso', $m['courses'][ Workspace::NO_COURSE ] );
+
+		$url = Workspace::url( $m['selection'], array( 'course' => Workspace::NO_COURSE ) );
+		$this->assertStringContainsString( Workspace::VAR_COURSE . '=' . Workspace::NO_COURSE, $url );
+
+		$_GET[ Workspace::VAR_COURSE ] = (string) Workspace::NO_COURSE;
+		$m                             = Workspace::model();
+		$this->assertSame( Workspace::NO_COURSE, $m['selection']['course'] );
+		$this->assertSame( array( 'La que no tiene curso' ), $this->titulos( $m ) );
+		$this->assertStringContainsString( 'value="' . Workspace::NO_COURSE . '"', \Prc\PublicFront\View\WorkspaceView::html( $m ) );
+	}
+
+	/**
 	 * Cuando los filtros dejan la tabla vacía se dice, y se ofrece quitarlos.
 	 */
 	public function test_an_empty_table_says_whether_the_filters_are_to_blame() {

@@ -393,6 +393,30 @@ class Test_People_Panel extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Tras un rechazo, cada papel tecleado vuelve en su fila con su casilla
+	 * «Exige indicar el grupo», sin que la marca salte a otro papel.
+	 */
+	public function test_a_refused_save_repaints_role_rows_and_group_marks_by_position() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$campos                        = $this->campos(
+			array(
+				PeopleSpecPanel::FIELD_ROLES      => array( 'A', '', 'C' ),
+				PeopleSpecPanel::FIELD_ROLE_GROUP => array( 2 => '1' ),
+				PeopleSpecPanel::FIELD_MIN        => '5',
+				PeopleSpecPanel::FIELD_MAX        => '2',
+			)
+		);
+		$this->assertNull( $this->guardar( $uid, $procedimiento, $campos ) );
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[0]" value="A"', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[1]" value=""', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[2]" value="C"', $html );
+		$this->assertMatchesRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[2\]" value="1" checked/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[0\]" value="1" checked/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[1\]" value="1" checked/', $html );
+	}
+
+	/**
 	 * Uno nuevo empieza con «Una sola persona por papel y grupo» marcada y
 	 * con un papel por persona; lo guardado manda.
 	 */

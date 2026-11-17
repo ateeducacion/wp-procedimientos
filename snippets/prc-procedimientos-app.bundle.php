@@ -7514,6 +7514,13 @@ final class ApplicationActions {
 
 
 
+
+
+	private static $purging = false;
+
+
+
+
 	public const CAP_WITHDRAW = 'prc_withdraw_application';
 
 
@@ -7783,17 +7790,43 @@ final class ApplicationActions {
 
 
 
+	public static function purge( int $application_id ): void {
+		self::$purging = true;
+		try {
+			wp_delete_post( $application_id, true );
+		} finally {
+			self::$purging = false;
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	public static function guard_delete( $delete, $post ) {
 		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
-		if ( 'trash' !== $post->post_status ) {
+		if ( self::$purging ) {
+			return null;
+		}
 
 
 
-			return self::trash_enabled() || ! self::inside_core_trash() ? $delete : false;
+		if ( 'trash' !== $post->post_status && ! self::trash_enabled() && self::inside_core_trash() ) {
+			return false;
 		}
 		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
 	}
@@ -11611,6 +11644,7 @@ final class CentreColumns {
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
@@ -12134,7 +12168,7 @@ final class Applications {
 		$id = (int) $id;
 		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
 			if ( $is_new ) {
-				wp_delete_post( $id, true );
+				ApplicationActions::purge( $id );
 			}
 			return 0;
 		}
@@ -13557,7 +13591,7 @@ final class ApplicationOperations {
 		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
 			return false;
 		}
-		wp_delete_post( $id, true );
+		ApplicationActions::purge( $id );
 		self::$refusal = self::DUPLICATE;
 		return true;
 	}

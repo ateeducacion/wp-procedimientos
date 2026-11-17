@@ -35,6 +35,13 @@ use Prc\PostType\ProcedurePostType;
 final class ApplicationActions {
 
 	/**
+	 * Whether {@see purge()} is deleting a brand new application right now.
+	 *
+	 * @var bool
+	 */
+	private static $purging = false;
+
+	/**
 	 * Meta capacidad: retirar su propia solicitud (quien solicita).
 	 */
 	public const CAP_WITHDRAW = 'prc_withdraw_application';
@@ -296,13 +303,36 @@ final class ApplicationActions {
 	}
 
 	/**
-	 * Keep a withdrawn application from being deleted for good by anyone but administration.
+	 * Delete for good a brand new application the save did not keep.
 	 *
-	 * La capa de abajo de {@see may_delete()}: vale también para lo que no
-	 * pregunta por capacidades, como el vaciado automático de la papelera del
-	 * núcleo (`wp_scheduled_delete()`, sin nadie delante). Una retirada se
-	 * queda con sus documentos y su historial hasta que administración la
-	 * borre a mano.
+	 * Es la única puerta, aparte de administración, para borrar para siempre
+	 * una solicitud viva: la que acaba de crear un guardado que perdió la
+	 * carrera de una por centro o cuyos documentos no se pudieron guardar.
+	 * No tiene historial ni avisos que perder.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return void
+	 */
+	public static function purge( int $application_id ): void {
+		self::$purging = true;
+		try {
+			wp_delete_post( $application_id, true );
+		} finally {
+			self::$purging = false;
+		}
+	}
+
+	/**
+	 * Keep an application from being deleted for good by anyone but administration.
+	 *
+	 * La capa de abajo de {@see may_delete()}, y la que de verdad frena el
+	 * borrado definitivo: `delete_post` es también lo que el núcleo pide para
+	 * «Eliminar permanentemente» desde el escritorio, y quien revisa lo tiene
+	 * sobre una solicitud viva para mandarla a la papelera. Vale también para
+	 * lo que no pregunta por capacidades, como el vaciado automático de la
+	 * papelera del núcleo (`wp_scheduled_delete()`, sin nadie delante). Una
+	 * solicitud se queda con sus documentos y su historial hasta que
+	 * administración la borre a mano; solo {@see purge()} borra sin ella.
 	 *
 	 * @param mixed    $delete Null to go on; anything else stops it.
 	 * @param \WP_Post $post   The post.
@@ -312,11 +342,14 @@ final class ApplicationActions {
 		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
-		if ( 'trash' !== $post->post_status ) {
-			// Con la papelera desactivada, wp_trash_post() borra para siempre:
-			// quien quería retirarla perdería documentos e historial. Una
-			// solicitud viva solo se borra a propósito, con wp_delete_post().
-			return self::trash_enabled() || ! self::inside_core_trash() ? $delete : false;
+		if ( self::$purging ) {
+			return null;
+		}
+		// Con la papelera desactivada, wp_trash_post() borra para siempre:
+		// quien quería retirarla perdería documentos e historial. Una
+		// solicitud viva solo se borra a propósito, con wp_delete_post().
+		if ( 'trash' !== $post->post_status && ! self::trash_enabled() && self::inside_core_trash() ) {
+			return false;
 		}
 		return ProcedureAccess::is_manager( get_current_user_id() ) ? null : false;
 	}

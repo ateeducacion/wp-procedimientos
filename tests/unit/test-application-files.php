@@ -750,6 +750,8 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$camino = ApplicationFiles::path( ApplicationFiles::descriptors( $d['application'] )['q1'] );
 		$this->assertFileExists( $camino );
 
+		// Borrar para siempre es de administración (ADR-0044).
+		$this->acting_as( $this->administrator() );
 		wp_delete_post( $d['application'], true );
 
 		$this->assertFileDoesNotExist( $camino, 'El borrado definitivo se lleva el fichero (ADR-0028).' );
@@ -1711,6 +1713,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 	/** A required future delivery does not block submitting the initial application. */
 	public function test_an_independent_delivery_does_not_block_the_initial_application() {
 		$data = $this->delivery_fixture();
+		$this->acting_as( $this->administrator() );
 		wp_delete_post( $data['application'], true );
 		delete_post_meta( $data['procedure'], ProcedureMetaKeys::FINAL_LIST_URL );
 		$this->assertNotNull( $this->presentar( $data ) );
@@ -1736,6 +1739,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 				'post_status' => 'publish',
 			)
 		);
+		$this->acting_as( $this->administrator() );
 		wp_delete_post( $data['application'], true );
 		$this->assertNull( $this->deliver_document( $data ) );
 		$this->assertNull( Applications::find( $data['procedure'], 'C0001' ) );

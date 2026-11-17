@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
@@ -529,7 +530,7 @@ final class Applications {
 		$id = (int) $id;
 		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
 			if ( $is_new ) {
-				wp_delete_post( $id, true );
+				ApplicationActions::purge( $id );
 			}
 			return 0;
 		}

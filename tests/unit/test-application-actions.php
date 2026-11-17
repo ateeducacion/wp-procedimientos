@@ -498,6 +498,24 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Quien revisa manda a la papelera una solicitud viva, pero no la borra
+	 * para siempre: ni por el escritorio («Eliminar permanentemente») ni con
+	 * `wp_delete_post()`. Administración, sí.
+	 */
+	public function test_a_reviewer_cannot_delete_a_live_application_for_good() {
+		$c = $this->caso();
+		ApplicationLog::add( $c['application'], ApplicationHistory::EXTENDED, array(), $c['reviewer'] );
+		$this->acting_as( $c['reviewer'] );
+		$this->assertFalse( wp_delete_post( $c['application'], true ) );
+		$this->assertSame( 'publish', get_post_status( $c['application'] ) );
+		$this->assertNotSame( array(), ApplicationLog::all( $c['application'] ), 'el historial se queda' );
+
+		$this->acting_as( $this->administrator() );
+		$this->assertInstanceOf( WP_Post::class, wp_delete_post( $c['application'], true ) );
+		$this->assertFalse( get_post_status( $c['application'] ) );
+	}
+
+	/**
 	 * La papelera del núcleo no se lleva una retirada antigua.
 	 */
 	public function test_the_automatic_bin_emptying_keeps_withdrawn_applications() {

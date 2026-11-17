@@ -105,7 +105,7 @@ final class ApplicationOperations {
 		if ( ! is_array( $ids ) || array() === $ids || (int) $ids[0] === $id ) {
 			return false;
 		}
-		wp_delete_post( $id, true );
+		ApplicationActions::purge( $id );
 		self::$refusal = self::DUPLICATE;
 		return true;
 	}

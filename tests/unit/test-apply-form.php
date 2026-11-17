@@ -759,7 +759,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->acting_as( $this->school_head( 'C0001' ) );
 		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
-		$this->assertStringContainsString( 'DATOS DE LA COORDINACIÓN', ApplyForm::render() );
+		$this->assertStringContainsString( 'Datos de la coordinación', ApplyForm::render() );
 	}
 
 	/**

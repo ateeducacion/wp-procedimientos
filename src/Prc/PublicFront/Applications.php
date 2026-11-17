@@ -396,7 +396,8 @@ final class Applications {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
 		// Una por centro (ADR-0018): si otra petición creó la suya entre la
-		// búsqueda y la escritura, se queda la más antigua y esta se borra.
+		// búsqueda y la escritura, se queda la más antigua y esta se borra;
+		// la del propio centro gana siempre a una en su nombre sin completar.
 		if ( ApplicationOperations::lost_race( $id, $created ) ) {
 			return 0;
 		}

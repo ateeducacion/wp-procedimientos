@@ -12058,6 +12058,7 @@ final class Applications {
 		}
 
 
+
 		if ( ApplicationOperations::lost_race( $id, $created ) ) {
 			return 0;
 		}

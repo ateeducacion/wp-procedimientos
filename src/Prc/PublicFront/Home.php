@@ -440,29 +440,33 @@ final class Home {
 		$quedan = in_array( $state, array( ProcedureMetaKeys::STATE_OPEN, ProcedureMetaKeys::STATE_AMENDMENT ), true )
 			? self::days_until( $fin )
 			: null;
+		$areas  = self::terms( $id );
+		$cartel = (int) get_post_thumbnail_id( $id );
+		$cartel = $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'medium_large' ) : '';
 
 		return array(
-			'id'           => $id,
-			'title'        => '' !== $titulo ? $titulo : 'Procedimiento sin título',
-			'url'          => (string) get_permalink( $id ),
-			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
-			'areas'        => self::terms( $id ),
-			'state'        => $state,
-			'state_label'  => ProcedureState::label(
+			'id'          => $id,
+			'title'       => '' !== $titulo ? $titulo : 'Procedimiento sin título',
+			'url'         => (string) get_permalink( $id ),
+			'excerpt'     => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
+			'areas'       => $areas,
+			'poster'      => $cartel,
+			'area_logo'   => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
+			'state'       => $state,
+			'state_label' => ProcedureState::label(
 				$state,
 				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 			),
-			'closes_at'    => $cierra,
-			'days_left'    => $quedan,
-			'deadline'     => self::deadline( $quedan ),
-			'urgent'       => null !== $quedan && $quedan <= 3,
-			'applied'      => isset( $solicitados[ $id ] ),
-			'header_color' => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
-			'dates'        => DateRange::of(
+			'closes_at'   => $cierra,
+			'days_left'   => $quedan,
+			'deadline'    => self::deadline( $quedan ),
+			'urgent'      => null !== $quedan && $quedan <= 3,
+			'applied'     => isset( $solicitados[ $id ] ),
+			'dates'       => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::CLOSES_AT, true )
 			),
-			'amend_dates'  => DateRange::of(
+			'amend_dates' => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_CLOSES_AT, true )
 			),
@@ -500,6 +504,30 @@ final class Home {
 			return array();
 		}
 		return wp_list_pluck( $terms, 'name', 'term_id' );
+	}
+
+	/**
+	 * The logo of the first ámbito that has one, looking up the tree.
+	 *
+	 * Un subámbito sin imagen propia lleva la del ámbito del que cuelga.
+	 *
+	 * @param int[] $term_ids Ámbito term IDs of the procedure.
+	 * @return string Image URL, or '' when none has one.
+	 */
+	private static function area_logo( array $term_ids ): string {
+		foreach ( $term_ids as $term_id ) {
+			$linea = array_merge( array( (int) $term_id ), get_ancestors( (int) $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
+			foreach ( $linea as $id ) {
+				$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
+				if ( $imagen > 0 ) {
+					$url = wp_get_attachment_image_url( $imagen, 'medium_large' );
+					if ( is_string( $url ) && '' !== $url ) {
+						return $url;
+					}
+				}
+			}
+		}
+		return '';
 	}
 
 	/**

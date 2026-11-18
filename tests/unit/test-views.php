@@ -90,7 +90,7 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-bloque--' . ProcedureMetaKeys::STATE_OPEN, $html );
 		$this->assertStringContainsString( 'Abierto', $html );
 		$this->assertStringContainsString( 'prc-rejilla', $html );
-		$this->assertStringContainsString( 'prc-proc__marco', $html );
+		$this->assertStringContainsString( 'prc-proc__cartel', $html );
 		$this->assertStringContainsString( 'Todos los ámbitos', $html, 'con dos ámbitos hay algo que elegir' );
 		$this->assertStringContainsString( Home::VAR_AREA . '=', $html, 'el filtro es un enlace, no un desplegable' );
 	}
@@ -112,11 +112,12 @@ class Test_Views extends WP_UnitTestCase {
 		$m    = Home::model();
 		$fila = &$m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'][0];
 
-		$fila['title']        = self::VENENO;
-		$fila['state_label']  = '<b>Abierto</b>';
-		$fila['deadline']     = '"><img src=x onerror=alert(1)>';
-		$fila['header_color'] = '#fff" onload="alert(1)';
-		$fila['url']          = 'javascript:alert(1)';
+		$fila['title']       = self::VENENO;
+		$fila['state_label'] = '<b>Abierto</b>';
+		$fila['deadline']    = '"><img src=x onerror=alert(1)>';
+		$fila['poster']      = 'x" onload="alert(1)';
+		$fila['areas']       = array( 1 => '<b>Ámbito</b>' );
+		$fila['url']         = 'javascript:alert(1)';
 		unset( $fila );
 
 		// Y el filtro, que es lo único que pinta nombres de término.

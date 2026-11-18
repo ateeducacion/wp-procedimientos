@@ -98,22 +98,22 @@
 
 /* --- la rejilla de tarjetas ---------------------------------------------- */
 
-/* Cuatro columnas con hueco del 5,5 % en las dos direcciones: a 1176px de fila
-   son los 245,5px de tarjeta y los 64,7px de hueco medidos. El `auto-fill` las
-   va quitando solo al estrechar, sin un punto de ruptura por cada anchura. */
+/* Carteles en vertical a tamaño intermedio: cinco por fila a 1176px, dos en el
+   móvil. El `auto-fill` las va quitando solo al estrechar, sin un punto de
+   ruptura por cada anchura. */
 .prc-rejilla {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   column-gap: var(--prc-hueco);
   row-gap: var(--prc-hueco-px);
   align-items: start;
 }
 
-/* La tarjeta no es una caja: ni borde, ni sombra, ni fondo propio. El efecto
-   de tarjeta lo da el marco blanco contra el gris del bloque. */
+/* La tarjeta no es una caja: ni borde, ni sombra, ni fondo propio. Lo que se
+   ve es el cartel contra el gris del bloque. */
 .prc-proc {
   display: block;
   width: auto;
@@ -134,13 +134,16 @@
   outline-offset: 2px;
 }
 
-.prc-proc__marco { display: block; padding: 10px; background: var(--prc-c-fondo); }
-
-.prc-proc__banda {
+/* El cartel, en proporción A4 vertical: es el formato en que se hacen. Sin
+   cartel, el logo del ámbito entero y centrado sobre blanco. */
+.prc-proc__cartel {
   display: block;
-  height: var(--prc-banda-tarjeta);
-  background: var(--prc-banda, #c9c9c9);
+  aspect-ratio: 1 / 1.414;
+  overflow: hidden;
+  background: var(--prc-c-fondo);
 }
+.prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.prc-proc__cartel--logo img { object-fit: contain; padding: 18%; }
 
 /* El título no se trunca: de una a seis líneas, como esté escrito. */
 .prc-proc__titulo {
@@ -150,6 +153,16 @@
   line-height: var(--prc-i-tarjeta);
   font-weight: 500;
   color: var(--prc-c-titulo);
+}
+
+/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca. */
+.prc-proc__ambito {
+  margin: 4px 0 0;
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  font-weight: 600;
+  color: var(--prc-c-medio);
+  text-transform: uppercase;
 }
 
 .prc-proc__estado { margin: 0; }

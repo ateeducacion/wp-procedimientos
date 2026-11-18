@@ -15,11 +15,11 @@ use Prc\PublicFront\Shell;
  *
  * La portada que se sustituye es un héroe en mayúsculas, una banda clara con
  * la entradilla y los filtros, y debajo un bloque gris por estado con una
- * rejilla de cuatro tarjetas por fila. La tarjeta es un marco blanco con una
- * banda de color, el título completo sin truncar y, fuera del enlace, la
- * etiqueta del estado. Aquí se calca eso, con dos añadidos que el original no
- * tiene: los días que quedan de plazo y la marca de que el centro de quien
- * mira ya ha solicitado.
+ * rejilla de tarjetas. La tarjeta es el cartel en vertical, tipo cartelera
+ * —o el logo del ámbito si no hay cartel—, el título completo sin truncar y,
+ * fuera del enlace, el ámbito y la etiqueta del estado. Añade lo que el
+ * original no tiene: los días que quedan de plazo y la marca de que el centro
+ * de quien mira ya ha solicitado.
  */
 final class HomeView {
 
@@ -114,11 +114,12 @@ final class HomeView {
 	}
 
 	/**
-	 * One card: the colour band, the whole title and what is known of its term.
+	 * One card: the poster, the whole title, its ámbito and what is known of its term.
 	 *
-	 * La etiqueta de estado va **fuera** del enlace: dentro entraría en el
-	 * nombre accesible del enlace, que es el título del procedimiento. Es la
-	 * misma pastilla que en el resto del aplicativo ({@see Assets::state_class()}).
+	 * El ámbito y la etiqueta de estado van **fuera** del enlace: dentro
+	 * entrarían en su nombre accesible, que es el título del procedimiento. Por
+	 * eso la imagen lleva `alt` vacío. La pastilla es la del resto del
+	 * aplicativo ({@see Assets::state_class()}).
 	 *
 	 * @param array<string, mixed> $row One row of a group.
 	 * @return void
@@ -127,11 +128,18 @@ final class HomeView {
 		?>
 		<li class="prc-proc">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
-				<span class="prc-proc__marco">
-					<span class="prc-proc__banda" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>"></span>
-				</span>
+				<?php if ( '' !== (string) $row['poster'] ) : ?>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>" alt="" loading="lazy" decoding="async"></span>
+				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="lazy" decoding="async"></span>
+				<?php else : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--vacio"></span>
+				<?php endif; ?>
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
+			<?php if ( array() !== (array) $row['areas'] ) : ?>
+				<p class="prc-proc__ambito"><?php echo esc_html( implode( ' · ', array_map( 'strval', (array) $row['areas'] ) ) ); ?></p>
+			<?php endif; ?>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
 				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>

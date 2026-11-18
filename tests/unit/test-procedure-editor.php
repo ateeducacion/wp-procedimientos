@@ -605,9 +605,11 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				$area,
 				$curso,
 				array(
-					ProcedureMetaKeys::CENTRE_TYPES    => array( 'CEIP' ),
-					ProcedureMetaKeys::ISLANDS         => array( 'Isla Uno', 'Isla Uno' ),
-					ProcedureMetaKeys::ALLOWED_CENTRES => " C0001,\nC0002\n\nC0001 ",
+					ProcedureEditor::FIELD_LIMIT_TYPES   => '1',
+					ProcedureMetaKeys::CENTRE_TYPES      => array( 'CEIP' ),
+					ProcedureEditor::FIELD_LIMIT_ISLANDS => '1',
+					ProcedureMetaKeys::ISLANDS           => array( 'Isla Uno', 'Isla Uno' ),
+					ProcedureMetaKeys::ALLOWED_CENTRES   => " C0001,\nC0002\n\nC0001 ",
 				)
 			)
 		);
@@ -635,55 +637,133 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Sin límite, «Limitar a ciertos centros» sale plegado y con todo marcado;
-	 * reenviarlo así no acota (ADR-0042). Con un límite, sale abierto.
+	 * «Limitar a ciertos centros» sale plegado sin límite, con un interruptor
+	 * por lista: apagado no acota aunque las casillas vayan marcadas;
+	 * encendido guarda exactamente lo marcado, también si es todo el catálogo;
+	 * encendido sin nada se rechaza y se repinta como se envió (#84).
 	 */
-	public function test_the_data_panel_folds_the_centre_limits_and_ticks_everything() {
-		add_filter(
-			'prc_centres',
-			static function () {
-				return array(
-					array(
-						'code'   => 'C0001',
-						'name'   => 'Escuela Inventada',
-						'type'   => 'CEIP',
-						'island' => 'Isla Uno',
-					),
-					array(
-						'code'   => 'C0002',
-						'name'   => 'Instituto Inventado',
-						'type'   => 'IES',
-						'island' => 'Isla Dos',
-					),
-				);
-			}
-		);
-		list( $area, $uid, $procedimiento ) = $this->mio();
+	public function test_the_limit_switches_fold_and_decide_the_centre_lists() {
+		add_filter( 'prc_centres', array( $this, 'two_centres' ) );
+		list( $area, $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC, ProcedureMetaKeys::OWNERSHIP_PRIVATE ) ) );
 		$curso                              = $this->course( '2027-2028' );
 
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
 		$this->assertStringContainsString( '<details class="prc-acotar">', $html, 'plegado sin límite' );
 		$this->assertStringContainsString( 'Limitar a ciertos centros (avanzado)', $html );
-		$this->assertStringContainsString( 'data-prc-tick-all', $html );
-		$marcadas = array();
-		foreach ( array( ProcedureMetaKeys::CENTRE_TYPES, ProcedureMetaKeys::ISLANDS ) as $nombre ) {
-			preg_match_all( '/name="' . preg_quote( $nombre, '/' ) . '\[\]" value="([^"]*)"\s*checked=/', $html, $coincidencias );
-			$marcadas[ $nombre ] = array_map( 'html_entity_decode', $coincidencias[1] );
-		}
-		$this->assertSame( array( 'CEIP', 'IES' ), $marcadas[ ProcedureMetaKeys::CENTRE_TYPES ], 'todos marcados' );
-		$this->assertSame( array( 'Isla Dos', 'Isla Uno' ), $marcadas[ ProcedureMetaKeys::ISLANDS ] );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*\/>/', $html, 'el interruptor, apagado' );
+		$this->assertStringContainsString( 'Limitar por tipo de centro', $html );
+		$this->assertStringContainsString( 'Limitar por isla', $html );
+		$ticked = $this->ticked( $html );
+		$this->assertSame( array( 'CEIP', 'IES' ), $ticked[ ProcedureMetaKeys::CENTRE_TYPES ], 'al encenderlo, todos marcados' );
 
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $marcadas ) ) );
-		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ), 'todos marcados se guarda sin límite' );
-		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+		// Apagado, las casillas marcadas no acotan.
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $ticked ) ) );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 
-		$this->assertNotNull(
-			$this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::CENTRE_TYPES => array( 'IES' ) ) ) )
-		);
-		$this->assertSame( array( 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		// Encendido con todo el catálogo: se guarda tal cual, no se deduce nada.
+		$on = array( ProcedureEditor::FIELD_LIMIT_TYPES => '1' ) + $ticked;
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $on ) ) );
+		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->acting_as( $uid );
-		$this->assertStringContainsString( '<details class="prc-acotar" open>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ), 'con un límite, abierto' );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'con un límite, abierto' );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*checked=/', $html );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_ISLANDS . '" value="1"\s*\/>/', $html, 'las islas, sin límite' );
+
+		// Encendido y sin nada: se rechaza, no se guarda y se repinta encendido.
+		// La lista cerrada viaja siempre, como en el navegador.
+		$empty = array(
+			ProcedureEditor::FIELD_LIMIT_ISLANDS => '1',
+			ProcedureMetaKeys::ALLOWED_CENTRES   => '',
+		);
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $empty ) ) );
+		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ), 'no se guarda nada' );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+		$m    = $this->modelo( $procedimiento );
+		$html = ProcedureEditorView::html( $m );
+		$this->assertStringContainsString( 'marque al menos una isla', $m['flash']['texto'] );
+		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'repintado con la regla de los interruptores' );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_ISLANDS . '" value="1"\s*checked=/', $html, 'como se envió' );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*\/>/', $html, 'el de tipos, como se envió: apagado' );
+	}
+
+	/**
+	 * Una titularidad que limita, o el aviso del catálogo vacío, abren el
+	 * plegado; el aviso va fuera, a la vista.
+	 */
+	public function test_the_fold_opens_for_ownership_and_the_warning_stays_outside() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) ) );
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'una sola titularidad limita' );
+		$aviso = strpos( $html, 'El catálogo de centros está vacío' );
+		$this->assertNotFalse( $aviso );
+		$this->assertLessThan( strpos( $html, '<details class="prc-acotar"' ), $aviso, 'el aviso, fuera del plegado' );
+	}
+
+	/**
+	 * Con «Datos» cerrado por el estado, guardar las fechas no toca un límite
+	 * que cubre todo el catálogo: ya no se deduce «sin límite» (#84).
+	 */
+	public function test_a_closed_data_group_keeps_a_limit_that_covers_the_catalogue() {
+		add_filter( 'prc_centres', array( $this, 'two_centres' ) );
+		list( $area, $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, array( 'CEIP', 'IES' ) );
+
+		$url = $this->submit(
+			$uid,
+			ProcedureEditor::PANEL_DATA,
+			$procedimiento,
+			0,
+			$this->datos(
+				$area,
+				$this->course( '2099-2100' ),
+				array(
+					ProcedureMetaKeys::OPENS_AT  => '2026-01-07',
+					ProcedureMetaKeys::CLOSES_AT => '2026-01-20',
+				)
+			)
+		);
+		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+	}
+
+	/**
+	 * A catalogue of two invented centres, of two types and two islands.
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	public function two_centres(): array {
+		return array(
+			array(
+				'code'   => 'C0001',
+				'name'   => 'Escuela Inventada',
+				'type'   => 'CEIP',
+				'island' => 'Isla Uno',
+			),
+			array(
+				'code'   => 'C0002',
+				'name'   => 'Instituto Inventado',
+				'type'   => 'IES',
+				'island' => 'Isla Dos',
+			),
+		);
+	}
+
+	/**
+	 * The options ticked in the painted form, as the browser would send them.
+	 *
+	 * @param string $html Painted workshop.
+	 * @return array<string, string[]>
+	 */
+	private function ticked( string $html ): array {
+		$out = array();
+		foreach ( array( ProcedureMetaKeys::CENTRE_TYPES, ProcedureMetaKeys::ISLANDS ) as $name ) {
+			preg_match_all( '/name="' . preg_quote( $name, '/' ) . '\[\]" value="([^"]*)"\s*checked=/', $html, $matches );
+			$out[ $name ] = array_map( 'html_entity_decode', $matches[1] );
+		}
+		return $out;
 	}
 
 	/**
@@ -733,7 +813,11 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( array( 'ceip' ), $marcadas[ ProcedureMetaKeys::CENTRE_TYPES ], 'la casilla sale marcada' );
 		$this->assertSame( array( 'isla uno (inventada)' ), $marcadas[ ProcedureMetaKeys::ISLANDS ], 'la casilla sale marcada' );
 
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $marcadas ) ) );
+		$switches = array(
+			ProcedureEditor::FIELD_LIMIT_TYPES   => '1',
+			ProcedureEditor::FIELD_LIMIT_ISLANDS => '1',
+		);
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $switches + $marcadas ) ) );
 		$this->assertSame( array( 'ceip' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->assertSame( array( 'isla uno (inventada)' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
 	}

@@ -129,40 +129,38 @@ final class CentreEligibility {
 	 * Validate the three lists of the «Datos» form.
 	 *
 	 * Un procedimiento de profesorado no acota centros: las tres, vacías.
-	 * Marcar todos los tipos o todas las islas que ofrece el catálogo se guarda
-	 * vacío, sin límite: guardar la lista entera dejaría fuera a los centros que
-	 * no están en el catálogo (ADR-0042).
+	 * Tipos e islas llevan cada uno su interruptor («Limitar por tipo de
+	 * centro», «Limitar por isla»): apagado, la lista se guarda vacía, sin
+	 * límite; encendido, exactamente lo marcado —sin compararlo con el
+	 * catálogo, que puede cambiar entre pintar y guardar—, y sin nada marcado
+	 * es un error. Sin interruptor, como lo que se reescribe con el grupo
+	 * cerrado, se limita si la lista trae algo: lo guardado sigue igual (#84).
 	 *
 	 * @param array<string, mixed> $raw     `centre_types`, `islands`, `allowed_centres`, and the
-	 *                                      catalogue's `centre_type_options` and `island_options`.
+	 *                                      switches `limit_centre_types` and `limit_islands`.
 	 * @param bool                 $schools Whether the procedure is for schools.
 	 * @return array{data:array{centre_types:string[], islands:string[], allowed_centres:string[]}, errors:string[]}
 	 */
 	public static function input( array $raw, bool $schools ): array {
 		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
 		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
+		$lists    = array();
+		foreach ( array( 'centre_types', 'islands' ) as $list ) {
+			$values         = self::values( $raw[ $list ] ?? array() );
+			$limit          = (bool) ( $raw[ 'limit_' . $list ] ?? ( array() !== $values ) );
+			$lists[ $list ] = $limit ? $values : array();
+			if ( $limit && array() === $values ) {
+				$errors[] = $list;
+			}
+		}
 		return array(
 			'data'   => array(
-				'centre_types'    => $schools ? self::ticked( $raw['centre_types'] ?? array(), $raw['centre_type_options'] ?? array() ) : array(),
-				'islands'         => $schools ? self::ticked( $raw['islands'] ?? array(), $raw['island_options'] ?? array() ) : array(),
+				'centre_types'    => $schools ? $lists['centre_types'] : array(),
+				'islands'         => $schools ? $lists['islands'] : array(),
 				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
 			),
 			'errors' => $schools ? $errors : array(),
 		);
-	}
-
-	/**
-	 * The ticked values, or none when they cover every option offered.
-	 *
-	 * @param mixed $ticked  Values ticked.
-	 * @param mixed $options Values the catalogue offers.
-	 * @return string[]
-	 */
-	private static function ticked( $ticked, $options ): array {
-		$ticked  = self::values( $ticked );
-		$options = array_map( array( self::class, 'fold' ), self::values( $options ) );
-		$faltan  = array_diff( $options, array_map( array( self::class, 'fold' ), $ticked ) );
-		return array() !== $options && array() === $faltan ? array() : $ticked;
 	}
 
 	/**
@@ -185,14 +183,16 @@ final class CentreEligibility {
 	 * The rules as the «Datos» form holds them: the closed list, one code per line.
 	 *
 	 * @param array<string, string[]> $rules What {@see rules()} returned.
-	 * @return array{centre_types:string[], islands:string[], allowed_centres:string}
+	 * @return array{limit_centre_types:bool, centre_types:string[], limit_islands:bool, islands:string[], allowed_centres:string}
 	 */
 	public static function form_values( array $rules ): array {
 		$rules = self::rules( $rules );
 		return array(
-			'centre_types'    => $rules['types'],
-			'islands'         => $rules['islands'],
-			'allowed_centres' => implode( "\n", $rules['codes'] ),
+			'limit_centre_types' => array() !== $rules['types'],
+			'centre_types'       => $rules['types'],
+			'limit_islands'      => array() !== $rules['islands'],
+			'islands'            => $rules['islands'],
+			'allowed_centres'    => implode( "\n", $rules['codes'] ),
 		);
 	}
 

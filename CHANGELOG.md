@@ -12,6 +12,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
 
 ### Añadido
 
+- **Correos del aplicativo.** Quien presenta una solicitud recibe un acuse con el resumen de lo presentado —procedimiento, centro, fecha y una línea por respuesta— y el enlace para consultarla; al modificarla, otro aviso. Los correos de contacto del procedimiento reciben cada solicitud nueva o modificada, cada documento entregado con plazo propio y, quien la presentó, cada cambio de su estado de revisión, con la nota al pedir subsanar o al excluir. Al crear un procedimiento en borrador se avisa a sus contactos y a quienes gestionan sus ámbitos de qué falta y de los dos pasos que quedan. Todo sale en texto plano por una única salida (`Mailer::mail()`, filtro `prc_mail`); si el servidor de correo falla, la solicitud se guarda igual y la pantalla dice lo mismo. Cada procedimiento apaga los suyos en la nueva pestaña «Avisos» del taller, y el remitente, la dirección de respuesta, una dirección de copia y un párrafo propio para el correo de alta se configuran en «Ajustes», vacíos por defecto (ADR-0038).
 - DNI o NIE de cada persona coordinadora, con validación de la letra de control y disponible para la revisión y el CSV. La ayuda indica que lo habitual es pedir una persona coordinadora.
 - En «Publicación», pausa y reapertura de solicitudes sin cambiar el calendario
   ni los plazos documentales; los procedimientos publicados también pueden

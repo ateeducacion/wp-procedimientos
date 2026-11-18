@@ -564,7 +564,7 @@ final class ApplyForm {
 				self::$rejected = ApplicationFiles::why( $files['errors'] );
 				return;
 			}
-			if ( ! ApplicationFiles::store_all( (int) $id, $files['files'] ) ) {
+			if ( ! ApplicationFiles::deliver( (int) $id, $key, $files['files'], $user_id ) ) {
 				self::$rejected = 'No se ha podido guardar el documento. Se conserva la entrega anterior; vuelva a intentarlo.';
 				return;
 			}

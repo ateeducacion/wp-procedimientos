@@ -13,6 +13,7 @@ use Prc\Admin\Settings;
 use Prc\Centre\CentreCatalogueSync;
 use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaRegistration;
+use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\Applications;
@@ -107,6 +108,10 @@ final class App {
 				call_user_func( array( $modulo, 'register' ) );
 			}
 		}
+
+		// El correo escucha las acciones que emiten las pantallas; ellas no
+		// saben de él (ADR-0038).
+		Mailer::register();
 
 		ProcedureAdmin::register();
 		Settings::register();

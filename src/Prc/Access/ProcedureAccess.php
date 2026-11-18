@@ -523,6 +523,57 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * The accounts that manage the ámbitos of a procedure.
+	 *
+	 * Quien tiene la capacidad de gestionar procedimientos y un ámbito en su
+	 * perfil que alcanza a alguno de los del procedimiento —el mismo o uno
+	 * por encima—: la regla de {@see in_scope()}, leída al revés. Quien
+	 * trabaja sobre todos los ámbitos no entra: alcanzarlos todos no es
+	 * gestionar este, y sería mandarle cada aviso del sitio.
+	 *
+	 * @param int $procedure_id Procedure ID, or an application under it.
+	 * @return int[] User IDs.
+	 */
+	public static function area_managers( int $procedure_id ): array {
+		$theirs = $procedure_id > 0 ? self::post_areas( $procedure_id ) : array();
+		if ( array() === $theirs ) {
+			return array();
+		}
+		// Una consulta para las cuentas, con sus metas ya en caché
+		// (`all_with_meta`): lo que se mira después de cada una —capacidades y
+		// ámbito— no vuelve a la base de datos.
+		$candidatos = get_users(
+			array(
+				'capability' => self::CAP_MANAGE_PROCEDURES,
+				'fields'     => 'all_with_meta',
+				// Solo quien tiene un ámbito en el perfil puede gestionarlo: el
+				// de este sitio o, sin él, la copia global de antes de la ADR-0032.
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- ídem.
+					'relation' => 'OR',
+					array(
+						'key'     => self::user_area_meta_key(),
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => self::USER_AREA_META,
+						'compare' => 'EXISTS',
+					),
+				),
+			)
+		);
+		$out        = array();
+		foreach ( (array) $candidatos as $user ) {
+			if ( ! $user instanceof \WP_User || self::can_edit_all_areas( (int) $user->ID ) ) {
+				continue;
+			}
+			if ( array() !== array_intersect( self::scope_areas( (int) $user->ID ), $theirs ) ) {
+				$out[] = (int) $user->ID;
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * Ámbitos a post belongs to.
 	 *
 	 * Una solicitud no lleva ámbito propio: el de su procedimiento manda.

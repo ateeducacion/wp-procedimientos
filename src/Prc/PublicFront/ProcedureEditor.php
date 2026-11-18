@@ -59,6 +59,7 @@ final class ProcedureEditor {
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
+	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
 
 	public const OP_REVIEW              = 'review';
@@ -70,6 +71,7 @@ final class ProcedureEditor {
 	public const OP_UNARCHIVE           = 'unarchive';
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
+	public const OP_NOTIFY              = 'notify';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
@@ -115,6 +117,14 @@ final class ProcedureEditor {
 	public const FIELD_Q = 'prc_q_';
 
 	/**
+	 * Checkboxes of the «Avisos» panel: the mail events left switched on.
+	 *
+	 * Lo que se guarda es lo contrario, los apagados, en `prc_notify`: así un
+	 * procedimiento que nunca pasó por este panel los tiene todos.
+	 */
+	public const FIELD_NOTIFY = 'prc_notify_on';
+
+	/**
 	 * Every operation this screen accepts by POST.
 	 *
 	 * @var string[]
@@ -124,6 +134,7 @@ final class ProcedureEditor {
 		self::PANEL_QUESTIONS,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
+		self::OP_NOTIFY,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_EXPORT,
@@ -146,6 +157,7 @@ final class ProcedureEditor {
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
+		'avisos'       => 'Avisos por correo guardados.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -251,6 +263,7 @@ final class ProcedureEditor {
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PUBLISH      => 'Publicación',
+			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_CODE         => 'Código',
 		);
 		$cuentas = array(
@@ -355,6 +368,15 @@ final class ProcedureEditor {
 				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
 			}
 			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
+			return;
+		}
+		if ( self::OP_NOTIFY === $op ) {
+			EditLock::require_available( $procedure_id );
+			if ( ! ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+				self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id );
+				return;
+			}
+			self::save_notify( $procedure_id );
 			return;
 		}
 		if ( self::OP_DELIVERY_DATES === $op ) {
@@ -496,6 +518,17 @@ final class ProcedureEditor {
 			return;
 		}
 		self::write_data( (int) $id, $revisado['data'] );
+
+		/**
+		 * A procedure has just been created, as a draft, from the workshop.
+		 *
+		 * Una sola vez: guardar el borrador después no la vuelve a emitir. Se
+		 * emite con las metas y los ámbitos ya escritos, que es lo que lee el
+		 * correo del alta (ADR-0038).
+		 *
+		 * @param int $id Procedure post ID.
+		 */
+		do_action( 'prc_procedure_created', (int) $id );
 		Shell::leave( self::url( (int) $id, self::PANEL_DATA, array( self::ARG_NOTICE => 'creado' ) ) );
 	}
 
@@ -830,6 +863,22 @@ final class ProcedureEditor {
 	}
 
 	/**
+	 * Save which mails this procedure sends: the panel ticks the ones on,
+	 * the meta keeps the ones off.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function save_notify( int $procedure_id ): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() verified the nonce; only slugs of the closed list survive array_intersect().
+		$encendidos = (array) wp_unslash( $_POST[ self::FIELD_NOTIFY ] ?? array() );
+		$encendidos = array_map( 'sanitize_key', array_filter( $encendidos, 'is_string' ) );
+		$apagados   = array_values( array_diff( array_keys( ProcedureMetaKeys::notify_events() ), $encendidos ) );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, $apagados );
+		Shell::leave( self::url( $procedure_id, self::PANEL_NOTICES, array( self::ARG_NOTICE => 'avisos' ) ) );
+	}
+
+	/**
 	 * Save the three links: resolution, provisional list, final list.
 	 *
 	 * @param int $procedure_id Procedure post ID.
@@ -1127,6 +1176,7 @@ final class ProcedureEditor {
 			'applications'            => array(),
 			'app_cols'                => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
+			'notify_events'           => ProcedureMetaKeys::notify_events(),
 		);
 	}
 
@@ -1301,6 +1351,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
+			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		if ( '' === self::$rejected ) {

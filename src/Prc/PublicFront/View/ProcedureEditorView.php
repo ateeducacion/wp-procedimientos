@@ -209,7 +209,7 @@ final class ProcedureEditorView {
 		</div>
 		<p class="prc-intro">
 			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
-			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, los campos adicionales y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -1118,7 +1118,7 @@ final class ProcedureEditorView {
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
 			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
 			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
-			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar los campos.</p></div>';
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar la inscripción, mientras este panel siga editable.</p></div>';
 		foreach ( array(
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',

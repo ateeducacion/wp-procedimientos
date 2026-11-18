@@ -2193,7 +2193,7 @@ final class QuestionChanges {
 			return '';
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
-			. ': ya hay solicitudes que lo han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
+			. ': ya hay solicitudes que ' . ( count( $cambiadas ) > 1 ? 'los' : 'lo' ) . ' han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
 	}
 
 
@@ -19148,7 +19148,7 @@ final class HelpContent {
 				'html'  => '<p>Algunos documentos (una memoria, un proyecto, un anexo firmado) se entregan <strong>después</strong>, en su propio plazo. Aparecen en la solicitud con su apertura y su cierre. Elija el fichero y pulse <strong>«Entregar documento»</strong>. Si ya había entregado uno, el nuevo lo sustituye; la solicitud y su revisión se conservan.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pregunta de entrega con plazo propio y el botón «Entregar documento»',
+						'caption' => 'campo de tipo Archivo con plazo propio y el botón «Entregar documento»',
 						'image'   => '',
 					),
 				),
@@ -19270,7 +19270,7 @@ final class HelpContent {
 				'title' => 'Participantes',
 				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de participantes»</strong> si necesita saber quién participa. Defina:</p>'
 					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de participantes, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
+					. '<p>Con la lista encendida, un papel cuyo nombre diga coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Participantes» con papeles y grupos',
@@ -23804,7 +23804,7 @@ final class ProcedureEditorView {
 		</div>
 		<p class="prc-intro">
 			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
-			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, los campos adicionales y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -24713,7 +24713,7 @@ final class ProcedureEditorView {
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
 			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
 			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
-			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar los campos.</p></div>';
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar la inscripción, mientras este panel siga editable.</p></div>';
 		foreach ( array(
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
@@ -27973,7 +27973,7 @@ final class PeopleView {
 		);
 		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
 		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
-			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su nombre en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
 		foreach ( $filas as $i => $fila ) {
 			$id   = 'prc-people-role-' . $i;
 			$out .= '<div class="prc-papel">'

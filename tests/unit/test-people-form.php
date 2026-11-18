@@ -184,7 +184,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Sustituir o corregir', $html );
 		$this->assertStringContainsString( '>Guardar los cambios de la persona</button>', $html, 'guardar y qué' );
 		$this->assertStringContainsString( 'data-prc-confirm="¿Dar de baja a Ana Pérez de la lista de participantes?', $html, 'la baja pide confirmación' );
-		$this->assertStringContainsString( 'Participante', $html, 'el papel, por su rótulo' );
+		$this->assertStringContainsString( 'data-rotulo="Papel">Participante</td>', $html, 'el papel, por su nombre' );
 		$this->assertStringContainsString( 'queda incompleta', $html, 'una de dos: incompleta, no rechazada' );
 	}
 

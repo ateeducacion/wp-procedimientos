@@ -222,7 +222,8 @@ class Test_People_List extends WP_UnitTestCase {
 			$this->assertStringNotContainsString( '12345678Z', $correo['message'], 'el DNI no va en el correo' );
 			$this->assertStringNotContainsString( '11111111H', $correo['message'] );
 		}
-		$this->assertStringContainsString( 'Participante', $this->enviados[1]['message'], 'el papel por su rótulo' );
+		$this->assertStringContainsString( '] Participantes de la solicitud: cambio — ', $this->enviados[1]['subject'], 'el asunto' );
+		$this->assertStringContainsString( 'Participante', $this->enviados[1]['message'], 'el papel por su nombre' );
 		$this->assertStringContainsString( 'Eje 1', $this->enviados[1]['message'] );
 		$this->assertStringContainsString( 'Centro de prueba', $this->enviados[1]['message'] );
 		$this->assertStringContainsString( 'Ana Pérez Díaz', $this->enviados[1]['message'], 'el antes' );

@@ -205,6 +205,21 @@ class Test_Help extends WP_UnitTestCase {
 	}
 
 	/**
+	 * La ayuda nombra las cosas como el taller: campos con título y papeles
+	 * con nombre, no preguntas ni rótulos.
+	 */
+	public function test_the_help_uses_the_workshop_names() {
+		foreach ( array_keys( HelpContent::GUIDES ) as $guia ) {
+			foreach ( HelpContent::raw( $guia ) as $apartado ) {
+				$this->assertStringNotContainsString( 'rótulo', $apartado['html'], $guia . ' #' . $apartado['id'] );
+				foreach ( $apartado['shots'] as $captura ) {
+					$this->assertStringNotContainsString( 'pregunta', $captura['caption'], $guia . ' #' . $apartado['id'] );
+				}
+			}
+		}
+	}
+
+	/**
 	 * Cada hueco de captura se pinta como tal, con su texto, hasta que llegue la imagen.
 	 */
 	public function test_the_missing_screenshots_are_marked() {

@@ -153,7 +153,7 @@ y van en las secciones siguientes.
 | `prc_manage_procedures` | | ✓ | ✓ | Crear, editar, publicar y archivar procedimientos **de sus ámbitos**; la página `gestion-de-procedimientos`; los paneles Datos, Campos adicionales, Participantes, Enlaces y Publicación del taller; el botón «Gestionar» |
 | `prc_review_applications` | | ✓ | ✓ | El panel Solicitudes del taller: ver, admitir, excluir, pedir subsanar con nota y exportar el CSV de esos procedimientos |
 | `prc_manage_all_areas` | | | ✓ | Saltarse el acotado por ámbito, y ver los procedimientos que se han quedado sin ámbito |
-| `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico |
+| `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico; configurar en el taller el **«Acceso de consulta»** por zona (`ProcedureAccess::can_configure_observe()`) |
 | `prc_view_applications` | | | | Solo la tiene `prc_observer`: la página `consulta-de-solicitudes` y **leer** las solicitudes de los centros **de sus zonas** en los procedimientos que admiten consulta. Nunca editar, revisar, borrar ni exportar el fichero de usuarios |
 
 Y `read`, que llevan los dos roles del snippet.

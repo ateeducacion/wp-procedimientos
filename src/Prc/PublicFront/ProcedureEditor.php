@@ -306,11 +306,11 @@ final class ProcedureEditor {
 	 * @return array<string, array{label:string, url:string, count:?int, group:string}>
 	 */
 	public static function panels( int $procedure_id ): array {
-		$avanzado = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
+		$advanced = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
 		$grupos   = array(
 			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
 			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Avanzado'  => array_merge( $avanzado, array( self::PANEL_CODE ) ),
+			'Avanzado'  => array_merge( $advanced, array( self::PANEL_CODE ) ),
 		);
 		$rotulos  = array(
 			self::PANEL_DATA         => 'Datos',
@@ -538,8 +538,8 @@ final class ProcedureEditor {
 	/**
 	 * Save the «Acceso de consulta» panel, only for administración.
 	 *
-	 * Esta es la capa que protege: sin la pestaña, quien gestiona su ámbito
-	 * aún podría armar el POST a mano.
+	 * This is the layer that protects: without the tab, a scope manager could
+	 * still forge the POST by hand.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return void

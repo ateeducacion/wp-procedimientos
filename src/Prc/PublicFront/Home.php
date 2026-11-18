@@ -516,9 +516,9 @@ final class Home {
 	/**
 	 * The logo of the first ámbito that has one, looking up the tree.
 	 *
-	 * Un subámbito sin imagen propia lleva la del ámbito del que cuelga.
-	 * ponytail: memoria por petición; un cambio de logo a mitad de petición
-	 * no se ve hasta la siguiente, y eso no pasa en la portada.
+	 * A sub-ámbito without an image of its own takes its parent's.
+	 * ponytail: per-request memo; a logo changed mid-request shows on the
+	 * next one, which never matters on the front page.
 	 *
 	 * @param int[] $term_ids Ámbito term IDs of the procedure.
 	 * @return string Image URL, or '' when none has one.

@@ -130,10 +130,10 @@ final class HomeView {
 	/**
 	 * One card: the poster, the whole title, its ámbito and what is known of its term.
 	 *
-	 * El ámbito y la etiqueta de estado van **fuera** del enlace: dentro
-	 * entrarían en su nombre accesible, que es el título del procedimiento. Por
-	 * eso la imagen lleva `alt` vacío. La pastilla es la del resto del
-	 * aplicativo ({@see Assets::state_class()}).
+	 * The ámbito and the state label go **outside** the link: inside, they
+	 * would join its accessible name, which is the procedure title. For the
+	 * same reason the image has an empty `alt`. The state pill is the one used
+	 * across the app ({@see Assets::state_class()}).
 	 *
 	 * @param array<string, mixed> $row      One row of a group.
 	 * @param int                  $position Its place on the page, from 0.

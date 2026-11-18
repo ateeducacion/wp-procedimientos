@@ -542,7 +542,7 @@ class Test_Centres extends WP_UnitTestCase {
 		$html = (string) ob_get_clean();
 		$this->assertStringContainsString( 'Catálogo actualizado', $html );
 		$this->assertStringContainsString( 'No disponible (catálogo vacío)', $html );
-		$this->assertStringContainsString( 'Actualizar catálogo ahora', $html );
+		$this->assertStringContainsString( 'Guardar y actualizar el catálogo ahora', $html );
 
 		// 2. Con error y catálogo poblado.
 		$catalog = array(
@@ -642,6 +642,56 @@ class Test_Centres extends WP_UnitTestCase {
 		);
 		$url_sub = $this->exit_url( array( Settings::class, 'handle_actions' ) );
 		$this->assertNull( $url_sub );
+	}
+
+	/**
+	 * La dirección del listado se guarda desde Ajustes; una que no es https, no.
+	 */
+	public function test_settings_saves_the_manifest_url_before_syncing(): void {
+		$this->acting_as( $this->administrator() );
+		set_current_screen( 'edit.php?post_type=prc_procedure' );
+		$payload = $this->make_payload(
+			array(
+				array(
+					'code'   => '90000102',
+					'name'   => 'CEIP Test',
+					'type'   => 'CEIP',
+					'active' => true,
+				),
+			)
+		);
+		$this->mock_http( $payload['manifest_json'], $payload['catalogue_json'] );
+		delete_option( CentreCatalogueSync::OPTION_MANIFEST_URL );
+
+		$this->post(
+			array(
+				'prc_action'       => 'sync_centres',
+				'prc_manifest_url' => 'http://example.org/manifest.json',
+			),
+			Settings::NONCE_SYNC_CENTRES,
+			'_prc_centres_nonce'
+		);
+		$url = $this->exit_url( array( Settings::class, 'handle_actions' ) );
+		$this->assertNotEmpty( $this->query_arg( (string) $url, 'error' ), 'sin https no se guarda' );
+		$this->assertSame( '', (string) get_option( CentreCatalogueSync::OPTION_MANIFEST_URL, '' ) );
+
+		$this->post(
+			array(
+				'prc_action'       => 'sync_centres',
+				'prc_manifest_url' => ' https://example.org/manifest.json ',
+			),
+			Settings::NONCE_SYNC_CENTRES,
+			'_prc_centres_nonce'
+		);
+		$url = $this->exit_url( array( Settings::class, 'handle_actions' ) );
+		$this->assertSame( 'synced', $this->query_arg( (string) $url, 'updated' ) );
+		$this->assertSame( 'https://example.org/manifest.json', get_option( CentreCatalogueSync::OPTION_MANIFEST_URL ) );
+
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'name="prc_manifest_url"', $html );
+		$this->assertStringContainsString( 'value="https://example.org/manifest.json"', $html );
 	}
 
 	/**

@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\HelpContent;
 use Prc\PublicFront\Shell;
 
@@ -83,6 +84,26 @@ final class HelpView {
 		}
 		$html .= ( $abierta ? '</ul>' : '' ) . '</li>';
 		return '<nav class="prc-ayuda__indice" aria-label="Índice de la guía"><h3 class="prc-ayuda__indice-titulo">En esta guía</h3><ol>' . $html . '</ol></nav>';
+	}
+
+	/**
+	 * One section alone, in a closed dialog: what a «¿Dudas?» link opens.
+	 *
+	 * El guion enfoca el título del apartado, para que se lea desde arriba:
+	 * con el foco en «Cerrar», uno largo se abriría desplazado hasta el final.
+	 * Escape lo cierra el propio navegador.
+	 *
+	 * @param string               $id       Dialog id, from Help::ask().
+	 * @param array<string, mixed> $apartado Section.
+	 * @param string               $url      The whole help, at that section.
+	 * @return string
+	 */
+	public static function dialog( string $id, array $apartado, string $url ): string {
+		return '<dialog class="prc-dialogo prc-ayuda-dialogo" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $apartado['id'] . '-titulo' ) . '">'
+			. self::section( $apartado )
+			. '<p class="prc-acciones"><a href="' . esc_url( $url ) . '">Ver toda la ayuda</a>'
+			. '<button type="button" class="' . esc_attr( Assets::button_class() ) . '" data-prc-help-close>Cerrar</button></p>'
+			. '</dialog>';
 	}
 
 	/**

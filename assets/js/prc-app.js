@@ -457,6 +457,49 @@
 		}
 	} );
 
+	/* --- 6 bis. La ayuda en un diálogo --------------------------------- */
+
+	/*
+	 * `data-prc-help` en un enlace «¿Dudas?»: apunta al `<dialog>` que el
+	 * servidor pintó en el pie con solo ese apartado (#86). Se abre con
+	 * `showModal()` —foco en el título del apartado; Escape del navegador— y,
+	 * al cerrarse,
+	 * el foco vuelve al enlace. Sin guion, sin `showModal()` o con una tecla
+	 * que pide otra pestaña, el enlace lleva a la ayuda entera como siempre.
+	 * Va antes del aviso de cambios sin guardar (sección 10): abrir la ayuda
+	 * no sale de la página, y ese aviso no mira un clic ya atendido.
+	 */
+	document.addEventListener( 'click', function ( e ) {
+		var enlace = e.target.closest ? e.target.closest( 'a[data-prc-help]' ) : null;
+		var dialogo = enlace ? document.getElementById( enlace.getAttribute( 'data-prc-help' ) ) : null;
+		if ( dialogo && dialogo.showModal && ! e.defaultPrevented && 0 === e.button &&
+			! e.ctrlKey && ! e.metaKey && ! e.shiftKey && ! e.altKey ) {
+			e.preventDefault();
+			dialogo.prcVuelta = enlace;
+			dialogo.showModal();
+			// El título, no el primer enlace: se lee desde arriba. `tabindex`
+			// en el `<dialog>` no está permitido; en el título, sí.
+			var titulo = dialogo.querySelector( 'h3, h4' );
+			if ( titulo ) {
+				titulo.tabIndex = -1;
+				titulo.focus();
+			}
+			return;
+		}
+		var cerrar = e.target.closest ? e.target.closest( '[data-prc-help-close]' ) : null;
+		if ( cerrar && cerrar.closest( 'dialog' ) ) {
+			cerrarDialogo( cerrar.closest( 'dialog' ) );
+		}
+	} );
+
+	// `close` no sube: se escucha en captura. Vale también para Escape.
+	document.addEventListener( 'close', function ( e ) {
+		if ( e.target.prcVuelta ) {
+			e.target.prcVuelta.focus();
+			e.target.prcVuelta = null;
+		}
+	}, true );
+
 	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
 
 	/*

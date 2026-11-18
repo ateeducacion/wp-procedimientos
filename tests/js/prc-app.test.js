@@ -1086,3 +1086,75 @@ describe( 'tick all or none in a group of checkboxes', () => {
 		expect( document.getElementById( 'b' ).checked ).toBe( false );
 	} );
 } );
+
+describe( 'the help in a dialog', () => {
+	const PAGE = `
+		<form id="f" data-prc-dirty-guard><input id="t" name="prc_title" /></form>
+		<p class="prc-ayuda-enlace"><a id="ayuda" href="/ayuda/?guia=solicitar#antes-de-empezar"
+			data-prc-help="prc-ayuda-solicitar-antes-de-empezar">Cómo se solicita</a></p>
+		<dialog id="prc-ayuda-solicitar-antes-de-empezar">
+			<section><h3 id="titulo">Antes de empezar</h3></section>
+			<p><a id="toda" href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
+			<button id="cerrar" type="button" data-prc-help-close>Cerrar</button></p>
+		</dialog>`;
+
+	function click( id, init = {} ) {
+		const event = new MouseEvent( 'click', { bubbles: true, cancelable: true, ...init } );
+		document.getElementById( id ).dispatchEvent( event );
+		return event;
+	}
+
+	function modal() {
+		const dialogo = document.getElementById( 'prc-ayuda-solicitar-antes-de-empezar' );
+		dialogo.showModal = vi.fn( () => dialogo.setAttribute( 'open', '' ) );
+		dialogo.close = vi.fn( () => {
+			dialogo.removeAttribute( 'open' );
+			dialogo.dispatchEvent( new Event( 'close' ) );
+		} );
+		return dialogo;
+	}
+
+	it( 'opens the section in its dialog instead of following the link', async () => {
+		document.body.innerHTML = PAGE;
+		const dialogo = modal();
+		await load();
+
+		expect( click( 'ayuda' ).defaultPrevented ).toBe( true );
+		expect( dialogo.showModal ).toHaveBeenCalled();
+		expect( document.activeElement ).toBe( document.getElementById( 'titulo' ) );
+	} );
+
+	it( 'closes with its button and gives the focus back to the link', async () => {
+		document.body.innerHTML = PAGE;
+		const dialogo = modal();
+		await load();
+		click( 'ayuda' );
+		click( 'cerrar' );
+
+		expect( dialogo.close ).toHaveBeenCalled();
+		expect( document.activeElement ).toBe( document.getElementById( 'ayuda' ) );
+	} );
+
+	it( 'does not ask about unsaved changes: the page stays', async () => {
+		document.body.innerHTML = PAGE;
+		modal();
+		window.confirm = vi.fn();
+		await load();
+		document.getElementById( 't' ).dispatchEvent( new Event( 'input', { bubbles: true } ) );
+
+		expect( click( 'ayuda' ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).not.toHaveBeenCalled();
+	} );
+
+	it( 'follows the link when the browser has no showModal(), or to a new tab', async () => {
+		document.body.innerHTML = PAGE;
+		document.getElementById( 'prc-ayuda-solicitar-antes-de-empezar' ).showModal = undefined;
+		await load();
+		expect( click( 'ayuda' ).defaultPrevented ).toBe( false );
+
+		document.body.innerHTML = PAGE;
+		const dialogo = modal();
+		expect( click( 'ayuda', { ctrlKey: true } ).defaultPrevented ).toBe( false );
+		expect( dialogo.showModal ).not.toHaveBeenCalled();
+	} );
+} );

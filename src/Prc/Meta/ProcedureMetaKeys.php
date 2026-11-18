@@ -59,6 +59,14 @@ final class ProcedureMetaKeys {
 	public const FINAL_LIST_URL = 'prc_final_list_url';
 
 	/**
+	 * Copia privada del PDF de cada enlace, por clave del enlace (ADR-0048).
+	 *
+	 * Cada entrada: `url` de origen, `stored` (nombre opaco en el almacén
+	 * privado), `saved_at` (marca de tiempo) y `size` en bytes.
+	 */
+	public const LINK_COPIES = 'prc_link_copies';
+
+	/**
 	 * Correos de contacto del ámbito convocante: hasta tres, el primero obligatorio.
 	 */
 	public const CONTACT_EMAILS = 'prc_contact_emails';
@@ -234,6 +242,7 @@ final class ProcedureMetaKeys {
 			self::RESOLUTION_URL,
 			self::PROVISIONAL_LIST_URL,
 			self::FINAL_LIST_URL,
+			self::LINK_COPIES,
 			self::CONTACT_EMAILS,
 			self::HEADER_COLOR,
 			self::AUDIENCE,

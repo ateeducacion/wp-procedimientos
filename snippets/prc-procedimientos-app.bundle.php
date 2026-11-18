@@ -189,14 +189,6 @@ final class ProcedureMetaKeys {
 
 
 
-
-	public const NOTIFY = 'prc_notify';
-
-
-
-
-
-
 	public const PEOPLE_SPEC = 'prc_people_spec';
 
 
@@ -287,35 +279,12 @@ final class ProcedureMetaKeys {
 			self::COMMITMENTS,
 			self::ARCHIVED,
 			self::APPLICATIONS_CLOSED,
-			self::NOTIFY,
 			self::PEOPLE_SPEC,
 			self::OBSERVABLE,
 			self::OBSERVER_COLUMNS,
 			self::OBSERVER_FILES,
 			self::OBSERVER_EXPORT,
 			self::OBSERVER_NOTIFY,
-		);
-	}
-
-
-
-
-
-
-
-
-
-
-	public static function notify_events(): array {
-		return array(
-			'application_submitted' => 'Acuse a quien presenta una solicitud nueva',
-			'application_updated'   => 'Aviso a quien modifica su solicitud',
-			'application_received'  => 'Aviso a los correos de contacto de cada solicitud recibida o modificada',
-			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
-			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
-			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de participantes de una solicitud',
-			'application_withdrawn' => 'Aviso a los correos de contacto, y acuse a quien la retira, cuando un centro retira su solicitud',
-			'application_extended'  => 'Aviso a quien presentó la solicitud cuando se le concede una prórroga',
 		);
 	}
 
@@ -3673,7 +3642,6 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
-			ProcedureMetaKeys::NOTIFY               => self::COPY,
 			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
 			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
 			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,
@@ -9009,10 +8977,6 @@ final class ProcedureMetaRegistration {
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 			),
-			ProcedureMetaKeys::NOTIFY               => array(
-				'type'     => 'array',
-				'sanitize' => array( self::class, 'sanitize_notify' ),
-			),
 			ProcedureMetaKeys::PEOPLE_SPEC          => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_people_spec' ),
@@ -9280,23 +9244,6 @@ final class ProcedureMetaRegistration {
 	public static function sanitize_coordinator_count( $value ): int {
 		$count = is_scalar( $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT ) ? (int) $value : 0;
 		return min( ProcedureMetaKeys::COORDINATOR_COUNT_MAX, max( 0, $count ) );
-	}
-
-
-
-
-
-
-
-	public static function sanitize_notify( $value ): array {
-		$out = array();
-		foreach ( is_array( $value ) ? $value : array( $value ) as $evento ) {
-			$evento = ProcedureMetaKeys::in_list( $evento, ProcedureMetaKeys::notify_events() );
-			if ( '' !== $evento && ! in_array( $evento, $out, true ) ) {
-				$out[] = $evento;
-			}
-		}
-		return $out;
 	}
 
 
@@ -19221,7 +19168,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19288,10 +19235,10 @@ final class HelpContent {
 				),
 			),
 			array(
-				'id'    => 'taller-avisos',
+				'id'    => 'taller-correos',
 				'level' => 3,
-				'title' => 'Avisos',
-				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios en la lista de participantes, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
+				'title' => 'Correos',
+				'html'  => '<p>Los correos salen solos y no se apagan desde el taller. Al presentar, modificar o retirar una solicitud, el acuse llega a la cuenta con la que se hace —la del centro, en los procedimientos para centros; la de la persona, en los de profesorado— y el aviso, a los correos de contacto del procedimiento. También salen, como siempre, los cambios de revisión, las prórrogas, las entregas y los cambios en la lista de participantes. Si alguien necesita copia de estos correos en otra dirección, lo configura administración.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -23722,7 +23669,6 @@ final class ProcedureEditorView {
 			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
 			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
-			ProcedureEditor::PANEL_NOTICES => self::notices_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
 			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
@@ -25049,44 +24995,6 @@ final class ProcedureEditorView {
 
 
 
-
-
-
-	private static function notices_panel( array $m ): string {
-		$op       = ProcedureEditor::OP_NOTIFY;
-		$apagados = (array) ( $m['values'][ ProcedureMetaKeys::NOTIFY ] ?? array() );
-		ob_start();
-		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<fieldset class="prc-seccion-campos">
-				<legend class="prc-seccion__titulo">Avisos por correo</legend>
-				<p class="prc-intro">Los correos que manda el aplicativo para este procedimiento. Desmarque los que no quiera enviar; el resto sale solo, en texto plano y desde el remitente que configure administración.</p>
-				<div class="prc-opciones prc-opciones--vertical">
-					<?php foreach ( (array) $m['notify_events'] as $evento => $rotulo ) : ?>
-						<div class="prc-opcion">
-							<input type="checkbox" id="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"
-								name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTIFY ); ?>[]" value="<?php echo esc_attr( (string) $evento ); ?>"
-								<?php checked( ! in_array( (string) $evento, $apagados, true ) ); ?> />
-							<label for="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			</fieldset>
-			<?php echo PanelParts::submit( 'Guardar los avisos' );?>
-		</form>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
 	private static function custom_code_panel( array $m ): string {
 		$op = ProcedureEditor::OP_CUSTOM_CODE;
 		ob_start();
@@ -25319,7 +25227,6 @@ final class ProcedureEditor {
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
-	public const PANEL_NOTICES      = 'avisos';
 	public const PANEL_CODE         = 'codigo';
 	public const PANEL_PEOPLE       = 'personas';
 	public const PANEL_OBSERVE      = 'consulta';
@@ -25334,7 +25241,6 @@ final class ProcedureEditor {
 	public const OP_UNARCHIVE           = 'unarchive';
 	public const OP_DELIVERY_DATES      = 'delivery_dates';
 	public const OP_CUSTOM_CODE         = 'custom_code';
-	public const OP_NOTIFY              = 'notify';
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
@@ -25395,14 +25301,6 @@ final class ProcedureEditor {
 
 
 
-	public const FIELD_NOTIFY = 'prc_notify_on';
-
-
-
-
-
-
-
 
 	public const FIELD_EXPORT_ALL     = 'prc_export_all';
 	public const FIELD_EXPORT_COLUMNS = 'prc_export_columns';
@@ -25421,7 +25319,6 @@ final class ProcedureEditor {
 		self::OP_MOVE_QUESTION,
 		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
-		self::OP_NOTIFY,
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
 		self::PANEL_LINKS,
@@ -25466,7 +25363,6 @@ final class ProcedureEditor {
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
-		'avisos'       => 'Avisos por correo guardados.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'revisada'     => 'Solicitud revisada.',
@@ -25563,7 +25459,7 @@ final class ProcedureEditor {
 		$grupos  = array(
 			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
 			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Más ajustes' => array( self::PANEL_NOTICES, self::PANEL_OBSERVE, self::PANEL_CODE ),
+			'Más ajustes' => array( self::PANEL_OBSERVE, self::PANEL_CODE ),
 		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
@@ -25573,7 +25469,6 @@ final class ProcedureEditor {
 			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PEOPLE       => 'Participantes',
 			self::PANEL_PUBLISH      => 'Publicación',
-			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
@@ -25713,7 +25608,6 @@ final class ProcedureEditor {
 
 
 		$sueltas = array(
-			self::OP_NOTIFY         => array( self::class, 'save_notify' ),
 			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
 			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
@@ -26302,22 +26196,6 @@ final class ProcedureEditor {
 
 
 
-
-	private static function save_notify( int $procedure_id ): void {
-
-		$encendidos = (array) wp_unslash( $_POST[ self::FIELD_NOTIFY ] ?? array() );
-		$encendidos = array_map( 'sanitize_key', array_filter( $encendidos, 'is_string' ) );
-		$apagados   = array_values( array_diff( array_keys( ProcedureMetaKeys::notify_events() ), $encendidos ) );
-		update_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, $apagados );
-		Shell::leave( self::url( $procedure_id, self::PANEL_NOTICES, array( self::ARG_NOTICE => 'avisos' ) ) );
-	}
-
-
-
-
-
-
-
 	private static function save_people_spec( int $procedure_id ): void {
 		self::$rejected = PeopleSpecPanel::save( $procedure_id );
 		if ( '' === self::$rejected ) {
@@ -26774,7 +26652,6 @@ final class ProcedureEditor {
 			'export'                  => array(),
 			'table'                   => array(),
 			'review_states'           => ApplicationMetaKeys::review_states(),
-			'notify_events'           => ProcedureMetaKeys::notify_events(),
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
@@ -26975,7 +26852,6 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
-			ProcedureMetaKeys::NOTIFY               => $procedure_id > 0 ? (array) get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true ) : array(),
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
@@ -32899,10 +32775,6 @@ final class Mailer {
 		if ( '' === $to || '' === trim( $message ) ) {
 			return false;
 		}
-		$procedure_id = isset( $ctx['procedure_id'] ) ? (int) $ctx['procedure_id'] : 0;
-		if ( $procedure_id > 0 && ! self::enabled( $procedure_id, $event ) ) {
-			return false;
-		}
 
 		try {
 
@@ -32960,18 +32832,6 @@ final class Mailer {
 			}
 		}
 		return $hechos;
-	}
-
-
-
-
-
-
-
-
-	public static function enabled( int $procedure_id, string $event ): bool {
-		$apagados = get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true );
-		return ! is_array( $apagados ) || ! in_array( $event, $apagados, true );
 	}
 
 

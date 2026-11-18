@@ -231,10 +231,10 @@ class Test_People_List extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El aviso a los contactos se apaga en el panel «Avisos», y la copia de
-	 * administración no lo recibe.
+	 * El aviso va solo a los contactos, sin la copia de administración, y no
+	 * se apaga por procedimiento (#81).
 	 */
-	public function test_the_mail_goes_to_contacts_only_and_can_be_switched_off() {
+	public function test_the_mail_goes_to_contacts_only_and_cannot_be_switched_off() {
 		update_option( 'prc_mail_copy', 'copia@example.org' );
 		$procedimiento = $this->procedimiento();
 		$director      = $this->school_head( 'C0001' );
@@ -243,7 +243,7 @@ class Test_People_List extends WP_UnitTestCase {
 		$this->assertSame( array( 'gestion@example.org' ), array_column( $this->enviados, 'to' ) );
 
 		$this->enviados = array();
-		update_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, array( 'people_changed' ) );
+		update_post_meta( $procedimiento, 'prc_notify', array( 'people_changed' ) );
 		People::add(
 			$solicitud,
 			$director,
@@ -254,8 +254,8 @@ class Test_People_List extends WP_UnitTestCase {
 				)
 			)
 		);
-		$this->assertSame( array(), $this->enviados );
-		$this->assertCount( 2, People::of( $solicitud ), 'apagar el correo no apaga el alta' );
+		$this->assertSame( array( 'gestion@example.org' ), array_column( $this->enviados, 'to' ), 'un prc_notify de antes no apaga nada' );
+		$this->assertCount( 2, People::of( $solicitud ) );
 		delete_option( 'prc_mail_copy' );
 	}
 

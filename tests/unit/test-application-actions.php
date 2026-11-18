@@ -436,14 +436,12 @@ class Test_Application_Actions extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Apagado en «Avisos», retirar no manda nada.
+	 * Retirar avisa siempre, aunque quede un `prc_notify` guardado de antes (#81).
 	 */
-	public function test_the_withdrawal_mail_can_be_switched_off() {
-		$c = $this->caso( true, array( ProcedureMetaKeys::NOTIFY => array( Mailer::EVENT_APPLICATION_WITHDRAWN ) ) );
+	public function test_the_withdrawal_mail_cannot_be_switched_off() {
+		$c = $this->caso( true, array( 'prc_notify' => array( Mailer::EVENT_APPLICATION_WITHDRAWN ) ) );
 		$this->assertNotNull( $this->retirar( $c['head'], $c['application'] ) );
-		$this->assertSame( array(), $this->enviados );
-		$this->assertArrayHasKey( Mailer::EVENT_APPLICATION_WITHDRAWN, ProcedureMetaKeys::notify_events() );
-		$this->assertArrayHasKey( Mailer::EVENT_APPLICATION_EXTENDED, ProcedureMetaKeys::notify_events() );
+		$this->assertContains( 'contacto@example.org', array_column( $this->enviados, 'to' ) );
 	}
 
 	/**

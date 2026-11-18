@@ -243,3 +243,48 @@ enlace al justificante. La prueba que vigilaba que el número no saliera
 sale solo como «n.º N».
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-18
+
+**Los correos ya no se apagan por procedimiento.** La regla 5 deja de
+valer: se quitan el panel «Avisos» del taller, la meta `prc_notify` de su
+registro y de `ProcedureCopy::policy()`, y la comprobación que hacía
+`Mailer::mail()` antes de salir (#81). La regla 1 se queda en el filtro
+`prc_mail`.
+
+Por qué: quien da de alta un procedimiento no es quien tiene que decidir si
+un centro recibe el acuse de lo que presenta. Un acuse apagado por error deja
+a un centro sin justificante y sin forma de saber que su solicitud llegó, y
+eso se contesta luego por correo a mano. Los correos son fijos:
+
+- En **alta, modificación y retirada** de una solicitud, el acuse va a la
+  cuenta con la que se hace —en un procedimiento para centros, la del equipo
+  directivo que presenta; en uno para profesorado, la de la persona— y el
+  aviso, a los correos de contacto del procedimiento y a la copia de
+  administración (`prc_mail_copy`) donde ya iba. Es lo que hacía el Mailer:
+  no cambia ningún destinatario. El catálogo de centros no trae una
+  dirección propia del centro, así que «el correo del centro» es el de la
+  cuenta con la que el centro presenta.
+- El resto —revisión, prórroga, entregas y lista de participantes— sale como
+  salía, sin interruptor.
+
+Una copia a una cuenta concreta que alguien pida no es cosa del taller: la
+pone quien despliega con el filtro `prc_mail`, que ve cada correo con su
+evento y su contexto, o con la opción `prc_mail_copy` de los ajustes para el
+alta del procedimiento y las solicitudes recibidas.
+
+Lo que cuesta: un procedimiento que necesitara de verdad callar un aviso ya
+no puede hacerlo desde el taller; tiene que pedirlo a quien despliega, que lo
+descarta en `prc_mail`. Los valores de `prc_notify` que haya guardados en la
+base de datos se quedan donde están y se ignoran: nadie los lee y un
+duplicado no los copia, porque `ProcedureCopy` solo recorre las claves de su
+política. No hace falta migración. El aviso a quien consulta
+(`prc_observer_notify`, ADR-0043) no entra aquí: es del panel «Acceso de
+consulta».
+
+Las pruebas: `tests/unit/test-mailer.php`,
+`test_a_stored_prc_notify_switches_nothing_off`;
+`tests/unit/test-procedure-editor.php`,
+`test_the_workshop_has_no_notices_panel`.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

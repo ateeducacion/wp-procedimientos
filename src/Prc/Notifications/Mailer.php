@@ -144,24 +144,20 @@ final class Mailer {
 	/**
 	 * Send one mail. The only place of the application that calls wp_mail().
 	 *
-	 * Con `procedure_id` en el contexto, un evento apagado en ese
-	 * procedimiento (`prc_notify`) no sale. El filtro `prc_mail` recibe
-	 * `to`, `subject`, `message` y `headers`, y devolver `false` lo descarta.
+	 * Los correos no se apagan por procedimiento (ADR-0038, adenda): el
+	 * filtro `prc_mail` recibe `to`, `subject`, `message` y `headers`, y
+	 * devolver `false` lo descarta.
 	 *
 	 * @param string               $event   One of {@see events()}.
 	 * @param string               $to      Recipient address.
 	 * @param string               $subject Subject.
 	 * @param string               $message Plain-text body.
-	 * @param array<string, mixed> $ctx     Context; `procedure_id` is read here.
+	 * @param array<string, mixed> $ctx     Context it was built from.
 	 * @return bool Whether wp_mail() accepted it.
 	 */
 	public static function mail( string $event, string $to, string $subject, string $message, array $ctx = array() ): bool {
 		$to = self::sanitize_address( $to );
 		if ( '' === $to || '' === trim( $message ) ) {
-			return false;
-		}
-		$procedure_id = isset( $ctx['procedure_id'] ) ? (int) $ctx['procedure_id'] : 0;
-		if ( $procedure_id > 0 && ! self::enabled( $procedure_id, $event ) ) {
 			return false;
 		}
 
@@ -221,18 +217,6 @@ final class Mailer {
 			}
 		}
 		return $hechos;
-	}
-
-	/**
-	 * Whether a procedure leaves this event switched on.
-	 *
-	 * @param int    $procedure_id Procedure ID.
-	 * @param string $event        Event.
-	 * @return bool
-	 */
-	public static function enabled( int $procedure_id, string $event ): bool {
-		$apagados = get_post_meta( $procedure_id, ProcedureMetaKeys::NOTIFY, true );
-		return ! is_array( $apagados ) || ! in_array( $event, $apagados, true );
 	}
 
 	/**

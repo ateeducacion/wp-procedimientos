@@ -213,7 +213,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_APPLICATIONS,
 				ProcedureEditor::PANEL_DELIVERIES,
-				ProcedureEditor::PANEL_NOTICES,
 				ProcedureEditor::PANEL_OBSERVE,
 				ProcedureEditor::PANEL_CODE,
 			),
@@ -221,7 +220,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			'en el orden en que se trabaja: preparar, gestionar y el resto'
 		);
 		$this->assertSame(
-			array( 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Gestionar', 'Gestionar', 'Más ajustes', 'Más ajustes', 'Más ajustes' ),
+			array( 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Gestionar', 'Gestionar', 'Más ajustes', 'Más ajustes' ),
 			array_values( wp_list_pluck( $m['panels'], 'group' ) )
 		);
 		$this->assertSame( 'Acceso de consulta', $m['panels'][ ProcedureEditor::PANEL_OBSERVE ]['label'], 'no se llama como el menú de arriba' );
@@ -262,7 +261,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_QUESTIONS,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_LINKS,
-			ProcedureEditor::PANEL_NOTICES,
 			ProcedureEditor::PANEL_OBSERVE,
 			ProcedureEditor::PANEL_CODE,
 		);
@@ -1975,48 +1973,20 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El panel «Avisos»: una casilla por evento, encendida salvo que se apague;
-	 * lo que se guarda es la lista de los apagados.
+	 * Los correos no se apagan en el taller: no hay panel «Avisos» ni su POST (#81).
 	 */
-	public function test_the_notices_panel_saves_what_is_switched_off() {
+	public function test_the_workshop_has_no_notices_panel() {
 		list( , $uid, $procedimiento ) = $this->mio();
-		$todos                         = array_keys( ProcedureMetaKeys::notify_events() );
-
-		// Recién creado, todo encendido.
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_NOTICES ) );
-		foreach ( ProcedureMetaKeys::notify_events() as $evento => $rotulo ) {
-			$this->assertStringContainsString( esc_html( $rotulo ), $html );
-			$this->assertMatchesRegularExpression( '/value="' . $evento . '"[^>]*checked/', $html, $evento . ' encendido' );
-		}
+		$m = $this->modelo( $procedimiento, 'avisos' );
+		$this->assertArrayNotHasKey( 'avisos', $m['panels'] );
+		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'la pestaña de antes cae en los datos' );
+		$this->assertStringNotContainsString( 'prc_notify_on', ProcedureEditorView::html( $m ) );
 
-		$url = $this->submit(
-			$uid,
-			ProcedureEditor::OP_NOTIFY,
-			$procedimiento,
-			0,
-			array( ProcedureEditor::FIELD_NOTIFY => array( Mailer::EVENT_APPLICATION_SUBMITTED, Mailer::EVENT_REVIEW_CHANGED, 'inventado' ) )
-		);
-		$this->assertSame( 'avisos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
-		$this->assertSame( ProcedureEditor::PANEL_NOTICES, $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ) );
-		$this->assertEqualsCanonicalizing(
-			array_values( array_diff( $todos, array( Mailer::EVENT_APPLICATION_SUBMITTED, Mailer::EVENT_REVIEW_CHANGED ) ) ),
-			get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true )
-		);
-
-		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_NOTICES ) );
-		$this->assertDoesNotMatchRegularExpression( '/value="' . Mailer::EVENT_APPLICATION_RECEIVED . '"[^>]*checked/', $html, 'apagado, sin marcar' );
-
-		// Ninguna marcada: todas apagadas.
-		$this->submit( $uid, ProcedureEditor::OP_NOTIFY, $procedimiento );
-		$this->assertEqualsCanonicalizing( $todos, get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true ) );
-
-		// Otro ámbito no toca nada.
-		$ajena = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
-		$this->assertNull( $this->submit( $ajena, ProcedureEditor::OP_NOTIFY, $procedimiento, 0, array( ProcedureEditor::FIELD_NOTIFY => $todos ) ) );
-		$this->assertEqualsCanonicalizing( $todos, get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true ) );
+		update_post_meta( $procedimiento, 'prc_notify', array( 'review_changed' ) );
+		$this->assertNull( $this->submit( $uid, 'notify', $procedimiento, 0, array( 'prc_notify_on' => array() ) ), 'la operación ya no existe' );
 	}
+
 	/** The editor persists complete delivery windows and rejects malformed dates without replacing them. */
 	public function test_the_editor_saves_and_validates_delivery_dates() {
 		list( , $uid, $procedure ) = $this->mio();
@@ -2638,7 +2608,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_DELIVERIES,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_PUBLISH,
-			ProcedureEditor::PANEL_NOTICES,
 			ProcedureEditor::PANEL_OBSERVE,
 			ProcedureEditor::PANEL_CODE,
 		);

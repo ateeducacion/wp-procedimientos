@@ -75,7 +75,6 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
-			ProcedureMetaKeys::NOTIFY               => self::COPY,
 			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
 			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
 			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,

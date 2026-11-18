@@ -249,6 +249,73 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Cuando el pie lo pinta el tema, el crédito y la ayuda salen en un sub-pie
+	 * debajo de la pantalla, encima del pie del tema; sin crédito configurado
+	 * no se pinta nada (ADR-0009).
+	 */
+	public function test_the_subfooter_shows_the_credit_and_the_help_when_the_theme_paints_the_footer() {
+		$this->acting_as( $this->administrator() );
+		add_filter( 'prc_show_chrome', '__return_false' );
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ): array {
+				return array_merge(
+					$chrome,
+					array(
+						'credit'       => 'Equipo de ejemplo',
+						'footer_links' => array(
+							array(
+								'label' => 'Incidencias',
+								'url'   => 'https://example.org/incidencias',
+							),
+						),
+					)
+				);
+			}
+		);
+
+		$html = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+
+		$this->assertStringStartsWith( '<div class="prc-hoja"><p>cuerpo</p></div>', $html, 'la pantalla va primero' );
+		$this->assertStringContainsString( 'prc-subpie', $html );
+		$this->assertStringContainsString( 'Equipo de ejemplo', $html );
+		$this->assertStringContainsString( esc_url( Shell::url( 'help' ) ), $html, 'enlaza a la ayuda' );
+		$this->assertStringContainsString( 'example.org/incidencias', $html );
+		$this->assertStringNotContainsString( 'prc-top', $html, 'la cabecera sigue siendo del tema' );
+		$this->assertStringNotContainsString( 'class="prc-pie"', $html, 'y el pie también' );
+	}
+
+	/**
+	 * Sin crédito, basta con que haya enlaces configurados; un enlace a medias
+	 * no cuenta y no pinta la franja.
+	 */
+	public function test_the_subfooter_needs_a_credit_or_a_whole_link() {
+		$this->acting_as( $this->administrator() );
+		add_filter( 'prc_show_chrome', '__return_false' );
+		$links = array( array( 'label' => 'Solo rótulo' ) );
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ) use ( &$links ): array {
+				$chrome['footer_links'] = $links;
+				return $chrome;
+			}
+		);
+
+		$this->assertStringNotContainsString( 'prc-subpie', Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' ) );
+
+		$links = array(
+			array(
+				'label' => 'Incidencias',
+				'url'   => 'https://example.org/incidencias',
+			),
+		);
+		$html  = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		$this->assertStringContainsString( 'prc-subpie', $html );
+		$this->assertStringContainsString( 'example.org/incidencias', $html );
+		$this->assertStringContainsString( '> Ayuda</a>', $html );
+	}
+
+	/**
 	 * Con una sola entrada no hay nada que elegir: no se pinta el menú.
 	 */
 	public function test_the_tabs_only_appear_when_there_is_something_to_choose() {

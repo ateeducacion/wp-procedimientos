@@ -192,3 +192,15 @@ solicitud, que es la otra clave de texto libre del armazón, toma otro camino:
 se escribe también en Ajustes, con el filtro mandando encima, porque lo cambia
 administración sin tocar código. Los motivos y el saneado, en la adenda del
 2026-11-18 de [ADR-0009](ADR-0009-el-repositorio-se-publica-sin-nada-de-nadie.md).
+
+## Adenda — 2026-11-18: la ayuda, en un sub-pie cuando el tema pinta el pie
+
+«Ayuda» está siempre en el menú, pero con `prc_show_chrome` en «no» el menú no
+sale, y con él se iban el enlace a la ayuda y el `credit` del pie. Ahora
+`Shell::render()` añade en ese caso una franja debajo de la pantalla —encima
+del pie del tema— con el crédito, «Ayuda» y los `footer_links`
+(`Shell::subfooter()`). Solo se pinta si `prc_chrome` trae un `credit` o
+`footer_links`: sin configurar, quien apaga el armazón sigue recibiendo solo la
+pantalla, como antes (ADR-0009). A diferencia del pie, no se esconde en el
+móvil: allí es el único camino a la ayuda. Contra: una instalación que apague
+el armazón y no configure nada se queda sin enlace a la ayuda.

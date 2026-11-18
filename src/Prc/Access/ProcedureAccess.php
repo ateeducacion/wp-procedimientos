@@ -105,17 +105,6 @@ final class ProcedureAccess {
 	public const VIEW_DOCUMENT = 'document';
 
 	/**
-	 * The centres of each set of zones, worked out in this request, and the
-	 * catalogue version they come from ({@see observer_codes()}).
-	 *
-	 * @var array{catalogue:string|null, codes:array<string, string[]>}
-	 */
-	private static $zone_codes = array(
-		'catalogue' => null,
-		'codes'     => array(),
-	);
-
-	/**
 	 * Why someone may not apply, by case: what {@see why_not_apply()} says.
 	 *
 	 * La cuenta genérica del centro y el perfil sin cargo de dirección son el
@@ -158,6 +147,7 @@ final class ProcedureAccess {
 		add_filter( 'rest_pre_insert_prc_procedure', array( self::class, 'validate_rest_areas' ), 10, 2 );
 		add_action( 'admin_init', array( self::class, 'validate_admin_areas' ) );
 		add_filter( 'wp_insert_post_data', array( self::class, 'guard_parent' ), 10, 2 );
+		add_filter( 'pre_trash_post', array( ProcedureDeletion::class, 'veto_trash' ), 10, 2 );
 		add_action( 'save_post_' . ProcedurePostType::POST_TYPE, array( self::class, 'stamp_area' ), 20 );
 	}
 
@@ -203,6 +193,7 @@ final class ProcedureAccess {
 				if ( ! $por_rest && self::is_unready_publication( $post_id, (string) ( $data['post_status'] ?? '' ), $postarr['tax_input'][ ProcedureTaxonomies::COURSE ] ?? null ) ) {
 					$data['post_status'] = 'draft';
 				}
+				$data['post_status'] = ProcedureDeletion::trash_or_keep( $post_id, (string) ( $data['post_status'] ?? '' ) );
 			}
 		} elseif ( ProcedurePostType::POST_TYPE === $tipo ) {
 			$data['post_parent'] = 0;
@@ -838,8 +829,9 @@ final class ProcedureAccess {
 	 *
 	 * La regla del ámbito y, por encima, el cierre: histórico no lo edita el
 	 * ámbito que lo convocó, y sí administración. `map_meta_cap()` manda aquí
-	 * `edit_post`, `delete_post` y `publish_post`, así que alcanza también al
-	 * escritorio, a la edición rápida y a la REST.
+	 * `edit_post` y `publish_post` —`delete_post` tiene su propia regla, en
+	 * {@see ProcedureDeletion}—, así que alcanza también al escritorio, a la
+	 * edición rápida y a la REST.
 	 *
 	 * @param int $user_id User ID.
 	 * @param int $post_id Procedure ID.
@@ -1328,22 +1320,14 @@ final class ProcedureAccess {
 		if ( array() === $zonas ) {
 			return array();
 		}
-		// Una vez por petición y por zonas, no en cada solicitud que se
-		// pregunta: el listado y read_post recorrerían el catálogo entero
-		// cada vez. La clave son las zonas leídas ahora, así que un cambio
-		// de zona se ve en el acto; un cambio del catálogo lo vacía.
-		$version = CentreCatalog::version();
-		if ( $version !== self::$zone_codes['catalogue'] ) {
-			self::$zone_codes = array(
-				'catalogue' => $version,
-				'codes'     => array(),
-			);
+		// El índice por zona del catálogo se construye una vez por petición:
+		// el listado y read_post no recorren el catálogo entero cada vez.
+		$por_zona = CentreCatalog::by_zone();
+		$out      = array();
+		foreach ( $zonas as $zona ) {
+			$out = array_merge( $out, $por_zona[ $zona ] ?? array() );
 		}
-		$key = implode( ',', $zonas );
-		if ( ! isset( self::$zone_codes['codes'][ $key ] ) ) {
-			self::$zone_codes['codes'][ $key ] = ObserverScope::codes_in( $zonas, CentreCatalog::index() );
-		}
-		return self::$zone_codes['codes'][ $key ];
+		return $out;
 	}
 
 	/**
@@ -1452,9 +1436,14 @@ final class ProcedureAccess {
 			return $caps;
 		}
 
-		if ( ApplicationPostType::POST_TYPE === $tipo && 'delete_post' === $cap ) {
-			// Papelera y borrado definitivo tienen su propia regla (ADR-0044).
-			$permitido = ApplicationActions::may_delete( $user_id, $post_id );
+		if ( 'delete_post' === $cap ) {
+			// La papelera y el borrado definitivo tienen su propia regla: la de
+			// la solicitud (ADR-0044) y la del procedimiento, que solo deja un
+			// borrador sin solicitudes, también por el escritorio y la REST
+			// (adenda a la ADR-0007).
+			$permitido = ApplicationPostType::POST_TYPE === $tipo
+				? ApplicationActions::may_delete( $user_id, $post_id )
+				: ProcedureDeletion::allows( $user_id, $post_id );
 		} elseif ( ApplicationPostType::POST_TYPE === $tipo ) {
 			$permitido = 'read_post' === $cap
 				? self::can_view_application( $user_id, $post_id )

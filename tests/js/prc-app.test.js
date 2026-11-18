@@ -766,3 +766,103 @@ describe( 'one submission for forms marked data-prc-once', () => {
 		expect( submit( document.getElementById( 'd' ) ).defaultPrevented ).toBe( false );
 	} );
 } );
+
+describe( 'the «Más acciones» menu', () => {
+	const MENU = `
+		<details id="m1" class="prc-mas" data-prc-menu>
+			<summary id="s1">⋮</summary>
+			<div><a id="ver" href="#ver">Ver la ficha</a><a id="borrar" href="#borrar">Borrar</a></div>
+		</details>
+		<details id="m2" class="prc-mas" data-prc-menu>
+			<summary id="s2">⋮</summary>
+			<div><a href="#otro">Otro</a></div>
+		</details>
+		<details id="ajeno"><summary>Otro desplegable</summary><p>Dentro</p></details>
+		<p id="fuera">Fuera del menú</p>`;
+
+	/**
+	 * Open a menu the way the browser does: the attribute, then the toggle event.
+	 *
+	 * @param {HTMLDetailsElement} menu The menu.
+	 */
+	function open( menu ) {
+		menu.open = true;
+		menu.dispatchEvent( new Event( 'toggle' ) );
+	}
+
+	function key( name ) {
+		const event = new KeyboardEvent( 'keydown', { key: name, bubbles: true, cancelable: true } );
+		document.activeElement.dispatchEvent( event );
+		return event;
+	}
+
+	it( 'closes with Escape and gives the focus back to its button', async () => {
+		document.body.innerHTML = MENU;
+		await load();
+		const menu = document.getElementById( 'm1' );
+		open( menu );
+		document.getElementById( 'ver' ).focus();
+
+		key( 'Escape' );
+
+		expect( menu.open ).toBe( false );
+		expect( document.activeElement ).toBe( document.getElementById( 's1' ) );
+	} );
+
+	it( 'ignores other keys, and Escape with nothing open', async () => {
+		document.body.innerHTML = MENU;
+		await load();
+		const menu = document.getElementById( 'm1' );
+		open( menu );
+
+		key( 'Enter' );
+		expect( menu.open ).toBe( true );
+
+		menu.open = false;
+		document.getElementById( 'fuera' ).setAttribute( 'tabindex', '-1' );
+		document.getElementById( 'fuera' ).focus();
+		key( 'Escape' );
+		expect( document.activeElement ).toBe( document.getElementById( 'fuera' ) );
+	} );
+
+	it( 'leaves Escape to SweetAlert2 while its dialog is on screen', async () => {
+		document.body.innerHTML = MENU;
+		window.Swal = { isVisible: () => true };
+		await load();
+		const menu = document.getElementById( 'm1' );
+		open( menu );
+
+		key( 'Escape' );
+
+		expect( menu.open ).toBe( true );
+	} );
+
+	it( 'closes when clicking outside, and not when clicking inside', async () => {
+		document.body.innerHTML = MENU;
+		await load();
+		const menu = document.getElementById( 'm1' );
+		open( menu );
+
+		document.getElementById( 'borrar' ).dispatchEvent( new MouseEvent( 'click', { bubbles: true, cancelable: true } ) );
+		expect( menu.open ).toBe( true );
+
+		document.getElementById( 'fuera' ).dispatchEvent( new MouseEvent( 'click', { bubbles: true } ) );
+		expect( menu.open ).toBe( false );
+	} );
+
+	it( 'closes the open one when another opens, and leaves other details alone', async () => {
+		document.body.innerHTML = MENU;
+		await load();
+		const uno = document.getElementById( 'm1' );
+		const otro = document.getElementById( 'm2' );
+		const ajeno = document.getElementById( 'ajeno' );
+		ajeno.open = true;
+		open( uno );
+
+		open( otro );
+
+		expect( uno.open ).toBe( false );
+		expect( otro.open ).toBe( true );
+		expect( ajeno.open ).toBe( true );
+	} );
+} );

@@ -9,7 +9,6 @@ namespace Prc\PublicFront\View;
 
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
-use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\Workspace;
 
@@ -300,7 +299,6 @@ final class WorkspaceView {
 						<th scope="col">Plazo</th>
 						<th scope="col">Dirigido a</th>
 						<th scope="col">Solicitudes</th>
-						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -359,17 +357,6 @@ final class WorkspaceView {
 			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
 				<?php self::applications( $row ); ?>
 			</td>
-			<td class="prc-celda-accion" data-rotulo="Acciones">
-				<div class="prc-acciones">
-					<?php if ( '' !== (string) $row['view_url'] ) : ?>
-						<a class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" href="<?php echo esc_url( (string) $row['view_url'] ); ?>"
-							title="<?php echo esc_attr( 'publish' === (string) $row['status'] ? 'Ver la ficha pública' : 'Previsualizar la ficha, que está en borrador' ); ?>"><?php echo esc_html( 'publish' === (string) $row['status'] ? 'Ver la ficha' : 'Previsualizar' ); ?></a>
-					<?php endif; ?>
-					<?php if ( ! empty( $row['can_duplicate'] ) ) : ?>
-						<?php self::duplicate( $row ); ?>
-					<?php endif; ?>
-				</div>
-			</td>
 		</tr>
 		<?php
 	}
@@ -389,30 +376,6 @@ final class WorkspaceView {
 		}
 		?>
 		<a href="<?php echo esc_url( (string) $row['applications_url'] ); ?>"><?php echo esc_html( $texto ); ?></a>
-		<?php
-	}
-
-	/**
-	 * «Duplicar» de una fila: el mismo POST que el del taller.
-	 *
-	 * Solo en las filas que el modelo marca con `can_duplicate`. El
-	 * formulario va al taller del original, que es quien explica un rechazo.
-	 * El nonce va sin `id`: hay uno por fila y un `id` repetido no es HTML.
-	 *
-	 * @param array<string, mixed> $row One row of the model.
-	 * @return void
-	 */
-	private static function duplicate( array $row ): void {
-		$op = ProcedureEditor::OP_DUPLICATE;
-		?>
-		<form class="prc-acciones" method="post" action="<?php echo esc_url( (string) $row['url'] ); ?>"
-			data-prc-confirm="<?php echo esc_attr( ProcedureEditorView::duplicate_question( (string) $row['title'] ) ); ?>"
-			data-prc-confirm-ok="Duplicar" data-prc-once>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::nonce_name( $op ) ); ?>" value="<?php echo esc_attr( wp_create_nonce( ProcedureEditor::nonce_action( $op ) ) ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-			<button type="submit" class="<?php echo esc_attr( Assets::button_class() . ' btn-sm' ); ?>" title="Duplicar este procedimiento">Duplicar</button>
-		</form>
 		<?php
 	}
 }

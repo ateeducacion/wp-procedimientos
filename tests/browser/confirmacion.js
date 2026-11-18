@@ -227,26 +227,31 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
-	// --- 5. Duplicar, desde una fila de «Gestión» -----------------------------
+	// --- 5. Duplicar, desde el menú «⋮» del taller ---------------------------
 	//
-	// El mismo HTML que pinta `WorkspaceView::duplicate()`: un botón de icono
-	// dentro de una celda, con el nonce sin `id` y el procedimiento oculto.
+	// El mismo HTML que pinta `ProcedureEditorView::menu()`: un `details` con
+	// sus tres puntos, y dentro el formulario de duplicar con su confirmación.
+	// Sin guion, el `summary` lo abre igual y el botón envía.
 	{
 		const DUPLICAR = `<!doctype html><meta charset="utf-8">
 <body class="prc-app">
-<table><tbody><tr><td class="prc-celda-accion" data-rotulo="Duplicar">
-<form class="prc-acciones" method="post" action="/enviado"
-      data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes."
-      data-prc-confirm-ok="Duplicar" data-prc-once>
-  <input type="hidden" name="prc_nonce_duplicate_0" value="abc123" />
-  <input type="hidden" name="prc_do" value="duplicate" />
-  <input type="hidden" name="prc_procedure" value="42" />
-  <button id="dup" type="submit" class="prc-accion" title="Duplicar este procedimiento">
-    <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
-    <span class="screen-reader-text">Duplicar este procedimiento</span>
-  </button>
-</form>
-</td></tr></tbody></table>
+<details class="prc-mas" data-prc-menu>
+  <summary id="mas" class="prc-btn prc-btn-sec btn btn-outline-secondary prc-mini prc-mas__boton" title="Más acciones para este procedimiento">
+    <span aria-hidden="true">&#8942;</span><span class="screen-reader-text">Más acciones para este procedimiento</span>
+  </summary>
+  <div class="prc-mas__menu">
+    <a class="prc-mas__opcion" href="/ficha">Vista previa</a>
+    <form class="prc-mas__form" method="post" action="/enviado"
+          data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes."
+          data-prc-confirm-ok="Duplicar" data-prc-once>
+      <input type="hidden" name="prc_nonce_duplicate_0" value="abc123" />
+      <input type="hidden" name="prc_do" value="duplicate" />
+      <input type="hidden" name="prc_procedure" value="42" />
+      <button id="dup" type="submit" class="prc-mas__opcion">Duplicar</button>
+    </form>
+    <a class="prc-mas__opcion prc-mas__opcion--borrar" href="/borrar">Borrar</a>
+  </div>
+</details>
 </body>`;
 		const abrirDuplicar = async ( contexto, conSwal ) => {
 			const page = await contexto.newPage();
@@ -263,15 +268,22 @@ async function abrir( ctx, conSwal ) {
 						'<style>' + CSS + '</style>' + DUPLICAR + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
 				} );
 			} );
-			await page.goto( 'https://prc.test/gestion' );
+			await page.goto( 'https://prc.test/taller' );
 			return { page, envio };
+		};
+		// El botón está dentro del menú: primero se abre.
+		const pulsar = async ( page ) => {
+			if ( ! ( await page.evaluate( () => document.querySelector( 'details.prc-mas' ).open ) ) ) {
+				await page.click( '#mas' );
+			}
+			await page.click( '#dup' );
 		};
 		const lleva = ( cuerpo ) => /prc_do=duplicate/.test( cuerpo ) && /prc_procedure=42/.test( cuerpo ) && /prc_nonce_duplicate_0=abc123/.test( cuerpo );
 
 		// Sin JavaScript: el botón envía y la acción se hace.
 		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
 		let { page, envio } = await abrirDuplicar( sinJs, true );
-		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#dup' ) ] );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), pulsar( page ) ] );
 		ok( lleva( envio.cuerpo ), 'duplicar sin JavaScript envía la operación, el procedimiento y el nonce: ' + envio.cuerpo );
 		await sinJs.close();
 
@@ -279,13 +291,13 @@ async function abrir( ctx, conSwal ) {
 		( { page, envio } = await abrirDuplicar( ctx, false ) );
 		let pregunta = null;
 		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.dismiss(); } );
-		await page.click( '#dup' );
+		await pulsar( page );
 		await page.waitForTimeout( 300 );
 		ok( null !== pregunta && pregunta.startsWith( '¿Duplicar «Red de ejemplo»?' ), 'duplicar sin SweetAlert pregunta con confirm(): ' + JSON.stringify( pregunta ) );
 		ok( null === envio.cuerpo, 'al cancelar no se duplica' );
 		page.removeAllListeners( 'dialog' );
 		page.on( 'dialog', ( d ) => d.accept() );
-		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#dup' ) ] );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), pulsar( page ) ] );
 		ok( lleva( envio.cuerpo ), 'al aceptar el confirm() se duplica' );
 		await page.close();
 
@@ -293,7 +305,7 @@ async function abrir( ctx, conSwal ) {
 		// Con SweetAlert2.
 		( { page, envio } = await abrirDuplicar( ctx, true ) );
 		page.on( 'dialog', async ( d ) => { ok( false, 'no debería salir el confirm() del navegador' ); await d.dismiss(); } );
-		await page.click( '#dup' );
+		await pulsar( page );
 		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
 		const titular = ( await page.textContent( '.swal2-title' ) ).trim();
 		ok( '¿Duplicar «Red de ejemplo»?' === titular, 'titular: ' + titular );
@@ -302,7 +314,7 @@ async function abrir( ctx, conSwal ) {
 		await page.keyboard.press( 'Escape' );
 		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
 		ok( null === envio.cuerpo, 'Escape no duplica' );
-		await page.click( '#dup' );
+		await pulsar( page );
 		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
 		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
 		ok( lleva( envio.cuerpo ), 'confirmar duplica' );
@@ -401,6 +413,137 @@ async function abrir( ctx, conSwal ) {
 		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
 		ok( conMotivo( envio.cuerpo ), 'confirmar retira con el motivo: ' + envio.cuerpo );
 		await page.close();
+	}
+
+	// --- 7. El menú «⋮»: cerrarlo como un menú, en ordenador y en el móvil ---
+	//
+	// La cabecera del taller tal como la pinta `ProcedureEditorView::head()`,
+	// con un título largo para que en el móvil la fila se parta. Sin guion el
+	// `details` se abre y se cierra con su botón; con guion, además, Escape lo
+	// cierra devolviendo el foco y pulsar fuera también.
+	{
+		const CABECERA = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<body class="prc-app" style="margin:0;padding:0 16px">
+<div class="prc-h1-fila">
+  <h1 class="prc-h1">Jornadas de Ciencia en Familia para todos los centros</h1>
+  <span class="prc-state">Borrador</span>
+  <details class="prc-mas" data-prc-menu>
+    <summary id="mas" class="prc-btn prc-btn-sec btn btn-outline-secondary prc-mini prc-mas__boton" title="Más acciones para este procedimiento">
+      <span aria-hidden="true">&#8942;</span><span class="screen-reader-text">Más acciones para este procedimiento</span>
+    </summary>
+    <div class="prc-mas__menu" id="capa">
+      <a class="prc-mas__opcion" href="/ficha">Vista previa</a>
+      <form class="prc-mas__form" method="post" action="/enviado"><button type="submit" class="prc-mas__opcion">Duplicar</button></form>
+      <a class="prc-mas__opcion prc-mas__opcion--borrar" href="/borrar">Borrar</a>
+    </div>
+  </details>
+</div>
+<p id="fuera">Contenido del taller.</p>
+</body>`;
+		const abrirCabecera = async ( contexto ) => {
+			const page = await contexto.newPage();
+			await page.route( 'https://prc.test/**', ( route ) => route.fulfill( {
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: '<style>' + CSS + '</style>' + CABECERA + '<script>' + APP + '</scr' + 'ipt>',
+			} ) );
+			await page.goto( 'https://prc.test/taller' );
+			return page;
+		};
+		const abierto = ( page ) => page.evaluate( () => document.querySelector( 'details.prc-mas' ).open );
+
+		// Sin JavaScript: el botón abre y cierra, y las opciones se pulsan.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		let page = await abrirCabecera( sinJs );
+		await page.click( '#mas' );
+		ok( await abierto( page ), 'sin guion, los tres puntos abren el menú' );
+		ok( await page.isVisible( 'text=Borrar' ), 'y se ven sus opciones' );
+		await page.click( '#mas' );
+		ok( ! ( await abierto( page ) ), 'y lo vuelven a cerrar' );
+		await sinJs.close();
+
+		// Con guion: Escape devuelve el foco, pulsar fuera cierra.
+		page = await abrirCabecera( ctx );
+		await page.click( '#mas' );
+		ok( await abierto( page ), 'con guion, el menú se abre' );
+		await page.focus( '.prc-mas__opcion--borrar' );
+		await page.keyboard.press( 'Escape' );
+		ok( ! ( await abierto( page ) ), 'Escape lo cierra' );
+		ok( await page.evaluate( () => 'mas' === document.activeElement.id ), 'y el foco vuelve a los tres puntos' );
+		await page.click( '#mas' );
+		await page.click( '#fuera' );
+		ok( ! ( await abierto( page ) ), 'pulsar fuera lo cierra' );
+		await page.click( '#mas' );
+		await page.click( '#capa', { position: { x: 2, y: 2 } } );
+		ok( await abierto( page ), 'pulsar dentro no lo cierra' );
+		const alto = await page.evaluate( () => Math.min( ...Array.from(
+			document.querySelectorAll( '#mas, .prc-mas__opcion' ),
+			( el ) => el.getBoundingClientRect().height
+		) ) );
+		ok( alto >= 44, 'cada objetivo mide al menos 44 px de alto: ' + alto );
+		await page.close();
+
+		// En el móvil, la capa no se sale de la pantalla.
+		const movil = await browser.newContext( { viewport: { width: 360, height: 740 } } );
+		page = await abrirCabecera( movil );
+		await page.click( '#mas' );
+		const caja = await page.evaluate( () => {
+			const r = document.getElementById( 'capa' ).getBoundingClientRect();
+			return { izquierda: r.left, derecha: r.right, ancho: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth };
+		} );
+		ok( caja.izquierda >= 0 && caja.derecha <= caja.ancho, 'en el móvil la capa cabe en la pantalla: ' + JSON.stringify( caja ) );
+		ok( caja.scroll <= caja.ancho, 'y no hay desplazamiento horizontal' );
+		await movil.close();
+	}
+
+	// --- 8. Borrar: escribir BORRAR, también sin JavaScript -------------------
+	//
+	// La confirmación de `ProcedureEditorView::delete_confirmation()`: un campo
+	// obligatorio que el servidor vuelve a comprobar. Aquí se mira que sin
+	// escribir nada el navegador no envía y que lo escrito viaja.
+	{
+		const BORRAR = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<form class="prc-form" method="post" action="/enviado" data-prc-once>
+  <input type="hidden" name="prc_nonce_delete_42" value="abc123" />
+  <input type="hidden" name="prc_do" value="delete" />
+  <input type="hidden" name="prc_procedure" value="42" />
+  <label for="prc-confirm-word">Para confirmarlo, escriba <strong>BORRAR</strong></label>
+  <input type="text" id="prc-confirm-word" name="prc_confirm_word" required autocomplete="off" />
+  <button id="papelera" type="submit">Enviar a la papelera</button>
+</form>
+</body>`;
+		const abrirBorrar = async ( contexto, conJs ) => {
+			const pagina = await contexto.newPage();
+			const envio = { cuerpo: null };
+			await pagina.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				if ( url.includes( '/enviado' ) ) {
+					envio.cuerpo = decodeURIComponent( ( route.request().postData() || '' ).replace( /\+/g, ' ' ) );
+				}
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						'<style>' + CSS + '</style>' + BORRAR + ( conJs ? '<script>' + SWAL + '</scr' + 'ipt><script>' + APP + '</scr' + 'ipt>' : '' ),
+				} );
+			} );
+			await pagina.goto( 'https://prc.test/taller?borrar=1' );
+			return { pagina, envio };
+		};
+		for ( const conJs of [ false, true ] ) {
+			const contexto = await browser.newContext( { javaScriptEnabled: conJs } );
+			const { pagina, envio } = await abrirBorrar( contexto, conJs );
+			const como = conJs ? 'con guion' : 'sin guion';
+			await pagina.click( '#papelera' );
+			await pagina.waitForTimeout( 300 );
+			ok( null === envio.cuerpo, como + ', con el campo vacío no se envía' );
+			await pagina.fill( '#prc-confirm-word', ' borrar ' );
+			await Promise.all( [ pagina.waitForURL( '**/enviado' ), pagina.click( '#papelera' ) ] );
+			ok( /prc_do=delete/.test( envio.cuerpo ) && /prc_nonce_delete_42=abc123/.test( envio.cuerpo ) && /prc_confirm_word= borrar /.test( envio.cuerpo ),
+				como + ', lo escrito viaja tal cual y lo compara el servidor: ' + envio.cuerpo );
+			await contexto.close();
+		}
 	}
 
 	await browser.close();

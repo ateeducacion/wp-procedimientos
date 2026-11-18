@@ -600,6 +600,22 @@ final class ProcedureView {
 	}
 
 	/**
+	 * Where «Ver la ficha» goes: the public page, or the preview of a draft.
+	 *
+	 * **Un borrador también se mira**: estando dentro y con permiso,
+	 * WordPress lo sirve en vista previa.
+	 *
+	 * @param \WP_Post $procedure The procedure.
+	 * @return string
+	 */
+	public static function link( \WP_Post $procedure ): string {
+		if ( 'publish' === $procedure->post_status ) {
+			return (string) get_permalink( $procedure );
+		}
+		return (string) get_preview_post_link( $procedure );
+	}
+
+	/**
 	 * Who may apply, written out for the «Pueden solicitar» row of the summary.
 	 *
 	 * Lo que antes solo se sabía cuando el botón no aparecía: a quién se

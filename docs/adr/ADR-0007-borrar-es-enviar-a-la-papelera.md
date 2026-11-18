@@ -222,3 +222,41 @@ historial—, y **borrarla para siempre exige `prc_manage_app`**: quien revisa l
 envía a la papelera y la restaura, pero no la borra.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-11
+
+Borrar un procedimiento llega al aplicativo, y se acota más de lo que decía
+el punto 2:
+
+- **Solo se borra un borrador sin ninguna solicitud.** Ni publicado, ni
+  programado, ni histórico, ni con una solicitud en cualquier estado —también
+  retirada en la papelera, que puede tenerla un procedimiento publicado que
+  volvió a borrador—. El punto 7 ya decía que mandar a la papelera uno con
+  solicitudes es casi siempre un error; ahora no se ofrece. Lo que terminó se
+  marca como histórico ([ADR-0023](ADR-0023-el-estado-historico-cierra-la-edicion.md)).
+- **Se borra desde el taller**, en el menú «⋮» («Más acciones para este
+  procedimiento») de su cabecera, junto a «Ver la ficha» y «Duplicar». Un
+  procedimiento que no se puede borrar no lleva la opción, ni apagada. El
+  listado de «Gestión de procedimientos» pierde su columna de acciones y no
+  tiene filtro «Papelera».
+- **La confirmación es escribir BORRAR**, en una pantalla del propio taller
+  (`?borrar=1`) que funciona igual sin JavaScript, en lugar del diálogo del
+  punto 6: el servidor compara siempre la palabra —sin distinguir mayúsculas
+  ni espacios alrededor— y vuelve a mirar la regla al recibir el envío, por si
+  entre pintar y enviar llegó una solicitud. Nonce propio de cada
+  procedimiento. Tras borrar se vuelve a «Gestión» con «Se ha enviado «X» a la
+  papelera.», y se suelta el bloqueo de edición de quien borra; si lo tiene
+  otra persona, el envío se para con el 409 de siempre.
+- **La regla cierra también `delete_post`** para gestión, en
+  `Access/ProcedureDeletion`, enganchada en `ProcedureAccess::map_meta_cap()`:
+  ni el escritorio ni la REST envían a la papelera uno publicado, histórico o
+  con solicitudes. Como el núcleo pide `delete_post` también para sacar de la
+  papelera y para el borrado definitivo, **restaurar pasa a ser solo de quien
+  administra el aplicativo**, que conserva lo que ya podía —lo mismo que
+  editar—. Es lo que dice la confirmación: «quien administra el aplicativo
+  puede recuperarlo».
+
+Lo demás no cambia: es `wp_trash_post()`, nunca `wp_delete_post()`, y lo
+restaurado vuelve en borrador.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

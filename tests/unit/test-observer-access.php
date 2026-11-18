@@ -649,32 +649,31 @@ class Test_Observer_Access extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Los centros de las zonas se calculan una vez por petición y por zonas,
-	 * no en cada pregunta; un cambio de zona o del catálogo se ve en el acto.
+	 * Los centros de cada zona se calculan una vez por petición, con el
+	 * catálogo, no en cada pregunta; un cambio de zona o del catálogo se ve
+	 * en el acto.
 	 */
 	public function test_observer_codes_are_worked_out_once_and_follow_changes() {
 		$uid = $this->observer( array( 'Z0002' ) );
 		$this->assertSame( array( 'C0002', 'C0003' ), ProcedureAccess::observer_codes( $uid ) );
 
 		// Se envenena lo memorizado: si la segunda llamada recorre el catálogo, no lo ve.
-		$poison = static function ( array $codes ): void {
+		$poison = static function ( string $zone ): void {
 			\Closure::bind(
-				static function () use ( $codes ): void {
-					foreach ( array_keys( self::$zone_codes['codes'] ) as $key ) {
-						self::$zone_codes['codes'][ $key ] = $codes;
-					}
+				static function () use ( $zone ): void {
+					self::$memo['by_zone'][ $zone ] = array( 'MEMO' );
 				},
 				null,
-				ProcedureAccess::class
+				CentreCatalog::class
 			)();
 		};
-		$poison( array( 'MEMO' ) );
+		$poison( 'Z0002' );
 		$this->assertSame( array( 'MEMO' ), ProcedureAccess::observer_codes( $uid ), 'la segunda vez no recorre el catálogo' );
 
 		update_user_meta( $uid, ObserverScope::meta_key(), array( 'Z0001' ) );
 		$this->assertSame( array( 'C0001' ), ProcedureAccess::observer_codes( $uid ), 'un cambio de zona, en el acto' );
 
-		$poison( array( 'MEMO' ) );
+		$poison( 'Z0001' );
 		add_filter(
 			'prc_centres',
 			static function ( array $centres ): array {
@@ -689,7 +688,7 @@ class Test_Observer_Access extends WP_UnitTestCase {
 		);
 		$this->assertSame( array( 'C0001', 'C0004' ), ProcedureAccess::observer_codes( $uid ), 'un cambio del catálogo, también' );
 
-		$poison( array( 'MEMO' ) );
+		$poison( 'Z0001' );
 		CentreCatalog::flush();
 		$this->assertSame( array( 'C0001', 'C0004' ), ProcedureAccess::observer_codes( $uid ), 'y al vaciar el catálogo' );
 	}

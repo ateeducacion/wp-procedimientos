@@ -11,6 +11,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ApplicationActions;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PostType\ApplicationPostType;
+use Prc\PostType\ProcedurePostType;
 
 /**
  * Lo que escriben las actuaciones sobre una solicitud (PLAN-0003, PR 9;
@@ -99,17 +100,28 @@ final class ApplicationOperations {
 	 */
 	public static function lost_race( int $id, bool $created = true ): bool {
 		$args = $created ? ApplicationActions::same_applicant( $id ) : null;
-		$ids  = null === $args ? array() : array_map( 'intval', (array) get_posts( $args ) );
-		$own  = array_values( array_filter( $ids, static fn( int $other ): bool => ! self::pending_for_school( $other ) ) );
-		$wins = array() !== $own ? $own[0] : ( $ids[0] ?? $id );
+		if ( null === $args ) {
+			return false;
+		}
+		$own       = array();
+		$on_behalf = array();
+		foreach ( array_map( 'intval', (array) get_posts( $args ) ) as $other ) {
+			if ( self::pending_for_school( $other ) ) {
+				$on_behalf[] = $other;
+			} else {
+				$own[] = $other;
+			}
+		}
+		$wins = $own[0] ?? $on_behalf[0] ?? $id;
 		if ( $wins !== $id ) {
 			ApplicationActions::purge( $id );
 			self::$refusal = ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $wins, ApplicationMetaKeys::APPLICANT_TYPE, true ) ? self::DUPLICATE_TEACHER : self::DUPLICATE;
 			return true;
 		}
-		if ( ! self::pending_for_school( $id ) ) {
-			foreach ( array_diff( $ids, $own ) as $on_behalf ) {
-				ApplicationActions::purge( $on_behalf );
+		// Gana la del propio centro: la que se presentó en su nombre a la vez, fuera.
+		if ( in_array( $id, $own, true ) ) {
+			foreach ( $on_behalf as $other ) {
+				ApplicationActions::purge( $other );
 			}
 		}
 		return false;
@@ -163,18 +175,19 @@ final class ApplicationOperations {
 	}
 
 	/**
-	 * Send an application to the bin, even where the core bin is switched off.
+	 * Send an application or a procedure to the bin, even where the core bin is switched off.
 	 *
 	 * Con la papelera activa es `wp_trash_post()`. Desactivada —`EMPTY_TRASH_DAYS`
 	 * a 0—, `wp_trash_post()` borraría para siempre la solicitud con sus
 	 * documentos y su historial; aquí se hace lo mismo que hace el núcleo con
 	 * la papelera activa, con los mismos filtros y acciones, para que retirar
-	 * siga siendo reversible (ADR-0044).
+	 * siga siendo reversible (ADR-0044). Borrar un procedimiento desde su
+	 * taller pasa por aquí por lo mismo: nunca es definitivo (ADR-0007).
 	 *
-	 * @param int $application_id Application ID.
+	 * @param int $application_id Application or procedure ID.
 	 * @return void
 	 */
-	private static function send_to_trash( int $application_id ): void {
+	public static function send_to_trash( int $application_id ): void {
 		if ( ApplicationActions::trash_enabled() ) {
 			wp_trash_post( $application_id );
 			return;
@@ -207,20 +220,25 @@ final class ApplicationOperations {
 	}
 
 	/**
-	 * Tell whoever listens that an application has just gone to the bin.
+	 * Keep what went to the bin out of the automatic purge, and tell whoever listens about an application.
 	 *
 	 * @param int $post_id Post ID.
 	 * @return void
 	 */
 	public static function on_trashed( $post_id ): void {
 		$post_id = (int) $post_id;
-		if ( ApplicationPostType::POST_TYPE !== get_post_type( $post_id ) ) {
+		$type    = get_post_type( $post_id );
+		if ( ApplicationPostType::POST_TYPE !== $type && ProcedurePostType::POST_TYPE !== $type ) {
 			return;
 		}
 		// La papelera del núcleo se vacía sola a los EMPTY_TRASH_DAYS días, y
 		// lo que mira es esta meta: sin ella, una retirada no caduca y no se
-		// pierden ni sus documentos ni su historial (ADR-0044).
+		// pierden ni sus documentos ni su historial (ADR-0044), y un
+		// procedimiento borrado sigue ahí para quien administra (ADR-0007).
 		delete_post_meta( $post_id, '_wp_trash_meta_time' );
+		if ( ApplicationPostType::POST_TYPE !== $type ) {
+			return;
+		}
 		$ctx = self::$context ?? array(
 			'user'   => get_current_user_id(),
 			'by'     => self::BY_DESK,

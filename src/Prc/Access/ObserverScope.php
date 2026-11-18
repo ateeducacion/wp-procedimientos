@@ -145,8 +145,6 @@ final class ObserverScope {
 		if ( '' === $zona || '' === $meta ) {
 			return array();
 		}
-		// Solo los ID, y la meta de zona de esas cuentas en una consulta: no
-		// se cargan las demás metas de cada una.
 		$ids = get_users(
 			array(
 				'capability'   => ProcedureAccess::CAP_VIEW_APPLICATIONS,
@@ -156,36 +154,17 @@ final class ObserverScope {
 			)
 		);
 		$ids = array_map( 'intval', (array) $ids );
-		if ( array() === $ids ) {
-			return array();
-		}
-		global $wpdb;
-		$huecos = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-		// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- los huecos son %d y se preparan; una sola meta de unas pocas cuentas.
-		$filas = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT user_id, meta_value FROM ' . $wpdb->usermeta . ' WHERE meta_key = %s AND user_id IN (' . $huecos . ') ORDER BY umeta_id ASC',
-				array_merge( array( $meta ), $ids )
+		// Las metas de esas cuentas en una consulta, y la zona leída como la
+		// lee el guardián: el aviso no llega a una zona que no deja consultar.
+		update_meta_cache( 'user', $ids );
+		return array_values(
+			array_filter(
+				$ids,
+				static function ( int $uid ) use ( $zona ): bool {
+					return in_array( $zona, self::zones_for( $uid ), true );
+				}
 			)
 		);
-		// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber
-		// Solo la primera fila de cada cuenta, la que lee zones_for() con
-		// get_user_meta( …, true ): el aviso no llega a una zona que el
-		// guardián no deja consultar.
-		$seen = array();
-		$out  = array();
-		foreach ( (array) $filas as $fila ) {
-			$uid = (int) $fila->user_id;
-			if ( isset( $seen[ $uid ] ) ) {
-				continue;
-			}
-			$seen[ $uid ] = true;
-			if ( in_array( $zona, self::parse_zones( maybe_unserialize( $fila->meta_value ) ), true ) ) {
-				$out[ $uid ] = $uid;
-			}
-		}
-		$out = array_values( $out );
-		return $out;
 	}
 
 	/**

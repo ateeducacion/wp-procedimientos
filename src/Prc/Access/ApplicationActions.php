@@ -35,11 +35,14 @@ use Prc\PostType\ProcedurePostType;
 final class ApplicationActions {
 
 	/**
-	 * Whether {@see purge()} is deleting a brand new application right now.
+	 * The brand new application {@see purge()} is deleting right now; 0 when none.
 	 *
-	 * @var bool
+	 * Es el ID y no un sí o no: un borrado de otra solicitud que se dispare
+	 * entretanto no se salta la regla.
+	 *
+	 * @var int
 	 */
-	private static $purging = false;
+	private static $purging = 0;
 
 	/**
 	 * Meta capacidad: retirar su propia solicitud (quien solicita).
@@ -314,11 +317,11 @@ final class ApplicationActions {
 	 * @return void
 	 */
 	public static function purge( int $application_id ): void {
-		self::$purging = true;
+		self::$purging = $application_id;
 		try {
 			wp_delete_post( $application_id, true );
 		} finally {
-			self::$purging = false;
+			self::$purging = 0;
 		}
 	}
 
@@ -342,7 +345,7 @@ final class ApplicationActions {
 		if ( null !== $delete || ! $post instanceof \WP_Post || ApplicationPostType::POST_TYPE !== $post->post_type ) {
 			return $delete;
 		}
-		if ( self::$purging ) {
+		if ( (int) $post->ID === self::$purging ) {
 			return null;
 		}
 		// Con la papelera desactivada, wp_trash_post() borra para siempre:

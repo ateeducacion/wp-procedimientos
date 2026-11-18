@@ -59,7 +59,6 @@ final class MetaSwap {
 				return array( 'ok' => '' === (string) $res['error'] ) + $res;
 			}
 			if ( self::swap( $post_id, $key, $leido, $res['value'] ) ) {
-				wp_cache_delete( $post_id, 'post_meta' );
 				return array( 'ok' => true ) + $res;
 			}
 		}
@@ -105,6 +104,12 @@ final class MetaSwap {
 			)
 		);
 		wp_cache_delete( $post_id, 'post_meta' );
-		return is_int( $rows ) && $rows > 0;
+		if ( ! is_int( $rows ) || $rows <= 0 ) {
+			return false;
+		}
+		// Lo que haría update_metadata() con `updated_post_meta`: las consultas
+		// en caché que miran metas dejan de valer.
+		wp_cache_set_posts_last_changed();
+		return true;
 	}
 }

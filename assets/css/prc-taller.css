@@ -198,8 +198,6 @@
 .prc-celda-titulo__meta { display: block; margin-top: 2px; font-size: .875rem; color: var(--prc-c-medio); font-weight: 400; }
 .prc-celda-estado .prc-state { white-space: normal; }
 .prc-celda-estado .prc-state__curso { display: inline-block; padding-top: 2px; }
-.prc-tabla--taller .prc-celda-accion .prc-acciones { gap: 6px; margin: 0; flex-wrap: nowrap; }
-.prc-tabla--taller .prc-celda-accion form { margin: 0; }
 
 .prc-ambitos { margin: 0; padding-left: 1.1em; }
 .prc-ambitos li { line-height: var(--prc-i-tabla); }

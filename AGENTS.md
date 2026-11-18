@@ -188,7 +188,7 @@ Ni una capa más. Si crees que hace falta otra, escribe la ADR primero.
 | Tras `make bundle`, con wp-env arrancado | `make snippet-check` (los snippets sobreviven al guardado de Code Snippets) |
 | Un test concreto | `make test FILE=tests/unit/test-procedure-access.php` o `make test FILTER=nombre_del_metodo` |
 | Cambio en `assets/js/` | `make test-js` (Vitest y jsdom, sin wp-env; cobertura en `artifacts/coverage-js/`) |
-| Cambio en una confirmación o en `assets/js/prc-app.js` | `make test-browser` (los tres escalones: SweetAlert2, `confirm()` y sin JavaScript) |
+| Cambio en una confirmación, en `assets/js/prc-app.js` o en el CSS de las pestañas del taller | `make test-browser` (los tres escalones: SweetAlert2, `confirm()` y sin JavaScript; y que las pestañas quepan en una línea a 1200 px y se desplacen en el móvil) |
 | Ver la cobertura | `make coverage` (reinicia wp-env con Xdebug) |
 | Medir el rendimiento o comparar dos ramas | `make profile` y `make profile-compare A=main B=mi-rama` (SPX; skill `profiler`) |
 | Entorno raro | `make clean` |

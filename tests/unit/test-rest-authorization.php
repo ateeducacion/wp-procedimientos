@@ -330,7 +330,16 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame( 400, $direct->get_status() );
-		$published = $this->request( $editor, 'POST', '/wp/v2/prc_procedure/' . $draft->get_data()['id'], array( 'status' => 'publish' ) );
+		$curso     = $this->course( 'Curso de la REST' );
+		$published = $this->request(
+			$editor,
+			'POST',
+			'/wp/v2/prc_procedure/' . $draft->get_data()['id'],
+			array(
+				'status'                    => 'publish',
+				ProcedureTaxonomies::COURSE => array( $curso ),
+			)
+		);
 		$this->assertSame( 200, $published->get_status() );
 		$this->assertSame( array( $area ), wp_get_object_terms( $draft->get_data()['id'], ProcedureTaxonomies::AREA, array( 'fields' => 'ids' ) ) );
 		$admin_response = $this->request(
@@ -338,8 +347,9 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			'POST',
 			'/wp/v2/prc_procedure',
 			array(
-				'title'  => 'Reparación',
-				'status' => 'publish',
+				'title'                     => 'Reparación',
+				'status'                    => 'publish',
+				ProcedureTaxonomies::COURSE => array( $curso ),
 			)
 		);
 		$this->assertSame( 201, $admin_response->get_status() );
@@ -381,7 +391,16 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame( 201, $draft->get_status() );
-		$published = $this->request( $editor, 'POST', '/wp/v2/prc_procedure/' . $draft->get_data()['id'], array( 'status' => 'publish' ) );
+		$curso     = $this->course( 'Curso de la REST' );
+		$published = $this->request(
+			$editor,
+			'POST',
+			'/wp/v2/prc_procedure/' . $draft->get_data()['id'],
+			array(
+				'status'                    => 'publish',
+				ProcedureTaxonomies::COURSE => array( $curso ),
+			)
+		);
 		remove_action( 'transition_post_status', $watch, 10 );
 		$this->assertSame( 200, $published->get_status() );
 		$this->assertSame( array( array( $area ) ), $seen );

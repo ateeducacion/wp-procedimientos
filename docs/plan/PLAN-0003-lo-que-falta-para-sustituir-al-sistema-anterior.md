@@ -702,11 +702,87 @@ acotada para la consulta de solo lectura):
 
 ### PR 8 — Duplicar (`feature/duplicate-procedure`)
 
-- [ ] Operación `duplicate` en el taller: copia datos, preguntas (con claves
-      nuevas), compromisos, especificación de personas y avisos a un borrador.
-- [ ] No copia fechas, enlaces de resolución, solicitudes ni archivado; el
+**Ficheros:**
+- Crear `Domain/ProcedureCopy.php` (puro: qué se lleva el duplicado) y
+  `PublicFront/ProcedureDuplicate.php` (la operación y su aviso): fuera de
+  `ProcedureEditor`, que ya estaba en el tope de métodos de PHPMD.
+- Modificar `Access/ProcedureAccess.php`, `Domain/ProcedureInput.php`,
+  `ProcedureEditor.php` y su vista (botón en la cabecera, aviso de lo que
+  falta para publicar), `Workspace.php` y su vista (columna «Duplicar»),
+  `Notifications/Mailer.php`, `Admin/Settings.php`, `assets/js/prc-app.js`
+  (`data-prc-once`) y `load-order.php`.
+- Pruebas: `test-procedure-copy.php` (dominio y clasificación de metas),
+  `test-duplicate-procedure.php`, `test-publish-guard.php` (escritorio,
+  edición rápida y REST); ampliar `test-procedure-editor.php`,
+  `test-rest-authorization.php`, `tests/js/prc-app.test.js` y
+  `tests/browser/confirmacion.js`.
+
+**Interfaces que produce:**
+- `ProcedureCopy::policy(): array<string, string>` — cada meta del
+  procedimiento con `ProcedureCopy::COPY`, `TRANSFORM` o `NEVER`;
+  `::rule( string $key ): string` (`''` sin clasificar). La prueba
+  `test_every_registered_procedure_meta_is_classified` recorre las metas
+  registradas: **una meta nueva del procedimiento se clasifica aquí**.
+- `ProcedureCopy::meta( array $source, bool $with_js ): array{meta, js_left}`,
+  `::questions( $raw ): array{questions, seq, map}` (claves desde
+  `q1`, filas desde `r1`; `map` es clave vieja => nueva, filas como
+  `q4:r1`), `::people_spec( $raw )` (papeles y grupos renumerados, sin
+  ventana), `::observer_columns( $raw, array $map )` y
+  `::title( string $title )` (sufijo `ProcedureCopy::SUFFIX`, « (copia)»,
+  que no se repite si ya lo lleva).
+- `ProcedureAccess::can_duplicate( int $user_id, int $post_id, ?array &$areas = null ): bool`
+  — abre el original, que no está en la papelera, y puede crear
+  procedimientos; en `$areas`, los ámbitos del duplicado (los del original
+  que puede poner o, si ninguno, el suyo).
+- `ProcedureInput::not_ready( int $course, array $questions ): string[]` —
+  lo que impide publicar: el curso y las entregas sin fechas válidas. El
+  modelo del taller lo da en `not_ready` y apaga `can_publish`; el POST de
+  publicar lo rechaza; el correo de alta lo cuenta (`Mailer::missing()`).
+- **La guarda de publicación** está en `ProcedureAccess`, en las dos
+  costuras que ya tenía: `guard_parent()` (`wp_insert_post_data`: escritorio,
+  edición rápida, `wp_update_post()`; el paso de no publicado a `publish` o
+  `future` se queda en `draft`, con el curso que llegue en `tax_input` o el
+  guardado) y `validate_rest_areas()` (`rest_pre_insert_prc_procedure`:
+  `WP_Error` `prc_not_ready`, 400, con el motivo y el curso de la petición).
+  La decide el privado `is_unready_publication()`. Sin usuario delante
+  —provisión, cron— y en lo ya publicado no actúa.
+- `ProcedureEditor::OP_DUPLICATE` (`duplicate`, nonce propio
+  `nonce_name( 'duplicate' )`), modelo `can_duplicate`;
+  `ProcedureDuplicate::duplicate( int $procedure_id, int $user_id ): array{id, js_left}|\WP_Error`,
+  `::handle()`, `::notice( array $request )`, `NOTICE` (`duplicado`),
+  `ARG_SOURCE` (`origen`), `ARG_NO_JS` (`sin_js`) y `ARG_NO_CONTACTS`
+  (`sin_contactos`); `duplicate()` devuelve también `contacts_left`.
+- Fila de `Workspace::model()`: `can_duplicate`, calculado una vez por
+  persona.
+- `prc-app.js`: un formulario con `data-prc-once` apaga sus botones al
+  enviarse —ya confirmado— y no envía dos veces; sin guion, sí.
+- `ProcedureEditorView::duplicate_question( string $title )`: el texto de la
+  confirmación, el mismo en el taller y en «Gestión».
+- `Settings::scope_diagnostics()` (antes en `ProcedureAccess`, que estaba en
+  el tope de 45 públicos de PHPMD).
+
+**Decisiones:**
+- Se duplica en cualquier estado, también histórico o con el bloqueo de
+  otra persona: el original no se escribe. Emite `prc_procedure_created`.
+- El duplicado: borrador de quien duplica, «<título> (copia)», sin curso,
+  en «Datos» con el aviso. Las entregas con plazo propio quedan sin
+  fechas: el borrador se guarda, y no se publica hasta ponerlas.
+- El JavaScript propio solo se copia con `can_edit_custom_js` sobre el
+  original; si se queda atrás, el aviso lo dice.
+- Con menos ámbitos que el original, los correos de contacto no se copian:
+  el alta no avisa a un ámbito que ya no participa, y el aviso pide
+  indicarlos (el primero es obligatorio para guardar «Datos»).
+- No se publica sin curso ni con entregas sin fechas por ninguna vía; lo
+  ya publicado no se despublica.
+- Sin ADR: no hay decisión de arquitectura nueva; la regla de clasificar
+  cada meta vive en `ProcedureCopy`, en su prueba y en `AGENTS.md`.
+
+- [x] Operación `duplicate` en el taller y en «Gestión»: copia datos,
+      preguntas (con claves nuevas), compromisos, especificación de personas
+      y avisos a un borrador.
+- [x] No copia fechas, enlaces de resolución, solicitudes ni archivado; el
       curso queda vacío para que se elija.
-- [ ] Prueba: el duplicado no comparte ninguna respuesta ni documento.
+- [x] Prueba: el duplicado no comparte ninguna respuesta ni documento.
 
 ### PR 9 — Actuar sobre una solicitud (`feature/application-actions`)
 

@@ -208,6 +208,31 @@ final class ProcedureInput {
 	}
 
 	/**
+	 * What still stops a procedure from being published, in Spanish.
+	 *
+	 * Guardar «Datos» ya pide el curso, y guardar «Preguntas», unas fechas
+	 * válidas para cada entrega con plazo propio; pero un duplicado nace sin
+	 * las dos cosas (PR 8 del PLAN-0003): se puede seguir completando en
+	 * borrador, y no se publica hasta tenerlas.
+	 *
+	 * @param int                              $course    Term ID of prc_course; 0 for none.
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @return string[] Empty when it may be published.
+	 */
+	public static function not_ready( int $course, array $questions ): array {
+		$faltan = array();
+		if ( $course <= 0 ) {
+			$faltan[] = 'Falta el curso: elíjalo en «Datos».';
+		}
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::is_delivery( $pregunta ) && ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
+				$faltan[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+			}
+		}
+		return $faltan;
+	}
+
+	/**
 	 * Positive term IDs, without repeats, in the order they came.
 	 *
 	 * @param mixed $raw Raw value: a list, one ID, or a comma-separated string.

@@ -766,7 +766,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$user  = (int) self::factory()->user->create( array( 'role' => 'editor' ) );
 		$raw   = $area . ',' . $other;
 		update_user_option( $user, ProcedureAccess::USER_AREA_META, $raw );
-		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$rows = array_column( \Prc\Admin\Settings::scope_diagnostics(), null, 'user_id' );
 		$this->assertSame( 'ambiguous', $rows[ $user ]['state'] );
 		$this->assertTrue( $rows[ $user ]['legacy'] );
 		$this->assertSame( $raw, get_user_option( ProcedureAccess::USER_AREA_META, $user ) );
@@ -796,7 +796,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 
 		$this->assertSame( array( $area ), ProcedureAccess::user_areas( $user ) );
 		$this->assertTrue( ProcedureAccess::has_only_global_areas( $user ) );
-		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$rows = array_column( \Prc\Admin\Settings::scope_diagnostics(), null, 'user_id' );
 		$this->assertTrue( $rows[ $user ]['global_only'] );
 	}
 
@@ -810,7 +810,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 
 		$this->assertSame( array( $mine ), ProcedureAccess::user_areas( $user ) );
 		$this->assertFalse( ProcedureAccess::has_only_global_areas( $user ) );
-		$rows = array_column( ProcedureAccess::scope_diagnostics(), null, 'user_id' );
+		$rows = array_column( \Prc\Admin\Settings::scope_diagnostics(), null, 'user_id' );
 		$this->assertFalse( $rows[ $user ]['global_only'] );
 
 		// «Sin ámbito» en este sitio no hereda el de la red: falla en cerrado.

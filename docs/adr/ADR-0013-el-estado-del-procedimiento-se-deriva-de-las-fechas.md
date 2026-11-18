@@ -209,3 +209,17 @@ solicitud, fase 2); **pilotaje → no publicar**.
 - El «hoy» se inyecta, así que el entorno de demostración puede sembrar
   procedimientos en cada estado con fechas relativas al día en que se
   ejecuta `scripts/seed-demo.php`.
+
+## Adenda — 2026-11-11
+
+Un procedimiento sin fecha de inicio del plazo se publicaba igual y se quedaba
+en «Próximo» para siempre: nadie podía solicitar y nadie lo notaba. **Desde
+ahora no se publica sin plazo**: `ProcedureInput::not_ready()` lo exige junto
+al curso y las fechas de las entregas, en el taller, por el escritorio y por la
+REST, y solo en el paso a publicado. El estado sigue sin guardarse, y lo ya
+publicado sin plazo se sigue guardando como estaba. Quien quiera anunciar un
+procedimiento antes pone fechas futuras y lo publica como «Próximo». La pestaña
+«Publicación» lo enseña punto por punto en «Antes de publicar»
+(`ProcedureInput::checklist()`), donde la resolución avisa sin bloquear.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

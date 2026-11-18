@@ -33,6 +33,15 @@ final class ApplicationPeople {
 	public const FIELDS = array( 'id', 'name', 'surname', 'dni', 'email', 'phone', 'role', 'group' );
 
 	/**
+	 * The error keys of a row refused because it clashes with another one.
+	 *
+	 * Solo con estos motivos el aviso habla de otra fila y lleva a ella.
+	 *
+	 * @var string[]
+	 */
+	public const CLASHES = array( 'duplicate', 'same_person', 'unique_group' );
+
+	/**
 	 * One row, normalised: texts trimmed, DNI and email as they are compared.
 	 *
 	 * @param mixed $raw Raw row.
@@ -87,19 +96,27 @@ final class ApplicationPeople {
 	public static function validate( array $spec, array $people, array $row ): array {
 		$spec   = PeopleSpec::sanitize( $spec );
 		$row    = self::row( $row );
-		$otras  = array_values(
-			array_filter(
-				self::rows( $people ),
-				static function ( array $otra ) use ( $row ): bool {
-					return '' === $row['id'] || $otra['id'] !== $row['id'];
-				}
-			)
-		);
 		$errors = self::fields( $spec, $row );
 		if ( array() !== $errors ) {
 			return $errors;
 		}
-		return self::against( $spec, $otras, $row );
+		return self::against( $spec, self::rows( $people ), $row );
+	}
+
+	/**
+	 * The row the new one clashes with: the same person, or the taken role.
+	 *
+	 * Es la fila a la que lleva el aviso: para cambiar a alguien o
+	 * sustituirlo se edita su fila, no se da de alta otra.
+	 *
+	 * @param array<string, mixed>             $spec   Specification of the procedure.
+	 * @param array<int, array<string, mixed>> $people The list as it is now.
+	 * @param array<string, mixed>             $row    The row that was refused.
+	 * @return string The id of that row; empty when there is none.
+	 */
+	public static function clash( array $spec, array $people, array $row ): string {
+		$choque = self::conflict( PeopleSpec::sanitize( $spec ), self::rows( $people ), self::row( $row ) );
+		return null === $choque ? '' : (string) $choque['row']['id'];
 	}
 
 	/**
@@ -121,7 +138,7 @@ final class ApplicationPeople {
 		);
 		if ( array() !== $papel ) {
 			$grupo           = '' === $row['group'] || array() !== self::find( $spec['groups'], $row['group'] );
-			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que este papel exige' );
+			$checks['group'] = array( $grupo && ( '' !== $row['group'] || empty( $papel['needs_group'] ) ), 'el grupo, que el papel «' . $papel['label'] . '» exige (por ejemplo, el eje)' );
 		}
 		$out = array();
 		foreach ( $checks as $clave => list( $bien, $texto ) ) {
@@ -135,25 +152,122 @@ final class ApplicationPeople {
 	/**
 	 * What is wrong with a row against the rest of the list.
 	 *
-	 * @param array<string, mixed>             $spec  Normalised specification.
-	 * @param array<int, array<string, mixed>> $otras The other rows.
-	 * @param array<string, mixed>             $row   Normalised row.
+	 * @param array<string, mixed>             $spec   Normalised specification.
+	 * @param array<int, array<string, mixed>> $people The whole list, the row itself included if it is there.
+	 * @param array<string, mixed>             $row    Normalised row.
 	 * @return array<string, string>
 	 */
-	private static function against( array $spec, array $otras, array $row ): array {
-		foreach ( $otras as $otra ) {
-			$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
-			if ( $mismo_sitio && $otra['dni'] === $row['dni'] ) {
-				return array( 'duplicate' => 'Esa persona ya está en la lista con el mismo papel y grupo.' );
-			}
-			if ( $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ) {
-				return array( 'unique_group' => 'Ese papel ya lo tiene otra persona en ese grupo: solo cabe una por papel y grupo.' );
-			}
+	private static function against( array $spec, array $people, array $row ): array {
+		$choque = self::conflict( $spec, $people, $row );
+		if ( null !== $choque ) {
+			$quien  = trim( $choque['row']['name'] . ' ' . $choque['row']['surname'] );
+			$donde  = 'use «Sustituir o corregir» en su fila.';
+			$textos = array(
+				'duplicate'    => 'Esa persona ya está en la lista con el mismo papel y grupo.',
+				'same_person'  => $quien . ' ya está en la lista como «' . self::place( $spec, $choque['row'] ) . '». Para cambiarle el papel o sustituirla, ' . $donde,
+				'unique_group' => 'Ese papel ya lo tiene ' . $quien . ' en ese grupo, y solo cabe una persona por papel y grupo. Para sustituirla, ' . $donde,
+			);
+			return array( $choque['error'] => $textos[ $choque['error'] ] );
 		}
-		if ( '' === $row['id'] && count( $otras ) + 1 > (int) $spec['max'] ) {
-			return array( 'max' => 'La lista ya tiene ' . count( $otras ) . ' personas, que es el máximo que admite este procedimiento.' );
+		$otras = count( self::others( $people, $row ) );
+		if ( '' === $row['id'] && $otras + 1 > (int) $spec['max'] ) {
+			return array( 'max' => 'La lista ya tiene ' . $otras . ' personas, que es el máximo que admite este procedimiento.' );
 		}
 		return array();
+	}
+
+	/**
+	 * The first row the new one clashes with, and why.
+	 *
+	 * La misma persona con el mismo papel y grupo no entra nunca; con otro
+	 * papel u otro grupo, solo si el procedimiento lo permite
+	 * («Una persona puede tener varios papeles»). Una fila que ya estaba así
+	 * guardada —una lista de antes de la regla— se sigue editando: solo se
+	 * rechaza lo que el cambio trae nuevo.
+	 *
+	 * @param array<string, mixed>             $spec   Normalised specification.
+	 * @param array<int, array<string, mixed>> $people The whole list.
+	 * @param array<string, mixed>             $row    Normalised row.
+	 * @return array{error:string, row:array<string, string>}|null
+	 */
+	private static function conflict( array $spec, array $people, array $row ): ?array {
+		$ya_era = self::was_already( $people, $row );
+		foreach ( self::others( $people, $row ) as $otra ) {
+			$error = self::clash_kind( $spec, $otra, $row, $ya_era );
+			if ( '' !== $error ) {
+				return array(
+					'error' => $error,
+					'row'   => $otra,
+				);
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Why the new row clashes with another one, if it does.
+	 *
+	 * @param array<string, mixed> $spec   Normalised specification.
+	 * @param array<string, mixed> $otra   Another row of the list.
+	 * @param array<string, mixed> $row    Normalised row.
+	 * @param bool                 $ya_era Whether the row was already stored like this.
+	 * @return string `duplicate`, `same_person`, `unique_group`, or empty.
+	 */
+	private static function clash_kind( array $spec, array $otra, array $row, bool $ya_era ): string {
+		$mismo_sitio = $otra['role'] === $row['role'] && $otra['group'] === $row['group'];
+		$misma       = $otra['dni'] === $row['dni'];
+		if ( $mismo_sitio && $misma ) {
+			return 'duplicate';
+		}
+		if ( $misma && ! $spec['multi_role'] && ! $ya_era ) {
+			return 'same_person';
+		}
+		return $mismo_sitio && $spec['unique_per_group'] && '' !== $row['group'] ? 'unique_group' : '';
+	}
+
+	/**
+	 * Whether the row is being edited without touching its person, role or group.
+	 *
+	 * @param array<int, array<string, mixed>> $people The whole list.
+	 * @param array<string, mixed>             $row    Normalised row.
+	 * @return bool
+	 */
+	private static function was_already( array $people, array $row ): bool {
+		foreach ( $people as $fila ) {
+			if ( '' !== $row['id'] && $fila['id'] === $row['id'] ) {
+				return $fila['dni'] === $row['dni'] && $fila['role'] === $row['role'] && $fila['group'] === $row['group'];
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The other rows of the list: all but the one being edited.
+	 *
+	 * @param array<int, array<string, mixed>> $people The whole list.
+	 * @param array<string, mixed>             $row    Normalised row.
+	 * @return array<int, array<string, mixed>>
+	 */
+	private static function others( array $people, array $row ): array {
+		return array_values(
+			array_filter(
+				$people,
+				static function ( array $otra ) use ( $row ): bool {
+					return '' === $row['id'] || $otra['id'] !== $row['id'];
+				}
+			)
+		);
+	}
+
+	/**
+	 * Role and group of a row, by their labels: «Participante · Eje 1».
+	 *
+	 * @param array<string, mixed> $spec Specification.
+	 * @param array<string, mixed> $row  Row.
+	 * @return string
+	 */
+	private static function place( array $spec, array $row ): string {
+		return implode( ' · ', array_filter( array( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ), PeopleSpec::label( $spec, 'groups', (string) $row['group'] ) ), 'strlen' ) );
 	}
 
 	/**

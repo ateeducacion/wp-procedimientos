@@ -49,7 +49,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		add_filter( 'pre_wp_mail', '__return_true' );
 		foreach ( array(
 			ApplyForm::class  => array( 'rejected' ),
-			PeopleForm::class => array( 'rejected', 'rejected_row', 'stale' ),
+			PeopleForm::class => array( 'rejected', 'rejected_row', 'stale', 'clash' ),
 		) as $clase => $estaticas ) {
 			\Closure::bind(
 				static function () use ( $estaticas ): void {
@@ -181,7 +181,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'id="' . PeopleForm::ANCHOR . '"', $html );
 		$this->assertStringContainsString( 'PERSONAS QUE PARTICIPAN', $html );
 		$this->assertStringContainsString( 'Dar de alta a una persona', $html );
-		$this->assertStringContainsString( 'Cambiar o sustituir', $html );
+		$this->assertStringContainsString( 'Sustituir o corregir', $html );
 		$this->assertStringContainsString( 'data-prc-confirm="¿Dar de baja a Ana Pérez de la lista de personas?', $html, 'la baja pide confirmación' );
 		$this->assertStringContainsString( 'Participante', $html, 'el papel, por su rótulo' );
 		$this->assertStringContainsString( 'queda incompleta', $html, 'una de dos: incompleta, no rechazada' );
@@ -413,5 +413,83 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertSame( 1, $filas[ (string) $con ]['people_count'] );
 		$this->assertSame( '', $filas[ (string) $sin ]['people_url'] );
 		$this->assertStringContainsString( 'Falta 1 persona', MyCentre::render() );
+	}
+
+	/**
+	 * Cada fila tiene «Sustituir o corregir» a la vista, con su ancla, y
+	 * encima del alta se recuerda que sustituir es editar la fila.
+	 */
+	public function test_each_row_offers_to_replace_it() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		$this->acting_as( $director );
+
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '<tr id="prc-persona-' . $fila['id'] . '">', $html );
+		$this->assertMatchesRegularExpression( '/<summary class="[^"]*btn[^"]*">Sustituir o corregir<\/summary>/', $html );
+		$this->assertStringContainsString( '¿Viene a sustituir a alguien de la lista? Use «Sustituir o corregir» en su fila', $html );
+		$this->assertStringContainsString( 'Grupo (obligatorio para: Participante)', $html );
+	}
+
+	/**
+	 * Dar de alta a quien ya está, o en un papel ocupado, lleva a su fila y
+	 * la abre.
+	 */
+	public function test_a_clash_takes_to_the_row() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		$this->acting_as( $director );
+
+		$url = $this->enviar(
+			array(
+				PeopleForm::FIELD_OP          => PeopleForm::OP_ADD,
+				PeopleForm::FIELD_APPLICATION => (string) $solicitud,
+				PeopleForm::FIELD_PERSON      => $this->persona(
+					array(
+						'role'  => 'r1',
+						'group' => '',
+					)
+				),
+			)
+		);
+		$this->assertNull( $url );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( 'ya está en la lista como «Participante · Eje 1»', $html );
+		$this->assertStringContainsString( 'href="#prc-persona-' . $fila['id'] . '">Ir a su fila</a>', $html );
+		$this->assertMatchesRegularExpression( '/<tr id="prc-persona-' . $fila['id'] . '">.*<details class="prc-personas__cambio" open>/sU', $html );
+		$this->assertCount( 1, People::of( $solicitud ) );
+	}
+
+	/**
+	 * Rechazado por otro motivo —aquí, un papel que exige grupo y llega sin
+	 * él—, no se lleva a la fila de quien tiene el mismo DNI: el aviso no
+	 * habla de ella.
+	 */
+	public function test_a_refusal_that_is_not_a_clash_does_not_take_to_a_row() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		People::add( $solicitud, $director, $this->persona() );
+		$fila = People::of( $solicitud )[0];
+		$this->acting_as( $director );
+
+		$url = $this->enviar(
+			array(
+				PeopleForm::FIELD_OP          => PeopleForm::OP_ADD,
+				PeopleForm::FIELD_APPLICATION => (string) $solicitud,
+				PeopleForm::FIELD_PERSON      => $this->persona( array( 'group' => '' ) ),
+			)
+		);
+		$this->assertNull( $url );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( 'el grupo, que el papel «Participante» exige', $html );
+		$this->assertStringNotContainsString( 'Ir a su fila', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<tr id="prc-persona-' . $fila['id'] . '">.*<details class="prc-personas__cambio" open>/sU', $html );
 	}
 }

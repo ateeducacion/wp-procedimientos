@@ -50,7 +50,7 @@ final class ApplicationActionsView {
 					<?php wp_nonce_field( (string) $w['nonce_action'], WithdrawForm::NONCE_FIELD, false ); ?>
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_OP ); ?>" value="<?php echo esc_attr( WithdrawForm::OP_WITHDRAW ); ?>" />
 					<input type="hidden" name="<?php echo esc_attr( WithdrawForm::FIELD_APPLICATION ); ?>" value="<?php echo esc_attr( (string) (int) $w['application'] ); ?>" />
-					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button>
+					<button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button>
 				</form>
 			<?php else : ?>
 				<p><?php echo esc_html( (string) $w['why'] ); ?></p>
@@ -319,7 +319,7 @@ final class ApplicationActionsView {
 					<textarea class="prc-control" id="prc-motivo-<?php echo esc_attr( (string) $id ); ?>" name="<?php echo esc_attr( ApplicationActionsPanel::FIELD_REASON ); ?>" rows="2" required></textarea>
 					<p class="prc-campo__ayuda">Obligatorio: queda en el historial de la solicitud. Úselo para lo que se presentó por error; para decir que no se admite, está «Excluida».</p>
 				</div>
-				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Retirar la solicitud</button></p>
+				<p class="prc-acciones"><button class="<?php echo esc_attr( Assets::button_class( 'danger' ) ); ?>" type="submit">Retirar la solicitud</button></p>
 			</form>
 		</details>
 		<?php

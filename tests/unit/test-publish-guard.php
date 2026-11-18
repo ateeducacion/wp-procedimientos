@@ -50,7 +50,7 @@ class Test_Publish_Guard extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Un ámbito, quien lo gestiona y un borrador suyo, sin curso.
+	 * Un ámbito, quien lo gestiona y un borrador suyo, sin curso y con plazo.
 	 *
 	 * @param array<string, mixed> $meta Meta of the procedure.
 	 * @return array{0:int, 1:int} Manager, procedure.
@@ -58,6 +58,7 @@ class Test_Publish_Guard extends WP_UnitTestCase {
 	private function borrador( array $meta = array() ): array {
 		$area = $this->area( 'Área de prueba' );
 		$uid  = $this->manager( array( $area ) );
+		$meta = array_merge( array( ProcedureMetaKeys::OPENS_AT => gmdate( 'Y-m-d', strtotime( '+10 days' ) ) ), $meta );
 		return array( $uid, $this->procedure( $uid, array( $area ), $meta, array( 'post_status' => 'draft' ) ) );
 	}
 
@@ -171,8 +172,39 @@ class Test_Publish_Guard extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Lo que ya está publicado sin curso se sigue guardando publicado: la
-	 * guarda solo mira el paso a publicado.
+	 * Con curso pero sin plazo de solicitud, tampoco: se quedaría en «Próximo»
+	 * para siempre. Con el plazo puesto, sí.
+	 */
+	public function test_without_an_application_window_it_stays_a_draft() {
+		list( $uid, $id ) = $this->borrador( array( ProcedureMetaKeys::OPENS_AT => '' ) );
+		wp_set_object_terms( $id, array( $this->course() ), ProcedureTaxonomies::COURSE );
+		$this->acting_as( $uid );
+
+		wp_update_post(
+			array(
+				'ID'          => $id,
+				'post_status' => 'publish',
+			)
+		);
+		$this->assertSame( 'draft', get_post_status( $id ) );
+
+		$respuesta = $this->rest( $uid, '/wp/v2/prc_procedure/' . $id, array( 'status' => 'publish' ) );
+		$this->assertSame( 400, $respuesta->get_status() );
+		$this->assertStringContainsString( 'Falta el plazo de solicitud', $respuesta->get_data()['message'] );
+
+		update_post_meta( $id, ProcedureMetaKeys::OPENS_AT, gmdate( 'Y-m-d', strtotime( '+30 days' ) ) );
+		wp_update_post(
+			array(
+				'ID'          => $id,
+				'post_status' => 'publish',
+			)
+		);
+		$this->assertSame( 'publish', get_post_status( $id ), 'con fechas futuras se publica, como «Próximo»' );
+	}
+
+	/**
+	 * Lo que ya está publicado sin curso ni plazo se sigue guardando
+	 * publicado: la guarda solo mira el paso a publicado.
 	 */
 	public function test_a_published_procedure_without_course_is_not_unpublished() {
 		$area = $this->area( 'Área de prueba' );
@@ -237,7 +269,9 @@ class Test_Publish_Guard extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Crear publicado por la REST sin curso tampoco, ni siquiera administración.
+	 * Crear publicado por la REST tampoco, ni siquiera administración: sin
+	 * curso, o, con él, sin plazo, que la REST no escribe. Se crea en
+	 * borrador, se le ponen las fechas en el taller y se publica.
 	 */
 	public function test_rest_creation_as_published_needs_a_course() {
 		$admin = $this->administrator();
@@ -282,8 +316,9 @@ class Test_Publish_Guard extends WP_UnitTestCase {
 				ProcedureTaxonomies::COURSE => array( $this->course() ),
 			)
 		);
-		$this->assertSame( 201, $respuesta->get_status() );
-		$this->assertSame( 'publish', get_post_status( $respuesta->get_data()['id'] ) );
+		$this->assertSame( 400, $respuesta->get_status() );
+		$this->assertStringContainsString( 'Falta el plazo de solicitud', $respuesta->get_data()['message'] );
+		$this->assertStringNotContainsString( 'curso', $respuesta->get_data()['message'] );
 	}
 
 	/**

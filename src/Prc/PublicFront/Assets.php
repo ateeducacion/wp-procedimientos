@@ -253,11 +253,19 @@ final class Assets {
 	 * Bootstrap para que el botón sea el del resto del sitio. Sin Bootstrap,
 	 * las clases sobrantes no hacen nada.
 	 *
-	 * @param bool $primary Whether this is the primary action.
+	 * Tres variantes: la principal (`true`), la secundaria (por defecto) y la
+	 * de peligro (`'danger'`), para lo destructivo o difícil de deshacer
+	 * —retirar, devolver a borrador, cerrar, marcar como histórico—, que
+	 * siempre lleva su consecuencia escrita al lado.
+	 *
+	 * @param bool|string $variant True for the primary action, 'danger' for a destructive one.
 	 * @return string
 	 */
-	public static function button_class( bool $primary = false ): string {
-		return $primary
+	public static function button_class( $variant = false ): string {
+		if ( 'danger' === $variant ) {
+			return 'prc-btn prc-btn-borrar btn btn-outline-danger';
+		}
+		return true === $variant
 			? 'prc-btn prc-btn-primary btn btn-primary'
 			: 'prc-btn btn btn-light';
 	}

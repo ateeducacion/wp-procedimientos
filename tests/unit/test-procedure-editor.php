@@ -229,7 +229,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertTrue( $m['can_edit'] );
 		$this->assertTrue( $m['can_review'] );
 		$this->assertFalse( $m['can_publish'], 'ya está publicado' );
-		$this->assertTrue( $m['can_archive'] );
+		$this->assertFalse( $m['can_archive'], 'vivo no se marca como histórico' );
 		$this->assertSame( 'Área de prueba', $m['area_names'] );
 		$this->assertSame( array(), $m['applications'], 'la tabla solo se carga en su pestaña' );
 
@@ -866,6 +866,38 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con la lista de «Personas» recogiendo la coordinación, «Datos» no la
+	 * pide también: se rechaza y lo dice. «No se piden» se guarda, y la ayuda
+	 * remite a «Personas» para varios papeles o ejes.
+	 */
+	public function test_datos_does_not_ask_for_coordination_the_list_collects() {
+		list( $area, $uid, $id ) = $this->mio(
+			array(
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación general',
+						),
+					),
+					'min'     => 1,
+				),
+			)
+		);
+		$curso                   = $this->course( '2027-2028' );
+
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) ) );
+		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+		$m = $this->modelo( $id );
+		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Personas»', $m['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'none' ) ) ) );
+		$this->assertStringContainsString( 'Si necesita varios papeles o ejes', ProcedureEditorView::html( $this->modelo( $id ) ) );
+	}
+
+	/**
 	 * El radio manda sobre el número: «ninguna» y «una» no dependen de lo que
 	 * quede en el desplegable, y «varias» nunca guarda menos de dos.
 	 */
@@ -1165,7 +1197,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * Publicar, marcar como histórico y desmarcar: lo último, solo administración.
 	 */
 	public function test_publish_archive_and_unarchive() {
-		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OPENS_AT => $this->dia( '+10 days' ) ), array( 'post_status' => 'draft' ) );
 		$this->acting_as( $uid );
 
 		// Sin curso no se publica: no se ofrece ni se acepta (PR 8 del PLAN-0003).
@@ -1184,6 +1216,15 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 'publicado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 		$this->assertFalse( $this->modelo( $procedimiento )['can_publish'] );
 
+		// Vivo —«Próximo»— no se marca como histórico, y se dice por qué.
+		$this->assertFalse( $this->modelo( $procedimiento )['can_archive'] );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_ARCHIVE, $procedimiento ) );
+		$this->assertFalse( ProcedureAccess::is_archived( $procedimiento ) );
+		$this->assertStringContainsString( 'Solo se marca como histórico un procedimiento cerrado o resuelto', $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH )['flash']['texto'] );
+		$this->olvidar_rechazo();
+
+		update_post_meta( $procedimiento, ProcedureMetaKeys::APPLICATIONS_CLOSED, true );
+		$this->assertTrue( $this->modelo( $procedimiento )['can_archive'] );
 		$url = $this->submit( $uid, ProcedureEditor::OP_ARCHIVE, $procedimiento );
 		$this->assertTrue( ProcedureAccess::is_archived( $procedimiento ) );
 		$this->assertSame( 'archivado', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
@@ -1319,6 +1360,45 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	// ─── permisos, nonces y bloqueo ────────────────────────────────────────
+
+	/**
+	 * El rechazo de «Marcar como histórico».
+	 *
+	 * @return string
+	 */
+	private function rechazo(): string {
+		return (string) \Closure::bind(
+			static function (): string {
+				return self::$rejected;
+			},
+			null,
+			ProcedureEditor::class
+		)();
+	}
+
+	/**
+	 * Quien gestiona otro ámbito oye «no es suyo», no el estado de un
+	 * procedimiento ajeno; con el propio vivo, oye por qué no se marca. En
+	 * ningún caso se escribe la marca.
+	 */
+	public function test_archiving_a_procedure_of_another_area_says_it_is_not_yours() {
+		list( , , $procedimiento ) = $this->mio( array( ProcedureMetaKeys::APPLICATIONS_CLOSED => true ) );
+		$ajena                     = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
+
+		$this->assertNull( $this->submit( $ajena, ProcedureEditor::OP_ARCHIVE, $procedimiento ) );
+		$this->assertStringContainsString( 'no es suyo: solo lo marca', $this->rechazo() );
+		$this->assertStringNotContainsString( 'cerrado o resuelto', $this->rechazo() );
+		$this->assertFalse( ProcedureAccess::is_archived( $procedimiento ) );
+		$this->assertFalse( metadata_exists( 'post', $procedimiento, ProcedureMetaKeys::ARCHIVED ) );
+		$this->olvidar_rechazo();
+
+		list( , $propio, $vivo ) = $this->mio();
+		$this->assertNull( $this->submit( $propio, ProcedureEditor::OP_ARCHIVE, $vivo ) );
+		$this->assertStringContainsString( 'Solo se marca como histórico un procedimiento cerrado o resuelto', $this->rechazo() );
+		$this->assertStringNotContainsString( 'no es suyo', $this->rechazo() );
+		$this->assertFalse( ProcedureAccess::is_archived( $vivo ) );
+		$this->assertFalse( metadata_exists( 'post', $vivo, ProcedureMetaKeys::ARCHIVED ) );
+	}
 
 	/**
 	 * Sin permiso sobre el procedimiento no se muta NADA.
@@ -1709,7 +1789,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		}
 
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
-		$this->assertStringContainsString( 'Marcar como histórico', $html );
+		$this->assertStringNotContainsString( 'Marcar como histórico</button>', $html, 'vivo no se ofrece marcarlo' );
 		$this->assertStringContainsString( 'Cerrar solicitudes ahora', $html );
 		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
@@ -1723,7 +1803,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * abre en solo lectura y administración ve el recuadro para reabrirlo.
 	 */
 	public function test_the_empty_the_draft_and_the_archived_screens() {
-		list( , $uid, $procedimiento ) = $this->mio( array(), array( 'post_status' => 'draft' ) );
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OPENS_AT => $this->dia( '+10 days' ) ), array( 'post_status' => 'draft' ) );
 		wp_set_object_terms( $procedimiento, array( $this->course() ), ProcedureTaxonomies::COURSE );
 		$this->acting_as( $uid );
 

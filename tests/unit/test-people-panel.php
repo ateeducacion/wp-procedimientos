@@ -113,7 +113,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$_GET[ ProcedureEditor::ARG_PROCEDURE ] = (string) $procedimiento;
 		$_GET[ ProcedureEditor::ARG_PANEL ]     = ProcedureEditor::PANEL_PEOPLE;
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '"', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[0]"', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_PEOPLE_SPEC . '"', $html );
 		$this->assertStringContainsString( '>Personas', $html, 'la pestaña' );
 
@@ -281,5 +281,191 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Alta en la lista de personas', $html );
 		$this->assertStringNotContainsString( 'prc-personas-revision', $html );
 		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
+	}
+
+	/**
+	 * La pestaña, pintada.
+	 *
+	 * @param int $uid          Who looks.
+	 * @param int $procedure_id Procedure.
+	 * @return string
+	 */
+	private function pestana( int $uid, int $procedure_id ): string {
+		$this->acting_as( $uid );
+		$_GET = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $procedure_id,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_PEOPLE,
+		);
+		return ProcedureEditorView::html( ProcedureEditor::model() );
+	}
+
+	/**
+	 * Un papel por fila, con la casilla «Exige grupo», y dos filas en blanco
+	 * para añadir; lo guardado como «| grupo» sale marcado.
+	 */
+	public function test_each_role_is_a_row_with_its_group_checkbox() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->guardar( $uid, $procedimiento, $this->campos() );
+
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[0]" value="Coordinación"', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[1]" value="Participante"', $html );
+		$this->assertMatchesRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[1\]" value="1" checked/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[0\]" value="1" checked/', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[3]" value=""', $html, 'dos filas en blanco' );
+		$this->assertStringNotContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[4]"', $html );
+		$this->assertStringContainsString( 'Exige indicar el grupo', $html );
+		$this->assertStringContainsString( '<label for="prc-people-role-1-grupo"><span class="screen-reader-text">Papel 2: </span>Exige indicar el grupo</label>', $html, 'cada casilla dice de qué papel es' );
+		$this->assertStringContainsString( 'Coordinación de eje', $html, 'el ejemplo de la ayuda' );
+	}
+
+	/**
+	 * Las filas se guardan como el texto de antes: el papel con la casilla
+	 * marcada exige grupo; uno en blanco no cuenta.
+	 */
+	public function test_role_rows_are_saved_with_their_group_mark() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$url                           = $this->guardar(
+			$uid,
+			$procedimiento,
+			$this->campos(
+				array(
+					PeopleSpecPanel::FIELD_ROLES      => array( 'Coordinación general', 'Coordinación de eje', '' ),
+					PeopleSpecPanel::FIELD_ROLE_GROUP => array( 1 => '1' ),
+				)
+			)
+		);
+		$this->assertNotNull( $url );
+		$spec = People::spec( $procedimiento );
+		$this->assertSame( array( 'Coordinación general', 'Coordinación de eje' ), array_column( $spec['roles'], 'label' ) );
+		$this->assertSame( array( false, true ), array_column( $spec['roles'], 'needs_group' ) );
+	}
+
+	/**
+	 * Un guardado rechazado repinta los papeles en su mismo índice, con la
+	 * fila en blanco del medio; reenviarlo corregido deja a cada papel con su
+	 * clave: el renombrado conserva la suya y el quitado desaparece.
+	 */
+	public function test_a_refused_save_keeps_blank_role_rows_in_place() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => "Coordinación\nApoyo\nParticipante | grupo" ) ) );
+		$this->assertSame( array( 'r1', 'r2', 'r3' ), array_column( People::spec( $procedimiento )['roles'], 'key' ) );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		$alta      = People::add(
+			$solicitud,
+			$director,
+			array(
+				'name'    => 'Ana',
+				'surname' => 'Pérez',
+				'dni'     => '12345678Z',
+				'email'   => 'ana@example.org',
+				'role'    => 'r3',
+				'group'   => 'g1',
+			)
+		);
+		$this->assertTrue( $alta['ok'], $alta['error'] );
+
+		$filas = array(
+			PeopleSpecPanel::FIELD_ROLES      => array( 'Coordinación', '', 'Participante de eje', '', '' ),
+			PeopleSpecPanel::FIELD_ROLE_GROUP => array( 2 => '1' ),
+		);
+		$this->assertNull(
+			$this->guardar(
+				$uid,
+				$procedimiento,
+				$this->campos(
+					$filas + array(
+						PeopleSpecPanel::FIELD_MIN => '5',
+						PeopleSpecPanel::FIELD_MAX => '2',
+					)
+				)
+			)
+		);
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[1]" value=""', $html, 'la fila en blanco sigue en su sitio' );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[2]" value="Participante de eje"', $html );
+
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos( $filas ) ) );
+		$spec = People::spec( $procedimiento );
+		$this->assertSame( array( 'r1', 'r3' ), array_column( $spec['roles'], 'key' ) );
+		$this->assertSame( array( 'Coordinación', 'Participante de eje' ), array_column( $spec['roles'], 'label' ) );
+	}
+
+	/**
+	 * Tras un rechazo, cada papel tecleado vuelve en su fila con su casilla
+	 * «Exige indicar el grupo», sin que la marca salte a otro papel.
+	 */
+	public function test_a_refused_save_repaints_role_rows_and_group_marks_by_position() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$campos                        = $this->campos(
+			array(
+				PeopleSpecPanel::FIELD_ROLES      => array( 'A', '', 'C' ),
+				PeopleSpecPanel::FIELD_ROLE_GROUP => array( 2 => '1' ),
+				PeopleSpecPanel::FIELD_MIN        => '5',
+				PeopleSpecPanel::FIELD_MAX        => '2',
+			)
+		);
+		$this->assertNull( $this->guardar( $uid, $procedimiento, $campos ) );
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[0]" value="A"', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[1]" value=""', $html );
+		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[2]" value="C"', $html );
+		$this->assertMatchesRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[2\]" value="1" checked/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[0\]" value="1" checked/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/name="' . PeopleSpecPanel::FIELD_ROLE_GROUP . '\[1\]" value="1" checked/', $html );
+	}
+
+	/**
+	 * Uno nuevo empieza con «Una sola persona por papel y grupo» marcada y
+	 * con un papel por persona; lo guardado manda.
+	 */
+	public function test_new_lists_start_with_one_person_per_role_and_group() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$html                          = $this->pestana( $uid, $procedimiento );
+		$this->assertMatchesRegularExpression( '/id="' . PeopleSpecPanel::FIELD_UNIQUE . '" name="' . PeopleSpecPanel::FIELD_UNIQUE . '" value="1" checked/', $html );
+		$this->assertStringContainsString( 'Una persona puede tener varios papeles', $html );
+		$this->assertDoesNotMatchRegularExpression( '/id="' . PeopleSpecPanel::FIELD_MULTI_ROLE . '" name="' . PeopleSpecPanel::FIELD_MULTI_ROLE . '" value="1" checked/', $html );
+
+		$this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_MULTI_ROLE => '1' ) ) );
+		$spec = People::spec( $procedimiento );
+		$this->assertFalse( $spec['unique_per_group'], 'desmarcada y guardada, se queda desmarcada' );
+		$this->assertTrue( $spec['multi_role'] );
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertDoesNotMatchRegularExpression( '/id="' . PeopleSpecPanel::FIELD_UNIQUE . '" name="' . PeopleSpecPanel::FIELD_UNIQUE . '" value="1" checked/', $html );
+	}
+
+	/**
+	 * La coordinación no se pide en dos sitios: con «Datos» pidiéndola, la
+	 * lista no se enciende para recogerla, y al revés. Lo que ya estaba así
+	 * se sigue guardando.
+	 */
+	public function test_coordination_is_not_asked_in_both_places() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
+		// La lista recoge la coordinación cuando todos sus papeles la nombran.
+		$this->assertNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => 'Coordinación' ) ) ) );
+		$this->assertFalse( People::spec( $procedimiento )['enabled'] );
+		$html = $this->pestana( $uid, $procedimiento );
+		$this->assertStringContainsString( 'En «Datos» se piden personas coordinadoras', $html );
+
+		// Con un papel que no es de coordinación, la lista no la recoge: no hay choque.
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos() ) );
+
+		// Un procedimiento de antes con las dos cosas se sigue guardando.
+		update_post_meta(
+			$procedimiento,
+			ProcedureMetaKeys::PEOPLE_SPEC,
+			array(
+				'enabled' => true,
+				'roles'   => array(
+					array(
+						'key'   => 'r1',
+						'label' => 'Coordinación',
+					),
+				),
+				'min'     => 1,
+			)
+		);
+		$this->assertNotNull( $this->guardar( $uid, $procedimiento, $this->campos( array( PeopleSpecPanel::FIELD_ROLES => 'Coordinación' ) ) ) );
 	}
 }

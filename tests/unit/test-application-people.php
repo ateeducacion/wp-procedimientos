@@ -498,16 +498,117 @@ class Test_Application_People extends WP_UnitTestCase {
 	}
 
 	/**
-	 * La misma persona (DNI) con el mismo papel y grupo, rechazada; con otro
-	 * grupo, admitida.
+	 * La misma persona (DNI) con el mismo papel y grupo, rechazada siempre;
+	 * con otro grupo u otro papel, rechazada salvo que el procedimiento
+	 * admita varios papeles por persona.
 	 */
 	public function test_the_same_person_with_the_same_role_and_group_is_refused() {
 		$spec  = $this->spec();
 		$lista = array( ApplicationPeople::row( $this->fila( array( 'id' => 'a1' ) ) ) );
 		$this->assertArrayHasKey( 'duplicate', ApplicationPeople::validate( $spec, $lista, ApplicationPeople::row( $this->fila( array( 'dni' => '12345678z' ) ) ) ) );
-		$this->assertSame( array(), ApplicationPeople::validate( $spec, $lista, ApplicationPeople::row( $this->fila( array( 'group' => 'g2' ) ) ) ) );
+		$this->assertArrayHasKey( 'duplicate', ApplicationPeople::validate( $this->spec( array( 'multi_role' => true ) ), $lista, ApplicationPeople::row( $this->fila() ) ) );
+		$this->assertSame( array(), ApplicationPeople::validate( $this->spec( array( 'multi_role' => true ) ), $lista, ApplicationPeople::row( $this->fila( array( 'group' => 'g2' ) ) ) ) );
 		// Editar la propia fila no choca consigo misma.
 		$this->assertSame( array(), ApplicationPeople::validate( $spec, $lista, ApplicationPeople::row( $this->fila( array( 'id' => 'a1' ) ) ) ) );
+	}
+
+	/**
+	 * La misma persona con otro papel: se rechaza diciendo con qué papel ya
+	 * está y dónde se cambia. La casilla «Una persona puede tener varios
+	 * papeles» lo permite.
+	 */
+	public function test_the_same_person_with_another_role_is_refused_unless_allowed() {
+		$spec  = $this->spec();
+		$lista = array( ApplicationPeople::row( $this->fila( array( 'id' => 'a1' ) ) ) );
+		$otra  = ApplicationPeople::row(
+			$this->fila(
+				array(
+					'role'  => 'r1',
+					'group' => '',
+				)
+			)
+		);
+		$this->assertSame(
+			array( 'same_person' => 'Ana Pérez Díaz ya está en la lista como «Participante · Eje 1». Para cambiarle el papel o sustituirla, use «Sustituir o corregir» en su fila.' ),
+			ApplicationPeople::validate( $spec, $lista, $otra )
+		);
+		$this->assertSame( 'a1', ApplicationPeople::clash( $spec, $lista, $otra ) );
+		$this->assertSame( array(), ApplicationPeople::validate( $this->spec( array( 'multi_role' => true ) ), $lista, $otra ) );
+		$this->assertSame( '', ApplicationPeople::clash( $this->spec( array( 'multi_role' => true ) ), $lista, $otra ) );
+		$this->assertTrue( PeopleSpec::sanitize( array( 'multi_role' => '1' ) )['multi_role'] );
+		$this->assertFalse( PeopleSpec::sanitize( array() )['multi_role'], 'por defecto, un papel por persona' );
+	}
+
+	/**
+	 * Una lista de antes con la misma persona dos veces se sigue editando: la
+	 * fila que ya era así no se rechaza por el otro papel; cambiarle el DNI a
+	 * uno que ya está, sí.
+	 */
+	public function test_an_old_list_with_the_same_person_twice_still_saves() {
+		$spec     = $this->spec();
+		$lista    = array(
+			ApplicationPeople::row( $this->fila( array( 'id' => 'a1' ) ) ),
+			ApplicationPeople::row(
+				$this->fila(
+					array(
+						'id'    => 'a2',
+						'role'  => 'r1',
+						'group' => '',
+					)
+				)
+			),
+		);
+		$telefono = ApplicationPeople::row(
+			$this->fila(
+				array(
+					'id'    => 'a2',
+					'role'  => 'r1',
+					'group' => '',
+					'phone' => '600000000',
+				)
+			)
+		);
+		$this->assertSame( array(), ApplicationPeople::validate( $spec, $lista, $telefono ) );
+
+		$lista[1] = ApplicationPeople::row(
+			$this->fila(
+				array(
+					'id'    => 'a2',
+					'dni'   => '11111111H',
+					'role'  => 'r1',
+					'group' => '',
+				)
+			)
+		);
+		$this->assertArrayHasKey( 'same_person', ApplicationPeople::validate( $spec, $lista, array( 'dni' => '12345678Z' ) + $lista[1] ) );
+	}
+
+	/**
+	 * El papel ocupado, con «una por papel y grupo», también dice qué fila.
+	 */
+	public function test_the_taken_role_names_its_row() {
+		$spec  = $this->spec( array( 'unique_per_group' => true ) );
+		$lista = array( ApplicationPeople::row( $this->fila( array( 'id' => 'a1' ) ) ) );
+		$otra  = ApplicationPeople::row(
+			$this->fila(
+				array(
+					'name'  => 'Luis',
+					'dni'   => '11111111H',
+					'email' => 'luis@example.org',
+				)
+			)
+		);
+		$this->assertSame( 'a1', ApplicationPeople::clash( $spec, $lista, $otra ) );
+		$this->assertStringContainsString( 'Ana Pérez Díaz', ApplicationPeople::validate( $spec, $lista, $otra )['unique_group'] );
+		$this->assertStringContainsString( '«Sustituir o corregir» en su fila', ApplicationPeople::validate( $spec, $lista, $otra )['unique_group'] );
+	}
+
+	/**
+	 * El grupo que falta dice qué papel lo exige.
+	 */
+	public function test_the_missing_group_names_the_role() {
+		$errores = ApplicationPeople::validate( $this->spec(), array(), ApplicationPeople::row( $this->fila( array( 'group' => '' ) ) ) );
+		$this->assertSame( 'el grupo, que el papel «Participante» exige (por ejemplo, el eje)', $errores['group'] );
 	}
 
 	/**

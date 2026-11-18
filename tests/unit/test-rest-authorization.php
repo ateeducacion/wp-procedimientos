@@ -7,6 +7,7 @@
  */
 
 use Prc\Access\ProcedureAccess;
+use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ProcedureEditor;
@@ -330,7 +331,9 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame( 400, $direct->get_status() );
-		$curso     = $this->course( 'Curso de la REST' );
+		$curso = $this->course( 'Curso de la REST' );
+		// El plazo no viaja por la REST: lo pone el taller antes de publicar.
+		update_post_meta( $draft->get_data()['id'], ProcedureMetaKeys::OPENS_AT, gmdate( 'Y-m-d', strtotime( '+10 days' ) ) );
 		$published = $this->request(
 			$editor,
 			'POST',
@@ -342,13 +345,15 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 		);
 		$this->assertSame( 200, $published->get_status() );
 		$this->assertSame( array( $area ), wp_get_object_terms( $draft->get_data()['id'], ProcedureTaxonomies::AREA, array( 'fields' => 'ids' ) ) );
+		// Administración crea sin ámbito; en borrador, porque publicado no
+		// tendría plazo.
 		$admin_response = $this->request(
 			$admin,
 			'POST',
 			'/wp/v2/prc_procedure',
 			array(
 				'title'                     => 'Reparación',
-				'status'                    => 'publish',
+				'status'                    => 'draft',
 				ProcedureTaxonomies::COURSE => array( $curso ),
 			)
 		);
@@ -391,7 +396,8 @@ class Test_Rest_Authorization extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame( 201, $draft->get_status() );
-		$curso     = $this->course( 'Curso de la REST' );
+		$curso = $this->course( 'Curso de la REST' );
+		update_post_meta( $draft->get_data()['id'], ProcedureMetaKeys::OPENS_AT, gmdate( 'Y-m-d', strtotime( '+10 days' ) ) );
 		$published = $this->request(
 			$editor,
 			'POST',

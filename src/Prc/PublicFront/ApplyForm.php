@@ -640,6 +640,9 @@ final class ApplyForm {
 	public static function render( $atts = array() ): string {
 		unset( $atts );
 		Assets::enqueue();
-		return ApplyFormView::html( self::model() );
+		$m = self::model();
+		// La lista de personas va aparte: tiene su propia ventana (ADR-0041).
+		$m['people'] = PeopleForm::model( $m );
+		return ApplyFormView::html( $m );
 	}
 }

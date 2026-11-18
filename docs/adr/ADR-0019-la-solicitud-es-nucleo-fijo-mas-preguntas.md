@@ -245,3 +245,15 @@ el bloqueo que esta ADR dejaba en «Negativas» para cuando hiciera falta, y las
 claves nuevas salen de un contador que nunca baja (`prc_questions_seq`).
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-10 (ADR-0041)
+
+La [ADR-0041](ADR-0041-las-personas-de-la-solicitud-son-una-lista-que-gestiona-el-centro.md)
+añade a la solicitud, **fuera del núcleo fijo**, una lista de personas que
+participan, con papel y grupo, que el procedimiento pide si quiere
+(`prc_people_spec`) y que el centro gestiona aparte del formulario
+(`prc_people`), fila a fila y con su propia ventana. El núcleo de esta ADR no
+cambia: la coordinación (`prc_coordinator`) sigue siendo del formulario, con
+su plazo y su validación.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

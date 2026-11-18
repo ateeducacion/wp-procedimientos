@@ -207,3 +207,16 @@ revisa.
   estado de revisión no lo sustituye, lo complementa.
 - La subsanación no es un estado de la solicitud «pendiente de documentación»:
   eso llegará, si llega, con la documentación adjunta.
+
+## Adenda — 2026-11-10 (ADR-0041)
+
+La tabla «Quién edita y cuándo» sigue mandando sobre la solicitud. La lista de
+personas de la
+[ADR-0041](ADR-0041-las-personas-de-la-solicitud-son-una-lista-que-gestiona-el-centro.md)
+tiene su propia ventana: con fechas, se escribe dentro de ellas aunque el
+procedimiento esté cerrado o en subsanación y la solicitud no esté «a
+subsanar»; sin fechas, sigue esta tabla. Escribir en la lista no devuelve la
+solicitud a «presentada» ni toca la nota. Una solicitud excluida no escribe
+nunca en su lista.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

@@ -213,15 +213,21 @@ final class Applications {
 	}
 
 	/**
-	 * Every meta of one application, in its stored shape.
+	 * Every meta of one application, in its stored shape, but the history and
+	 * the list of people.
+	 *
+	 * El historial y la lista de personas tienen su propio lector
+	 * (`ApplicationLog::all()`, `People::of()`): leerlos aquí deserializaría
+	 * hasta quinientas entradas por solicitud en cada tabla, exportación o
+	 * correo, y nadie las usa.
 	 *
 	 * @param int $application_id Application post ID.
 	 * @return array<string, mixed> Keyed by ApplicationMetaKeys.
 	 */
 	public static function meta( int $application_id ): array {
 		$out = array();
-		foreach ( ApplicationMetaKeys::all() as $clave ) {
-			$out[ $clave ] = get_post_meta( $application_id, $clave, true );
+		foreach ( array_diff( ApplicationMetaKeys::all(), array( ApplicationMetaKeys::LOG, ApplicationMetaKeys::PEOPLE ) ) as $key ) {
+			$out[ $key ] = get_post_meta( $application_id, $key, true );
 		}
 		$out[ ApplicationMetaKeys::COORDINATOR ] = is_array( $out[ ApplicationMetaKeys::COORDINATOR ] )
 			? $out[ ApplicationMetaKeys::COORDINATOR ]
@@ -731,18 +737,25 @@ final class Applications {
 	 * comilla simple delante: sin eso, una hoja de cálculo lo trata como
 	 * fórmula y una respuesta tecleada se convierte en ejecución.
 	 *
-	 * @param array<string, string>             $columns clave => rótulo.
-	 * @param array<int, array<string, string>> $rows    Rows keyed by column.
+	 * Una columna de `$verbatim` sale sin esa comilla cuando su valor casa con
+	 * el patrón que la acompaña: un teléfono «+34 600 000 000» es un teléfono.
+	 *
+	 * @param array<string, string>             $columns  clave => rótulo.
+	 * @param array<int, array<string, string>> $rows     Rows keyed by column.
+	 * @param array<string, string>             $verbatim Column => pattern of the values that go as they are.
 	 * @return string
 	 */
-	public static function csv_lines( array $columns, array $rows ): string {
+	public static function csv_lines( array $columns, array $rows, array $verbatim = array() ): string {
 		$lineas = array( self::csv_line( array_values( $columns ) ) );
 		foreach ( $rows as $fila ) {
 			$campos = array();
+			$tal    = array();
 			foreach ( array_keys( $columns ) as $clave ) {
-				$campos[] = (string) ( $fila[ $clave ] ?? '' );
+				$campo    = (string) ( $fila[ $clave ] ?? '' );
+				$campos[] = $campo;
+				$tal[]    = isset( $verbatim[ $clave ] ) && (bool) preg_match( $verbatim[ $clave ], $campo );
 			}
-			$lineas[] = self::csv_line( $campos );
+			$lineas[] = self::csv_line( $campos, $tal );
 		}
 		// CRLF y BOM: para que el fichero se abra donde se va a abrir, que es
 		// una hoja de cálculo de escritorio y no un editor.
@@ -764,12 +777,13 @@ final class Applications {
 	 * One CSV line, quoted and escaped.
 	 *
 	 * @param string[] $campos Fields.
+	 * @param bool[]   $tal    Whether each field goes as it is, without neutralising.
 	 * @return string
 	 */
-	private static function csv_line( array $campos ): string {
+	private static function csv_line( array $campos, array $tal = array() ): string {
 		$fuera = array();
-		foreach ( $campos as $campo ) {
-			$fuera[] = '"' . str_replace( '"', '""', ApplicationExport::neutralize( $campo ) ) . '"';
+		foreach ( $campos as $i => $campo ) {
+			$fuera[] = '"' . str_replace( '"', '""', empty( $tal[ $i ] ) ? ApplicationExport::neutralize( $campo ) : $campo ) . '"';
 		}
 		return implode( ';', $fuera );
 	}

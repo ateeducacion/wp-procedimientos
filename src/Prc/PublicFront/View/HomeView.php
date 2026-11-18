@@ -126,7 +126,7 @@ final class HomeView {
 	 */
 	private static function card( array $row ): void {
 		?>
-		<li class="prc-proc">
+		<li class="prc-proc" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
 				<?php if ( '' !== (string) $row['poster'] ) : ?>
 					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="(max-width: 600px) 50vw, 240px"' : ''; ?> alt="" loading="lazy" decoding="async"></span>

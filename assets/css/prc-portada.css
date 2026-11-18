@@ -135,12 +135,14 @@
 }
 
 /* El cartel, en proporción A4 vertical: es el formato en que se hacen. Sin
-   cartel, el logo del ámbito entero y centrado sobre blanco. */
+   cartel, el logo del ámbito entero y centrado sobre blanco. Encima, una
+   franja fina con el color del procedimiento (`prc_header_color`). */
 .prc-proc__cartel {
   display: block;
   aspect-ratio: 1 / 1.414;
   overflow: hidden;
   background: var(--prc-c-fondo);
+  border-top: 5px solid var(--prc-banda, #c9c9c9);
 }
 .prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .prc-proc__cartel--logo img { box-sizing: border-box; object-fit: contain; padding: 18%; }

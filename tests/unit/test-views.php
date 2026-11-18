@@ -96,6 +96,21 @@ class Test_Views extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Each card carries the procedure's colour as a thin stripe over the poster.
+	 */
+	public function test_the_card_carries_the_procedure_colour() {
+		$curso = $this->course( '2026-2027' );
+		$id    = $this->procedure( $this->administrator(), array( $this->area( 'Área de prueba' ) ), $this->abierto() );
+		wp_set_object_terms( $id, array( $curso ), ProcedureTaxonomies::COURSE );
+		update_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, 'teja' );
+
+		$this->acting_as( 0 );
+		$html = HomeView::html( Home::model() );
+
+		$this->assertStringContainsString( 'style="--prc-banda: #a34118"', $html, 'el color del procedimiento, en la franja de su tarjeta' );
+	}
+
+	/**
 	 * Y lo escapa: lo que llega en el modelo sale como texto, no como etiquetas.
 	 *
 	 * Se envenena el modelo y no el post: al guardarlo, WordPress ya limpia el
@@ -112,13 +127,14 @@ class Test_Views extends WP_UnitTestCase {
 		$m    = Home::model();
 		$fila = &$m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'][0];
 
-		$fila['title']       = self::VENENO;
-		$fila['state_label'] = '<b>Abierto</b>';
-		$fila['deadline']    = '"><img src=x onerror=alert(1)>';
-		$fila['poster']      = 'x" onload="alert(1)';
-		$fila['poster_set']  = 'x 1w" onerror="alert(1)';
-		$fila['areas']       = array( 1 => '<b>Ámbito</b>' );
-		$fila['url']         = 'javascript:alert(1)';
+		$fila['title']        = self::VENENO;
+		$fila['state_label']  = '<b>Abierto</b>';
+		$fila['deadline']     = '"><img src=x onerror=alert(1)>';
+		$fila['poster']       = 'x" onload="alert(1)';
+		$fila['poster_set']   = 'x 1w" onerror="alert(1)';
+		$fila['areas']        = array( 1 => '<b>Ámbito</b>' );
+		$fila['header_color'] = '#fff" onclick="alert(1)';
+		$fila['url']          = 'javascript:alert(1)';
 		unset( $fila );
 
 		// Y el filtro, que es lo único que pinta nombres de término.
@@ -134,6 +150,7 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '<b>Abierto</b>', $html );
 		$this->assertStringNotContainsString( 'onload="alert(1)"', $html );
 		$this->assertStringNotContainsString( 'onerror="alert(1)"', $html );
+		$this->assertStringNotContainsString( 'onclick="alert(1)"', $html );
 		$this->assertStringNotContainsString( 'href="javascript:', $html );
 		$this->assertStringContainsString( '&lt;script&gt;', $html );
 	}

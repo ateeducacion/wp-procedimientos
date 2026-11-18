@@ -759,7 +759,7 @@ final class ProcedureEditorView {
 						</label>
 					<?php endforeach; ?>
 				</div>
-				<p class="prc-campo__ayuda">Es la banda de color de la ficha y de «Mis procedimientos».</p>
+				<p class="prc-campo__ayuda">Es la franja de color sobre el cartel en la tarjeta de la portada.</p>
 			</fieldset>
 		</div>
 		<?php

@@ -275,10 +275,15 @@
 .prc-form--solicitud .prc-form__envio .prc-btn-final { margin: 30px 0; }
 
 /* --- aviso de protección de datos ---------------------------------------
-   La plantilla pinta la caja; **el texto es del despliegue** y llega por el
-   filtro del armazón. Aquí no hay ni una línea de texto legal (ADR-0009). */
+   La plantilla pinta la caja; **el texto es del despliegue**: lo escribe
+   administración en los ajustes o llega por el filtro del armazón. Aquí no
+   hay ni una línea de texto legal (ADR-0009). Va al final, justo antes del
+   botón de enviar: aire encima para separarlo de la última sección, el del
+   botón debajo, y el texto alineado con el de los campos (5px de margen y 5px
+   de relleno, como `.prc-campo`). */
 .prc-aviso-legal {
-  margin: 0 0 15px;
+  padding: 0 5px;
+  margin: 30px 5px 0;
   font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
 }

@@ -1664,6 +1664,25 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'memoria.pdf', $html );
 	}
 
+	/**
+	 * Con la solicitud cerrada y una entrega abierta, la pantalla sigue
+	 * recogiendo datos: el aviso de protección de datos sale igual, al final.
+	 */
+	public function test_the_privacy_notice_follows_an_open_delivery() {
+		$data = $this->delivery_fixture();
+		update_option( ApplyForm::OPTION_PRIVACY, '<p>Aviso de los ajustes.</p>' );
+		$this->acting_as( $data['head'] );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $data['procedure'];
+		$model                            = ApplyForm::model();
+		$this->assertFalse( $model['can_submit'] );
+		$html = ApplyFormView::html( $model );
+		$this->assertSame( 1, substr_count( $html, 'prc-aviso-legal' ) );
+		$this->assertGreaterThan( (int) strpos( $html, 'Entregar documento' ), (int) strpos( $html, 'prc-aviso-legal' ), 'después de la entrega' );
+
+		$model['deliveries'][0]['can_submit'] = false;
+		$this->assertStringNotContainsString( 'prc-aviso-legal', ApplyFormView::html( $model ), 'sin nada que recoger, no' );
+	}
+
 	/** Owning a centre cannot grant access to another centre's application. */
 	public function test_a_delivery_cannot_target_another_centre_or_an_initial_file_question() {
 		$data  = $this->delivery_fixture();

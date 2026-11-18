@@ -30,9 +30,9 @@ use Prc\PublicFront\Shell;
  * de los campos técnicos de la convocatoria, secciones con su rótulo en
  * mayúsculas —las pone el CSS: el texto va en caja normal— y su filete, retícula de doce columnas y campos bloqueados que se
  * distinguen por el color y no por un fondo gris. Lo que no se calca es el
- * texto del aviso de protección de datos: ese es de quien despliega
- * ({@see ProcedureChrome::chrome()}, clave `privacy_notice`) y sin configurar
- * no se pinta (ADR-0009).
+ * texto del aviso de protección de datos: ese es de quien despliega —lo
+ * escribe administración en los ajustes o lo trae el filtro del armazón, y
+ * llega en `$m['privacy']`— y sin configurar no se pinta (ADR-0009).
  */
 final class ApplyFormView {
 
@@ -95,6 +95,11 @@ final class ApplyFormView {
 			echo '<div id="' . esc_attr( ApplicationProgress::ANCHOR_DELIVERIES ) . '">';
 			self::deliveries( $m );
 			echo '</div>';
+		}
+		// Con el formulario cerrado, la lista de personas o una entrega siguen
+		// recogiendo datos: el aviso va detrás de ellas.
+		if ( true !== $m['can_submit'] && self::still_collects( $m ) ) {
+			echo self::privacy( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy().
 		}
 		// Retirar la solicitud, al final: es lo último que se busca.
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
@@ -267,16 +272,37 @@ final class ApplyFormView {
 	 * tratamiento, el enlace a la resolución y el contacto de protección de
 	 * datos son del despliegue: los escribe administración en los ajustes o
 	 * llegan por el filtro del armazón (ADR-0009). Va al final, justo antes de
-	 * enviar. Sin configurar, no se pinta nada.
+	 * enviar, y se vuelve a sanear aquí: puede ir dentro de un formulario. Sin
+	 * configurar, no se pinta nada.
 	 *
+	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
-	private static function privacy(): string {
-		$texto = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
-		if ( '' === $texto ) {
+	private static function privacy( array $m ): string {
+		$text = ApplyForm::sanitize_privacy( (string) ( $m['privacy'] ?? '' ) );
+		if ( '' === $text ) {
 			return '';
 		}
-		return '<div class="prc-aviso-legal">' . wp_kses_post( $texto ) . '</div>';
+		return '<div class="prc-aviso-legal">' . $text . '</div>';
+	}
+
+	/**
+	 * Whether the screen still collects data with the application form closed.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return bool
+	 */
+	private static function still_collects( array $m ): bool {
+		$people = (array) ( $m['people'] ?? array() );
+		if ( ! empty( $people['show'] ) && ! empty( $people['can_edit'] ) ) {
+			return true;
+		}
+		foreach ( (array) ( $m['deliveries'] ?? array() ) as $delivery ) {
+			if ( ! empty( $delivery['can_submit'] ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -408,7 +434,7 @@ final class ApplyFormView {
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo self::privacy( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy(). ?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>

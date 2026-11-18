@@ -898,19 +898,23 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->acting_as( $this->school_head( 'C0001' ) );
 
 		// Se guarda sin el saneado del registro: lo que protege aquí es el
-		// escape al pintar.
-		remove_all_filters( 'sanitize_option_' . ProcedureChrome::OPTION_PRIVACY );
-		update_option( ProcedureChrome::OPTION_PRIVACY, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script>' );
+		// saneado al pintar, dentro de un formulario.
+		remove_all_filters( 'sanitize_option_' . ApplyForm::OPTION_PRIVACY );
+		update_option( ApplyForm::OPTION_PRIVACY, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script><form action="https://example.org/"><button>Otro</button></form><p>Sin cerrar' );
 
-		$this->assertStringContainsString( 'Texto de', ProcedureChrome::chrome()['privacy_notice'] );
+		$this->assertSame( '', ProcedureChrome::chrome()['privacy_notice'], 'el armazón no lee la opción en cada pantalla' );
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringContainsString( '<div class="prc-aviso-legal"><p>Texto de <strong>los ajustes</strong>.</p>', $html );
-		$this->assertStringNotContainsString( '<script>alert(2)</script>', $html, 'y llega filtrado' );
+		$this->assertStringNotContainsString( 'alert(2)', $html, 'y llega filtrado' );
+		$this->assertStringNotContainsString( 'action="https://example.org/"', $html, 'sin formularios dentro del formulario' );
+		$this->assertStringNotContainsString( '<button>Otro', $html );
+		$this->assertStringContainsString( '<p>Sin cerrar</p></div>', $html, 'las etiquetas se cierran' );
 		$aviso = (int) strpos( $html, 'prc-aviso-legal' );
 		$cola  = substr( $html, $aviso, (int) strpos( $html, '</form>', $aviso ) - $aviso );
 		$this->assertGreaterThan( (int) strpos( $html, 'prc-leyenda-obligatorio' ), $aviso );
 		$this->assertStringNotContainsString( 'prc-seccion', $cola, 'al final: detrás solo queda el botón de enviar' );
 		$this->assertStringContainsString( 'type="submit"', $cola );
+		$this->assertSame( 1, substr_count( $html, 'prc-aviso-legal' ), 'una sola vez' );
 
 		add_filter(
 			'prc_chrome',

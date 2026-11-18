@@ -19,6 +19,7 @@ use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
+use Prc\PublicFront\View\ProcedureChrome;
 
 /**
  * Shortcode [prc_apply]: la solicitud de un centro a un procedimiento.
@@ -80,6 +81,18 @@ final class ApplyForm {
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
+
+	/**
+	 * Option with the data protection notice, written in the settings.
+	 */
+	public const OPTION_PRIVACY = 'prc_privacy_notice';
+
+	/**
+	 * Tags a notice that sits inside the application form may never carry.
+	 *
+	 * @var string[]
+	 */
+	private const PRIVACY_FORBIDDEN = array( 'form', 'button', 'input', 'select', 'option', 'textarea', 'label', 'fieldset' );
 
 	/**
 	 * What each notice code in the URL says.
@@ -375,6 +388,40 @@ final class ApplyForm {
 	}
 
 	/**
+	 * The data protection notice of this installation, unsanitized.
+	 *
+	 * Lo escribe administración en los ajustes; si el filtro del armazón
+	 * trae uno, manda él (ADR-0009, adenda). La opción se lee aquí y no en
+	 * {@see ProcedureChrome::chrome()}, que corre en todas las pantallas.
+	 *
+	 * @return string
+	 */
+	public static function privacy_notice(): string {
+		$filtered = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
+		return '' !== $filtered ? $filtered : trim( (string) get_option( self::OPTION_PRIVACY, '' ) );
+	}
+
+	/**
+	 * Sanitize the notice: post content without form controls, tags balanced.
+	 *
+	 * Va dentro del formulario de la solicitud: un `<form>`, un botón o una
+	 * etiqueta sin cerrar lo romperían. Se aplica al guardar y al pintar.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function sanitize_privacy( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+		// kses quita la etiqueta pero deja su contenido: el de un guion o una
+		// hoja de estilo no es texto, se va entero (también sin cerrar).
+		$value   = (string) preg_replace( '#<(script|style)\b[^>]*>.*?(?:</\1\s*>|$)#is', '', $value );
+		$allowed = array_diff_key( wp_kses_allowed_html( 'post' ), array_flip( self::PRIVACY_FORBIDDEN ) );
+		return trim( force_balance_tags( wp_kses( $value, $allowed ) ) );
+	}
+
+	/**
 	 * Everything the screen decides before painting.
 	 *
 	 * @return array<string, mixed>
@@ -432,6 +479,8 @@ final class ApplyForm {
 			'values'          => array(),
 			// Los campos del envío rechazado que fallan, con lo que los nombra.
 			'invalid'         => self::$invalid,
+			// El aviso de protección de datos, tal como lo escribieron.
+			'privacy'         => self::privacy_notice(),
 		);
 
 		if ( ! is_user_logged_in() ) {

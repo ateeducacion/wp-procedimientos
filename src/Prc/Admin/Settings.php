@@ -17,8 +17,8 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\ExitSignal;
-use Prc\PublicFront\View\ProcedureChrome;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
 
@@ -109,15 +109,16 @@ final class Settings {
 				'show_in_rest'      => false,
 			)
 		);
-		// Texto con enlaces y negritas: se sanea como el contenido de una
-		// entrada al guardar, y otra vez al pintar.
+		// Texto con enlaces y negritas que va dentro del formulario de la
+		// solicitud: se sanea sin controles de formulario al guardar, y otra
+		// vez al pintar.
 		register_setting(
 			self::PRIVACY_GROUP,
-			ProcedureChrome::OPTION_PRIVACY,
+			ApplyForm::OPTION_PRIVACY,
 			array(
 				'type'              => 'string',
 				'default'           => '',
-				'sanitize_callback' => 'wp_kses_post',
+				'sanitize_callback' => array( ApplyForm::class, 'sanitize_privacy' ),
 				'show_in_rest'      => false,
 			)
 		);
@@ -134,7 +135,7 @@ final class Settings {
 	}
 
 	/**
-	 * The capability that saves the mail options.
+	 * The capability that saves the three settings groups: mail, centres and data protection.
 	 *
 	 * @return string
 	 */
@@ -411,10 +412,15 @@ final class Settings {
 			</form>
 
 			<h2>Protección de datos</h2>
+			<?php $privacy = trim( (string) get_option( ApplyForm::OPTION_PRIVACY, '' ) ); ?>
 			<form method="post" action="options.php">
 				<?php settings_fields( self::PRIVACY_GROUP ); ?>
-				<p style="max-width:46rem"><label for="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>">Texto de protección de datos</label></p>
-				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" name="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( (string) get_option( ProcedureChrome::OPTION_PRIVACY, '' ) ); ?></textarea>
+				<p style="max-width:46rem"><label for="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>">Texto de protección de datos</label></p>
+				<?php if ( ApplyForm::privacy_notice() !== $privacy ) : ?>
+					<div class="notice notice-warning inline" style="max-width:46rem"><p>Este texto lo fija la configuración de la instalación (filtro prc_chrome) y se ignora lo que escriba aquí.</p></div>
+				<?php endif; ?>
+				<?php // El saneado guarda «&» como «&amp;»: se devuelve tal cual se escribió, o el campo lo enseñaría escapado dos veces. ?>
+				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>" name="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( str_replace( '&amp;', '&', $privacy ) ); ?></textarea>
 				<p class="description" id="prc-privacy-ayuda" style="max-width:46rem">Sale al final de cada solicitud, antes del botón de enviar, igual para todos los procedimientos. Admite enlaces y negritas. En blanco, no se pinta.</p>
 				<?php submit_button( 'Guardar el texto de protección de datos' ); ?>
 			</form>

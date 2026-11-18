@@ -18685,6 +18685,17 @@ final class HomeView {
 
 
 
+	private const FIRST_ROW = 5;
+
+
+
+
+
+	private const SIZES = '(max-width: 530px) calc(50vw - 28px), (max-width: 980px) calc(33vw - 24px), 190px';
+
+
+
+
 
 
 
@@ -18709,8 +18720,10 @@ final class HomeView {
 				</div>
 			<?php endif; ?>
 
+			<?php $before = 0; ?>
 			<?php foreach ( (array) $m['groups'] as $state => $grupo ) : ?>
-				<?php self::group( (string) $state, (array) $grupo ); ?>
+				<?php self::group( (string) $state, (array) $grupo, $before ); ?>
+				<?php $before += count( (array) $grupo['rows'] ); ?>
 			<?php endforeach; ?>
 		</div>
 		<?php
@@ -18753,7 +18766,8 @@ final class HomeView {
 
 
 
-	private static function group( string $state, array $grupo ): void {
+
+	private static function group( string $state, array $grupo, int $before ): void {
 		$clase = sanitize_html_class( $state );
 		?>
 		<section class="prc-banda prc-bloque prc-bloque--<?php echo esc_attr( $clase ); ?> prc-grupo-<?php echo esc_attr( $clase ); ?>">
@@ -18763,8 +18777,8 @@ final class HomeView {
 					<strong class="prc-bloque__rotulo"><?php echo esc_html( (string) $grupo['label'] ); ?></strong>
 				</h2>
 				<ul class="prc-rejilla">
-					<?php foreach ( (array) $grupo['rows'] as $row ) : ?>
-						<?php self::card( (array) $row ); ?>
+					<?php foreach ( array_values( (array) $grupo['rows'] ) as $n => $row ) : ?>
+						<?php self::card( (array) $row, $before + $n ); ?>
 					<?php endforeach; ?>
 				</ul>
 			</div>
@@ -18783,14 +18797,18 @@ final class HomeView {
 
 
 
-	private static function card( array $row ): void {
+
+	private static function card( array $row, int $position ): void {
+
+		$loading  = $position < self::FIRST_ROW ? 'eager' : 'lazy';
+		$priority = 0 === $position ? 'high' : 'auto';
 		?>
-		<li class="prc-proc">
+		<li class="prc-proc" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
 				<?php if ( '' !== (string) $row['poster'] ) : ?>
-					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="(max-width: 600px) 50vw, 240px"' : ''; ?> alt="" loading="lazy" decoding="async"></span>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="' . esc_attr( self::SIZES ) . '"' : ''; ?> alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
 				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
-					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="lazy" decoding="async"></span>
+					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
 				<?php else : ?>
 					<span class="prc-proc__cartel prc-proc__cartel--vacio"></span>
 				<?php endif; ?>
@@ -19170,6 +19188,8 @@ final class Home {
 			'order'               => 'ASC',
 			'no_found_rows'       => true,
 			'ignore_sticky_posts' => true,
+
+			'suppress_filters'    => true,
 		);
 		if ( $course > 0 ) {
 			$args['tax_query'] = array(
@@ -19272,29 +19292,30 @@ final class Home {
 		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
-			'id'          => $id,
-			'title'       => '' !== $titulo ? $titulo : 'Procedimiento sin título',
-			'url'         => (string) get_permalink( $id ),
-			'excerpt'     => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
-			'areas'       => $areas,
-			'poster'      => $cartel,
-			'poster_set'  => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
-			'area_logo'   => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
-			'state'       => $state,
-			'state_label' => ProcedureState::label(
+			'id'           => $id,
+			'title'        => '' !== $titulo ? $titulo : 'Procedimiento sin título',
+			'url'          => (string) get_permalink( $id ),
+			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
+			'areas'        => $areas,
+			'poster'       => $cartel,
+			'poster_set'   => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
+			'area_logo'    => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
+			'state'        => $state,
+			'state_label'  => ProcedureState::label(
 				$state,
 				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 			),
-			'closes_at'   => $cierra,
-			'days_left'   => $quedan,
-			'deadline'    => self::deadline( $quedan ),
-			'urgent'      => null !== $quedan && $quedan <= 3,
-			'applied'     => isset( $solicitados[ $id ] ),
-			'dates'       => DateRange::of(
+			'closes_at'    => $cierra,
+			'days_left'    => $quedan,
+			'deadline'     => self::deadline( $quedan ),
+			'urgent'       => null !== $quedan && $quedan <= 3,
+			'applied'      => isset( $solicitados[ $id ] ),
+			'header_color' => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
+			'dates'        => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::CLOSES_AT, true )
 			),
-			'amend_dates' => DateRange::of(
+			'amend_dates'  => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_CLOSES_AT, true )
 			),
@@ -19346,14 +19367,16 @@ final class Home {
 
 	private static function area_logo( array $term_ids ): string {
 
-		static $vistos = array();
+
+		static $cache = array();
+		$blog         = get_current_blog_id();
 		foreach ( $term_ids as $term_id ) {
 			$term_id = (int) $term_id;
-			if ( ! array_key_exists( $term_id, $vistos ) ) {
-				$vistos[ $term_id ] = self::logo_of( $term_id );
+			if ( ! isset( $cache[ $blog ][ $term_id ] ) ) {
+				$cache[ $blog ][ $term_id ] = self::logo_of( $term_id );
 			}
-			if ( '' !== $vistos[ $term_id ] ) {
-				return $vistos[ $term_id ];
+			if ( '' !== $cache[ $blog ][ $term_id ] ) {
+				return $cache[ $blog ][ $term_id ];
 			}
 		}
 		return '';
@@ -24971,7 +24994,7 @@ final class ProcedureEditorView {
 						</label>
 					<?php endforeach; ?>
 				</div>
-				<p class="prc-campo__ayuda">Es la banda de color de la ficha y de «Mis procedimientos».</p>
+				<p class="prc-campo__ayuda">Es la franja de color sobre el cartel en la tarjeta de la portada.</p>
 			</fieldset>
 		</div>
 		<?php
@@ -38216,12 +38239,14 @@ body.prc-app .prc-btn-borrar {
 }
 
 /* El cartel, en proporción A4 vertical: es el formato en que se hacen. Sin
-   cartel, el logo del ámbito entero y centrado sobre blanco. */
+   cartel, el logo del ámbito entero y centrado sobre blanco. Encima, una
+   franja fina con el color del procedimiento (`prc_header_color`). */
 .prc-proc__cartel {
   display: block;
   aspect-ratio: 1 / 1.414;
   overflow: hidden;
   background: var(--prc-c-fondo);
+  border-top: 5px solid var(--prc-banda, #c9c9c9);
 }
 .prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .prc-proc__cartel--logo img { box-sizing: border-box; object-fit: contain; padding: 18%; }
@@ -38239,8 +38264,9 @@ body.prc-app .prc-btn-borrar {
   color: var(--prc-c-titulo);
 }
 
-/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca. */
-.prc-proc__ambito {
+/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca.
+   Con `.prc-proc` delante, para ganarle al `.prc-proc p { margin: 0 }`. */
+.prc-proc .prc-proc__ambito {
   margin: 4px 0 0;
   font-size: var(--prc-t-menudo);
   line-height: var(--prc-i-menudo);

@@ -3708,14 +3708,7 @@ final class ProcedureCopy {
 			$meta[ ProcedureMetaKeys::PEOPLE_SPEC ] = self::people_spec( $source[ ProcedureMetaKeys::PEOPLE_SPEC ] );
 		}
 		if ( $with_observe ) {
-			foreach ( array( ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) as $key ) {
-				if ( array_key_exists( $key, $source ) ) {
-					$meta[ $key ] = $source[ $key ];
-				}
-			}
-		}
-		if ( $with_observe && array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
-			$meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $preguntas['map'] );
+			$meta = array_merge( $meta, self::observe( $source, $preguntas['map'] ) );
 		}
 
 		$js = $source[ ProcedureMetaKeys::CUSTOM_JS ] ?? '';
@@ -3728,6 +3721,21 @@ final class ProcedureCopy {
 			'meta'    => $meta,
 			'js_left' => ! $with_js && '' !== trim( $js ),
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function observe( array $source, array $map ): array {
+		$out = array_intersect_key( $source, array_flip( array( ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) ) );
+		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
+			$out[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $map );
+		}
+		return $out;
 	}
 
 

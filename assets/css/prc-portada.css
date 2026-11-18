@@ -143,7 +143,10 @@
   background: var(--prc-c-fondo);
 }
 .prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.prc-proc__cartel--logo img { object-fit: contain; padding: 18%; }
+.prc-proc__cartel--logo img { box-sizing: border-box; object-fit: contain; padding: 18%; }
+/* Sin cartel ni logo, el gris neutro de la banda de antes: no parece una
+   imagen que no ha cargado. */
+.prc-proc__cartel--vacio { background: #c9c9c9; }
 
 /* El título no se trunca: de una a seis líneas, como esté escrito. */
 .prc-proc__titulo {

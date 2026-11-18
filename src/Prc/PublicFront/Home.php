@@ -359,8 +359,11 @@ final class Home {
 
 		$solicitados = self::applied_by_centre();
 
-		$rows = array();
-		foreach ( get_posts( $args ) as $post ) {
+		$rows  = array();
+		$query = new \WP_Query( $args );
+		// Los carteles de todo el curso en una consulta, no dos por tarjeta.
+		update_post_thumbnail_cache( $query );
+		foreach ( $query->posts as $post ) {
 			$rows[] = self::row( $post, $solicitados );
 		}
 
@@ -441,8 +444,8 @@ final class Home {
 			? self::days_until( $fin )
 			: null;
 		$areas  = self::terms( $id );
-		$cartel = (int) get_post_thumbnail_id( $id );
-		$cartel = $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'medium_large' ) : '';
+		$imagen = (int) get_post_thumbnail_id( $id );
+		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
 			'id'          => $id,
@@ -451,6 +454,7 @@ final class Home {
 			'excerpt'     => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
 			'areas'       => $areas,
 			'poster'      => $cartel,
+			'poster_set'  => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
 			'area_logo'   => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
 			'state'       => $state,
 			'state_label' => ProcedureState::label(
@@ -510,21 +514,40 @@ final class Home {
 	 * The logo of the first ámbito that has one, looking up the tree.
 	 *
 	 * Un subámbito sin imagen propia lleva la del ámbito del que cuelga.
+	 * ponytail: memoria por petición; un cambio de logo a mitad de petición
+	 * no se ve hasta la siguiente, y eso no pasa en la portada.
 	 *
 	 * @param int[] $term_ids Ámbito term IDs of the procedure.
 	 * @return string Image URL, or '' when none has one.
 	 */
 	private static function area_logo( array $term_ids ): string {
+		// Muchas tarjetas comparten ámbito: se resuelve una vez por término.
+		static $vistos = array();
 		foreach ( $term_ids as $term_id ) {
-			$linea = array_merge( array( (int) $term_id ), get_ancestors( (int) $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
-			foreach ( $linea as $id ) {
-				$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
-				if ( $imagen > 0 ) {
-					$url = wp_get_attachment_image_url( $imagen, 'medium_large' );
-					if ( is_string( $url ) && '' !== $url ) {
-						return $url;
-					}
-				}
+			$term_id = (int) $term_id;
+			if ( ! array_key_exists( $term_id, $vistos ) ) {
+				$vistos[ $term_id ] = self::logo_of( $term_id );
+			}
+			if ( '' !== $vistos[ $term_id ] ) {
+				return $vistos[ $term_id ];
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * The logo of one ámbito, or of the closest ancestor that has one.
+	 *
+	 * @param int $term_id Ámbito term ID.
+	 * @return string Image URL, or ''.
+	 */
+	private static function logo_of( int $term_id ): string {
+		$linea = array_merge( array( $term_id ), get_ancestors( $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
+		foreach ( $linea as $id ) {
+			$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
+			$url    = $imagen > 0 ? wp_get_attachment_image_url( $imagen, 'medium_large' ) : false;
+			if ( is_string( $url ) && '' !== $url ) {
+				return $url;
 			}
 		}
 		return '';

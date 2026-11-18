@@ -129,7 +129,7 @@ final class HomeView {
 		<li class="prc-proc">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
 				<?php if ( '' !== (string) $row['poster'] ) : ?>
-					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>" alt="" loading="lazy" decoding="async"></span>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="(max-width: 600px) 50vw, 240px"' : ''; ?> alt="" loading="lazy" decoding="async"></span>
 				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
 					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="lazy" decoding="async"></span>
 				<?php else : ?>

@@ -587,8 +587,8 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 
 		$this->assertStringContainsString( 'class="prc-leyenda-obligatorio"', $html, 'la leyenda del asterisco' );
-		$this->assertMatchesRegularExpression( '#<label for="prc-accept">.*?prc-campo__obligatorio.*?</label>#s', $html, 'la casilla de compromisos lleva asterisco' );
-		$this->assertMatchesRegularExpression( '#<label for="prc-q-q1">.*?prc-campo__obligatorio.*?</label>#s', $html, 'y el sí/no obligatorio' );
+		$this->assertMatchesRegularExpression( '#<label for="prc-accept">(?:(?!</label>).)*prc-campo__obligatorio#s', $html, 'la casilla de compromisos lleva asterisco' );
+		$this->assertMatchesRegularExpression( '#<label for="prc-q-q1">(?:(?!</label>).)*prc-campo__obligatorio#s', $html, 'y el sí/no obligatorio' );
 		$this->assertStringContainsString( 'accept=".pdf,.jpg,.jpeg,.jpe,.png,.docx,.odt"', $html, 'accept con las extensiones' );
 		$this->assertStringContainsString( 'Formatos admitidos: PDF, JPG, PNG, DOCX, ODT · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ), $html );
 	}

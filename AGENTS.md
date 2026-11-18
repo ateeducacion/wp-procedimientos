@@ -146,6 +146,7 @@ src/Prc/
 ├── PublicFront/Help.php                    [prc_help] y Help::url() para enlazar a un apartado (ADR-0045)
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública
 ├── PublicFront/ProcedureView.php           El single de prc_procedure
+├── PublicFront/DraftNotice.php             El aviso de un procedimiento sin publicar, en vez del 404 (ADR-0047)
 ├── PublicFront/View/WorkspaceView.php      Pinta «Mis procedimientos»
 ├── PublicFront/Workspace.php               [prc_workspace]
 ├── PublicFront/View/ExportDialogView.php   Pinta el diálogo de exportar

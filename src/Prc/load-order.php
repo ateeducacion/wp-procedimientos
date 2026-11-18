@@ -72,6 +72,7 @@ return array(
 	'PublicFront/Help.php',
 	'PublicFront/View/ProcedureChrome.php',
 	'PublicFront/ProcedureView.php',
+	'PublicFront/DraftNotice.php',
 	'PublicFront/View/WorkspaceView.php',
 	'PublicFront/Workspace.php',
 	'PublicFront/View/ExportDialogView.php',

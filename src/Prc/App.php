@@ -25,6 +25,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\DraftNotice;
 use Prc\PublicFront\EditLock;
 use Prc\PublicFront\Help;
 use Prc\PublicFront\Home;
@@ -96,6 +97,8 @@ final class App {
 		// La ayuda: dos guías y las preguntas frecuentes (ADR-0045).
 		Help::class,
 		ProcedureView::class,
+		// Un procedimiento en borrador avisa en vez de dar el 404 del tema (ADR-0047).
+		DraftNotice::class,
 	);
 
 	/**

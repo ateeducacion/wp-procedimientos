@@ -907,7 +907,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) ) );
 		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 		$m = $this->modelo( $id );
-		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Personas»', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Participantes»', $m['flash']['texto'] );
 		$this->olvidar_rechazo();
 
 		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'none' ) ) ) );
@@ -1764,7 +1764,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html   = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
 		$labels = array(
 			'Datos',
-			'Preguntas',
+			'Campos adicionales',
+			'Participantes',
 			'Entregas',
 			'Enlaces',
 			'Solicitudes',
@@ -1785,7 +1786,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Modalidad', $html );
 		$this->assertStringContainsString( ProcedureEditor::FIELD_Q . 'label[0]', $html );
 		$this->assertStringContainsString( ProcedureEditor::FIELD_Q . 'label[1]', $html, 'la fila en blanco del final' );
-		$this->assertStringContainsString( 'Pregunta nueva', $html );
+		$this->assertStringContainsString( 'Campo nuevo', $html );
+		$this->assertStringContainsString( '>Título</label>', $html, 'cada campo lleva título, no rótulo' );
+		$this->assertStringContainsString( 'Guardar los campos', $html );
+		foreach ( array( 'Pregunta', 'pregunta', 'Rótulo' ) as $vieja ) {
+			$this->assertStringNotContainsString( '>' . $vieja, $html, 'en el panel ya no se dice ' . $vieja );
+		}
 		foreach ( ProcedureQuestions::types() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}

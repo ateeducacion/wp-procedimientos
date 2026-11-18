@@ -122,8 +122,8 @@ class Test_Questions_Panel extends WP_UnitTestCase {
 			$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'label[' . $i . ']"', $html );
 		}
 		$this->assertStringNotContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'label[4]"', $html );
-		$this->assertMatchesRegularExpression( '/<details class="prc-preguntas-mas">\s*<summary>Añadir otra pregunta<\/summary>.*label\[2\].*label\[3\].*<\/details>/sU', $html );
-		$this->assertDoesNotMatchRegularExpression( '/<summary>Añadir otra pregunta<\/summary>.*label\[1\]/sU', $html, 'la primera, a la vista' );
+		$this->assertMatchesRegularExpression( '/<details class="prc-preguntas-mas">\s*<summary>Añadir otro campo<\/summary>.*label\[2\].*label\[3\].*<\/details>/sU', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<summary>Añadir otro campo<\/summary>.*label\[1\]/sU', $html, 'la primera, a la vista' );
 
 		// Al guardar, las que vienen con rótulo se crean todas.
 		$this->acting_as( $uid );
@@ -160,7 +160,7 @@ class Test_Questions_Panel extends WP_UnitTestCase {
 		);
 		$html             = $this->panel( $uid, $id );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'remove[0]"', $html );
-		$this->assertStringContainsString( 'Quitar esta pregunta', $html );
+		$this->assertStringContainsString( 'Quitar este campo', $html );
 		$this->assertStringNotContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'remove[2]"', $html, 'una pregunta nueva no se quita: se deja en blanco' );
 
 		$this->acting_as( $uid );
@@ -202,9 +202,9 @@ class Test_Questions_Panel extends WP_UnitTestCase {
 		$this->assertSame( array( 'q1' => 2 ), Applications::answer_counts( $id ) );
 
 		$html = $this->panel( $uid, $id );
-		$this->assertStringContainsString( 'Ya la han contestado 2 solicitudes. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $html );
+		$this->assertStringContainsString( 'Ya lo han contestado 2 solicitudes. Corrija la redacción, no el sentido: si va a pedir otra cosa, cree un campo nuevo.', $html );
 		$this->assertStringContainsString( 'aria-describedby="prc-q-l-aviso-0"', $html );
-		$this->assertSame( 1, substr_count( $html, 'Ya la han contestado' ), 'la que nadie contestó no avisa' );
+		$this->assertSame( 1, substr_count( $html, 'Ya lo han contestado' ), 'la que nadie contestó no avisa' );
 	}
 
 	/**
@@ -227,7 +227,7 @@ class Test_Questions_Panel extends WP_UnitTestCase {
 		$html             = $this->panel( $uid, $id );
 		$this->assertStringContainsString( 'class="' . Assets::button_class() . '" form="prc-q-mover"', $html );
 		$this->assertStringNotContainsString( 'class="' . Assets::button_class( true ) . '" form="prc-q-mover"', $html );
-		$this->assertStringContainsString( 'aria-label="Bajar la pregunta 1"', $html );
-		$this->assertStringContainsString( '¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»', $html );
+		$this->assertStringContainsString( 'aria-label="Bajar el campo 1"', $html );
+		$this->assertStringContainsString( '¿Los mismos campos que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»', $html );
 	}
 }

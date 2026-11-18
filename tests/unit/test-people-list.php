@@ -16,7 +16,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\People;
 
 /**
- * La lista de personas de una solicitud, guardada (ADR-0041).
+ * La lista de participantes de una solicitud, guardada (ADR-0041).
  *
  * El guardián es `ProcedureAccess::can_edit_people()`: mismo centro, ventana
  * propia, nunca excluida ni histórica, y con «solo admitidas», admitida.

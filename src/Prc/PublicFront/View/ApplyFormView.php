@@ -388,7 +388,7 @@ final class ApplyFormView {
 
 			<?php if ( array() !== (array) $spec['questions'] ) : ?>
 				<section class="prc-seccion prc-seccion--sin-titulo" aria-labelledby="prc-preguntas">
-					<h2 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h2>
+					<h2 class="screen-reader-text" id="prc-preguntas">Campos adicionales del procedimiento</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
 							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
@@ -419,7 +419,7 @@ final class ApplyFormView {
 			$despues = (string) ( $m['people']['after_submit'] ?? '' );
 			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
 			return '<div class="prc-nota prc-campo--completo"><p>'
-				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de participantes, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
 				. '</p></div>';
 		}
 		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );

@@ -115,7 +115,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'name="' . PeopleSpecPanel::FIELD_ROLES . '[0]"', $html );
 		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_PEOPLE_SPEC . '"', $html );
-		$this->assertStringContainsString( '>Personas', $html, 'la pestaña' );
+		$this->assertStringContainsString( '>Participantes', $html, 'la pestaña' );
 
 		$url = $this->guardar( $uid, $procedimiento, $this->campos() );
 		$this->assertNotNull( $url );
@@ -267,7 +267,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 
 		$_GET[ PeopleSpecPanel::ARG_HISTORY ] = (string) $solicitud;
 		$html                                 = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringContainsString( 'Alta en la lista de personas', $html, 'un solo historial, el de la solicitud' );
+		$this->assertStringContainsString( 'Alta en la lista de participantes', $html, 'un solo historial, el de la solicitud' );
 		$this->assertStringContainsString( '<details class="prc-revision" open>', $html, 'la revisión de esa solicitud, abierta' );
 		$this->assertStringContainsString( '12345678Z', $html, 'en la lista, entero' );
 		$this->assertStringContainsString( 'DNI •••••678Z', $html, 'en el historial, tapado' );
@@ -278,7 +278,7 @@ class Test_People_Panel extends WP_UnitTestCase {
 		$this->acting_as( $otro_uid );
 		$_GET[ ProcedureEditor::ARG_PROCEDURE ] = (string) $sin;
 		$html                                   = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringNotContainsString( 'Alta en la lista de personas', $html );
+		$this->assertStringNotContainsString( 'Alta en la lista de participantes', $html );
 		$this->assertStringNotContainsString( 'prc-personas-revision', $html );
 		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
 	}

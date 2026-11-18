@@ -181,7 +181,7 @@ final class ApplicationProgress {
 		);
 		if ( ! empty( $people['show'] ) ) {
 			$pasos[] = array(
-				'label'  => 'Personas que participan',
+				'label'  => 'Participantes',
 				'anchor' => PeopleForm::ANCHOR,
 				'done'   => $hay && ! empty( $people['complete'] ),
 			);
@@ -247,10 +247,10 @@ final class ApplicationProgress {
 				return $out;
 			}
 			$hasta            = (string) $p['people_until'];
-			$out['texto']     = $falta . ' Hágalo abajo, en «Personas que participan»'
+			$out['texto']     = $falta . ' Hágalo abajo, en «Participantes»'
 				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
 			$out['link']      = '#' . PeopleForm::ANCHOR;
-			$out['link_text'] = 'Ir a la lista de personas';
+			$out['link_text'] = 'Ir a la lista de participantes';
 			return $out;
 		}
 		$out['texto'] = $verbo . ', pero todavía no está completa. Le falta: ' . lcfirst( implode( '; ', (array) $p['missing'] ) ) . '.';

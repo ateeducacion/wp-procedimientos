@@ -153,7 +153,7 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringContainsString( '<ol class="prc-pasos"', $html );
 		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--falta" aria-current="step">.*?href="#prc-solicitud-datos".*?Datos de la solicitud.*?Falta/s', $html );
-		$this->assertMatchesRegularExpression( '/href="#' . PeopleForm::ANCHOR . '".*?Personas que participan.*?Falta/s', $html );
+		$this->assertMatchesRegularExpression( '/href="#' . PeopleForm::ANCHOR . '".*?Participantes.*?Falta/s', $html );
 		$this->assertMatchesRegularExpression( '/href="#prc-entregas".*?Documentos con plazo propio.*?Falta/s', $html );
 		$this->assertStringContainsString( 'id="prc-solicitud-datos"', $html );
 		$this->assertStringContainsString( 'Después de presentar, en esta misma pantalla tendrá que dar de alta a las personas que participan (al menos 2).', $html, 'el paso 2 se anuncia antes de presentar' );
@@ -173,7 +173,7 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$html = $this->pintar( $procedimiento );
 		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--hecho">.*?Datos de la solicitud.*?Hecho/s', $html );
-		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--hecho">.*?Personas que participan.*?Hecho/s', $html );
+		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--hecho">.*?Participantes.*?Hecho/s', $html );
 		$this->assertMatchesRegularExpression( '/<li class="prc-paso prc-paso--falta" aria-current="step">.*?Documentos con plazo propio/s', $html );
 	}
 
@@ -211,7 +211,7 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
 		$this->assertStringContainsString( 'Solicitud presentada, pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos 2).', $html );
-		$this->assertStringContainsString( 'href="#' . PeopleForm::ANCHOR . '">Ir a la lista de personas</a>', $html );
+		$this->assertStringContainsString( 'href="#' . PeopleForm::ANCHOR . '">Ir a la lista de participantes</a>', $html );
 		$this->assertStringNotContainsString( 'no tiene que hacer nada más', $html );
 	}
 
@@ -324,11 +324,11 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$antes = $this->pintar( $procedimiento );
 		$this->assertStringNotContainsString( 'en esta misma pantalla', $antes );
-		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida', $antes );
+		$this->assertStringContainsString( 'La lista de participantes se gestiona cuando la solicitud esté admitida', $antes );
 
 		$this->application( $procedimiento, $director );
 		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
-		$this->assertStringContainsString( 'Solicitud presentada, pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos 2). La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
+		$this->assertStringContainsString( 'Solicitud presentada, pero todavía no está completa: falta dar de alta a las personas que participan (el procedimiento pide al menos 2). La lista de participantes se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
 		$this->assertStringNotContainsString( 'Hágalo abajo', $html );
 		$this->assertStringNotContainsString( 'Puede dar de alta, cambiar o sustituir personas hasta el', $html );
 	}
@@ -351,11 +351,11 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$antes = $this->pintar( $procedimiento );
 		$this->assertStringNotContainsString( 'en esta misma pantalla', $antes );
-		$this->assertStringContainsString( 'La lista de personas se abre el ' . $dia . '.', $antes );
+		$this->assertStringContainsString( 'La lista de participantes se abre el ' . $dia . '.', $antes );
 
 		$this->application( $procedimiento, $director );
 		$html = $this->pintar( $procedimiento, array( ApplyForm::ARG_NOTICE => 'presentada' ) );
-		$this->assertStringContainsString( '(el procedimiento pide al menos 2). La lista de personas se abre el ' . $dia . '.', $html );
+		$this->assertStringContainsString( '(el procedimiento pide al menos 2). La lista de participantes se abre el ' . $dia . '.', $html );
 		$this->assertStringNotContainsString( 'Hágalo abajo', $html );
 	}
 

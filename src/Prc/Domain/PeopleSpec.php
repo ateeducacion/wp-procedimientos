@@ -269,7 +269,7 @@ final class PeopleSpec {
 			return '';
 		}
 		return $count_after !== $count_before
-			? 'La coordinación ya se da de alta en la lista de la pestaña «Personas»: deje aquí «No se piden». No se ha guardado nada.'
+			? 'La coordinación ya se da de alta en la lista de la pestaña «Participantes»: deje aquí «No se piden». No se ha guardado nada.'
 			: 'En «Datos» se piden personas coordinadoras: para recogerlas en esta lista, deje antes «No se piden» en «Datos». No se ha guardado nada.';
 	}
 
@@ -289,11 +289,11 @@ final class PeopleSpec {
 			'Caben como mucho ' . self::MAX_GROUPS . ' grupos.' => $groups > self::MAX_GROUPS,
 			'Escriba al menos un papel, uno por línea.' => $spec['enabled'] && array() === $spec['roles'],
 			'Un papel exige grupo, pero no hay grupos: escriba los grupos o quite «| grupo».' => array() === $spec['groups'] && in_array( true, array_column( $spec['roles'], 'needs_group' ), true ),
-			'El mínimo y el máximo de personas tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
-			'El máximo de personas no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,
-			'El mínimo de personas no puede ser mayor que el máximo.' => $spec['min'] > $spec['max'],
-			'Las fechas de la lista de personas tienen que ser días que existen.' => ( '' !== $fechas[0] && '' === $spec['opens_at'] ) || ( '' !== $fechas[1] && '' === $spec['closes_at'] ),
-			'La lista de personas no puede cerrarse antes de abrirse.' => '' !== $spec['opens_at'] && '' !== $spec['closes_at'] && $spec['closes_at'] < $spec['opens_at'],
+			'El mínimo y el máximo de participantes tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
+			'El máximo de participantes no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,
+			'El mínimo de participantes no puede ser mayor que el máximo.' => $spec['min'] > $spec['max'],
+			'Las fechas de la lista de participantes tienen que ser días que existen.' => ( '' !== $fechas[0] && '' === $spec['opens_at'] ) || ( '' !== $fechas[1] && '' === $spec['closes_at'] ),
+			'La lista de participantes no puede cerrarse antes de abrirse.' => '' !== $spec['opens_at'] && '' !== $spec['closes_at'] && $spec['closes_at'] < $spec['opens_at'],
 		);
 		foreach ( $checks as $texto => $falla ) {
 			if ( $falla ) {
@@ -419,10 +419,10 @@ final class PeopleSpec {
 		$spec   = self::sanitize( $spec );
 		$review = (string) ( $ctx['review'] ?? '' );
 		$checks = array(
-			'Este procedimiento no pide una lista de personas.' => ! $spec['enabled'] || ! empty( $ctx['teacher'] ),
-			'El procedimiento está marcado como histórico: la lista de personas ya no se cambia.' => ! empty( $ctx['archived'] ),
-			'La solicitud está excluida: su lista de personas ya no se cambia.' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review,
-			'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.' => $spec['admitted_only'] && ApplicationMetaKeys::REVIEW_ADMITTED !== $review,
+			'Este procedimiento no pide una lista de participantes.' => ! $spec['enabled'] || ! empty( $ctx['teacher'] ),
+			'El procedimiento está marcado como histórico: la lista de participantes ya no se cambia.' => ! empty( $ctx['archived'] ),
+			'La solicitud está excluida: su lista de participantes ya no se cambia.' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review,
+			'La lista de participantes se gestiona cuando la solicitud esté admitida, y todavía no lo está.' => $spec['admitted_only'] && ApplicationMetaKeys::REVIEW_ADMITTED !== $review,
 		);
 		foreach ( $checks as $texto => $cierra ) {
 			if ( $cierra ) {
@@ -448,13 +448,13 @@ final class PeopleSpec {
 		if ( '' === $abre && '' === $cierra ) {
 			return self::application_editable( $state, $review, $late )
 				? ''
-				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
+				: 'La lista de participantes sigue el plazo de la solicitud, y no está abierto para la suya.';
 		}
 		if ( '' !== $abre && $today < $abre ) {
-			return 'La lista de personas se abre el ' . self::day( $abre ) . '.';
+			return 'La lista de participantes se abre el ' . self::day( $abre ) . '.';
 		}
 		if ( '' !== $cierra && $today > $cierra ) {
-			return 'El plazo de la lista de personas terminó el ' . self::day( $cierra ) . '.';
+			return 'El plazo de la lista de participantes terminó el ' . self::day( $cierra ) . '.';
 		}
 		return '';
 	}

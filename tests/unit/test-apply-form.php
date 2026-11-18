@@ -684,7 +684,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->assertStringNotContainsString( 'Datos de la coordinación', $html );
 		$this->assertStringNotContainsString( ApplyForm::FIELD_COORDINATORS, $html );
-		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. Allí podrá cambiarlas hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido.', $html );
+		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de participantes, después de presentar la solicitud. Allí podrá cambiarlas hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) ) . ', incluido.', $html );
 
 		$this->assertNotNull( $this->enviar( $uid, $procedure ), 'sin coordinación en el formulario, se presenta' );
 		$this->assertNotNull( Applications::find( $procedure, 'C0001' ) );
@@ -724,7 +724,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 			$html                             = ApplyForm::render();
 			$this->assertStringContainsString( 'Datos de la coordinación', $html );
-			$this->assertStringNotContainsString( 'se dan de alta en la lista de personas', $html );
+			$this->assertStringNotContainsString( 'se dan de alta en la lista de participantes', $html );
 		}
 	}
 
@@ -776,7 +776,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->acting_as( $this->school_head( 'C0001' ) );
 		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $procedure;
 		$html                             = ApplyForm::render();
-		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud. La lista de personas se gestiona cuando la solicitud esté admitida', $html );
+		$this->assertStringContainsString( 'Las personas coordinadoras se dan de alta en la lista de participantes, después de presentar la solicitud. La lista de participantes se gestiona cuando la solicitud esté admitida', $html );
 		$this->assertStringNotContainsString( 'Allí podrá cambiarlas hasta el', $html );
 	}
 

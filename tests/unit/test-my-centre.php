@@ -392,10 +392,10 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertFalse( $m['rows'][0]['people_complete'] );
 		$this->assertSame( 1, $m['incomplete']['count'] );
 		$html = MyCentreView::html( $m );
-		$this->assertStringContainsString( '>Personas</a></th>', $html );
+		$this->assertStringContainsString( '>Participantes</a></th>', $html );
 		$this->assertStringContainsString( 'Faltan 2 personas', $html );
 		$this->assertMatchesRegularExpression( '/href="[^"]*#' . PeopleForm::ANCHOR . '">Completar</', $html );
-		$this->assertStringContainsString( '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.', $html );
+		$this->assertStringContainsString( '<strong>1 solicitud</strong> está incompleta: le faltan participantes en la lista.', $html );
 		$this->assertStringContainsString( 'href="#fila-' . $lista . '">Ir a la solicitud</a>', $html );
 
 		foreach ( array( '12345678Z', 'X0000000T' ) as $dni ) {
@@ -435,7 +435,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertSame( 0, $m['incomplete']['count'] );
 		$html = MyCentreView::html( $m );
 		$this->assertStringNotContainsString( 'ya no se puede cambiar', $html );
-		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
+		$this->assertStringContainsString( 'La lista de participantes se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $html );
 		$this->assertStringNotContainsString( 'está incompleta', $html );
 	}
 
@@ -460,8 +460,8 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertCount( 2, $m['rows'] );
 		$this->assertSame( 0, $m['incomplete']['count'] );
 		$html = MyCentreView::html( $m );
-		$this->assertStringContainsString( 'La solicitud está excluida: su lista de personas ya no se cambia.', $html );
-		$this->assertStringContainsString( 'El plazo de la lista de personas terminó el', $html );
+		$this->assertStringContainsString( 'La solicitud está excluida: su lista de participantes ya no se cambia.', $html );
+		$this->assertStringContainsString( 'El plazo de la lista de participantes terminó el', $html );
 	}
 
 	/**
@@ -478,7 +478,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 		$this->assertTrue( $m['rows'][0]['people_complete'] );
 		$html = MyCentreView::html( $m );
 		$this->assertStringNotContainsString( 'Faltan', $html );
-		$this->assertStringContainsString( 'La solicitud está excluida: su lista de personas ya no se cambia.', $html );
+		$this->assertStringContainsString( 'La solicitud está excluida: su lista de participantes ya no se cambia.', $html );
 	}
 
 	/**
@@ -491,7 +491,7 @@ class Test_My_Centre extends WP_UnitTestCase {
 
 		$m = MyCentre::model();
 		$this->assertFalse( $m['has_people'] );
-		$this->assertStringNotContainsString( '>Personas</a></th>', MyCentreView::html( $m ) );
+		$this->assertStringNotContainsString( '>Participantes</a></th>', MyCentreView::html( $m ) );
 	}
 
 	/**

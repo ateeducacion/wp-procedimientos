@@ -287,9 +287,9 @@ final class ApplicationHistory {
 			return self::words( $fijos[ $evento ] );
 		}
 		$personas = array(
-			'person_added'   => 'Alta en la lista de personas',
-			'person_changed' => 'Cambio en la lista de personas',
-			'person_removed' => 'Baja en la lista de personas',
+			'person_added'   => 'Alta en la lista de participantes',
+			'person_changed' => 'Cambio en la lista de participantes',
+			'person_removed' => 'Baja en la lista de participantes',
 		);
 		if ( isset( $personas[ $evento ] ) ) {
 			return self::words( $personas[ $evento ], self::person( $spec, (array) ( $data['before'] ?? array() ) ), self::person( $spec, (array) ( $data['after'] ?? array() ) ) );

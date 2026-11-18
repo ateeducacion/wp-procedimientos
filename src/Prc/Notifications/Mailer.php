@@ -744,7 +744,7 @@ final class Mailer {
 			$falta[] = 'Plazo de solicitud: fechas de apertura y cierre';
 		}
 		if ( array() === Applications::questions( $procedure_id ) ) {
-			$falta[] = 'Preguntas de la solicitud, si las necesita';
+			$falta[] = 'Campos adicionales de la solicitud, si los necesita';
 		}
 		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
 			$falta[] = 'Enlace a la resolución';

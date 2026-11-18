@@ -182,9 +182,9 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'Rellene la solicitud',
 				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
-					. '<p>Si el procedimiento pide una lista de personas o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Personas que participan», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
+					. '<p>Si el procedimiento pide una lista de participantes o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Participantes», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
 					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
-					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Campos adicionales del procedimiento</strong>: los que haya puesto quien lo gestiona. Los marcados con asterisco (*) son obligatorios. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En los de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de participantes</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
 					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -192,7 +192,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => 'bloque de preguntas, con una obligatoria y una de archivo',
+						'caption' => 'bloque de campos adicionales, con uno obligatorio y uno de archivo',
 						'image'   => '',
 					),
 					array(
@@ -205,7 +205,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -222,11 +222,11 @@ final class HelpContent {
 				'id'    => 'personas-participantes',
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
-				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de participantes</strong> (quienes participan, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Participantes»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Participantes» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
+						'caption' => 'bloque «Participantes» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
@@ -277,7 +277,7 @@ final class HelpContent {
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de participantes, la columna <strong>«Participantes»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -313,7 +313,7 @@ final class HelpContent {
 				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong>, junto al título de su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El alta pide solo lo mínimo:</p>'
 					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Gestión de procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha), <strong>Otros correos de contacto</strong>, si quiere, y <strong>Color de cabecera</strong>, que ya viene elegido.</li></ul>'
 					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
-					. '<p><strong>Duplicar</strong>: abra el procedimiento que quiere copiar, pulse el menú <strong>«⋮»</strong> de arriba a la derecha del taller y elija <strong>«Duplicar»</strong>. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+					. '<p><strong>Duplicar</strong>: abra el procedimiento que quiere copiar, pulse el menú <strong>«⋮»</strong> de arriba a la derecha del taller y elija <strong>«Duplicar»</strong>. Crea un borrador con los mismos datos, <strong>los mismos campos adicionales</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pantalla «Crear un procedimiento»',
@@ -325,7 +325,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -337,7 +337,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Personas») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -353,14 +353,14 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-preguntas',
 				'level' => 3,
-				'title' => 'Preguntas',
-				'html'  => '<p>Hasta 40 preguntas propias. Al final hay siempre una <strong>«Pregunta nueva»</strong> vacía y, en <strong>«Añadir otra pregunta»</strong>, dos más: rellene las que necesite y pulse <strong>«Guardar las preguntas»</strong>. Las que deje sin rótulo no se crean. Cada pregunta enseña solo los campos de su tipo.</p>'
-					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
+				'title' => 'Campos adicionales',
+				'html'  => '<p>Hasta 40 campos adicionales. Al final hay siempre un <strong>«Campo nuevo»</strong> vacío y, en <strong>«Añadir otro campo»</strong>, dos más: rellene los que necesite y pulse <strong>«Guardar los campos»</strong>. Los que deje sin título no se crean. Cada campo enseña solo las opciones de su tipo.</p>'
+					. '<p>Cada campo lleva <strong>Título</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatorio</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, marque <strong>«Quitar esta pregunta»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el rótulo se dice cuántas la han contestado. El rótulo sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar un campo, marque <strong>«Quitar este campo»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el título se dice cuántas lo han contestado. El título sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si el campo es otro, cree uno nuevo.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
+						'caption' => 'pestaña «Campos adicionales» con un campo de «Una opción» y el «Campo nuevo»',
 						'image'   => '',
 					),
 				),
@@ -380,13 +380,13 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-personas',
 				'level' => 3,
-				'title' => 'Personas',
-				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+				'title' => 'Participantes',
+				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de participantes»</strong> si necesita saber quién participa. Defina:</p>'
+					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de participantes, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
 					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Personas» con papeles y grupos',
+						'caption' => 'pestaña «Participantes» con papeles y grupos',
 						'image'   => '',
 					),
 				),
@@ -395,7 +395,7 @@ final class HelpContent {
 				'id'    => 'taller-avisos',
 				'level' => 3,
 				'title' => 'Avisos',
-				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios de personas, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
+				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios en la lista de participantes, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -416,9 +416,9 @@ final class HelpContent {
 				'id'    => 'publicar',
 				'level' => 2,
 				'title' => 'Publique',
-				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, los campos adicionales, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
 					. '<p>Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>, que tiene el aspecto de las acciones delicadas y dice al lado lo que pasa: deja de verse en la portada.</p>'
-					. '<p>Antes de publicar, repase también a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
+					. '<p>Antes de publicar, repase también a quién se dirige, los campos obligatorios y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Publicación» con la línea de estados y la etapa actual',
@@ -523,7 +523,7 @@ final class HelpContent {
 				'id'    => 'inscripcion-incompleta',
 				'level' => 3,
 				'title' => 'Me dicen que la inscripción no está completa, pero lo rellené todo',
-				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas que participan», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
+				'html'  => '<p>Casi siempre falta la <strong>lista de participantes</strong>, que se rellena después de presentar, en «Participantes», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -537,7 +537,7 @@ final class HelpContent {
 				'id'    => 'cambiar-personas-coordinadoras',
 				'level' => 3,
 				'title' => '¿Dónde añado o cambio a las personas después de presentar? ¿Hasta cuándo?',
-				'html'  => '<p>En la misma solicitud, en el bloque «Personas que participan». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
+				'html'  => '<p>En la misma solicitud, en el bloque «Participantes». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -606,14 +606,14 @@ final class HelpContent {
 			array(
 				'id'    => 'varias-casillas',
 				'level' => 3,
-				'title' => '¿Cómo creo varias casillas o varias preguntas?',
-				'html'  => '<p>Rellene la «Pregunta nueva» y, si necesita más, las dos de «Añadir otra pregunta», y pulse «Guardar las preguntas»; aparecerán otras tres vacías. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'title' => '¿Cómo creo varias casillas o varios campos?',
+				'html'  => '<p>Rellene el «Campo nuevo» y, si necesita más, los dos de «Añadir otro campo», y pulse «Guardar los campos»; aparecerán otros tres vacíos. Para una lista de casillas que marcar, use un solo campo de tipo «Varias opciones», con una opción por línea.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'mismas-preguntas',
 				'level' => 3,
-				'title' => 'Quiero las mismas preguntas que el curso pasado',
+				'title' => 'Quiero los mismos campos que el curso pasado',
 				'html'  => '<p>Abra el procedimiento del curso pasado, pulse el menú «⋮» de arriba a la derecha y elija «Duplicar». Después, ponga el curso nuevo y las fechas.</p>',
 				'shots' => array(),
 			),
@@ -628,14 +628,14 @@ final class HelpContent {
 				'id'    => 'documento-firmado',
 				'level' => 3,
 				'title' => 'Necesito que el centro suba un documento de compromiso firmado',
-				'html'  => '<p>Cree una pregunta de tipo «Archivo», obligatoria. Si se entrega más tarde, marque «Entrega con plazo propio» y ponga sus fechas. Si basta con que el centro acepte un texto, use «Compromisos del centro» en «Datos».</p>',
+				'html'  => '<p>Cree un campo de tipo «Archivo», obligatorio. Si se entrega más tarde, marque «Entrega con plazo propio» y ponga sus fechas. Si basta con que el centro acepte un texto, use «Compromisos del centro» en «Datos».</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'cambie-un-rotulo',
 				'level' => 3,
-				'title' => 'He cambiado el rótulo de una pregunta con solicitudes ya presentadas',
-				'html'  => '<p>Las respuestas ya dadas se quedan como estaban, ahora bajo el rótulo nuevo. Si la pregunta significa otra cosa, vuelva al rótulo anterior y cree una pregunta nueva.</p>',
+				'title' => 'He cambiado el título de un campo con solicitudes ya presentadas',
+				'html'  => '<p>Las respuestas ya dadas se quedan como estaban, ahora bajo el título nuevo. Si el campo significa otra cosa, vuelva al título anterior y cree un campo nuevo.</p>',
 				'shots' => array(),
 			),
 			array(

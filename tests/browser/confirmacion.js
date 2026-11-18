@@ -242,7 +242,7 @@ async function abrir( ctx, conSwal ) {
   <div class="prc-mas__menu">
     <a class="prc-mas__opcion" href="/ficha">Vista previa</a>
     <form class="prc-mas__form" method="post" action="/enviado"
-          data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes."
+          data-prc-confirm="¿Duplicar «Red de ejemplo»? Se creará un borrador nuevo con sus datos, sus campos adicionales y su configuración, sin plazos, sin curso y sin solicitudes."
           data-prc-confirm-ok="Duplicar" data-prc-once>
       <input type="hidden" name="prc_nonce_duplicate_0" value="abc123" />
       <input type="hidden" name="prc_do" value="duplicate" />

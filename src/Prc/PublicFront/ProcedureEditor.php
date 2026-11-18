@@ -216,15 +216,15 @@ final class ProcedureEditor {
 	 * @var array<string, string>
 	 */
 	private const DONE = array(
-		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
+		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus campos adicionales y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
-		'preguntas'    => 'Preguntas guardadas.',
-		'ordenadas'    => 'Orden de las preguntas guardado.',
+		'preguntas'    => 'Campos adicionales guardados.',
+		'ordenadas'    => 'Orden de los campos guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
 		'avisos'       => 'Avisos por correo guardados.',
-		'personas'     => 'Lista de personas guardada.',
+		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
@@ -324,11 +324,11 @@ final class ProcedureEditor {
 		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
-			self::PANEL_QUESTIONS    => 'Preguntas',
+			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
-			self::PANEL_PEOPLE       => 'Personas',
+			self::PANEL_PEOPLE       => 'Participantes',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
@@ -958,7 +958,7 @@ final class ProcedureEditor {
 		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
-				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
+				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado los campos.';
 				return;
 			}
 		}

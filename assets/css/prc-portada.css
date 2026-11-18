@@ -160,8 +160,9 @@
   color: var(--prc-c-titulo);
 }
 
-/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca. */
-.prc-proc__ambito {
+/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca.
+   Con `.prc-proc` delante, para ganarle al `.prc-proc p { margin: 0 }`. */
+.prc-proc .prc-proc__ambito {
   margin: 4px 0 0;
   font-size: var(--prc-t-menudo);
   line-height: var(--prc-i-menudo);

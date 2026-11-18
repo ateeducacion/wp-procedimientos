@@ -46,6 +46,11 @@ final class ProcedureChrome {
 	public const CONSENT_COOKIE = 'cookieconsent_status';
 
 	/**
+	 * Option with the data protection notice, written in the settings.
+	 */
+	public const OPTION_PRIVACY = 'prc_privacy_notice';
+
+	/**
 	 * Everything the pages need from whoever deploys them.
 	 *
 	 * Todo vacío por defecto, y eso es la decisión: lo que no se configura no
@@ -68,7 +73,8 @@ final class ProcedureChrome {
 			'brand_alt'      => '',
 			// Aviso de protección de datos de la pantalla de solicitud: el órgano
 			// responsable y el tratamiento son del despliegue, no del aplicativo.
-			'privacy_notice' => '',
+			// Lo escribe administración en los ajustes; el filtro manda encima.
+			'privacy_notice' => (string) get_option( self::OPTION_PRIVACY, '' ),
 			// Ayuda técnica de la pantalla «Ayuda»: a quién escribir cuando no
 			// se puede entrar o algo falla. Texto libre con enlaces, que se
 			// sanea al pintarse; vacío, la ayuda solo remite al correo de

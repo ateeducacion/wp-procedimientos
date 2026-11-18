@@ -129,8 +129,12 @@ final class CentreEligibility {
 	 * Validate the three lists of the «Datos» form.
 	 *
 	 * Un procedimiento de profesorado no acota centros: las tres, vacías.
+	 * Marcar todos los tipos o todas las islas que ofrece el catálogo se guarda
+	 * vacío, sin límite: guardar la lista entera dejaría fuera a los centros que
+	 * no están en el catálogo (ADR-0042).
 	 *
-	 * @param array<string, mixed> $raw     `centre_types`, `islands`, `allowed_centres`.
+	 * @param array<string, mixed> $raw     `centre_types`, `islands`, `allowed_centres`, and the
+	 *                                      catalogue's `centre_type_options` and `island_options`.
 	 * @param bool                 $schools Whether the procedure is for schools.
 	 * @return array{data:array{centre_types:string[], islands:string[], allowed_centres:string[]}, errors:string[]}
 	 */
@@ -139,12 +143,26 @@ final class CentreEligibility {
 		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
 		return array(
 			'data'   => array(
-				'centre_types'    => $schools ? self::values( $raw['centre_types'] ?? array() ) : array(),
-				'islands'         => $schools ? self::values( $raw['islands'] ?? array() ) : array(),
+				'centre_types'    => $schools ? self::ticked( $raw['centre_types'] ?? array(), $raw['centre_type_options'] ?? array() ) : array(),
+				'islands'         => $schools ? self::ticked( $raw['islands'] ?? array(), $raw['island_options'] ?? array() ) : array(),
 				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
 			),
 			'errors' => $schools ? $errors : array(),
 		);
+	}
+
+	/**
+	 * The ticked values, or none when they cover every option offered.
+	 *
+	 * @param mixed $ticked  Values ticked.
+	 * @param mixed $options Values the catalogue offers.
+	 * @return string[]
+	 */
+	private static function ticked( $ticked, $options ): array {
+		$ticked  = self::values( $ticked );
+		$options = array_map( array( self::class, 'fold' ), self::values( $options ) );
+		$faltan  = array_diff( $options, array_map( array( self::class, 'fold' ), $ticked ) );
+		return array() !== $options && array() === $faltan ? array() : $ticked;
 	}
 
 	/**

@@ -863,9 +863,10 @@ final class ProcedureEditorView {
 	/**
 	 * «Qué centros pueden solicitar»: tipos, islas y una lista cerrada de códigos.
 	 *
-	 * Las casillas son los tipos y las islas que trae el catálogo, más los ya
-	 * elegidos aunque el catálogo los haya perdido. Ninguna marcada es «todos»
-	 * (ADR-0042).
+	 * Plegado como avanzado y abierto si ya hay un límite. Las casillas son los
+	 * tipos y las islas que trae el catálogo, más los ya elegidos aunque el
+	 * catálogo los haya perdido; sin límite guardado, todas marcadas. Todas o
+	 * ninguna es «sin límite» (ADR-0042, CentreEligibility::input()).
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @param array<string, mixed> $v Field values.
@@ -874,40 +875,47 @@ final class ProcedureEditorView {
 	private static function eligibility_fields( array $m, array $v ): string {
 		$opciones = (array) ( $m['centre_options'] ?? array() );
 		$listas   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ) ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ) ),
 		);
 
 		$elegidos = array();
 		foreach ( array_keys( $listas ) as $nombre ) {
 			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
 		}
+		$abierto = array() !== array_filter( $elegidos ) || '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] );
 
 		ob_start();
 		?>
+		<details class="prc-acotar"<?php echo $abierto ? ' open' : ''; ?>>
+		<summary>Limitar a ciertos centros (avanzado)</summary>
 		<div class="prc-seccion__cuerpo">
 			<div class="prc-campo prc-campo--completo">
-				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<p class="prc-campo__ayuda">Con todo marcado y la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Para limitar, desmarca lo que sobre: con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Desmarcarlo todo cuenta como no limitar. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
 				<?php echo self::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</div>
 			<?php foreach ( $listas as $nombre => $lista ) : ?>
 				<div class="prc-campo prc-campo--medio">
-					<fieldset>
+					<fieldset data-prc-tick-group>
 						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
 						<?php if ( array() === $lista[1] ) : ?>
 							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php else : ?>
+							<p class="prc-acotar__marcar" hidden>
+								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
+								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
+							</p>
 						<?php endif; ?>
 						<div class="prc-opciones prc-opciones--vertical">
 							<?php foreach ( $lista[1] as $i => $valor ) : ?>
 								<div class="prc-opcion">
 									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
 										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
-										<?php checked( in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
+										<?php checked( array() === $elegidos[ $nombre ] || in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
 									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
 								</div>
 							<?php endforeach; ?>
 						</div>
-						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
 					</fieldset>
 				</div>
 			<?php endforeach; ?>
@@ -918,6 +926,7 @@ final class ProcedureEditorView {
 				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
 			</div>
 		</div>
+		</details>
 		<?php
 		return (string) ob_get_clean();
 	}

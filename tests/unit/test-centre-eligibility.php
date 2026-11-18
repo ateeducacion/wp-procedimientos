@@ -79,6 +79,43 @@ class Test_Centre_Eligibility extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Todos los tipos o islas del catálogo marcados es no acotar: se guarda
+	 * vacío, que deja solicitar también a quien no está en el catálogo
+	 * (ADR-0042). Ninguno marcado, igual. Algunos, esos.
+	 */
+	public function test_ticking_every_option_stores_no_limit() {
+		$opciones = array(
+			'centre_type_options' => array( 'CEIP', 'IES' ),
+			'island_options'      => array( 'Isla Uno', 'Isla Dos' ),
+		);
+
+		$todas = ProcedureInput::validate(
+			$opciones + array(
+				'centre_types' => array( 'ies', 'CEIP' ),
+				'islands'      => array( 'Isla Uno', 'Isla Dos', 'Isla Perdida' ),
+			)
+		);
+		$this->assertSame( array(), $todas['data']['centre_types'], 'todos los tipos marcados: sin límite' );
+		$this->assertSame( array(), $todas['data']['islands'], 'todas las islas, aunque haya una perdida marcada: sin límite' );
+
+		$algunas = ProcedureInput::validate(
+			$opciones + array(
+				'centre_types' => array( 'CEIP' ),
+				'islands'      => array( 'Isla Dos', 'Isla Perdida' ),
+			)
+		);
+		$this->assertSame( array( 'CEIP' ), $algunas['data']['centre_types'] );
+		$this->assertSame( array( 'Isla Dos', 'Isla Perdida' ), $algunas['data']['islands'] );
+
+		$ninguna = ProcedureInput::validate( $opciones );
+		$this->assertSame( array(), $ninguna['data']['centre_types'], 'ninguno marcado no es «nadie»: sin límite' );
+		$this->assertSame( array(), $ninguna['data']['islands'] );
+
+		$sin_catalogo = ProcedureInput::validate( array( 'centre_types' => array( 'CEIP' ) ) );
+		$this->assertSame( array( 'CEIP' ), $sin_catalogo['data']['centre_types'], 'sin opciones que cubrir, se guarda lo marcado' );
+	}
+
+	/**
 	 * El error de la lista se cuenta en castellano.
 	 */
 	public function test_the_list_error_reads_well() {

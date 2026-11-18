@@ -4765,17 +4765,35 @@ final class CentreEligibility {
 
 
 
+
+
+
+
 	public static function input( array $raw, bool $schools ): array {
 		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
 		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
 		return array(
 			'data'   => array(
-				'centre_types'    => $schools ? self::values( $raw['centre_types'] ?? array() ) : array(),
-				'islands'         => $schools ? self::values( $raw['islands'] ?? array() ) : array(),
+				'centre_types'    => $schools ? self::ticked( $raw['centre_types'] ?? array(), $raw['centre_type_options'] ?? array() ) : array(),
+				'islands'         => $schools ? self::ticked( $raw['islands'] ?? array(), $raw['island_options'] ?? array() ) : array(),
 				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
 			),
 			'errors' => $schools ? $errors : array(),
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function ticked( $ticked, $options ): array {
+		$ticked  = self::values( $ticked );
+		$options = array_map( array( self::class, 'fold' ), self::values( $options ) );
+		$faltan  = array_diff( $options, array_map( array( self::class, 'fold' ), $ticked ) );
+		return array() !== $options && array() === $faltan ? array() : $ticked;
 	}
 
 
@@ -19233,7 +19251,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>, dentro de «Limitar a ciertos centros (avanzado)»: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Tipos e islas vienen todos marcados: así, y con la lista en blanco, puede solicitar cualquier centro. Para limitar, desmarque lo que sobre; desmarcarlo todo cuenta como no limitar.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -24490,43 +24508,51 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function eligibility_fields( array $m, array $v ): string {
 		$opciones = (array) ( $m['centre_options'] ?? array() );
 		$listas   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ), 'Ninguno marcado: todos los tipos.' ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ), 'Ninguna marcada: todas.' ),
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ) ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ) ),
 		);
 
 		$elegidos = array();
 		foreach ( array_keys( $listas ) as $nombre ) {
 			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
 		}
+		$abierto = array() !== array_filter( $elegidos ) || '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] );
 
 		ob_start();
 		?>
+		<details class="prc-acotar"<?php echo $abierto ? ' open' : ''; ?>>
+		<summary>Limitar a ciertos centros (avanzado)</summary>
 		<div class="prc-seccion__cuerpo">
 			<div class="prc-campo prc-campo--completo">
-				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+				<p class="prc-campo__ayuda">Con todo marcado y la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Para limitar, desmarca lo que sobre: con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Desmarcarlo todo cuenta como no limitar. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
 				<?php echo self::centre_warning( $m, 'catalogue' );?>
 			</div>
 			<?php foreach ( $listas as $nombre => $lista ) : ?>
 				<div class="prc-campo prc-campo--medio">
-					<fieldset>
+					<fieldset data-prc-tick-group>
 						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
 						<?php if ( array() === $lista[1] ) : ?>
 							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php else : ?>
+							<p class="prc-acotar__marcar" hidden>
+								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
+								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
+							</p>
 						<?php endif; ?>
 						<div class="prc-opciones prc-opciones--vertical">
 							<?php foreach ( $lista[1] as $i => $valor ) : ?>
 								<div class="prc-opcion">
 									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
 										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
-										<?php checked( in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
+										<?php checked( array() === $elegidos[ $nombre ] || in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
 									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
 								</div>
 							<?php endforeach; ?>
 						</div>
-						<p class="prc-campo__ayuda"><?php echo esc_html( $lista[2] ); ?></p>
 					</fieldset>
 				</div>
 			<?php endforeach; ?>
@@ -24537,6 +24563,7 @@ final class ProcedureEditorView {
 				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
 			</div>
 		</div>
+		</details>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -26011,6 +26038,9 @@ final class ProcedureEditor {
 			'centre_types'         => $tipos,
 			'islands'              => $islas,
 			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
+
+			'centre_type_options'  => CentreCatalog::values( 'type' ),
+			'island_options'       => CentreCatalog::values( 'island' ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -37715,6 +37745,10 @@ body.prc-app .prc-btn-borrar {
 /* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
 .prc-preguntas-mas { margin: 0 0 16px; }
 .prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+/* «Limitar a ciertos centros», plegado como avanzado, con el mismo rótulo. */
+.prc-acotar > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
+.prc-acotar__marcar[hidden] { display: none; }
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
@@ -38212,6 +38246,32 @@ body.prc-app .prc-btn-borrar {
 				} );
 			}
 		}
+	} );
+
+	/*
+	 * «Marcar todos» y «Ninguno» (`data-prc-tick-all="1"` o `"0"`) dentro de un
+	 * `data-prc-tick-group`: marcan o desmarcan las casillas del grupo. Salen
+	 * escondidos y solo los enseña el guion; sin él, las casillas se marcan
+	 * una a una.
+	 */
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-tick-all]\' ), function ( boton ) {
+			boton.parentElement.hidden = false;
+		} );
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		var boton = e.target.closest ? e.target.closest( \'[data-prc-tick-all]\' ) : null;
+		var grupo = boton ? boton.closest( \'[data-prc-tick-group]\' ) : null;
+		if ( ! grupo ) {
+			return;
+		}
+		var marcar = \'1\' === boton.getAttribute( \'data-prc-tick-all\' );
+		Array.prototype.forEach.call( grupo.querySelectorAll( \'input[type="checkbox"]\' ), function ( casilla ) {
+			casilla.checked = marcar;
+		} );
+		// Cuenta como un cambio del formulario: el aviso de cambios sin guardar lo ve.
+		boton.dispatchEvent( new Event( \'change\', { bubbles: true } ) );
 	} );
 
 	/* --- 8. Un solo envío ------------------------------------------------ */

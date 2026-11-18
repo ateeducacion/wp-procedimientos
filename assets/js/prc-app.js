@@ -487,6 +487,32 @@
 		}
 	} );
 
+	/*
+	 * «Marcar todos» y «Ninguno» (`data-prc-tick-all="1"` o `"0"`) dentro de un
+	 * `data-prc-tick-group`: marcan o desmarcan las casillas del grupo. Salen
+	 * escondidos y solo los enseña el guion; sin él, las casillas se marcan
+	 * una a una.
+	 */
+	document.addEventListener( 'DOMContentLoaded', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-tick-all]' ), function ( boton ) {
+			boton.parentElement.hidden = false;
+		} );
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		var boton = e.target.closest ? e.target.closest( '[data-prc-tick-all]' ) : null;
+		var grupo = boton ? boton.closest( '[data-prc-tick-group]' ) : null;
+		if ( ! grupo ) {
+			return;
+		}
+		var marcar = '1' === boton.getAttribute( 'data-prc-tick-all' );
+		Array.prototype.forEach.call( grupo.querySelectorAll( 'input[type="checkbox"]' ), function ( casilla ) {
+			casilla.checked = marcar;
+		} );
+		// Cuenta como un cambio del formulario: el aviso de cambios sin guardar lo ve.
+		boton.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	} );
+
 	/* --- 8. Un solo envío ------------------------------------------------ */
 
 	/*

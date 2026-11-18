@@ -12,7 +12,6 @@ use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationFilter;
 use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaKeys;
-use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Observe;
@@ -38,6 +37,15 @@ class Test_Observe extends WP_UnitTestCase {
 
 	/** Review note: must never reach the consultation. */
 	const NOTA = 'NOTA-RESERVADA-DE-REVISION';
+
+	/** Every meta key of the consultation settings. */
+	const OBSERVE_KEYS = array(
+		ProcedureMetaKeys::OBSERVABLE,
+		ProcedureMetaKeys::OBSERVER_COLUMNS,
+		ProcedureMetaKeys::OBSERVER_FILES,
+		ProcedureMetaKeys::OBSERVER_EXPORT,
+		ProcedureMetaKeys::OBSERVER_NOTIFY,
+	);
 
 	/**
 	 * Correos capturados.
@@ -94,6 +102,13 @@ class Test_Observe extends WP_UnitTestCase {
 			},
 			null,
 			Observe::class
+		)();
+		\Closure::bind(
+			static function (): void {
+				self::$rejected = '';
+			},
+			null,
+			ProcedureEditor::class
 		)();
 		$this->enviados = array();
 		add_filter(
@@ -627,7 +642,9 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->assertFalse( ProcedureAccess::can_configure_observe( $gestor, $caso['procedure'] ) );
 		$this->assertArrayNotHasKey( ProcedureEditor::PANEL_OBSERVE, ProcedureEditor::panels( $caso['procedure'] ), 'sin pestaña' );
 		$this->assertArrayHasKey( ProcedureEditor::PANEL_CODE, ProcedureEditor::panels( $caso['procedure'] ), 'el código sí' );
-		$this->assertFalse( ProcedureMetaRegistration::auth_observe( true, ProcedureMetaKeys::OBSERVABLE, $caso['procedure'], $gestor ), 'ni por la meta' );
+		foreach ( self::OBSERVE_KEYS as $key ) {
+			$this->assertFalse( user_can( $gestor, 'edit_post_meta', $caso['procedure'], $key ), 'ni por la meta: ' . $key );
+		}
 
 		$op = ProcedureEditor::OP_OBSERVE;
 		$this->post(
@@ -646,7 +663,39 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->acting_as( $admin );
 		$this->assertTrue( ProcedureAccess::can_configure_observe( $admin, $caso['procedure'] ) );
 		$this->assertSame( 'Avanzado', ProcedureEditor::panels( $caso['procedure'] )[ ProcedureEditor::PANEL_OBSERVE ]['group'] );
-		$this->assertTrue( ProcedureMetaRegistration::auth_observe( false, ProcedureMetaKeys::OBSERVABLE, $caso['procedure'], $admin ) );
+		foreach ( self::OBSERVE_KEYS as $key ) {
+			$this->assertTrue( user_can( $admin, 'edit_post_meta', $caso['procedure'], $key ), $key );
+		}
+	}
+
+	/**
+	 * Sin la pestaña, quien gestiona su ámbito ve en «Código» que la consulta
+	 * está activa, y si sus columnas ya no existen; sin poder cambiarla.
+	 */
+	public function test_a_scope_manager_sees_the_consultation_is_on_without_editing_it() {
+		$caso   = $this->caso(
+			array(
+				ProcedureMetaKeys::OBSERVABLE       => true,
+				ProcedureMetaKeys::OBSERVER_COLUMNS => array( 'q99' ),
+			)
+		);
+		$gestor = $this->manager( array( $caso['area'] ) );
+		$this->acting_as( $gestor );
+		$_GET = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $caso['procedure'],
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_CODE,
+		);
+		$html = ProcedureEditorView::html( ProcedureEditor::model() );
+		$this->assertStringContainsString( 'La consulta por zona está activa en este procedimiento', $html );
+		$this->assertStringContainsString( 'Pero las columnas que se eligieron ya no existen', $html );
+		$this->assertStringNotContainsString( 'name="' . ObserveSettings::FIELD_OBSERVABLE . '"', $html, 'sin edición' );
+
+		update_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVABLE, false );
+		$html = ProcedureEditorView::html( ProcedureEditor::model() );
+		$this->assertStringNotContainsString( 'La consulta por zona está activa', $html, 'apagada, nada que decir' );
+
+		$_GET[ ProcedureEditor::ARG_PANEL ] = ProcedureEditor::PANEL_DATA;
+		$this->assertSame( array(), ProcedureEditor::model()['observe'], 'el panel solo se arma donde se pinta' );
 	}
 
 	/**

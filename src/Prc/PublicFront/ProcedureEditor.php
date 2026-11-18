@@ -1524,6 +1524,11 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
+			// Sin la pestaña «Acceso de consulta»: si la consulta está activa.
+			'observe_status'          => array(
+				'observable' => false,
+				'gone'       => false,
+			),
 			'actions'                 => array(),
 		);
 	}
@@ -1643,7 +1648,12 @@ final class ProcedureEditor {
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']        = ObserveSettings::model( $procedure_id );
+		if ( self::PANEL_OBSERVE === $m['panel'] ) {
+			$m['observe'] = ObserveSettings::model( $procedure_id );
+		}
+		if ( self::PANEL_CODE === $m['panel'] && ! isset( $paneles[ self::PANEL_OBSERVE ] ) ) {
+			$m['observe_status'] = ObserveSettings::status( $procedure_id );
+		}
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de

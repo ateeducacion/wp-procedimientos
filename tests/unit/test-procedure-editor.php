@@ -262,13 +262,19 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_QUESTIONS,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_LINKS,
-			ProcedureEditor::PANEL_OBSERVE,
 			ProcedureEditor::PANEL_CODE,
 		);
 		foreach ( $paneles as $panel ) {
 			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
 			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html, $panel );
 		}
+		// «Acceso de consulta» solo lo ve administración: con quien gestiona
+		// su ámbito, el modelo caería a «Datos» y no se comprobaría nada.
+		$this->acting_as( $this->administrator() );
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_OBSERVE );
+		$this->assertSame( ProcedureEditor::PANEL_OBSERVE, $m['panel'] );
+		$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ), ProcedureEditor::PANEL_OBSERVE );
+		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringNotContainsString( 'data-prc-dirty-guard', $html, 'publicar es un botón, no un formulario que se rellena' );
 	}

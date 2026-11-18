@@ -664,6 +664,9 @@ body.prc-app .prc-hoja {
    persona: sin guion se abre y se cierra igual. Cada opción mide al menos
    44 px de alto, y la capa no pasa del ancho de la pantalla en el móvil. */
 .prc-mas { position: relative; margin-left: auto; }
+/* El ojo de «Ver la ficha», a la vista junto al menú: él empuja a la derecha. */
+.prc-cabecera__ojo { margin-left: auto; }
+.prc-cabecera__ojo + .prc-mas { margin-left: 0; }
 .prc-mas > summary { list-style: none; cursor: pointer; }
 .prc-mas > summary::-webkit-details-marker { display: none; }
 /* Con más peso que `.prc-mini` y que `body.prc-app .btn`, que lo dejarían

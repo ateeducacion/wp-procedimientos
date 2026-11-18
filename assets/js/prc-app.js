@@ -365,7 +365,10 @@
 		var abrir = document.createElement( 'button' );
 		abrir.type = 'button';
 		abrir.className = resumen.className;
-		abrir.textContent = resumen.textContent;
+		// Con sus hijos, no solo el texto: el icono viaja con el rótulo.
+		Array.prototype.forEach.call( resumen.childNodes, function ( nodo ) {
+			abrir.appendChild( nodo.cloneNode( true ) );
+		} );
 		abrir.setAttribute( 'aria-haspopup', 'dialog' );
 		abrir.setAttribute( 'aria-controls', dialogo.id );
 		abrir.setAttribute( 'data-prc-export-open', dialogo.id );

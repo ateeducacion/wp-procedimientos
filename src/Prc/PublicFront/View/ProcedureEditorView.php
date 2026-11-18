@@ -245,6 +245,7 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa', 'prc-cabecera__ojo' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::menu( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>

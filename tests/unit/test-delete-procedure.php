@@ -529,6 +529,10 @@ class Test_Delete_Procedure extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>Borrar</a>', $html );
 		$this->assertSame( 1, substr_count( $html, 'data-prc-menu' ), 'un solo menú' );
 		$this->assertLessThan( strpos( $html, 'prc-tabs--taller' ), strpos( $html, 'data-prc-menu' ), 'en la cabecera' );
+		// El ojo, a la vista además de en el menú, y antes de él.
+		$ojo = strpos( $html, '<span class="screen-reader-text">Vista previa</span></a>' );
+		$this->assertNotFalse( $ojo, 'la vista previa, también fuera del menú' );
+		$this->assertLessThan( strpos( $html, 'data-prc-menu' ), $ojo );
 	}
 
 	/**

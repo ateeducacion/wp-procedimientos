@@ -69,7 +69,10 @@ final class ExportDialogView {
 		ob_start();
 		?>
 		<details class="prc-exportar" data-prc-export>
-			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
+			<summary class="<?php echo esc_attr( Assets::button_class( true ) ); ?> prc-exportar__abrir">
+				<?php echo Shell::icon( 'descarga' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- SVG literal. ?>
+				Exportar…
+			</summary>
 			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" aria-labelledby="prc-exportar-titulo">
 				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>

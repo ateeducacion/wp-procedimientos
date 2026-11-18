@@ -415,6 +415,9 @@ final class Workspace {
 			'applications'     => 0,
 			'url'              => Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ),
 			'applications_url' => ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ),
+			// Lo mismo que el menú del taller: la ficha, o la vista previa de un borrador.
+			'view_url'         => ProcedureView::link( $post ),
+			'view_label'       => 'publish' === $post->post_status ? 'Ver la ficha' : 'Vista previa',
 		);
 	}
 

@@ -254,7 +254,8 @@ class Test_Home extends WP_UnitTestCase {
 		$this->assertStringContainsString( '<p class="prc-proc__estado"><span class="' . Assets::state_class( ProcedureMetaKeys::STATE_OPEN ) . '">Abierto</span></p>', $html, 'la misma pastilla de estado que en el resto' );
 		$this->assertStringContainsString( 'prc-grupo-' . ProcedureMetaKeys::STATE_OPEN, $html );
 		$this->assertStringContainsString( 'prc-hero', $html, 'la portada lleva el título grande, no el de pantalla interior' );
-		$this->assertStringContainsString( 'prc-proc__banda', $html, 'y cada tarjeta su banda de color' );
+		$this->assertStringContainsString( '<p class="prc-proc__ambito">Área de prueba</p>', $html, 'y cada tarjeta, su ámbito a la vista' );
+		$this->assertStringNotContainsString( 'prc-proc__banda', $html, 'la banda de color no le decía nada a nadie' );
 		$this->assertStringContainsString( 'Cierra en 3 días', $html, 'con lo que queda de plazo' );
 		$this->assertStringContainsString( 'Acceder', $html, 'sin sesión se ofrece entrar' );
 		$this->assertTrue( wp_style_is( 'prc-app', 'enqueued' ), 'y la hoja del aplicativo se encola' );
@@ -409,6 +410,41 @@ class Test_Home extends WP_UnitTestCase {
 		$this->assertTrue( $suyas['La que ya pidió'] );
 		$this->assertFalse( $suyas['La que no'] );
 		$this->assertStringContainsString( 'Su centro ya ha solicitado', Home::render() );
+	}
+
+	/**
+	 * La tarjeta lleva el cartel; sin cartel, el logo del ámbito, que puede
+	 * ser el de un ámbito de arriba; sin ninguno de los dos, nada.
+	 */
+	public function test_the_card_shows_the_poster_or_the_area_logo() {
+		$curso  = $this->course( '2026-2027' );
+		$padre  = $this->area( 'Ámbito con logo' );
+		$hijo   = $this->area( 'Subámbito sin logo', $padre );
+		$suelto = $this->area( 'Ámbito sin logo' );
+		$logo   = (int) self::factory()->attachment->create_object( 'logo.png', 0, array( 'post_mime_type' => 'image/png' ) );
+		update_term_meta( $padre, ProcedureTaxonomies::IMAGE_ID, $logo );
+
+		$con_cartel = $this->convocatoria( 'Con cartel', $curso, $hijo, $this->abierto() );
+		$cartel     = (int) self::factory()->attachment->create_object( 'cartel.jpg', $con_cartel, array( 'post_mime_type' => 'image/jpeg' ) );
+		set_post_thumbnail( $con_cartel, $cartel );
+		$this->convocatoria( 'Sin cartel', $curso, $hijo, $this->abierto() );
+		$this->convocatoria( 'Sin nada', $curso, $suelto, $this->abierto() );
+
+		$this->acting_as( 0 );
+		$filas = array();
+		foreach ( Home::model()['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'] as $fila ) {
+			$filas[ $fila['title'] ] = $fila;
+		}
+
+		$this->assertSame( wp_get_attachment_image_url( $cartel, 'medium_large' ), $filas['Con cartel']['poster'] );
+		$this->assertSame( '', $filas['Con cartel']['area_logo'], 'con cartel, el logo sobra' );
+		$this->assertSame( '', $filas['Sin cartel']['poster'] );
+		$this->assertSame( wp_get_attachment_image_url( $logo, 'medium_large' ), $filas['Sin cartel']['area_logo'], 'el logo del ámbito de arriba' );
+		$this->assertSame( '', $filas['Sin nada']['area_logo'] );
+
+		$html = Home::render();
+		$this->assertStringContainsString( 'prc-proc__cartel--logo', $html );
+		$this->assertStringContainsString( 'prc-proc__cartel--vacio', $html );
 	}
 
 	/**

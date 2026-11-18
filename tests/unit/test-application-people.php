@@ -387,6 +387,26 @@ class Test_Application_People extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Hasta cuándo se cambia la lista, para decirlo en la pantalla y en el
+	 * acuse: su último día propio o, sin fechas, el cierre del plazo de
+	 * solicitud. Lo que ya pasó, o un plazo sin final, no se dice.
+	 */
+	public function test_until_is_the_last_day_the_list_can_be_changed() {
+		$propia = $this->spec(
+			array(
+				'opens_at'  => '2026-11-10',
+				'closes_at' => '2026-11-20',
+			)
+		);
+		$this->assertSame( '2026-11-20', PeopleSpec::until( $propia, '2026-11-15', '2026-11-12' ), 'la fecha propia manda' );
+		$this->assertSame( '2026-11-15', PeopleSpec::until( $this->spec(), '2026-11-15', '2026-11-12' ), 'sin fechas, la de la solicitud' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec(), '2026-11-15', '2026-11-16' ), 'pasada, no se dice' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec( array( 'opens_at' => '2026-11-10' ) ), '2026-11-15', '2026-11-12' ), 'abierta sin final' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec( array( 'enabled' => false ) ), '2026-11-15', '2026-11-12' ), 'sin lista' );
+		$this->assertSame( '', PeopleSpec::until( $this->spec(), '', '2026-11-12' ), 'sin plazo' );
+	}
+
+	/**
 	 * Histórico, excluida, profesorado o apagada: nunca; con «solo admitidas»,
 	 * solo admitida.
 	 */
@@ -548,5 +568,27 @@ class Test_Application_People extends WP_UnitTestCase {
 		$texto = ApplicationPeople::describe( $this->spec(), ApplicationPeople::row( $this->fila() ) );
 		$this->assertSame( 'Ana Pérez Díaz · ana@example.org · Participante · Eje 1', $texto );
 		$this->assertStringNotContainsString( '12345678Z', $texto );
+	}
+
+	/**
+	 * La lista recoge la coordinación solo si obliga a dar de alta a tantas
+	 * personas coordinadoras como se piden: un mínimo que las cubre y ningún
+	 * papel con el que completarlo sin coordinar.
+	 */
+	public function test_collects_coordination_needs_a_minimum_that_covers_the_coordinators() {
+		$solo_coordinacion = array(
+			'roles' => array(
+				array(
+					'key'   => 'r1',
+					'label' => 'Coordinación',
+				),
+			),
+		);
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 1 ) ), 2 ), 'un mínimo de 1 no cubre dos personas coordinadoras' );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 2 ) ), 2 ), 'con «Participante» el mínimo se completa sin coordinar' );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 1 ) + $solo_coordinacion ), 2 ) );
+		$this->assertTrue( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 2 ) + $solo_coordinacion ), 2 ) );
+		$this->assertTrue( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 3 ) + $solo_coordinacion ), 1 ) );
+		$this->assertFalse( PeopleSpec::collects_coordination( $this->spec( array( 'min' => 0 ) + $solo_coordinacion ), 1 ), 'sin mínimo no se recoge nada' );
 	}
 }

@@ -188,6 +188,45 @@ class Test_People_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * La sección dice siempre, la primera y en negrita, hasta qué día se
+	 * cambian las personas: es lo que se pregunta después de presentar.
+	 */
+	public function test_the_section_says_until_when_people_can_be_changed() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+
+		$html = $this->pintar( $procedimiento );
+		$dia  = implode( '-', array_reverse( explode( '-', $this->dia( 1 ) ) ) );
+		$this->assertStringContainsString( '<strong>Puede dar de alta, cambiar o sustituir personas hasta el ' . $dia . ', incluido.</strong>', $html );
+
+		// Sin fechas propias, el cierre del plazo de solicitud.
+		$sin_fechas = $this->procedure(
+			$this->administrator(),
+			array( $this->area( 'Área de prueba' ) ),
+			array(
+				ProcedureMetaKeys::OPENS_AT    => $this->dia( -1 ),
+				ProcedureMetaKeys::CLOSES_AT   => $this->dia( 3 ),
+				ProcedureMetaKeys::PEOPLE_SPEC => array(
+					'enabled' => true,
+					'roles'   => array(
+						array(
+							'key'   => 'r1',
+							'label' => 'Coordinación',
+						),
+					),
+					'min'     => 1,
+					'max'     => 2,
+				),
+			)
+		);
+		$this->acting_as( $director );
+		$html = $this->pintar( $sin_fechas );
+		$this->assertStringContainsString( 'hasta el ' . implode( '-', array_reverse( explode( '-', $this->dia( 3 ) ) ) ) . ', incluido.', $html, 'antes de presentar también' );
+	}
+
+	/**
 	 * Sin especificación no hay sección, y la pantalla es la de siempre.
 	 */
 	public function test_without_spec_there_is_no_section() {
@@ -373,6 +412,6 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertStringEndsWith( '#' . PeopleForm::ANCHOR, (string) $filas[ (string) $con ]['people_url'] );
 		$this->assertSame( 1, $filas[ (string) $con ]['people_count'] );
 		$this->assertSame( '', $filas[ (string) $sin ]['people_url'] );
-		$this->assertStringContainsString( 'Personas (1)', MyCentre::render() );
+		$this->assertStringContainsString( 'Falta 1 persona', MyCentre::render() );
 	}
 }

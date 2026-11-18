@@ -135,6 +135,24 @@ class Test_Application_Completeness extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Lo que queda por entregar: obligatoria, sin documento y en plazo o
+	 * antes de él; ni una vencida, que ya falta, ni una opcional, ni nada en
+	 * una excluida.
+	 */
+	public function test_a_required_delivery_still_in_time_is_pending() {
+		$hoy       = '2026-06-01';
+		$preguntas = array(
+			$this->entrega( 'q1', 'Memoria final', '2026-05-31' ),
+			$this->entrega( 'q2', 'Fotos', '2026-07-01', false ),
+			$this->entrega( 'q3', 'Plan', '2026-06-01' ),
+			$this->entrega( 'q4', 'Proyecto', '2026-07-01' ),
+		);
+		$this->assertSame( array( 'q3', 'q4' ), array_column( ApplicationCompleteness::pending( $preguntas, array(), $hoy, ApplicationMetaKeys::REVIEW_SUBMITTED ), 'key' ) );
+		$this->assertSame( array( 'q4' ), array_column( ApplicationCompleteness::pending( $preguntas, array( 'q3' => $this->documento() ), $hoy, ApplicationMetaKeys::REVIEW_SUBMITTED ), 'key' ) );
+		$this->assertSame( array(), ApplicationCompleteness::pending( $preguntas, array(), $hoy, ApplicationMetaKeys::REVIEW_EXCLUDED ) );
+	}
+
+	/**
 	 * Las dos cosas a la vez dan los dos motivos; excluida, ninguno.
 	 */
 	public function test_both_reasons_and_none_for_an_excluded_one() {

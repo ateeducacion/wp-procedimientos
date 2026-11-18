@@ -61,6 +61,37 @@ final class ApplicationCompleteness {
 	}
 
 	/**
+	 * The required deliveries still to be made whose own deadline is not over.
+	 *
+	 * No faltan —todavía pueden llegar—, pero quedan por hacer: quien
+	 * presenta no puede leer «no tiene que hacer nada más» mientras haya
+	 * una. Una excluida no tiene nada pendiente.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions of the procedure.
+	 * @param mixed                            $files     Stored documents of the application, by question key.
+	 * @param string                           $today     Today, `Y-m-d`.
+	 * @param string                           $review    Review state of the application.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function pending( array $questions, $files, string $today, string $review ): array {
+		if ( ApplicationMetaKeys::REVIEW_EXCLUDED === $review || ! ProcedureInput::is_valid_date( $today ) ) {
+			return array();
+		}
+		$files = is_array( $files ) ? $files : array();
+		$out   = array();
+		foreach ( $questions as $question ) {
+			if ( empty( $question['required'] ) || ! ProcedureQuestions::valid_delivery( $question ) || (string) $question['closes_at'] < $today ) {
+				continue;
+			}
+			$doc = $files[ (string) $question['key'] ] ?? null;
+			if ( ! is_array( $doc ) || ! isset( $doc['id'], $doc['stored'] ) ) {
+				$out[] = $question;
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * The required deliveries whose own deadline is already over.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.

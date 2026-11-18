@@ -103,6 +103,12 @@ final class ApplicationMetaKeys {
 	 */
 	public const CREATED_BY = 'prc_created_by';
 
+	/**
+	 * Cuándo completó el centro, por primera vez, una solicitud presentada en
+	 * su nombre: es el momento en que la presenta él (marca de tiempo Unix).
+	 */
+	public const ADOPTED_AT = 'prc_adopted_at';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -135,6 +141,7 @@ final class ApplicationMetaKeys {
 			self::LATE_UNTIL,
 			self::INTERNAL_NOTE,
 			self::CREATED_BY,
+			self::ADOPTED_AT,
 		);
 	}
 

@@ -16,11 +16,11 @@ use Prc\Meta\ProcedureMetaKeys;
  *
  * Va aparte de {@see ProcedureEditor} para que no pase del umbral de PHPMD.
  * No comprueba ni el nonce ni quién pregunta: eso lo hace
- * {@see ProcedureEditor::handle()} con `ProcedureAccess::can_edit()` antes de
- * llamar a {@see handle()}. Tampoco pinta: es de {@see View\ObserveView::settings()}.
+ * {@see ProcedureEditor::handle()} con `ProcedureAccess::can_edit()` y
+ * `can_configure_observe()` —solo administración— antes de llamar a {@see handle()}. Tampoco pinta: es de {@see View\ObserveView::settings()}.
  *
  * Todo apagado por defecto: un procedimiento no se enseña a nadie de fuera de
- * su ámbito hasta que quien lo gestiona lo decide.
+ * su ámbito hasta que administración lo decide.
  */
 final class ObserveSettings {
 
@@ -95,7 +95,7 @@ final class ObserveSettings {
 	 * Save the panel and go back to it.
 	 *
 	 * Lo llama {@see ProcedureEditor::handle()} después de comprobar el nonce,
-	 * el bloqueo y `ProcedureAccess::can_edit()`.
+	 * el bloqueo, `ProcedureAccess::can_edit()` y `can_configure_observe()`.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return void

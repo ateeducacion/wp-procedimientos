@@ -8,9 +8,11 @@
  */
 
 use Prc\Access\ObserverScope;
+use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationFilter;
 use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Observe;
@@ -589,9 +591,8 @@ class Test_Observe extends WP_UnitTestCase {
 	 * El panel «Acceso de consulta» guarda lo que se marca, y nunca el DNI.
 	 */
 	public function test_the_workshop_panel_saves_the_settings() {
-		$caso   = $this->caso( array( ProcedureMetaKeys::OBSERVABLE => false ) );
-		$gestor = $this->manager( array( $caso['area'] ) );
-		$this->acting_as( $gestor );
+		$caso = $this->caso( array( ProcedureMetaKeys::OBSERVABLE => false ) );
+		$this->acting_as( $this->administrator() );
 		$op = ProcedureEditor::OP_OBSERVE;
 		$this->post(
 			array(
@@ -613,6 +614,39 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->assertTrue( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_EXPORT, true ) );
 		$this->assertFalse( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_FILES, true ) );
 		$this->assertTrue( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_NOTIFY, true ) );
+	}
+
+	/**
+	 * Quien gestiona su ámbito sin administrar el aplicativo ni ve el panel ni lo guarda.
+	 */
+	public function test_a_scope_manager_neither_sees_nor_saves_the_panel() {
+		$caso   = $this->caso( array( ProcedureMetaKeys::OBSERVABLE => false ) );
+		$gestor = $this->manager( array( $caso['area'] ) );
+		$this->acting_as( $gestor );
+
+		$this->assertFalse( ProcedureAccess::can_configure_observe( $gestor, $caso['procedure'] ) );
+		$this->assertArrayNotHasKey( ProcedureEditor::PANEL_OBSERVE, ProcedureEditor::panels( $caso['procedure'] ), 'sin pestaña' );
+		$this->assertArrayHasKey( ProcedureEditor::PANEL_CODE, ProcedureEditor::panels( $caso['procedure'] ), 'el código sí' );
+		$this->assertFalse( ProcedureMetaRegistration::auth_observe( true, ProcedureMetaKeys::OBSERVABLE, $caso['procedure'], $gestor ), 'ni por la meta' );
+
+		$op = ProcedureEditor::OP_OBSERVE;
+		$this->post(
+			array(
+				ProcedureEditor::FIELD_DO         => $op,
+				ProcedureEditor::FIELD_PROCEDURE  => (string) $caso['procedure'],
+				ObserveSettings::FIELD_OBSERVABLE => '1',
+			),
+			ProcedureEditor::nonce_action( $op ),
+			ProcedureEditor::nonce_name( $op )
+		);
+		$this->assertNull( $this->exit_url( array( ProcedureEditor::class, 'handle' ) ), 'armando el envío a mano, tampoco' );
+		$this->assertFalse( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVABLE, true ) );
+
+		$admin = $this->administrator();
+		$this->acting_as( $admin );
+		$this->assertTrue( ProcedureAccess::can_configure_observe( $admin, $caso['procedure'] ) );
+		$this->assertSame( 'Avanzado', ProcedureEditor::panels( $caso['procedure'] )[ ProcedureEditor::PANEL_OBSERVE ]['group'] );
+		$this->assertTrue( ProcedureMetaRegistration::auth_observe( false, ProcedureMetaKeys::OBSERVABLE, $caso['procedure'], $admin ) );
 	}
 
 	/**
@@ -640,7 +674,7 @@ class Test_Observe extends WP_UnitTestCase {
 	 */
 	public function test_the_workshop_panel_paints_without_the_dni() {
 		$area = $this->area( 'Ámbito convocante' );
-		$uid  = $this->manager( array( $area ) );
+		$uid  = $this->administrator();
 		$pid  = $this->procedure( $uid, array( $area ) );
 		$this->acting_as( $uid );
 		$_GET = array(

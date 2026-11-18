@@ -370,7 +370,7 @@ final class ProcedureEditorView {
 	/**
 	 * The inner tabs, in their groups, each with its count where there is something to count.
 	 *
-	 * Cada grupo —Preparar, Gestionar, Más ajustes— lleva su rótulo pequeño
+	 * Cada grupo —Preparar, Gestionar, Avanzado— lleva su rótulo pequeño
 	 * encima y un `role="group"` con su nombre para quien no lo ve.
 	 *
 	 * @param array<string, mixed> $m Model.

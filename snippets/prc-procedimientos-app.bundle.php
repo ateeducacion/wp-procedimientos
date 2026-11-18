@@ -6885,6 +6885,21 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
+
+	public static function can_configure_observe( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && self::can_edit( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
 	public static function can_edit_all_areas( int $user_id = 0 ): bool {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -8984,22 +8999,27 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::OBSERVABLE           => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_FILES       => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 		);
 	}
@@ -9084,6 +9104,20 @@ final class ProcedureMetaRegistration {
 	public static function auth_custom_js( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 		return ProcedureAccess::can_edit_custom_js( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function auth_observe( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
+		unset( $allowed, $meta_key );
+		return ProcedureAccess::can_configure_observe( $user_id, $post_id );
 	}
 
 
@@ -19168,7 +19202,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Avanzado</strong> (Código y, solo para quien administra el aplicativo, Acceso de consulta).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19245,7 +19279,7 @@ final class HelpContent {
 				'id'    => 'taller-consulta',
 				'level' => 3,
 				'title' => 'Acceso de consulta',
-				'html'  => '<p>Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
+				'html'  => '<p>Solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -25455,13 +25489,15 @@ final class ProcedureEditor {
 
 
 
+
 	public static function panels( int $procedure_id ): array {
-		$grupos  = array(
-			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
-			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Más ajustes' => array( self::PANEL_OBSERVE, self::PANEL_CODE ),
+		$avanzado = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
+		$grupos   = array(
+			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Avanzado'  => array_merge( $avanzado, array( self::PANEL_CODE ) ),
 		);
-		$rotulos = array(
+		$rotulos  = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_LINKS        => 'Enlaces',
@@ -25472,7 +25508,7 @@ final class ProcedureEditor {
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
-		$cuentas = array(
+		$cuentas  = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
 			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
@@ -25610,7 +25646,7 @@ final class ProcedureEditor {
 		$sueltas = array(
 			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
-			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
+			self::OP_OBSERVE        => array( self::class, 'save_observe' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -25682,6 +25718,23 @@ final class ProcedureEditor {
 			return;
 		}
 		self::save_links( $procedure_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function save_observe( int $procedure_id ): void {
+		if ( ! ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ) {
+			self::$rejected = 'El acceso de consulta lo configura quien administra el aplicativo.';
+			return;
+		}
+		ObserveSettings::handle( $procedure_id );
 	}
 
 

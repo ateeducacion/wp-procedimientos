@@ -496,18 +496,110 @@ copia de todo `procedure_created` y `application_received`). Con
 
 ### PR 6 — Tabla de solicitudes (`feature/applications-table`)
 
-**Ficheros:** `Applications.php`, `ProcedureEditor.php`,
-`View/ProcedureEditorView.php`; pruebas en `test-procedure-editor.php` y
-`test-applications.php`.
+**Ficheros:**
+- Crear `Domain/ApplicationFilter.php` y `Domain/ApplicationCompleteness.php`
+  (puros), `PublicFront/ApplicationQuery.php` (la consulta),
+  `PublicFront/ApplicationsPanel.php` (el modelo del panel y la revisión en
+  bloque), `PublicFront/View/ApplicationsPanelView.php` y
+  `PublicFront/View/ExportDialogView.php`: el panel sale de
+  `ProcedureEditor` y de `ProcedureEditorView`, que ya estaban en el umbral
+  de PHPMD.
+- Modificar `ProcedureEditor.php` (`OP_BULK_REVIEW`, el filtro de vuelta y la
+  exportación acotada), `ApplicationExport.php` y `PeopleExport.php` (`ids` y
+  metas ya leídas), `PeopleSpecPanel.php` y `PeopleForm.php` (el enlace al
+  historial conserva el filtro), `assets/js/prc-app.js` y
+  `assets/css/prc-alta.css`.
+- Pruebas: `test-application-filter.php`, `test-application-completeness.php`
+  (dominio), `test-applications-table.php` (consulta, panel, bloque,
+  exportación y número de consultas), `tests/js/prc-app.test.js` y
+  `tests/browser/confirmacion.js`.
 
-- [ ] Filtros por estado de revisión, isla, zona e «incompletas», y búsqueda
+**Interfaces que produce** (el PR 7 reutiliza filtro, páginas y exportación
+acotada para la consulta de solo lectura):
+- Parámetros GET del panel: `ApplicationFilter::ARG_REVIEW` (`revision`),
+  `ARG_ISLAND` (`isla`), `ARG_ZONE` (`zona`, el código de la zona),
+  `ARG_INCOMPLETE` (`incompletas=1`), `ARG_SEARCH` (`buscar`) y `ARG_PAGE`
+  (`pagina`); `ApplicationFilter::PER_PAGE = 50`, `MAX_SEARCH = 100`. Lo que
+  no es un valor del filtro se ignora; la isla y la zona, además, si no son de
+  ninguna solicitud del procedimiento.
+- `ApplicationFilter::sanitize( array $raw ): array{review, island, zone, incomplete, search, page}`,
+  `::against( array $filter, array $options )`, `::active( array $filter ): bool`,
+  `::query( array $filter, array $changes = array() ): array` (los argumentos
+  de la URL, sin codificar; cambiar algo que no es la página vuelve a la 1),
+  `::window( int $total, int $page, int $per_page = 50 ): array{page, pages, offset, from, to}`
+  (una página fuera de rango cae en la última), `::matches( string $term, array $texts ): bool`
+  (sin mayúsculas ni tildes; `%` y `_` son letras) y `::args()`.
+- `ApplicationCompleteness::reasons( array $spec, $people, array $questions, $files, string $today, string $review ): string[]`
+  («Faltan 2 personas», «Falta: Memoria final»; vacío para una excluida),
+  `::overdue( array $questions, string $today )` y
+  `::may_be_incomplete( array $spec, array $questions, string $today ): bool`.
+- `ApplicationQuery::run( int $procedure_id, array $filter, array $scope = array() ): array{filter, active, ids, all, total, counts, incomplete, may_be_incomplete, options:{islands, zones}, posts, reasons, stored, page, pages, offset, from, to}`
+  — `$scope['codes']` es el acotado adicional por códigos de centro (vacío no
+  deja ver nada); contadores, opciones, filtro, página y exportación salen ya
+  acotados. `ApplicationQuery::ids( int $procedure_id, array $filter, array $scope = array() ): int[]`
+  y `::state_of( $state )` (vacío es «presentada»).
+- `ApplicationsPanel::filter( array $source )` (de `$_GET` o de los campos
+  ocultos de un POST), `::url( int $procedure_id, array $filter, array $extra = array(), array $changes = array() )`,
+  `::model( int $procedure_id, int $user_id, array $questions, array $request )`,
+  `::export_ids( int $procedure_id, array $post ): ?int[]`,
+  `::posted_ids( array $post ): int[]`,
+  `::bulk( int $procedure_id, array $ids, string $state, string $note ): array{error, done, failed}`
+  y `::bulk_notice( array $request )`; `BULK_MAX = 50`.
+- `Applications::review( int $application_id, string $state, ?string $note )`:
+  `null` es «sin nota nueva» y conserva la que tenga (que cuenta para la
+  obligatoria); la cadena vacía la vacía, como en la revisión de una en una.
+- Campos POST: `ProcedureEditor::OP_BULK_REVIEW` (`bulk_review`, nonce propio),
+  `ApplicationsPanel::FIELD_ROWS` (`prc_rows[]`), `FIELD_PAGE`
+  (`prc_rows_page`, «marcar las de esta página»), `FIELD_PAGE_ROWS`
+  (`prc_page_rows`, los ID de la página), los de siempre `FIELD_STATE` y
+  `FIELD_NOTE`, y en el diálogo de exportar `FIELD_EXPORT_SCOPE`
+  (`prc_export_scope`: `filter` o `all`). Cada formulario del panel lleva el
+  filtro en campos ocultos con los nombres de GET. Aviso `bloque` con
+  `revisadas` y `sin_cambiar`.
+- `ApplicationExport::csv( …, ?array $ids = null )`, `::moodle( …, array{who, ids} )`,
+  `::people( …, ?array $ids = null )`, `::who_counts( array $applications, array $who = array(), array $stored = array() )`
+  (el diálogo la llama dos veces con filtro: todas y las del filtro),
+  `PeopleExport::users( int $application_id, $people = null )`,
+  `PeopleSpecPanel::reviews( array $applications, array $args = array() )` y
+  `PeopleForm::review( int $application_id, bool $history = false, array $args = array() )`.
+
+**Decisiones:**
+- Todo el filtro por GET, sin guion. Los contadores por estado son del total
+  sin filtrar y sirven de atajo; con una página y sin filtro, el recuento dice
+  lo de siempre.
+- Leer en dos tiempos: un censo con las solicitudes sin sus metas y, en otra
+  consulta, solo las metas que deciden el filtro; luego las metas enteras de
+  la página. El estado y la búsqueda se resuelven en el censo y no con
+  `meta_query`: el censo ya hace falta entero para los contadores y las
+  opciones, y así un `%` no es un comodín y las tildes no cuentan. Medido:
+  pintar el panel con una página de 50 cuesta las mismas consultas sobre 100
+  solicitudes que sobre 300 (`test-applications-table.php`).
+- En bloque, las mismas reglas que de una en una; un estado que no existe, la
+  nota que falta, nada marcado o más de 50 —una página— rechazan el envío
+  entero. Un ID que no es una solicitud publicada de este procedimiento no se
+  toca y se cuenta, sin frenar a las demás. Cada una pasa por
+  `Applications::review()`: emite `prc_application_reviewed` y su correo sale
+  **dentro de la misma petición**, sin cola ni cron; por eso el tope es una
+  página. La nota común, escrita, sustituye la de todas; en blanco, con un
+  estado que no la exige, cada una conserva la suya.
+- Exportar con un filtro ofrece «las del filtro» (lo marcado) o «todas». Los
+  recuentos de quién se queda fuera del fichero de usuarios se calculan para
+  las dos; con guion se ve la de la opción elegida y sin guion las dos, cada
+  una con su rótulo.
+- Los contadores por estado son atajos sobre el total: su enlace lleva solo
+  el estado. `incompletas=1` en un procedimiento donde ninguna puede estarlo
+  se ignora, como una isla que no está.
+- Quien no gestiona las solicitudes filtra y pasa de página; revisar, revisar
+  en bloque y exportar quedan apagados.
+
+- [x] Filtros por estado de revisión, isla, zona e «incompletas», y búsqueda
       por centro o código; todo por GET.
-- [ ] Paginación de 50 y contadores por estado.
-- [ ] Revisión en bloque: mismo estado y misma nota para las marcadas; cada
+- [x] Paginación de 50 y contadores por estado.
+- [x] Revisión en bloque: mismo estado y misma nota para las marcadas; cada
       una emite `prc_application_reviewed`.
-- [ ] «Incompleta» es: personas por debajo del mínimo o una entrega obligatoria
+- [x] «Incompleta» es: personas por debajo del mínimo o una entrega obligatoria
       vencida sin documento.
-- [ ] La exportación respeta el filtro activo.
+- [x] La exportación respeta el filtro activo.
 
 ### PR 7 — Consulta de solo lectura (`feature/observers`)
 

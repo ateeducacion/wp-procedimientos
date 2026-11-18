@@ -329,6 +329,18 @@
 		} );
 	}
 
+	/*
+	 * Con un filtro en la tabla, el diálogo cuenta quién sale en el fichero
+	 * de usuarios para «las del filtro» y para «todas»; sin guion se leen las
+	 * dos, con su rótulo. Con guion, solo la de la opción elegida.
+	 */
+	function ambitoElegido( form ) {
+		var marcado = form.querySelector( '[data-prc-export-scope]:checked' );
+		Array.prototype.forEach.call( form.querySelectorAll( '[data-prc-export-scope-count]' ), function ( cifra ) {
+			cifra.hidden = !! marcado && cifra.getAttribute( 'data-prc-export-scope-count' ) !== marcado.value;
+		} );
+	}
+
 	function prepararExportar( caja ) {
 		var form = caja.querySelector( 'form' );
 		var resumen = caja.querySelector( 'summary' );
@@ -365,6 +377,7 @@
 		caja.hidden = true;
 		caja.dataset.prcDialog = dialogo.id;
 		formatoElegido( form );
+		ambitoElegido( form );
 	}
 
 	document.addEventListener( 'DOMContentLoaded', function () {
@@ -401,6 +414,8 @@
 			} );
 		} else if ( e.target.hasAttribute( 'data-prc-export-format' ) ) {
 			formatoElegido( form );
+		} else if ( e.target.hasAttribute( 'data-prc-export-scope' ) ) {
+			ambitoElegido( form );
 		}
 	} );
 
@@ -412,6 +427,36 @@
 			window.setTimeout( function () {
 				cerrarDialogo( dialogo );
 			}, 0 );
+		}
+	} );
+
+	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
+
+	/*
+	 * `data-prc-bulk-page` es la casilla «Marcar las de esta página» y
+	 * `data-prc-bulk-row`, la de cada fila, que apunta al formulario del bloque
+	 * con el atributo `form`. Sin guion, la casilla de la página es un campo que
+	 * lee el servidor y revisa la página entera. Con guion, además, marca y
+	 * desmarca las de las filas, y se desmarca sola en cuanto falta alguna: así
+	 * lo que se ve marcado es lo que se envía.
+	 */
+	document.addEventListener( 'change', function ( e ) {
+		var casilla = e.target;
+		if ( ! casilla || ! casilla.hasAttribute ) {
+			return;
+		}
+		var filas = document.querySelectorAll( '[data-prc-bulk-row]' );
+		if ( casilla.hasAttribute( 'data-prc-bulk-page' ) ) {
+			Array.prototype.forEach.call( filas, function ( fila ) {
+				fila.checked = casilla.checked;
+			} );
+		} else if ( casilla.hasAttribute( 'data-prc-bulk-row' ) ) {
+			var pagina = document.querySelector( '[data-prc-bulk-page]' );
+			if ( pagina ) {
+				pagina.checked = filas.length > 0 && Array.prototype.every.call( filas, function ( fila ) {
+					return fila.checked;
+				} );
+			}
 		}
 	} );
 }() );

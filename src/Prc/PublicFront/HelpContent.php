@@ -325,7 +325,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -392,10 +392,10 @@ final class HelpContent {
 				),
 			),
 			array(
-				'id'    => 'taller-avisos',
+				'id'    => 'taller-correos',
 				'level' => 3,
-				'title' => 'Avisos',
-				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios en la lista de participantes, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
+				'title' => 'Correos',
+				'html'  => '<p>Los correos salen solos y no se apagan desde el taller. Al presentar, modificar o retirar una solicitud, el acuse llega a la cuenta con la que se hace —la del centro, en los procedimientos para centros; la de la persona, en los de profesorado— y el aviso, a los correos de contacto del procedimiento. También salen, como siempre, los cambios de revisión, las prórrogas, las entregas y los cambios en la lista de participantes. Si alguien necesita copia de estos correos en otra dirección, lo configura administración.</p>',
 				'shots' => array(),
 			),
 			array(

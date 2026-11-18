@@ -154,7 +154,7 @@ test: start-if-not-running ## Ejecuta los tests de PHPUnit (admite FILE=... y FI
 # wp-env: Playwright monta la página con el mismo `prc-app.js` y la misma copia
 # de `node_modules` que sirve el mu-plugin de desarrollo. Fuera de `check`
 # porque necesita que Playwright se haya bajado su Chromium.
-test-browser: ## Comprueba en un navegador real los tres escalones de la confirmación y el menú «⋮»
+test-browser: ## Comprueba en un navegador real los tres escalones de la confirmación, el menú «⋮» y la ayuda en diálogo
 	npm run test:browser
 
 # Los guiones de assets/js con Vitest y jsdom: sin wp-env ni navegador, así que

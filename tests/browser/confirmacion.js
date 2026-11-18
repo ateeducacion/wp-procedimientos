@@ -646,6 +646,56 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// --- La ayuda en un diálogo (#86): abrir, cerrar y, sin JavaScript, navegar
+	{
+		const AYUDA = `<!doctype html><meta charset="utf-8"><body class="prc-app">
+<form data-prc-dirty-guard><input id="t" name="prc_title" /></form>
+<p class="prc-ayuda-enlace"><a id="ayuda" href="/ayuda/?guia=solicitar#antes-de-empezar"
+   data-prc-help="prc-ayuda-solicitar-antes-de-empezar" aria-haspopup="dialog">Cómo se solicita</a></p>
+<dialog class="prc-dialogo prc-ayuda-dialogo" id="prc-ayuda-solicitar-antes-de-empezar" aria-labelledby="antes-de-empezar-titulo">
+  <section class="prc-ayuda__apartado" id="antes-de-empezar"><h3 id="antes-de-empezar-titulo">Antes de empezar</h3><p>Texto.</p></section>
+  <p class="prc-acciones"><a href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
+  <button id="cerrar" type="button" class="prc-btn" data-prc-help-close>Cerrar</button></p>
+</dialog></body>`;
+		const servir = async ( contexto ) => {
+			const page = await contexto.newPage();
+			await page.route( 'https://prc.test/**', ( route ) => route.fulfill( {
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: route.request().url().includes( '/ayuda/' ) ? '<!doctype html><h1>AYUDA</h1>' :
+					'<style>' + CSS + '</style>' + AYUDA + '<script>' + APP + '</scr' + 'ipt>',
+			} ) );
+			await page.goto( 'https://prc.test/solicitud' );
+			return page;
+		};
+
+		const conJs = await browser.newContext();
+		const page = await servir( conJs );
+		let preguntado = null;
+		page.on( 'dialog', async ( d ) => { preguntado = d.message(); await d.dismiss(); } );
+		await page.fill( '#t', 'algo escrito' );
+		await page.click( '#ayuda' );
+		const abierto = () => page.evaluate( () => document.getElementById( 'prc-ayuda-solicitar-antes-de-empezar' ).matches( ':modal' ) );
+		ok( await abierto(), 'ayuda: el enlace abre el apartado en un diálogo modal' );
+		ok( page.url().endsWith( '/solicitud' ), 'ayuda: sin salir de la página' );
+		ok( null === preguntado, 'ayuda: con cambios sin guardar, abrirla no pregunta nada' );
+		ok( 'antes-de-empezar-titulo' === await page.evaluate( () => document.activeElement.id ), 'ayuda: el foco va al título del apartado' );
+		await page.keyboard.press( 'Escape' );
+		ok( ! await abierto(), 'ayuda: Escape la cierra' );
+		ok( 'ayuda' === await page.evaluate( () => document.activeElement.id ), 'ayuda: y el foco vuelve al enlace' );
+		await page.click( '#ayuda' );
+		await page.click( '#cerrar' );
+		ok( ! await abierto(), 'ayuda: «Cerrar» la cierra' );
+		ok( 'ayuda' === await page.evaluate( () => document.activeElement.id ), 'ayuda: y el foco vuelve al enlace' );
+		await conJs.close();
+
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		const plana = await servir( sinJs );
+		await Promise.all( [ plana.waitForURL( '**/ayuda/**' ), plana.click( '#ayuda' ) ] );
+		ok( plana.url().includes( '/ayuda/?guia=solicitar#antes-de-empezar' ), 'ayuda: sin JavaScript el enlace lleva a la ayuda, en su apartado' );
+		await sinJs.close();
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

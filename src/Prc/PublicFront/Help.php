@@ -33,12 +33,75 @@ final class Help {
 	public const ARG_GUIDE = 'guia';
 
 	/**
+	 * Sections asked for by a help link on this page, waiting for the footer.
+	 *
+	 * @var array<string, array{guide:string, anchor:string, url:string}>
+	 */
+	private static array $asked = array();
+
+	/**
 	 * Register the shortcode.
 	 *
 	 * @return void
 	 */
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+		add_action( 'wp_footer', array( self::class, 'print_dialogs' ) );
+	}
+
+	/**
+	 * Queue the dialog of the section a help URL points to.
+	 *
+	 * Cada «¿Dudas?» abre su apartado en un `<dialog>` sin salir de la página
+	 * (#86). El diálogo no se pinta junto al enlace sino en el pie, una vez
+	 * por apartado aunque lo pidan varios enlaces; el enlace sigue llevando a
+	 * la ayuda entera para quien no tiene JavaScript.
+	 *
+	 * @param string $url A URL from url(), with its guide and its anchor.
+	 * @return string Id of the dialog; empty when the URL names no known section.
+	 */
+	public static function ask( string $url ): string {
+		$partes = wp_parse_url( $url );
+		$ancla  = (string) ( $partes['fragment'] ?? '' );
+		wp_parse_str( (string) ( $partes['query'] ?? '' ), $query );
+		$guia = self::known( sanitize_key( (string) ( $query[ self::ARG_GUIDE ] ?? '' ) ) );
+		if ( '' === $ancla || ! in_array( $ancla, array_column( HelpContent::raw( $guia ), 'id' ), true ) ) {
+			return '';
+		}
+		$id                 = 'prc-ayuda-' . $guia . '-' . $ancla;
+		self::$asked[ $id ] = array(
+			'guide'  => $guia,
+			'anchor' => $ancla,
+			'url'    => $url,
+		);
+		return $id;
+	}
+
+	/**
+	 * The queued dialogs, painted, and the queue emptied.
+	 *
+	 * @return string
+	 */
+	public static function dialogs(): string {
+		$html = '';
+		foreach ( self::$asked as $id => $pedido ) {
+			foreach ( HelpContent::sections( $pedido['guide'] ) as $apartado ) {
+				if ( $apartado['id'] === $pedido['anchor'] ) {
+					$html .= HelpView::dialog( $id, $apartado, $pedido['url'] );
+				}
+			}
+		}
+		self::$asked = array();
+		return $html;
+	}
+
+	/**
+	 * Print the queued dialogs: hooked to wp_footer.
+	 *
+	 * @return void
+	 */
+	public static function print_dialogs(): void {
+		echo self::dialogs(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado en HelpView.
 	}
 
 	/**

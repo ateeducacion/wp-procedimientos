@@ -494,23 +494,23 @@
 	 * una a una.
 	 */
 	document.addEventListener( 'DOMContentLoaded', function () {
-		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-tick-all]' ), function ( boton ) {
-			boton.parentElement.hidden = false;
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-tick-all]' ), function ( button ) {
+			button.parentElement.hidden = false;
 		} );
 	} );
 
 	document.addEventListener( 'click', function ( e ) {
-		var boton = e.target.closest ? e.target.closest( '[data-prc-tick-all]' ) : null;
-		var grupo = boton ? boton.closest( '[data-prc-tick-group]' ) : null;
-		if ( ! grupo ) {
+		var button = e.target.closest ? e.target.closest( '[data-prc-tick-all]' ) : null;
+		var group = button ? button.closest( '[data-prc-tick-group]' ) : null;
+		if ( ! group ) {
 			return;
 		}
-		var marcar = '1' === boton.getAttribute( 'data-prc-tick-all' );
-		Array.prototype.forEach.call( grupo.querySelectorAll( 'input[type="checkbox"]' ), function ( casilla ) {
-			casilla.checked = marcar;
+		var tick = '1' === button.getAttribute( 'data-prc-tick-all' );
+		Array.prototype.forEach.call( group.querySelectorAll( 'input[type="checkbox"]' ), function ( box ) {
+			box.checked = tick;
 		} );
-		// Cuenta como un cambio del formulario: el aviso de cambios sin guardar lo ve.
-		boton.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		// Cuenta como un cambio del formulario, para el aviso de cambios sin guardar.
+		marcar( { target: button } );
 	} );
 
 	/* --- 8. Un solo envío ------------------------------------------------ */

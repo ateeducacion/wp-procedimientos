@@ -24078,7 +24078,10 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
-			$secciones .= PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo );
+
+			$secciones .= '<div data-prc-schools-only ' . self::hidden_unless_schools( $v ) . '>'
+				. PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo )
+				. '</div>';
 		}
 
 		ob_start();
@@ -24415,6 +24418,17 @@ final class ProcedureEditorView {
 
 
 
+
+	private static function hidden_unless_schools( array $v ): string {
+		return ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden';
+	}
+
+
+
+
+
+
+
 	private static function request_fields( array $v ): string {
 		$numero = (int) $v[ ProcedureMetaKeys::COORDINATOR_COUNT ];
 		$tipo   = 0 === $numero ? 'none' : ( 1 === $numero ? 'one' : 'several' );
@@ -24422,7 +24436,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<fieldset class="prc-campo">
+		<fieldset class="prc-campo" data-prc-schools-only <?php echo esc_attr( self::hidden_unless_schools( $v ) ); ?>>
 			<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras?</legend>
 			<div class="prc-opciones prc-opciones--vertical">
 				<div class="prc-opcion">
@@ -24486,7 +24500,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<div class="prc-seccion__cuerpo" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
+		<div class="prc-seccion__cuerpo">
 			<div class="prc-campo prc-campo--completo">
 				<p class="prc-campo__ayuda">Sin nada marcado ni escrito, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
 				<?php echo self::centre_warning( $m, 'catalogue' );?>
@@ -37977,10 +37991,26 @@ body.prc-app .prc-btn-borrar {
 				input.disabled = ! soloCentros;
 			} );
 		} );
+		numeroDeCoordinadores();
+	}
+
+	/*
+	 * El número de personas coordinadoras solo se elige con «Sí, varias
+	 * personas»; con profesorado las opciones están apagadas y el número
+	 * también, para que no se envíe solo. Sin guion queda activo.
+	 */
+	function numeroDeCoordinadores() {
+		var numero = document.getElementById( \'prc-coordinator-count\' );
+		var varias = document.querySelector( \'input[name="prc_coordinator_kind"][value="several"]\' );
+		if ( numero && varias ) {
+			numero.disabled = ! varias.checked || varias.disabled;
+		}
 	}
 	document.addEventListener( \'change\', function ( e ) {
 		if ( e.target && \'prc-audience\' === e.target.id ) {
 			mostrarCamposDeCentro();
+		} else if ( e.target && \'prc_coordinator_kind\' === e.target.name ) {
+			numeroDeCoordinadores();
 		}
 	} );
 	document.addEventListener( \'DOMContentLoaded\', mostrarCamposDeCentro );

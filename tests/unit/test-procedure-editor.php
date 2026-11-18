@@ -413,6 +413,25 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Con profesorado, la coordinación y la sección entera de centros, con su
+	 * título, salen escondidas; los compromisos siguen, porque también se le
+	 * piden a cada docente.
+	 */
+	public function test_teachers_hide_coordination_and_the_centre_section() {
+		list( , $uid, $docentes ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $docentes, ProcedureEditor::PANEL_DATA ) );
+
+		$this->assertMatchesRegularExpression( '#<fieldset class="prc-campo" data-prc-schools-only hidden>\s*<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras\?#u', $html );
+		$this->assertMatchesRegularExpression( '#<div data-prc-schools-only hidden><fieldset class="prc-seccion-campos"[^>]*><legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>#u', $html );
+		$this->assertDoesNotMatchRegularExpression( '#data-prc-schools-only hidden>\s*<div class="prc-campo">\s*<label class="prc-campo__etiqueta" for="prc-commitments"#u', $html );
+
+		update_post_meta( $docentes, ProcedureMetaKeys::AUDIENCE, ProcedureMetaKeys::AUDIENCE_SCHOOLS );
+		$html = ProcedureEditorView::html( $this->modelo( $docentes, ProcedureEditor::PANEL_DATA ) );
+		$this->assertMatchesRegularExpression( '#<div data-prc-schools-only ><fieldset class="prc-seccion-campos"[^>]*><legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>#u', $html );
+	}
+
+	/**
 	 * La cabecera del taller dice a quién se dirige, junto al estado.
 	 */
 	public function test_the_workshop_head_says_who_may_apply() {
@@ -987,6 +1006,14 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 		$this->assertSame( 2, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ), 'varias no puede quedarse en una' );
+
+		// Con guion, el desplegable apagado no se envía: «una» basta.
+		$this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) );
+		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		// Con profesorado no llega ni la opción ni el número: se queda lo que había.
+		$this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso ) );
+		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 	}
 
 	/**

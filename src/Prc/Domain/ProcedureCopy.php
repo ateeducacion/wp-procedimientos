@@ -75,10 +75,6 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
-			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
-			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
-			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,
-			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::COPY,
 			// Claves nuevas desde el principio, y sin fechas.
 			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
 			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,
@@ -86,6 +82,11 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::OBSERVER_COLUMNS     => self::TRANSFORM,
 			// Solo si quien duplica puede escribir JavaScript en el original.
 			ProcedureMetaKeys::CUSTOM_JS            => self::TRANSFORM,
+			// Solo si quien duplica configura la consulta: administración (#82).
+			ProcedureMetaKeys::OBSERVABLE           => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_FILES       => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_EXPORT      => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::TRANSFORM,
 		);
 	}
 
@@ -118,11 +119,12 @@ final class ProcedureCopy {
 	 * Solo lo que el original tiene: una meta que no existe allí no se crea
 	 * aquí, salvo el contador de preguntas, que acompaña a las preguntas.
 	 *
-	 * @param array<string, mixed> $source  The original's meta that exists, key => stored value.
-	 * @param bool                 $with_js Whether whoever duplicates may write its JavaScript.
+	 * @param array<string, mixed> $source       The original's meta that exists, key => stored value.
+	 * @param bool                 $with_js      Whether whoever duplicates may write its JavaScript.
+	 * @param bool                 $with_observe Whether whoever duplicates may configure the consultation.
 	 * @return array{meta:array<string, mixed>, js_left:bool}
 	 */
-	public static function meta( array $source, bool $with_js ): array {
+	public static function meta( array $source, bool $with_js, bool $with_observe ): array {
 		$meta = array();
 		foreach ( self::policy() as $key => $rule ) {
 			if ( self::COPY === $rule && array_key_exists( $key, $source ) ) {
@@ -138,7 +140,14 @@ final class ProcedureCopy {
 		if ( array_key_exists( ProcedureMetaKeys::PEOPLE_SPEC, $source ) ) {
 			$meta[ ProcedureMetaKeys::PEOPLE_SPEC ] = self::people_spec( $source[ ProcedureMetaKeys::PEOPLE_SPEC ] );
 		}
-		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
+		if ( $with_observe ) {
+			foreach ( array( ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) as $key ) {
+				if ( array_key_exists( $key, $source ) ) {
+					$meta[ $key ] = $source[ $key ];
+				}
+			}
+		}
+		if ( $with_observe && array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
 			$meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $preguntas['map'] );
 		}
 

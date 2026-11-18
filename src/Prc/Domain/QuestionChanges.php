@@ -77,7 +77,7 @@ final class QuestionChanges {
 			return '';
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
-			. ': ya hay solicitudes que lo han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
+			. ': ya hay solicitudes que ' . ( count( $cambiadas ) > 1 ? 'los' : 'lo' ) . ' han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
 	}
 
 	/**

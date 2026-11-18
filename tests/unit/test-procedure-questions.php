@@ -800,6 +800,14 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 		$this->assertStringContainsString( '«Grupos»', $porque );
 		$this->assertStringNotContainsString( 'Sin respuestas', $porque );
 		$this->assertSame( '', QuestionChanges::refusal( $antes, $despues, array() ), 'sin respuestas, el tipo cambia' );
+		$this->assertStringContainsString( 'que lo han contestado', $porque, 'uno: en singular' );
+
+		$todas = array(
+			'q1' => true,
+			'q2' => true,
+		);
+		$dos   = QuestionChanges::refusal( $antes, $despues, $todas );
+		$this->assertStringContainsString( '«Grupos», «Sin respuestas»: ya hay solicitudes que los han contestado', $dos, 'varios: en plural' );
 
 		$renombrada             = $antes;
 		$renombrada[0]['label'] = 'Número de grupos';

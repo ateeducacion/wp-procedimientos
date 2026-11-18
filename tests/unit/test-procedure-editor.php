@@ -1776,6 +1776,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
+		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación' ) as $pestana ) {
+			$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*>' . preg_quote( $pestana, '#' ) . '\s#', $html, 'falta la pestaña ' . $pestana );
+		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OPENS_AT . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OWNERSHIP . '[]"', $html );
@@ -1789,9 +1792,14 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Campo nuevo', $html );
 		$this->assertStringContainsString( '>Título</label>', $html, 'cada campo lleva título, no rótulo' );
 		$this->assertStringContainsString( 'Guardar los campos', $html );
-		foreach ( array( 'Pregunta', 'pregunta', 'Rótulo' ) as $vieja ) {
-			$this->assertStringNotContainsString( '>' . $vieja, $html, 'en el panel ya no se dice ' . $vieja );
+		// Lo que se lee: el texto y los atributos que se anuncian o se ven.
+		preg_match_all( '#(?:aria-label|title|placeholder|data-prc-confirm)="([^"]*)"#', $html, $atributos );
+		$legible = wp_strip_all_tags( $html ) . ' ' . implode( ' ', $atributos[1] );
+		foreach ( array( 'Pregunta', 'pregunta', 'Rótulo', 'rótulo' ) as $vieja ) {
+			$this->assertStringNotContainsString( $vieja, $legible, 'en el panel ya no se dice ' . $vieja );
 		}
+		$this->assertStringContainsString( 'antes de cerrar la inscripción, mientras este panel siga editable', $html, 'la entrega con plazo propio dice cuándo se configura' );
+		$this->assertStringNotContainsString( 'rótulo', wp_strip_all_tags( ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PEOPLE ) ) ), 'los papeles tienen nombre, no rótulo' );
 		foreach ( ProcedureQuestions::types() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
@@ -1842,6 +1850,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'Crear un procedimiento', $html );
+		$this->assertStringContainsString( 'los plazos, los campos adicionales y los', $html, 'el alta nombra las pestañas que hay' );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
 		// El sistema no marca como histórico un borrador: primero se publica.

@@ -413,6 +413,24 @@ class Test_Home extends WP_UnitTestCase {
 	}
 
 	/**
+	 * The front page query skips the posts_* filters, like every other query here.
+	 */
+	public function test_the_front_page_query_skips_query_filters() {
+		$curso = $this->course( '2026-2027' );
+		$this->convocatoria( 'Abierta', $curso, 0, $this->abierto() );
+		$vacia = static function () {
+			return ' AND 1 = 0';
+		};
+		add_filter( 'posts_where', $vacia );
+
+		$this->acting_as( 0 );
+		$grupos = Home::model()['groups'];
+		remove_filter( 'posts_where', $vacia );
+
+		$this->assertArrayHasKey( ProcedureMetaKeys::STATE_OPEN, $grupos, 'un filtro de otro plugin no vacía la portada' );
+	}
+
+	/**
 	 * La tarjeta lleva el cartel; sin cartel, el logo del ámbito, que puede
 	 * ser el de un ámbito de arriba; sin ninguno de los dos, nada.
 	 */

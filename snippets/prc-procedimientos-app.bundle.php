@@ -2411,6 +2411,11 @@ final class ProcedureInput {
 		}
 		$errors = array_values( array_unique( $errors ) );
 
+
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== $audience ) {
+			$coordinator_count = 0;
+		}
+
 		return array(
 			'ok'     => array() === $errors,
 			'errors' => $errors,

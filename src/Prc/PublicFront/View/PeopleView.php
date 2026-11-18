@@ -263,7 +263,10 @@ final class PeopleView {
 	}
 
 	/**
-	 * The people of one application and their history, read-only, for whoever reviews.
+	 * The people of one application, read-only, for whoever reviews.
+	 *
+	 * Su historial es el de la solicitud entera: lo pinta
+	 * {@see ApplicationActionsView::history()}.
 	 *
 	 * @param array<string, mixed> $r What PeopleForm::review() returned.
 	 * @return string Empty when the procedure has no list.
@@ -283,28 +286,6 @@ final class PeopleView {
 				<?php endif; ?>
 			</p>
 			<?php echo self::table( array(), $filas, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<?php if ( empty( $r['open'] ) ) : ?>
-				<p><a href="<?php echo esc_url( (string) ( $r['log_url'] ?? '' ) ); ?>">Ver el historial de la lista</a></p>
-			<?php elseif ( array() === (array) $r['log'] ) : ?>
-				<p class="prc-vacio">La lista todavía no tiene historial.</p>
-			<?php else : ?>
-				<div class="prc-personas__historial">
-					<p><strong>Historial de la lista</strong></p>
-					<ol class="prc-historial">
-						<?php foreach ( (array) $r['log'] as $entrada ) : ?>
-							<li>
-								<?php echo esc_html( implode( ' · ', array_filter( array( $entrada['when'], $entrada['who'], $entrada['what'] ), 'strlen' ) ) ); ?>
-								<?php if ( '' !== $entrada['before'] ) : ?>
-									<br /><?php echo esc_html( 'Antes: ' . $entrada['before'] ); ?>
-								<?php endif; ?>
-								<?php if ( '' !== $entrada['after'] ) : ?>
-									<br /><?php echo esc_html( 'Después: ' . $entrada['after'] ); ?>
-								<?php endif; ?>
-							</li>
-						<?php endforeach; ?>
-					</ol>
-				</div>
-			<?php endif; ?>
 		</div>
 		<?php
 		return (string) ob_get_clean();

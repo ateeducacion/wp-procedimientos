@@ -473,7 +473,7 @@ class Test_People_List extends WP_UnitTestCase {
 		$this->assertFalse( ProcedureAccess::can_edit_people( $director, $id ) );
 		$this->assertFalse( People::add( $id, $director, $this->persona() )['ok'] );
 		$this->assertSame( array(), get_post_meta( $id, ApplicationMetaKeys::PEOPLE, true ) );
-		$this->assertSame( array(), ApplicationLog::all( $id ) );
+		$this->assertSame( array( 'submitted' ), array_column( ApplicationLog::all( $id ), 'event' ), 'ni una entrada de personas: solo la de presentarla' );
 	}
 
 	/**

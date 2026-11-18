@@ -309,6 +309,100 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// --- 6. Retirar una solicitud: el centro, y quien revisa con su motivo ---
+	//
+	// El mismo HTML que pintan `ApplicationActionsView::withdraw()` y
+	// `retire_form()`: el centro retira sin más; quien revisa escribe el
+	// motivo, que es obligatorio y tiene que viajar con el envío.
+	{
+		const RETIRAR = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<form id="centro" class="prc-form prc-acciones" method="post" action="/enviado"
+      data-prc-confirm="¿Retirar su solicitud? Dejará de contar para este procedimiento. Mientras el plazo siga abierto podrá presentar otra, pero tendrá que rellenarla de nuevo."
+      data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
+  <input type="hidden" name="_prc_withdraw_nonce" value="abc123" />
+  <input type="hidden" name="prc_withdraw_op" value="withdraw" />
+  <input type="hidden" name="prc_withdraw_application" value="77" />
+  <button id="retirar" type="submit">Retirar la solicitud</button>
+</form>
+<form id="revision" class="prc-form" method="post" action="/enviado"
+      data-prc-confirm="¿Retirar la solicitud de Centro de ejemplo? Pasará a «Retiradas»: dejará de contar, de salir en la consulta y en las exportaciones. Se puede restaurar mientras el centro no presente otra."
+      data-prc-confirm-ok="Retirar la solicitud" data-prc-once>
+  <input type="hidden" name="prc_do" value="retire_application" />
+  <input type="hidden" name="prc_row" value="78" />
+  <textarea id="motivo" name="prc_retire_reason" required></textarea>
+  <button id="quitar" type="submit">Retirar la solicitud</button>
+</form>
+</body>`;
+		const abrirRetirar = async ( contexto, conSwal ) => {
+			const page = await contexto.newPage();
+			const envio = { cuerpo: null };
+			await page.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				if ( url.includes( '/enviado' ) ) {
+					envio.cuerpo = decodeURIComponent( ( route.request().postData() || '' ).replace( /\+/g, ' ' ) );
+				}
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						'<style>' + CSS + '</style>' + RETIRAR + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
+				} );
+			} );
+			await page.goto( 'https://prc.test/solicitud' );
+			return { page, envio };
+		};
+		const delCentro = ( cuerpo ) => /prc_withdraw_op=withdraw/.test( cuerpo ) && /prc_withdraw_application=77/.test( cuerpo ) && /_prc_withdraw_nonce=abc123/.test( cuerpo );
+		const conMotivo = ( cuerpo ) => /prc_do=retire_application/.test( cuerpo ) && /prc_row=78/.test( cuerpo ) && /prc_retire_reason=Por error/.test( cuerpo );
+
+		// Sin JavaScript: el botón envía, y sin motivo el navegador no deja.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		let { page, envio } = await abrirRetirar( sinJs, true );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#retirar' ) ] );
+		ok( delCentro( envio.cuerpo ), 'retirar sin JavaScript envía la solicitud y el nonce: ' + envio.cuerpo );
+		await page.close();
+		( { page, envio } = await abrirRetirar( sinJs, true ) );
+		await page.click( '#quitar' );
+		await page.waitForTimeout( 300 );
+		ok( null === envio.cuerpo, 'sin motivo, quien revisa no retira' );
+		await page.fill( '#motivo', 'Por error' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#quitar' ) ] );
+		ok( conMotivo( envio.cuerpo ), 'con motivo, el motivo viaja: ' + envio.cuerpo );
+		await sinJs.close();
+
+		// Con el confirm() del navegador.
+		( { page, envio } = await abrirRetirar( ctx, false ) );
+		let pregunta = null;
+		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.dismiss(); } );
+		await page.click( '#retirar' );
+		await page.waitForTimeout( 300 );
+		ok( null !== pregunta && pregunta.startsWith( '¿Retirar su solicitud?' ), 'retirar sin SweetAlert pregunta con confirm(): ' + JSON.stringify( pregunta ) );
+		ok( null === envio.cuerpo, 'al cancelar no se retira' );
+		page.removeAllListeners( 'dialog' );
+		page.on( 'dialog', ( d ) => d.accept() );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#retirar' ) ] );
+		ok( delCentro( envio.cuerpo ), 'al aceptar el confirm() se retira' );
+		await page.close();
+
+		// Con SweetAlert2: el centro, y quien revisa con su motivo.
+		( { page, envio } = await abrirRetirar( ctx, true ) );
+		page.on( 'dialog', async ( d ) => { ok( false, 'no debería salir el confirm() del navegador' ); await d.dismiss(); } );
+		await page.click( '#retirar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		ok( '¿Retirar su solicitud?' === ( await page.textContent( '.swal2-title' ) ).trim(), 'titular del centro' );
+		ok( 'Retirar la solicitud' === ( await page.textContent( '.swal2-confirm' ) ).trim(), 'el botón dice el verbo' );
+		await page.keyboard.press( 'Escape' );
+		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
+		ok( null === envio.cuerpo, 'Escape no retira' );
+		await page.fill( '#motivo', 'Por error' );
+		await page.click( '#quitar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		ok( ( await page.textContent( '.swal2-title' ) ).trim().startsWith( '¿Retirar la solicitud de Centro de ejemplo?' ), 'titular de quien revisa' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
+		ok( conMotivo( envio.cuerpo ), 'confirmar retira con el motivo: ' + envio.cuerpo );
+		await page.close();
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

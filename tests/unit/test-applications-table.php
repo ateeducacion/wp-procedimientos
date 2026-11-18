@@ -514,7 +514,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 				),
 				$extra
 			),
-			ProcedureEditor::nonce_action( $op ),
+			ProcedureEditor::nonce_action( $op, ProcedureEditor::OP_REVIEW === $op ? $row : 0 ),
 			ProcedureEditor::nonce_name( $op, ProcedureEditor::OP_REVIEW === $op ? $row : 0 )
 		);
 		return $this->exit_url( array( ProcedureEditor::class, 'handle' ) );
@@ -571,7 +571,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		list( $uid, $proc ) = $this->mio();
 		$html               = $this->panel( $uid, $proc );
 		$this->assertStringContainsString( 'Todavía no hay solicitudes', $html );
-		$this->assertStringNotContainsString( 'prc-filtros', $html );
+		$this->assertStringNotContainsString( 'aria-label="Filtrar las solicitudes"', $html );
 	}
 
 	/**
@@ -638,7 +638,7 @@ class Test_Applications_Table extends WP_UnitTestCase {
 			)
 		);
 		$m   = ApplicationsPanel::model( $proc, $uid, array(), array( ApplicationFilter::ARG_SEARCH => 'Norte & Sur' ) );
-		$url = (string) reset( $m['people'] )['log_url'];
+		$url = (string) reset( $m['actions']['rows'] )['history']['url'];
 		$this->assertSame( 'Norte & Sur', $this->query_arg( $url, ApplicationFilter::ARG_SEARCH ) );
 		$this->assertNotSame( '', $this->query_arg( $url, PeopleSpecPanel::ARG_HISTORY ) );
 	}

@@ -78,7 +78,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$extra
 		);
 		if ( null === $nonce ) {
-			$this->post( $campos, ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op, $row ) );
+			$this->post( $campos, ProcedureEditor::nonce_action( $op, $row ), ProcedureEditor::nonce_name( $op, $row ) );
 		} else {
 			$campos[ ProcedureEditor::nonce_name( $op, $row ) ] = $nonce;
 			$this->post( $campos );

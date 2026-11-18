@@ -421,6 +421,21 @@
 .prc-th--marca,
 .prc-celda--marca { width: 1%; text-align: center; }
 
+/* Actuar sobre una solicitud (PLAN-0003, PR 9). */
+.prc-retiradas-enlace { margin: 0 0 8px; font-size: var(--prc-t-menudo); }
+.prc-en-nombre { margin: 0 0 10px; }
+.prc-en-nombre[open] {
+  padding: 12px;
+  max-width: 40rem;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-centros-encontrados { margin: 0 0 10px; padding-left: 1.2em; }
+.prc-prorroga,
+.prc-retirar,
+.prc-historial-caja { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--prc-c-linea); }
+.prc-historial-enlace { margin: 8px 0 0; font-size: var(--prc-t-menudo); }
+
 .prc-incompleta { margin: 4px 0 0; font-size: var(--prc-t-menudo); color: var(--prc-c-tabla); }
 .prc-incompleta__titulo { font-weight: 700; }
 .prc-incompleta__motivos { margin: 0; padding-left: 1.1em; }

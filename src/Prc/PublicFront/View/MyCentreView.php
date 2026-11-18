@@ -190,6 +190,12 @@ final class MyCentreView {
 				<?php if ( '' !== (string) ( $fila['people_url'] ?? '' ) ) : ?>
 					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['people_url'] ); ?>"><?php echo esc_html( sprintf( 'Personas (%d)', (int) $fila['people_count'] ) ); ?></a>
 				<?php endif; ?>
+				<?php if ( '' !== (string) ( $fila['late'] ?? '' ) ) : ?>
+					<span class="prc-nota-revision"><?php echo esc_html( (string) $fila['late'] ); ?></span>
+				<?php endif; ?>
+				<?php if ( '' !== (string) ( $fila['withdraw_url'] ?? '' ) ) : ?>
+					<a class="prc-ver-solicitud" href="<?php echo esc_url( (string) $fila['withdraw_url'] ); ?>">Retirar la solicitud</a>
+				<?php endif; ?>
 			</td>
 		</tr>
 		<?php

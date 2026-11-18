@@ -135,6 +135,31 @@ class Test_Messages extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Retirar: el acuse dice que se puede presentar otra; el aviso a los
+	 * contactos, que está en «Retiradas». Ninguno lleva las respuestas.
+	 */
+	public function test_the_withdrawal_tells_each_one_what_matters() {
+		$acuse = Messages::render( Mailer::EVENT_APPLICATION_WITHDRAWN, $this->solicitud( array( 'ack' => true ) ) );
+		$aviso = Messages::render( Mailer::EVENT_APPLICATION_WITHDRAWN, $this->solicitud() );
+		$this->assertStringStartsWith( '[Procedimientos] Solicitud retirada: ', $acuse['subject'] );
+		$this->assertStringContainsString( 'presentar una nueva', $acuse['message'] );
+		$this->assertStringContainsString( 'Centro de prueba Norte (C0001)', $aviso['subject'] );
+		$this->assertStringContainsString( '«Retiradas»', $aviso['message'] );
+		foreach ( array( $acuse, $aviso ) as $correo ) {
+			$this->assertStringNotContainsString( 'Tiene huerto', $correo['message'] );
+		}
+	}
+
+	/**
+	 * La prórroga dice hasta qué día, incluido.
+	 */
+	public function test_the_extension_says_until_when() {
+		$correo = Messages::render( Mailer::EVENT_APPLICATION_EXTENDED, $this->solicitud( array( 'until' => '20-11-2026' ) ) );
+		$this->assertStringStartsWith( '[Procedimientos] Prórroga de su solicitud', $correo['subject'] );
+		$this->assertStringContainsString( 'hasta el 20-11-2026, incluido', $correo['message'] );
+	}
+
+	/**
 	 * La entrega dice qué documento llegó y con qué nombre.
 	 */
 	public function test_the_delivery_names_the_document() {

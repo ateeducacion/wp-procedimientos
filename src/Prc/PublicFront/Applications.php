@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreCatalog;
@@ -50,6 +51,14 @@ final class Applications {
 	 * que compone {@see ApplicationFiles::url()} al pintar.
 	 */
 	public const KEY_FILES = '_files';
+
+	/**
+	 * Columns that are offered but are not of the CSV «de siempre»: the
+	 * internal note of whoever reviews (PLAN-0003, PR 9). Like those of the
+	 * catalogue ({@see CentreColumns}), they only go out when chosen.
+	 */
+	public const EXTRA_COLUMNS = array( 'internal_note' );
+
 
 	// ─── leer ──────────────────────────────────────────────────────────────
 
@@ -355,6 +364,7 @@ final class Applications {
 			return 0;
 		}
 		$centro = self::centre_of( $user_id, $code );
+		ApplicationOperations::forget_refusal();
 		if ( '' === $centro['code'] ) {
 			return 0;
 		}
@@ -372,6 +382,7 @@ final class Applications {
 			'coordinator' => array(),
 			'answers'     => array(),
 		);
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		$metas = array(
 			ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_CENTRE,
 			ApplicationMetaKeys::CENTRE_CODE        => $centro['code'],
@@ -384,7 +395,16 @@ final class Applications {
 		foreach ( $metas as $clave => $valor ) {
 			update_post_meta( $id, $clave, wp_slash( $valor ) );
 		}
-		self::saved( $id, $created, $user_id );
+		// Una por centro (ADR-0018): si otra petición creó la suya entre la
+		// búsqueda y la escritura, se queda la más antigua y esta se borra;
+		// la del propio centro gana siempre a una en su nombre sin completar.
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
+			return 0;
+		}
+		// Una presentada en su nombre (PLAN-0003, PR 9) la presenta de verdad
+		// el centro la primera vez que la guarda: cuenta como nueva.
+		$created = ApplicationOperations::adopt( $id, $user_id ) || $created;
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -402,6 +422,7 @@ final class Applications {
 		if ( ! $user || ! ProcedureAccess::can_apply( $user_id, $procedure_id ) || ProcedureMetaKeys::AUDIENCE_TEACHERS !== get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
 			return 0;
 		}
+		ApplicationOperations::forget_refusal();
 		$created = null === self::find_for_teacher( $procedure_id, $user_id );
 		$id      = self::save_post(
 			$procedure_id,
@@ -419,6 +440,7 @@ final class Applications {
 			return 0;
 		}
 		$data += array( 'answers' => array() );
+		$antes = (string) get_post_meta( $id, ApplicationMetaKeys::REVIEW_STATE, true );
 		foreach (
 			array(
 				ApplicationMetaKeys::APPLICANT_TYPE     => ApplicationMetaKeys::TYPE_TEACHER,
@@ -432,7 +454,12 @@ final class Applications {
 		) {
 			update_post_meta( $id, $key, wp_slash( $value ) );
 		}
-		self::saved( $id, $created, $user_id );
+		// Una por persona: si otra petición creó la suya entretanto, se
+		// queda la más antigua y esta se borra.
+		if ( ApplicationOperations::lost_race( $id, $created ) ) {
+			return 0;
+		}
+		self::saved( $id, $created, $user_id, $antes );
 		return $id;
 	}
 
@@ -447,20 +474,27 @@ final class Applications {
 	 * centro es del centro y no de quien la presentó: otra persona del mismo
 	 * centro puede modificarla, y el aviso es para ella.
 	 *
-	 * @param int  $id      Application post ID.
-	 * @param bool $created Whether it did not exist before.
-	 * @param int  $user_id Account that stored it.
+	 * El estado de revisión de antes viaja también: guardar devuelve la
+	 * solicitud a «presentada» (ADR-0020), y el historial lo anota como un
+	 * cambio de revisión hecho por el guardado (ADR-0044). No es una revisión:
+	 * no emite `prc_application_reviewed` ni manda su correo.
+	 *
+	 * @param int    $id       Application post ID.
+	 * @param bool   $created  Whether it did not exist before.
+	 * @param int    $user_id  Account that stored it.
+	 * @param string $previous Review state before saving; empty for a new one.
 	 * @return void
 	 */
-	private static function saved( int $id, bool $created, int $user_id ): void {
+	private static function saved( int $id, bool $created, int $user_id, string $previous = '' ): void {
 		/**
 		 * An application has just been stored, new or edited.
 		 *
-		 * @param int  $id      Application post ID.
-		 * @param bool $created Whether it did not exist before.
-		 * @param int  $user_id Account that stored it.
+		 * @param int    $id       Application post ID.
+		 * @param bool   $created  Whether it did not exist before.
+		 * @param int    $user_id  Account that stored it.
+		 * @param string $previous Review state before saving; empty for a new one.
 		 */
-		do_action( 'prc_application_saved', $id, $created, $user_id );
+		do_action( 'prc_application_saved', $id, $created, $user_id, $previous );
 	}
 
 	/**
@@ -503,7 +537,7 @@ final class Applications {
 		$id = (int) $id;
 		if ( ! ApplicationFiles::store_all( $id, $files ) ) {
 			if ( $is_new ) {
-				wp_delete_post( $id, true );
+				ApplicationActions::purge( $id );
 			}
 			return 0;
 		}
@@ -614,10 +648,11 @@ final class Applications {
 	 * aquí una columna; la exportación la abre en una por fila.
 	 *
 	 * Con `$centre`, detrás del código van los atributos del centro que se leen
-	 * del catálogo ({@see CentreColumns}); sin él, las de siempre.
+	 * del catálogo ({@see CentreColumns}) y, tras la nota, la nota interna
+	 * ({@see EXTRA_COLUMNS}); sin él, las de siempre.
 	 *
 	 * @param array<int, array<string, mixed>> $questions Normalised questions.
-	 * @param bool                             $centre    Whether to add the catalogue columns.
+	 * @param bool                             $centre    Whether to add the catalogue columns and the internal note.
 	 * @return array<string, string> clave => rótulo.
 	 */
 	public static function columns( array $questions, bool $centre = false ): array {
@@ -638,6 +673,9 @@ final class Applications {
 			'note'              => 'Nota',
 		);
 		$out += QuestionPoints::heading( $questions );
+		// La nota interna, solo entre las que se ofrecen: nunca en la tabla ni
+		// en el CSV de siempre.
+		$out += $centre ? array( 'internal_note' => 'Nota interna' ) : array();
 		foreach ( $questions as $pregunta ) {
 			$out[ (string) $pregunta['key'] ] = (string) $pregunta['label'];
 		}
@@ -701,6 +739,7 @@ final class Applications {
 			'coordinator_email' => implode( ', ', array_filter( array_column( $coord, 'email' ) ) ),
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
+			'internal_note'     => (string) $meta[ ApplicationMetaKeys::INTERNAL_NOTE ],
 		);
 		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la

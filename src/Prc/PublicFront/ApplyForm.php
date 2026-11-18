@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront;
 
+use Prc\Access\ApplicationActions;
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ApplicationInput;
@@ -88,6 +89,7 @@ final class ApplyForm {
 		'presentada' => 'Solicitud presentada. Puede volver a esta pantalla para consultarla, y editarla mientras el plazo siga abierto.',
 		'guardada'   => 'Solicitud guardada.',
 		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
+		'retirada'   => 'Solicitud retirada: ya no cuenta para este procedimiento. Mientras el plazo siga abierto, puede volver a presentar una nueva.',
 	);
 
 	/**
@@ -164,32 +166,19 @@ final class ApplyForm {
 	/**
 	 * Whether a school may submit or edit its application right now, and why not.
 	 *
-	 * La tabla de la SDD, en código: abierto se presenta o se edita; en
-	 * subsanación solo edita quien tiene la solicitud «a subsanar»; en el
-	 * resto se mira y ya. Quién puede —capacidad, centro, titularidad— lo
-	 * dice {@see ProcedureAccess::can_apply()} antes de llegar aquí.
+	 * Lo decide el dominio ({@see ProcedureState::application_window()}): la
+	 * tabla de la SDD y, por encima, la prórroga de esa solicitud. Quién
+	 * puede —capacidad, centro, titularidad— lo dice
+	 * {@see ProcedureAccess::can_apply()} antes de llegar aquí.
 	 *
-	 * @param string $state        One of ProcedureMetaKeys::states().
-	 * @param string $review_state Review state of the existing application, '' when there is none.
+	 * @param string $state           One of ProcedureMetaKeys::states().
+	 * @param string $review_state    Review state of the existing application, '' when there is none.
 	 * @param bool   $manually_closed Whether new applications were closed manually.
+	 * @param bool   $late            Whether the existing application has a live extension.
 	 * @return string Empty when the form is open; otherwise why it is not.
 	 */
-	public static function window( string $state, string $review_state, bool $manually_closed = false ): string {
-		if ( ProcedureState::accepts_applications( $state ) ) {
-			return '';
-		}
-		if ( ProcedureMetaKeys::STATE_AMENDMENT === $state ) {
-			return ApplicationMetaKeys::REVIEW_AMEND === $review_state
-				? ''
-				: 'El procedimiento está en plazo de subsanación: solo pueden editar su solicitud los centros a los que se ha pedido subsanar.';
-		}
-		if ( ProcedureMetaKeys::STATE_UPCOMING === $state ) {
-			return 'El plazo de solicitud todavía no está abierto.';
-		}
-		if ( ProcedureMetaKeys::STATE_CLOSED === $state && $manually_closed ) {
-			return 'La inscripción se ha cerrado manualmente, antes de la fecha prevista.';
-		}
-		return 'Las solicitudes están cerradas.';
+	public static function window( string $state, string $review_state, bool $manually_closed = false, bool $late = false ): string {
+		return ProcedureState::application_window( $state, $review_state, $manually_closed, $late );
 	}
 
 	/**
@@ -232,7 +221,9 @@ final class ApplyForm {
 		$cerrado   = self::window(
 			ProcedureState::of_post( $procedure_id ),
 			null !== $existente ? (string) get_post_meta( $existente, ApplicationMetaKeys::REVIEW_STATE, true ) : '',
-			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+			(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+			// La prórroga de esa solicitud la abre aunque el plazo esté cerrado.
+			ApplicationActions::is_late_open( (int) $existente )
 		);
 		if ( '' !== $cerrado ) {
 			self::$rejected = $cerrado;
@@ -262,7 +253,7 @@ final class ApplyForm {
 			? Applications::save_teacher( $procedure_id, $user_id, $revisado['data'], $ficheros['files'] )
 			: Applications::save( $procedure_id, $user_id, $revisado['data'], $code, $ficheros['files'] );
 		if ( $id <= 0 ) {
-			self::$rejected = 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.';
+			self::$rejected = ApplicationOperations::why_not_saved( 'No se ha podido guardar la solicitud o su documento, así que la solicitud no se ha presentado. Vuelva a intentarlo.' );
 			return;
 		}
 
@@ -523,7 +514,8 @@ final class ApplyForm {
 			$m['why'] = self::window(
 				(string) $m['state'],
 				(string) ( $m['application']['state'] ?? '' ),
-				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
+				(bool) get_post_meta( $procedure_id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true ),
+				ApplicationActions::is_late_open( (int) ( $m['application']['id'] ?? 0 ) )
 			);
 		}
 		$m['can_submit'] = '' === $m['why'];
@@ -626,8 +618,9 @@ final class ApplyForm {
 			'coordinator_name'  => (string) ( $coordinators[0]['name'] ?? '' ),
 			'coordinator_dni'   => (string) ( $coordinators[0]['dni'] ?? '' ),
 			'coordinator_email' => (string) ( $coordinators[0]['email'] ?? '' ),
-			// Una solicitud ya presentada ya aceptó los compromisos.
-			'accept'            => array() !== $application,
+			// Una solicitud ya presentada ya aceptó los compromisos; una
+			// presentada en nombre del centro, todavía no.
+			'accept'            => ApplicationOperations::accepted( $application ),
 			'answers'           => (array) ( $application['answers'] ?? array() ),
 		);
 	}
@@ -644,6 +637,8 @@ final class ApplyForm {
 		$m = self::model();
 		// La lista de personas va aparte: tiene su propia ventana (ADR-0041).
 		$m['people'] = PeopleForm::model( $m );
+		// Retirar y la prórroga, también aparte (PLAN-0003, PR 9).
+		$m['withdraw'] = WithdrawForm::model( $m );
 		return ApplyFormView::html( $m );
 	}
 }

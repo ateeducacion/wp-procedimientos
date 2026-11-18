@@ -220,3 +220,15 @@ solicitud a «presentada» ni toca la nota. Una solicitud excluida no escribe
 nunca en su lista.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-10 (ADR-0044)
+
+Por encima de la tabla «Quién edita y cuándo» va la **prórroga** de cada
+solicitud ([ADR-0044](ADR-0044-actuar-sobre-una-solicitud-y-su-historial.md)): con `prc_late_until` en el futuro —o hoy—, el
+centro edita esa solicitud entera en cualquier estado del procedimiento salvo
+borrador e histórico, aunque no esté «a subsanar». No afecta a las demás. La
+regla vive en `ProcedureState::application_window()`, que sustituye a la de
+`ApplyForm::window()`. Además de la nota que lee el centro, quien revisa tiene
+una **nota interna** que el centro no ve nunca.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

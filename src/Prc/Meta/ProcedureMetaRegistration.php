@@ -38,7 +38,9 @@ final class ProcedureMetaRegistration {
 	 * one of its own, its authorisation callback.
 	 *
 	 * Sin `auth` la clave la escribe quien pueda editar el procedimiento
-	 * ({@see auth_edit_procedure()}); la marca de histórico pide su regla.
+	 * ({@see auth_edit_procedure()}); la marca de histórico, el JavaScript y
+	 * la consulta por zona ({@see auth_observe()}, solo administración) piden
+	 * su regla.
 	 *
 	 * @return array<string, array{type:string, sanitize:callable, auth?:callable}>
 	 */

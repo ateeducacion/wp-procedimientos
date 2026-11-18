@@ -97,9 +97,10 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$result = ProcedureInput::validate(
 			$this->valido(
 				array(
-					'audience'     => 'teachers',
-					'ownership'    => array(),
-					'centre_kinds' => array(),
+					'audience'          => 'teachers',
+					'ownership'         => array(),
+					'centre_kinds'      => array(),
+					'coordinator_count' => 1,
 				)
 			)
 		);
@@ -107,6 +108,9 @@ class Test_Procedure_Input extends WP_UnitTestCase {
 		$this->assertTrue( $result['ok'] );
 		$this->assertSame( array(), $result['data']['ownership'] );
 		$this->assertSame( array(), $result['data']['centre_kinds'] );
+		// El taller esconde la coordinación al profesorado: lo que quedara de antes se borra.
+		$this->assertSame( 0, $result['data']['coordinator_count'] );
+		$this->assertFalse( $result['data']['requires_coordinator'] );
 	}
 
 	/**

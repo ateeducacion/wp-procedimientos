@@ -1052,3 +1052,43 @@ describe( 'unsaved changes in the workshop forms', () => {
 		expect( leave().defaultPrevented ).toBe( false );
 	} );
 } );
+
+describe( 'the active workshop tab in view', () => {
+	/**
+	 * A row 300 px wide whose tabs sit at a given left edge, moved by its scroll.
+	 *
+	 * @param {number} left Left edge of the active tab with the row unscrolled.
+	 * @return {HTMLElement} The row.
+	 */
+	function row( left ) {
+		document.body.innerHTML = `
+			<nav class="prc-tabs--taller"><div class="prc-tabs-fila">
+				<a class="prc-tab" href="#">Datos</a>
+				<a class="prc-tab prc-tab-on" aria-current="page" href="#">Código</a>
+			</div></nav>`;
+		const tabRow = document.querySelector( '.prc-tabs-fila' );
+		const tab = document.querySelector( '[aria-current="page"]' );
+		tabRow.getBoundingClientRect = () => ( { left: 0, right: 300 } );
+		tab.getBoundingClientRect = () => ( { left: left - tabRow.scrollLeft, right: left + 80 - tabRow.scrollLeft } );
+		return tabRow;
+	}
+
+	it( 'scrolls the row, not the page, until the active tab fits on the right', async () => {
+		const tabRow = row( 400 );
+		await load();
+		expect( tabRow.scrollLeft ).toBe( 180 );
+	} );
+
+	it( 'scrolls back when the active tab is hidden on the left', async () => {
+		const tabRow = row( 100 );
+		tabRow.scrollLeft = 150;
+		await load();
+		expect( tabRow.scrollLeft ).toBe( 100 );
+	} );
+
+	it( 'leaves a row whose active tab already fits', async () => {
+		const tabRow = row( 50 );
+		await load();
+		expect( tabRow.scrollLeft ).toBe( 0 );
+	} );
+} );

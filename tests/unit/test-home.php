@@ -431,8 +431,8 @@ class Test_Home extends WP_UnitTestCase {
 	}
 
 	/**
-	 * La tarjeta lleva el cartel; sin cartel, el logo del ámbito, que puede
-	 * ser el de un ámbito de arriba; sin ninguno de los dos, nada.
+	 * The card shows the poster; without one, the logo of its ámbito, which
+	 * may be the one of an ámbito above it; with neither, nothing.
 	 */
 	public function test_the_card_shows_the_poster_or_the_area_logo() {
 		$curso  = $this->course( '2026-2027' );

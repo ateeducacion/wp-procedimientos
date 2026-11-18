@@ -1006,6 +1006,37 @@ describe( 'unsaved changes in the workshop forms', () => {
 		expect( window.confirm ).not.toHaveBeenCalled();
 	} );
 
+	it( 'asks with confirm() from a link inside an open modal dialog, where SweetAlert2 would sit underneath', async () => {
+		document.body.innerHTML = TALLER + '<dialog id="bloqueo" open><a id="volver" href="/mis-procedimientos/">Dejarlo</a></dialog>';
+		window.Swal = { fire: vi.fn( () => Promise.resolve( { isConfirmed: false } ) ) };
+		window.confirm = vi.fn( () => false );
+		await load();
+		type( 't' );
+
+		expect( click( 'volver' ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( QUESTION );
+		expect( window.Swal.fire ).not.toHaveBeenCalled();
+	} );
+
+	it( 'marks the form when a CodeMirror editor inside it changes, edits that fire no input event', async () => {
+		document.body.innerHTML = TALLER.replace( '<input id="t" name="prc_title" />', '<textarea id="css" name="prc_custom_css"></textarea><div class="CodeMirror"><textarea id="cm-input"></textarea></div>' );
+		await load();
+		const handlers = [];
+		const textarea = document.getElementById( 'css' );
+		document.querySelector( '.CodeMirror' ).CodeMirror = {
+			on: ( event, handler ) => handlers.push( [ event, handler ] ),
+			getTextArea: () => textarea,
+		};
+
+		document.getElementById( 'cm-input' ).dispatchEvent( new FocusEvent( 'focusin', { bubbles: true } ) );
+		document.getElementById( 'cm-input' ).dispatchEvent( new FocusEvent( 'focusin', { bubbles: true } ) );
+		expect( leave().defaultPrevented ).toBe( false );
+		expect( handlers.map( ( [ event ] ) => event ) ).toEqual( [ 'change' ] );
+
+		handlers[ 0 ][ 1 ]();
+		expect( leave().defaultPrevented ).toBe( true );
+	} );
+
 	it( 'clears the mark when its own form is sent, not when the send is stopped', async () => {
 		document.body.innerHTML = TALLER.replace( 'data-prc-dirty-guard', 'data-prc-dirty-guard data-prc-confirm="¿Guardar?"' );
 		window.confirm = vi.fn( () => false );

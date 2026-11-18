@@ -603,6 +603,22 @@
 	document.addEventListener( 'input', marcar );
 	document.addEventListener( 'change', marcar );
 
+	/*
+	 * CodeMirror («Código adicional») borra y salta de línea en `keydown`, sin
+	 * `input`: se escucha su propio `change`, una vez por editor, al entrar en él.
+	 */
+	document.addEventListener( 'focusin', function ( e ) {
+		var envoltorio = e.target.closest ? e.target.closest( '.CodeMirror' ) : null;
+		var cm = envoltorio && envoltorio.CodeMirror;
+		if ( ! cm || cm.prcVigilado ) {
+			return;
+		}
+		cm.prcVigilado = true;
+		cm.on( 'change', function () {
+			marcar( { target: cm.getTextArea() } );
+		} );
+	} );
+
 	// En `window`, detrás de la confirmación: un envío cancelado sigue sucio.
 	window.addEventListener( 'submit', function ( e ) {
 		if ( ! e.defaultPrevented && e.target instanceof HTMLFormElement ) {
@@ -637,7 +653,9 @@
 			// El mismo enlace, ya limpio: el navegador lo sigue como siempre.
 			enlace.click();
 		};
-		if ( ! window.Swal ) {
+		// Dentro de un <dialog> modal —el del bloqueo de edición— SweetAlert2
+		// quedaría debajo, inerte; confirm() sale por encima.
+		if ( ! window.Swal || enlace.closest( 'dialog[open]' ) ) {
 			if ( window.confirm( SIN_GUARDAR ) ) {
 				salir();
 			}

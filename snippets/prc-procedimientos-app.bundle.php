@@ -28467,6 +28467,95 @@ final class ApplicationProgressView {
 
 
 
+namespace Prc\PublicFront;
+
+use Prc\PublicFront\View\ProcedureChrome;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\PrivacyNotice', false ) ) {
+final class PrivacyNotice {
+
+
+
+
+	public const OPTION = 'prc_privacy_notice';
+
+
+
+
+
+
+	private const FORBIDDEN = array( 'form', 'button', 'input', 'select', 'option', 'textarea', 'label', 'fieldset' );
+
+
+
+
+
+
+	public static function text(): string {
+		$filtered = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
+		return '' !== $filtered ? $filtered : trim( (string) get_option( self::OPTION, '' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+
+		$value   = (string) preg_replace( '#<(script|style)\b[^>]*>.*?(?:</\1\s*>|$)#is', '', $value );
+		$allowed = array_diff_key( wp_kses_allowed_html( 'post' ), array_flip( self::FORBIDDEN ) );
+		return trim( force_balance_tags( wp_kses( $value, $allowed ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function after_sections( array $m ): string {
+		if ( true === ( $m['can_submit'] ?? false ) ) {
+			return '';
+		}
+		$people = (array) ( $m['people'] ?? array() );
+		$open   = array_filter( array_column( (array) ( $m['deliveries'] ?? array() ), 'can_submit' ) );
+		if ( array() === $open && ( empty( $people['show'] ) || empty( $people['can_edit'] ) ) ) {
+			return '';
+		}
+		return (string) ( $m['privacy'] ?? '' );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\DateRange;
@@ -28477,6 +28566,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Shell;
 
 
@@ -28561,9 +28651,7 @@ final class ApplyFormView {
 		}
 
 
-		if ( true !== $m['can_submit'] && self::still_collects( $m ) ) {
-			echo self::privacy( $m );
-		}
+		echo self::privacy( PrivacyNotice::after_sections( $m ) );
 
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -28741,31 +28829,12 @@ final class ApplyFormView {
 
 
 
-	private static function privacy( array $m ): string {
-		$text = ApplyForm::sanitize_privacy( (string) ( $m['privacy'] ?? '' ) );
+	private static function privacy( string $notice ): string {
+		$text = PrivacyNotice::sanitize( $notice );
 		if ( '' === $text ) {
 			return '';
 		}
 		return '<div class="prc-aviso-legal">' . $text . '</div>';
-	}
-
-
-
-
-
-
-
-	private static function still_collects( array $m ): bool {
-		$people = (array) ( $m['people'] ?? array() );
-		if ( ! empty( $people['show'] ) && ! empty( $people['can_edit'] ) ) {
-			return true;
-		}
-		foreach ( (array) ( $m['deliveries'] ?? array() ) as $delivery ) {
-			if ( ! empty( $delivery['can_submit'] ) ) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 
@@ -28897,7 +28966,7 @@ final class ApplyFormView {
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
 
-			<?php echo self::privacy( $m );?>
+			<?php echo self::privacy( (string) ( $m['privacy'] ?? '' ) );?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva );?>
 		</form>
@@ -29255,7 +29324,6 @@ use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\View\ApplyFormView;
-use Prc\PublicFront\View\ProcedureChrome;
 
 
 
@@ -29318,18 +29386,6 @@ final class ApplyForm {
 
 	public const NONCE_ACTION = 'prc_apply';
 	public const NONCE_FIELD  = '_prc_apply_nonce';
-
-
-
-
-	public const OPTION_PRIVACY = 'prc_privacy_notice';
-
-
-
-
-
-
-	private const PRIVACY_FORBIDDEN = array( 'form', 'button', 'input', 'select', 'option', 'textarea', 'label', 'fieldset' );
 
 
 
@@ -29629,40 +29685,6 @@ final class ApplyForm {
 
 
 
-
-
-
-
-	public static function privacy_notice(): string {
-		$filtered = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
-		return '' !== $filtered ? $filtered : trim( (string) get_option( self::OPTION_PRIVACY, '' ) );
-	}
-
-
-
-
-
-
-
-
-
-
-	public static function sanitize_privacy( $value ): string {
-		if ( ! is_string( $value ) ) {
-			return '';
-		}
-
-
-		$value   = (string) preg_replace( '#<(script|style)\b[^>]*>.*?(?:</\1\s*>|$)#is', '', $value );
-		$allowed = array_diff_key( wp_kses_allowed_html( 'post' ), array_flip( self::PRIVACY_FORBIDDEN ) );
-		return trim( force_balance_tags( wp_kses( $value, $allowed ) ) );
-	}
-
-
-
-
-
-
 	public static function model(): array {
 		$m = self::exits() + array(
 			'aviso'           => '',
@@ -29717,7 +29739,7 @@ final class ApplyForm {
 
 			'invalid'         => self::$invalid,
 
-			'privacy'         => self::privacy_notice(),
+			'privacy'         => PrivacyNotice::text(),
 		);
 
 		if ( ! is_user_logged_in() ) {
@@ -33954,8 +33976,8 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
-use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\ExitSignal;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
 
@@ -34052,11 +34074,11 @@ final class Settings {
 
 		register_setting(
 			self::PRIVACY_GROUP,
-			ApplyForm::OPTION_PRIVACY,
+			PrivacyNotice::OPTION,
 			array(
 				'type'              => 'string',
 				'default'           => '',
-				'sanitize_callback' => array( ApplyForm::class, 'sanitize_privacy' ),
+				'sanitize_callback' => array( PrivacyNotice::class, 'sanitize' ),
 				'show_in_rest'      => false,
 			)
 		);
@@ -34350,15 +34372,15 @@ final class Settings {
 			</form>
 
 			<h2>Protección de datos</h2>
-			<?php $privacy = trim( (string) get_option( ApplyForm::OPTION_PRIVACY, '' ) ); ?>
+			<?php $privacy = trim( (string) get_option( PrivacyNotice::OPTION, '' ) ); ?>
 			<form method="post" action="options.php">
 				<?php settings_fields( self::PRIVACY_GROUP ); ?>
-				<p style="max-width:46rem"><label for="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>">Texto de protección de datos</label></p>
-				<?php if ( ApplyForm::privacy_notice() !== $privacy ) : ?>
+				<p style="max-width:46rem"><label for="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>">Texto de protección de datos</label></p>
+				<?php if ( PrivacyNotice::text() !== $privacy ) : ?>
 					<div class="notice notice-warning inline" style="max-width:46rem"><p>Este texto lo fija la configuración de la instalación (filtro prc_chrome) y se ignora lo que escriba aquí.</p></div>
 				<?php endif; ?>
 				<?php ?>
-				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>" name="<?php echo esc_attr( ApplyForm::OPTION_PRIVACY ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( str_replace( '&amp;', '&', $privacy ) ); ?></textarea>
+				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>" name="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( str_replace( '&amp;', '&', $privacy ) ); ?></textarea>
 				<p class="description" id="prc-privacy-ayuda" style="max-width:46rem">Sale al final de cada solicitud, antes del botón de enviar, igual para todos los procedimientos. Admite enlaces y negritas. En blanco, no se pinta.</p>
 				<?php submit_button( 'Guardar el texto de protección de datos' ); ?>
 			</form>

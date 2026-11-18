@@ -179,11 +179,11 @@ class Test_People_Form extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringContainsString( 'Las solicitudes están cerradas.', $html, 'la solicitud, cerrada' );
 		$this->assertStringContainsString( 'id="' . PeopleForm::ANCHOR . '"', $html );
-		$this->assertStringContainsString( '>Personas que participan</h2>', $html );
+		$this->assertStringContainsString( '>Participantes</h2>', $html );
 		$this->assertStringContainsString( 'Dar de alta a una persona', $html );
 		$this->assertStringContainsString( 'Sustituir o corregir', $html );
 		$this->assertStringContainsString( '>Guardar los cambios de la persona</button>', $html, 'guardar y qué' );
-		$this->assertStringContainsString( 'data-prc-confirm="¿Dar de baja a Ana Pérez de la lista de personas?', $html, 'la baja pide confirmación' );
+		$this->assertStringContainsString( 'data-prc-confirm="¿Dar de baja a Ana Pérez de la lista de participantes?', $html, 'la baja pide confirmación' );
 		$this->assertStringContainsString( 'Participante', $html, 'el papel, por su rótulo' );
 		$this->assertStringContainsString( 'queda incompleta', $html, 'una de dos: incompleta, no rechazada' );
 	}
@@ -237,7 +237,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->acting_as( $director );
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringNotContainsString( PeopleForm::ANCHOR, $html );
-		$this->assertStringNotContainsString( '>Personas que participan</h2>', $html );
+		$this->assertStringNotContainsString( '>Participantes</h2>', $html );
 	}
 
 	/**
@@ -259,7 +259,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		);
 		$this->application( $cerrada, $director );
 		$html = $this->pintar( $cerrada );
-		$this->assertStringContainsString( 'El plazo de la lista de personas terminó el', $html );
+		$this->assertStringContainsString( 'El plazo de la lista de participantes terminó el', $html );
 		$this->assertStringNotContainsString( 'Dar de alta a una persona', $html );
 	}
 
@@ -308,7 +308,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->assertNull( $this->enviar( $campos ) );
 		$this->assertSame( array(), People::of( $solicitud ) );
 		$html = $this->pintar( $cerrada );
-		$this->assertStringContainsString( 'La lista de personas se abre el', $html );
+		$this->assertStringContainsString( 'La lista de participantes se abre el', $html );
 
 		$abierta = $this->application( $this->procedimiento(), $director );
 		$this->assertNull( $this->enviar( array( PeopleForm::FIELD_APPLICATION => (string) $abierta ) + $campos, false ) );

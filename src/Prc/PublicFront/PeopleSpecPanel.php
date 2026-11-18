@@ -74,7 +74,7 @@ final class PeopleSpecPanel {
 	 */
 	public static function save( int $procedure_id ): string {
 		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
-			return 'Los procedimientos para profesorado no tienen lista de personas: cada solicitud es de una sola persona.';
+			return 'Los procedimientos para profesorado no tienen lista de participantes: cada solicitud es de una sola persona.';
 		}
 		$antes = People::spec( $procedure_id );
 		$res   = PeopleSpec::from_input( self::typed(), $antes );

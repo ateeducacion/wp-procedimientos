@@ -274,7 +274,7 @@ final class ProcedureInput {
 		$lista      = array(
 			self::point( 'course', (int) ( $facts['course'] ?? 0 ) > 0, true, 'Curso elegido.', $sin_curso, array( $sin_curso ) ),
 			self::point( 'window', '' !== $abre, true, sprintf( 'Plazo de solicitud: del %1$s al %2$s.', self::dmy( $abre ), self::dmy( $cierra ) ), $sin_plazo . ' Sin él, el procedimiento se quedaría en «Próximo» y nadie podría solicitar.', array( $sin_plazo ) ),
-			self::point( 'questions', true, false, array() === $preguntas ? 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Preguntas propias: %d.', count( $preguntas ) ), '', array() ),
+			self::point( 'questions', true, false, array() === $preguntas ? 'Sin campos adicionales: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Campos adicionales: %d.', count( $preguntas ) ), '', array() ),
 		);
 		$sin_fechas = array();
 		$entregas   = 0;
@@ -282,7 +282,7 @@ final class ProcedureInput {
 			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
 				++$entregas;
 				if ( ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
-					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Campos adicionales».', (string) ( $pregunta['label'] ?? '' ) );
 				}
 			}
 		}

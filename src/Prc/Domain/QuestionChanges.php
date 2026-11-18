@@ -67,7 +67,7 @@ final class QuestionChanges {
 			$key = (string) ( $pregunta['key'] ?? '' );
 			// Sin mínimo, el mínimo es cero: un máximo negativo tampoco cabe.
 			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
-				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado las preguntas.';
+				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado los campos.';
 			}
 			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
 				$cambiadas[] = '«' . (string) $pregunta['label'] . '»';
@@ -77,7 +77,7 @@ final class QuestionChanges {
 			return '';
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
-			. ': ya hay solicitudes que la han contestado. Si necesita otro tipo, cree una pregunta nueva. No se han guardado las preguntas.';
+			. ': ya hay solicitudes que lo han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
 	}
 
 	/**
@@ -109,7 +109,7 @@ final class QuestionChanges {
 			$antes  = $guardadas[ (string) ( $pregunta['key'] ?? '' ) ] ?? array();
 			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '', self::known_lines( $antes ) ) : '';
 			if ( '' !== $mal ) {
-				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
+				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado los campos.';
 			}
 			foreach ( array(
 				'min' => 'mínimo',
@@ -117,7 +117,7 @@ final class QuestionChanges {
 			) as $limite => $nombre ) {
 				$valor = is_scalar( $pregunta[ $limite ] ?? null ) ? trim( (string) $pregunta[ $limite ] ) : '';
 				if ( ProcedureQuestions::TYPE_NUMBER === $tipo && '' !== $valor && null === ProcedureQuestions::integer( $valor ) ) {
-					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado las preguntas.';
+					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado los campos.';
 				}
 			}
 		}

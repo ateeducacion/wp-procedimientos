@@ -138,8 +138,8 @@ final class MyCentreView {
 			return '';
 		}
 		$texto = 1 === $cuantas
-			? '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.'
-			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan personas en la lista.';
+			? '<strong>1 solicitud</strong> está incompleta: le faltan participantes en la lista.'
+			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan participantes en la lista.';
 		if ( '' !== (string) ( $incomplete['id'] ?? '' ) ) {
 			$texto .= ' <a href="#fila-' . esc_attr( (string) $incomplete['id'] ) . '">' . ( 1 === $cuantas ? 'Ir a la solicitud' : 'Ir a la primera' ) . '</a>';
 		}
@@ -154,7 +154,7 @@ final class MyCentreView {
 	 */
 	private static function people_cell( array $fila ): string {
 		if ( empty( $fila['people'] ) ) {
-			return '<td class="prc-celda" data-rotulo="Personas">' . self::value( '' ) . '</td>';
+			return '<td class="prc-celda" data-rotulo="Participantes">' . self::value( '' ) . '</td>';
 		}
 		$hay = (int) $fila['people_count'];
 		$min = (int) $fila['people_min'];
@@ -175,7 +175,7 @@ final class MyCentreView {
 			$porque = (string) ( $fila['people_why'] ?? '' );
 			$out   .= '<span class="prc-nota-revision">' . esc_html( '' !== $porque ? $porque : 'La lista ya no se puede cambiar.' ) . '</span>';
 		}
-		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
+		return '<td class="prc-celda" data-rotulo="Participantes">' . $out . '</td>';
 	}
 
 	/**

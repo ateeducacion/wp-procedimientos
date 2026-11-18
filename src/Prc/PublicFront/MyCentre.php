@@ -97,7 +97,7 @@ final class MyCentre {
 			),
 			// Solo se pinta si alguna solicitud tiene lista (ADR-0041).
 			'personas'      => array(
-				'label' => 'Personas',
+				'label' => 'Participantes',
 				'field' => 'people_sort',
 			),
 		);

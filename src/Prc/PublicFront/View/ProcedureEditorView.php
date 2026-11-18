@@ -166,7 +166,7 @@ final class ProcedureEditorView {
 		?>
 		<section aria-labelledby="prc-deliveries-title">
 			<h2 id="prc-deliveries-title">Plazos de entregas documentales</h2>
-			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y las preguntas se conservan; el nuevo cierre no puede ser anterior al actual.</p>
+			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y los campos adicionales se conservan; el nuevo cierre no puede ser anterior al actual.</p>
 			<?php if ( empty( $m['deliveries'] ) ) : ?>
 				<p>Este procedimiento no tiene entregas con plazo propio.</p>
 			<?php else : ?>
@@ -362,7 +362,7 @@ final class ProcedureEditorView {
 	 */
 	public static function duplicate_question( string $title ): string {
 		return sprintf(
-			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes.',
+			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus campos adicionales y su configuración, sin plazos, sin curso y sin solicitudes.',
 			'' !== $title ? $title : 'Procedimiento sin título'
 		);
 	}
@@ -834,7 +834,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Personas».</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Participantes».</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -1000,11 +1000,11 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 
 			<p class="prc-intro">
-				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
+				Los campos adicionales de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
-			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
+			<p class="prc-intro">¿Los mismos campos que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus campos, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
 			<?php foreach ( $guardas as $i => $pregunta ) : ?>
@@ -1013,7 +1013,7 @@ final class ProcedureEditorView {
 			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
 				<?php if ( 1 === $n ) : ?>
 					<details class="prc-preguntas-mas">
-						<summary>Añadir otra pregunta</summary>
+						<summary>Añadir otro campo</summary>
 				<?php endif; ?>
 				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php endfor; ?>
@@ -1021,7 +1021,7 @@ final class ProcedureEditorView {
 				</details>
 			<?php endif; ?>
 
-			<?php echo PanelParts::submit( 'Guardar las preguntas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo PanelParts::submit( 'Guardar los campos' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
 		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
@@ -1054,14 +1054,14 @@ final class ProcedureEditorView {
 				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
-				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
+				esc_attr( $boton[0] . ' el campo ' . ( $i + 1 ) ),
 				$boton[1] ? ' disabled' : '',
 				esc_html( $boton[0] )
 			);
 		}
 		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
 			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
-			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar (lo ya contestado se conserva)</label></span>';
 		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
@@ -1118,7 +1118,7 @@ final class ProcedureEditorView {
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
 			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
 			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
-			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar los campos.</p></div>';
 		foreach ( array(
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
@@ -1142,7 +1142,7 @@ final class ProcedureEditorView {
 	private static function question_row( int $i, array $p, array $m, int $total ): string {
 		$nueva     = '' === (string) $p['key'];
 		$campo     = ProcedureEditor::FIELD_Q;
-		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$rotulo    = $nueva ? 'Campo nuevo' : 'Campo ' . ( $i + 1 );
 		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
 		$aviso     = 'prc-q-l-aviso-' . $i;
 
@@ -1154,11 +1154,11 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
+					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Título</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
 						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
 					<?php if ( $contestan > 0 ) : ?>
-						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya lo han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a pedir otra cosa, cree un campo nuevo.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
 					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
@@ -1174,7 +1174,7 @@ final class ProcedureEditorView {
 				<label class="prc-campo__etiqueta" for="prc-q-h-<?php echo esc_attr( (string) $i ); ?>">Indicaciones</label>
 				<input class="prc-control" type="text" id="prc-q-h-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'help' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
-				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
+				<p class="prc-campo__ayuda">Una línea bajo el campo que ayude a contestarlo. Puede dejarse en blanco.</p>
 			</div>
 			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
@@ -1187,7 +1187,7 @@ final class ProcedureEditorView {
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
-				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatoria</label>
+				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatorio</label>
 			</div>
 		</fieldset>
 		<?php

@@ -1238,7 +1238,7 @@ final class ProcedureAccess {
 	 * @return string Empty when they can.
 	 */
 	public static function why_not_people( int $user_id, int $application_id ): string {
-		$ajena = 'Solo gestiona las personas de una solicitud el equipo directivo de su centro.';
+		$ajena = 'Solo gestiona la lista de participantes de una solicitud el equipo directivo de su centro.';
 		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) || 'publish' !== get_post_status( $application_id ) ) {
 			return $ajena;
 		}

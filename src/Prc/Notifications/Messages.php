@@ -239,7 +239,7 @@ final class Messages {
 			array(
 				'',
 				'Los pasos:',
-				'1. Complete los datos del procedimiento: la descripción, los plazos, las preguntas y los correos de contacto.',
+				'1. Complete los datos del procedimiento: la descripción, los plazos, los campos adicionales y los correos de contacto.',
 				'2. El día de la publicación, ponga las fechas definitivas, enlace la resolución y publíquelo.',
 			),
 			self::link( 'Taller del procedimiento:', $ctx, 'editor_url' ),
@@ -272,9 +272,9 @@ final class Messages {
 			return null;
 		}
 		return array(
-			'Personas de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			'Participantes de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
 			array_merge(
-				array( $cambio[1] . ' la lista de personas de una solicitud del procedimiento «' . $titulo . '».', '' ),
+				array( $cambio[1] . ' la lista de participantes de una solicitud del procedimiento «' . $titulo . '».', '' ),
 				self::field( 'Procedimiento', $titulo ),
 				self::field( 'Centro', self::text( $ctx, 'centre' ) ),
 				self::field( 'Hecho por', self::text( $ctx, 'applicant' ) ),

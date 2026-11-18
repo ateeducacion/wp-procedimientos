@@ -130,3 +130,17 @@ Tras la revisión del diseño inicial se introducen las siguientes precisiones y
    - Esto evita condiciones de carrera donde un proceso lento intente eliminar un candado antiguo y borre accidentalmente el candado nuevo recién adquirido por otro proceso contemporáneo.
 
 
+
+## Adenda — 2026-11-10 (ADR-0042)
+
+La sincronización guarda también `zone` —el campo `cep` de cada registro, el
+código de otro centro del catálogo, si tiene 8 cifras; vacía si no— y
+`ownership` si la fuente llegara a traerla. Un catálogo guardado antes, sin
+`zone`, sigue sirviendo: la zona sale vacía. `for_domain()` ya no rellena la
+titularidad con «público»: eso hacía que todo centro sincronizado se leyera
+público. La titularidad la deriva `Domain/CentreCatalog` del tipo
+([ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)). Cada solicitud sigue
+guardando solo código y nombre: la isla, el municipio, el tipo, la titularidad
+y la zona se leen del catálogo al pintar o exportar.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

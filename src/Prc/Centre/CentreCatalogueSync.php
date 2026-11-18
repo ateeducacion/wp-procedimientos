@@ -7,6 +7,7 @@
 
 namespace Prc\Centre;
 
+use Prc\Meta\ProcedureMetaKeys;
 use RuntimeException;
 
 /**
@@ -29,6 +30,47 @@ final class CentreCatalogueSync {
 	public const CRON_HOOK = 'prc_centres_cron_sync';
 
 	public const HTTP_TIMEOUT = 30;
+
+	/**
+	 * Field of the source record that carries the code of the centre a
+	 * record is attached to: its zone (ADR-0042). Stored as `zone`.
+	 */
+	public const SOURCE_ZONE_FIELD = 'cep';
+
+	/**
+	 * One validated record as it is stored, with what the domain reads.
+	 *
+	 * La zona es el código de **otro** centro del catálogo: se guarda si tiene
+	 * la forma de un código oficial y vacía si no, sin tumbar la
+	 * sincronización por eso. La fuente no trae titularidad; si algún día la
+	 * trae, se guarda, y manda sobre la que se deriva del tipo (ADR-0042).
+	 *
+	 * @param array<string, mixed> $item      Raw record of the source.
+	 * @param string               $code      Validated code.
+	 * @param string               $name      Validated name.
+	 * @param bool                 $is_active Validated flag.
+	 * @return array<string, mixed>
+	 */
+	public static function record( array $item, string $code, string $name, bool $is_active ): array {
+		$texto   = static function ( string $campo ) use ( $item ): string {
+			return isset( $item[ $campo ] ) && is_scalar( $item[ $campo ] ) ? trim( (string) $item[ $campo ] ) : '';
+		};
+		$zona    = $texto( self::SOURCE_ZONE_FIELD );
+		$record  = array(
+			'code'         => $code,
+			'name'         => $name,
+			'island'       => $texto( 'island' ),
+			'municipality' => $texto( 'municipality' ),
+			'type'         => $texto( 'type' ),
+			'zone'         => 1 === preg_match( '/^\d{8}$/', $zona ) ? $zona : '',
+			'active'       => $is_active,
+		);
+		$titular = strtolower( $texto( 'ownership' ) );
+		if ( in_array( $titular, array( ProcedureMetaKeys::OWNERSHIP_PUBLIC, ProcedureMetaKeys::OWNERSHIP_PRIVATE ), true ) ) {
+			$record['ownership'] = $titular;
+		}
+		return $record;
+	}
 
 	/**
 	 * Register cron schedule and hook.
@@ -371,18 +413,13 @@ final class CentreCatalogueSync {
 					++$active_count;
 				}
 
-				$indexed[ $code ] = array(
-					'code'         => $code,
-					'name'         => $name,
-					'island'       => isset( $item['island'] ) && is_scalar( $item['island'] ) ? trim( (string) $item['island'] ) : '',
-					'municipality' => isset( $item['municipality'] ) && is_scalar( $item['municipality'] ) ? trim( (string) $item['municipality'] ) : '',
-					'type'         => isset( $item['type'] ) && is_scalar( $item['type'] ) ? trim( (string) $item['type'] ) : '',
-					'active'       => $is_active,
-				);
+				$indexed[ $code ] = self::record( $item, $code, $name, $is_active );
 			}
 
 			// 7. Reemplazo atómico.
 			update_option( CentreCatalogue::OPTION_CATALOGUE, $indexed, false );
+			// Lo que el dominio ya había construido en esta petición es de antes.
+			\Prc\Domain\CentreCatalog::flush();
 
 			$status = array(
 				'schema_version'       => 1,

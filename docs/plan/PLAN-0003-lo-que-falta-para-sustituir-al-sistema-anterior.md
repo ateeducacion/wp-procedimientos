@@ -388,24 +388,111 @@ copia de todo `procedure_created` y `application_received`). Con
 
 ### PR 5 — Atributos del centro y elegibilidad (`feature/centre-attributes`)
 
-**Ficheros:** `Centre/CentreCatalogue.php`, `Centre/CentreCatalogueSync.php`,
-`Domain/CentreCatalog.php`, `Access/ProcedureAccess.php`,
-`Meta/ProcedureMetaKeys.php`, editor y vista; pruebas en
-`test-centre-catalog.php`, `test-centres.php`, `test-procedure-access.php`.
+**Ficheros:**
+- Crear `Domain/CentreEligibility.php` (puro): los acotados y su motivo.
+- Modificar `Centre/CentreCatalogue.php`, `Centre/CentreCatalogueSync.php`,
+  `Domain/CentreCatalog.php`, `Domain/ProcedureInput.php`,
+  `Access/ProcedureAccess.php`, `Meta/ProcedureMetaKeys.php` y registro,
+  `ProcedureEditor.php` y su vista (sección «Qué centros pueden solicitar» y
+  diálogo de exportación), `ApplyForm.php` (el motivo), `Applications.php`,
+  `PublicFront/CentreColumns.php` (nuevo: las columnas del catálogo, aparte
+  para que `Applications` y `ApplicationExport` no pasen del umbral de PHPMD),
+  `ApplicationExport.php`, `PeopleExport.php`, `Admin/Settings.php`,
+  `scripts/mu-plugins/prc-dev-tools.php`, `load-order.php`.
+- Pruebas: `test-centre-eligibility.php` (dominio); ampliar
+  `test-centre-catalog.php`, `test-centres.php`, `test-procedure-access.php`,
+  `test-rural-groups.php`, `test-apply-form.php`, `test-procedure-editor.php`,
+  `test-application-export.php`, `test-meta-registration.php` y
+  `test-rest-authorization.php`.
 
-- [ ] **Comprobar antes de tocar**: escribir la prueba que sincroniza un
-      centro privado y lee su titularidad desde el dominio. Si falla, es un
-      defecto y se arregla aquí; si pasa, se anota y se sigue.
-- [ ] El catálogo guarda y sirve `zone`: el código que la fuente trae en el
+**Interfaces que produce:**
+- Catálogo: `CentreCatalog::all()` / `find()` sirven `{code, name, ownership,
+  kind, island, municipality, type, zone, zone_name, active}`; `zone` es el
+  código de otro centro del catálogo y `zone_name` su nombre, vacío si no
+  está. `CentreCatalog::index(): array<string, array>` (por código, una
+  pasada) y `CentreCatalog::values( string $field ): string[]` (valores
+  distintos de `type`, `island`…), `CentreCatalog::choices( bool $wanted, array $types, array $islands )`
+  (lo que ofrece el taller). `CentreCatalog::private_types(): string[]`
+  y la opción `CentreCatalog::OPTION_PRIVATE_TYPES` (`prc_private_centre_types`).
+- La sincronización guarda `zone` (campo `CentreCatalogueSync::SOURCE_ZONE_FIELD`
+  de la fuente, 8 cifras o vacío) y `ownership` si viene;
+  `CentreCatalogueSync::record( array $item, string $code, string $name, bool $is_active ): array`.
+- Filtros: `prc_private_centre_types` (lista de tipos privados, sin distinguir
+  mayúsculas; por defecto la opción, vacía) y `prc_zone_label` (rótulo de la
+  zona, «Zona» por defecto; `CentreColumns::zone_label()`).
+- Metas del procedimiento: `ProcedureMetaKeys::CENTRE_TYPES`
+  (`prc_centre_types`), `ISLANDS` (`prc_islands`) y `ALLOWED_CENTRES`
+  (`prc_allowed_centres`), arrays sin REST; vacías, sin acotado.
+- `CentreEligibility::rules( array $raw ): array{ownership, types, islands, codes}`,
+  `::restricted( array $rules ): bool`, `::why_not( array $rules, string $code, array $centre ): string`,
+  `::parse_codes( $raw ): array{codes, invalid}`, `::codes( $raw )`,
+  `::values( $raw )`, `::input( array $raw, bool $schools )`, `MAX_CODES = 2000`.
+- `CentreEligibility::why_not( array $rules, string $code, array $centre, bool $catalogue = true )`
+  y `CentreEligibility::warnings( array $rules, bool $empty_catalogue, bool $no_private ): array{ownership?, catalogue?}`;
+  `CentreCatalog::flush()`, `CentreCatalog::register()`;
+  `Applications::rows( int $procedure_id, ?array $applications = null, bool $centre = false )`
+  (sin `$centre` no lee el catálogo); `CentreColumns::index_for( array $applications, bool $wanted = true )`.
+- Guardián: `ProcedureAccess::eligibility( int $post_id ): array`,
+  `::why_not_code( int $post_id, string $code, string $kind = 'school' ): string` y
+  `::why_not_eligible( int $user_id, int $post_id, string $code = '' ): string`;
+  `apply_codes()` / `can_apply()` los aplican.
+- **Leer los atributos de una solicitud** (para los PR 6 y 7):
+  `CentreColumns::attributes( string $code, ?array $index = null ): array{island, municipality, type, ownership, zone, zone_name}`
+  con el `prc_centre_code` de la solicitud; todo vacío si el código no está
+  en el catálogo o es de profesorado. Para muchas a la vez, pasar
+  `CentreCatalog::index()` una vez. `Applications::row()` ya trae las celdas
+  `island`, `municipality`, `centre_type`, `ownership` (rótulo), `zone`
+  (nombre) y `zone_code`, y `Applications::rows()` lee el catálogo una sola vez.
+- Exportación: `CentreColumns::KEYS`, `CentreColumns::columns()`,
+  `CentreColumns::cells( string $code, ?array $index )`, `CentreColumns::ordered()`,
+  `CentreColumns::all_plus()`, `CentreColumns::index_for( array $applications )`,
+  `Applications::columns( array $questions, bool $centre = false )` y
+  `PeopleExport::all_columns( int $procedure_id, bool $centre = false )`: las
+  seis van en el grupo `centre` de `groups()` pero fuera del CSV de siempre.
+- `CentreEligibility::form_values( array $rules )`: los acotados como los
+  pinta el taller (la lista cerrada, un código por línea).
+- `Settings::CENTRES_GROUP` y `Settings::sanitize_private_types()`.
+
+**Decisiones:**
+- La titularidad se deriva del tipo; una explícita manda. Sin configurar, todo
+  es público.
+- Un centro que no está en el catálogo no crea solicitud en un procedimiento
+  acotado por titularidad (distinta de «todas»), tipos o islas; sin acotados,
+  sí. Con la lista cerrada como único acotado, estar en ella basta aunque no
+  esté en el catálogo; con lista y otros acotados, hace falta el catálogo. Con
+  el catálogo entero vacío, la titularidad sola no cierra. La lista no
+  distingue mayúsculas. Una agrupación rural se mide por su propio código, y
+  la titularidad no la filtra.
+- La elegibilidad se mira al crear: quien ya presentó su solicitud la sigue
+  editando o subsanando aunque el procedimiento se acote después
+  (`apply_codes()` admite el código que ya tiene solicitud).
+- El taller avisa del catálogo vacío y de una sola titularidad sin tipos
+  privados (`CentreEligibility::warnings()`); los ajustes cuentan los centros
+  que sirve el dominio y los procedimientos publicados que dependen de lo que
+  falta (`Settings::dependents()`).
+- `CentreCatalog::all()`, `find()` e `index()` se construyen una vez por
+  petición; `CentreCatalog::flush()` lo vacía, y se llama al sincronizar y al
+  cambiar la opción del catálogo o la de los tipos privados.
+- Las seis columnas solo salen si se eligen: «Todas las columnas» y el CSV sin
+  columnas son el de siempre, byte a byte; con «Todas» marcada, las del
+  catálogo que se marquen se suman. En el diálogo van con
+  `data-prc-export-extra`, fuera del «marcar todo» del guion.
+
+- [x] **Comprobar antes de tocar**: la prueba que sincroniza un centro privado
+      y lee su titularidad desde el dominio **falló**: salía «pública». Era un
+      defecto y se arregla aquí.
+- [x] El catálogo guarda y sirve `zone`: el código que la fuente trae en el
       campo `cep` de cada centro, que es a su vez un centro del catálogo y de
       ahí sale su nombre. El rótulo de «zona» sale del filtro `prc_zone_label`.
-- [ ] La fuente no trae titularidad: se deriva del tipo de centro con una
+- [x] La fuente no trae titularidad: se deriva del tipo de centro con una
       lista de tipos privados que contesta el filtro `prc_private_centre_types`.
-- [ ] El procedimiento puede acotar por tipo de centro, por isla y por lista
+- [x] El procedimiento puede acotar por tipo de centro, por isla y por lista
       cerrada de códigos (`prc_allowed_centres`). Un centro que no está en el
-      catálogo **no** solicita en un procedimiento acotado (hoy sí).
-- [ ] La exportación gana las columnas isla, municipio, tipo, titularidad y zona.
-- [ ] ADR-0042.
+      catálogo **no** crea solicitud en un procedimiento acotado por
+      titularidad, tipo o isla (hoy sí); con la lista sola, basta estar en
+      ella.
+- [x] La exportación gana las columnas isla, municipio, tipo, titularidad y zona.
+- [x] ADR-0042.
 
 ### PR 6 — Tabla de solicitudes (`feature/applications-table`)
 

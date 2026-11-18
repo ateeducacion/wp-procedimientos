@@ -202,3 +202,16 @@ navegador, y sin código válido `prc_apply` no sirve para nada.**
 - El ámbito de quien gestiona es otro eje con otra meta, `prc_area`, cuya
   clave **no** es configurable: la escribe administración en la ficha, no un
   sistema externo ([ADR-0014](ADR-0014-el-ambito-es-un-alcance-no-un-rol.md)).
+
+## Adenda — 2026-11-10 (ADR-0042)
+
+«Autorizar es tener código» sigue valiendo para un procedimiento sin
+acotados. Para crear una solicitud en uno acotado por una sola titularidad,
+por tipos o por islas, el código tiene que estar además en el catálogo, porque
+si no está no se puede comprobar si cumple; con la lista cerrada sola, basta
+estar en ella, y con el catálogo entero vacío la titularidad no cierra. Quien
+ya presentó su solicitud la sigue editando
+([ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md)). El nombre se sigue
+guardando como foto, igual que antes.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

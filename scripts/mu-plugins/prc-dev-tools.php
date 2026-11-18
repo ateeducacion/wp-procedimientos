@@ -519,8 +519,13 @@ add_filter( 'style_loader_src', 'prc_dev_local_cdn_src' );
  * que le pone nombre y titularidad no es de este aplicativo: se pregunta con
  * `prc_centres` y lo contesta quien lo tenga (ADR-0017). Aquí contesta el
  * entorno de desarrollo con una docena **inventada**, que incluye los dos
- * centros de `direccion` y `direccion2` (scripts/seed-demo.php) y alguno
- * privado, para poder probar el cruce con `prc_ownership`.
+ * centros de `direccion` y `direccion2` (scripts/seed-demo.php), con su tipo,
+ * su isla, su municipio y su zona, para poder probar los acotados del
+ * procedimiento (ADR-0042). Las islas, los municipios y las zonas también son
+ * inventados.
+ *
+ * La titularidad no se escribe: se deriva del tipo con la lista de tipos
+ * privados, que aquí es uno solo y también inventado.
  */
 if ( ! function_exists( 'prc_dev_centres' ) ) {
 	/**
@@ -530,28 +535,51 @@ if ( ! function_exists( 'prc_dev_centres' ) ) {
 	 * @return array<int, array<string, mixed>>
 	 */
 	function prc_dev_centres( array $centros ): array {
-		$nombres = array(
-			'90000001' => array( 'CEIP Ejemplo Uno', 'public' ),
-			'90000002' => array( 'IES Ejemplo Dos', 'public' ),
-			'90000003' => array( 'CEIP Ejemplo Tres', 'public' ),
-			'90000004' => array( 'CEO Ejemplo Cuatro', 'public' ),
-			'90000005' => array( 'IES Ejemplo Cinco', 'public' ),
-			'90000006' => array( 'CEIP Ejemplo Seis', 'public' ),
-			'90000007' => array( 'Colegio Ejemplo Siete', 'private' ),
-			'90000008' => array( 'Colegio Ejemplo Ocho', 'private' ),
-			'90000009' => array( 'CEIP Ejemplo Nueve', 'public' ),
-			'90000010' => array( 'IES Ejemplo Diez', 'public' ),
-			'90000011' => array( 'Colegio Ejemplo Once', 'private' ),
-			'90000012' => array( 'CEE Ejemplo Doce', 'public' ),
+		$norte   = 'Isla Norte (inventada)';
+		$sur     = 'Isla Sur (inventada)';
+		$privado = 'Colegio privado (inventado)';
+		// Código => nombre, tipo, isla, municipio y zona (el código de otro centro).
+		$datos = array(
+			'90000001' => array( 'CEIP Ejemplo Uno', 'CEIP', $norte, 'Villa Alta', '90000090' ),
+			'90000002' => array( 'IES Ejemplo Dos', 'IES', $norte, 'Villa Alta', '90000090' ),
+			'90000003' => array( 'CEIP Ejemplo Tres', 'CEIP', $norte, 'Puerto Viejo', '90000090' ),
+			'90000004' => array( 'CEO Ejemplo Cuatro', 'CEO', $sur, 'Llano Grande', '90000091' ),
+			'90000005' => array( 'IES Ejemplo Cinco', 'IES', $sur, 'Llano Grande', '90000091' ),
+			'90000006' => array( 'CEIP Ejemplo Seis', 'CEIP', $sur, 'Costa Azul', '90000091' ),
+			'90000007' => array( 'Colegio Ejemplo Siete', $privado, $norte, 'Villa Alta', '90000090' ),
+			'90000008' => array( 'Colegio Ejemplo Ocho', $privado, $sur, 'Costa Azul', '90000091' ),
+			'90000009' => array( 'CEIP Ejemplo Nueve', 'CEIP', $sur, 'Llano Grande', '90000091' ),
+			'90000010' => array( 'IES Ejemplo Diez', 'IES', $norte, 'Puerto Viejo', '90000090' ),
+			'90000011' => array( 'Colegio Ejemplo Once', $privado, $norte, 'Puerto Viejo', '90000090' ),
+			'90000012' => array( 'CEE Ejemplo Doce', 'CEE', $sur, 'Costa Azul', '90000091' ),
+			'90000090' => array( 'Centro de zona Norte (inventado)', 'Centro de zona', $norte, 'Villa Alta', '' ),
+			'90000091' => array( 'Centro de zona Sur (inventado)', 'Centro de zona', $sur, 'Llano Grande', '' ),
 		);
-		foreach ( $nombres as $code => $datos ) {
+		foreach ( $datos as $code => $centro ) {
 			$centros[] = array(
-				'code'      => (string) $code,
-				'name'      => $datos[0],
-				'ownership' => $datos[1],
+				'code'         => (string) $code,
+				'name'         => $centro[0],
+				'type'         => $centro[1],
+				'island'       => $centro[2],
+				'municipality' => $centro[3],
+				'zone'         => $centro[4],
+				'active'       => true,
 			);
 		}
 		return $centros;
 	}
 }
 add_filter( 'prc_centres', 'prc_dev_centres' );
+
+if ( ! function_exists( 'prc_dev_private_centre_types' ) ) {
+	/**
+	 * The made-up private centre type, on top of whatever the settings say.
+	 *
+	 * @param string[] $tipos Types so far.
+	 * @return string[]
+	 */
+	function prc_dev_private_centre_types( $tipos ): array {
+		return array_merge( is_array( $tipos ) ? $tipos : array(), array( 'Colegio privado (inventado)' ) );
+	}
+}
+add_filter( 'prc_private_centre_types', 'prc_dev_private_centre_types' );

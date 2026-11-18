@@ -205,3 +205,21 @@ solicitud es de la
   [ADR-0016](ADR-0016-el-centro-de-la-persona-es-una-meta-configurable.md).
 - Esta ADR no dice de dónde saca quien despliega su catálogo ni con qué
   periodicidad lo refresca. Es suyo.
+
+## Adenda — 2026-11-10 (ADR-0042)
+
+Dos cosas de esta ADR cambian con la
+[ADR-0042](ADR-0042-la-titularidad-se-deriva-del-tipo-y-el-procedimiento-acota-que-centros-solicitan.md):
+
+- **Lo que no bloquea** deja de ser incondicional. Un código que no está en el
+  catálogo solicita igual a un procedimiento **sin acotados** o acotado solo
+  por una lista cerrada en la que está; a uno con titularidad, tipos o islas,
+  no, salvo la titularidad con el catálogo entero vacío.
+- **Tres datos ya no bastan.** El catálogo sirve además `island`,
+  `municipality`, `type`, `zone`, `zone_name` y `active`, y la titularidad,
+  si no viene escrita, se deriva del tipo con el filtro
+  `prc_private_centre_types` (vacío por defecto: todo público). Una
+  `ownership` fuera de la lista cerrada ya no se trata como desconocida: se
+  deriva.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

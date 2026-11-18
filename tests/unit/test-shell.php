@@ -253,7 +253,19 @@ class Test_Shell extends WP_UnitTestCase {
 	 */
 	public function test_the_tabs_only_appear_when_there_is_something_to_choose() {
 		$this->acting_as( (int) self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		// Con la portada y la ayuda ya hay dos: sin la página de la ayuda,
+		// queda una sola entrada y no hay menú.
+		$this->assertStringContainsString( 'prc-tabs', Shell::render( 'Procedimientos', '', '' ) );
+		add_filter(
+			'prc_page_slug',
+			static function ( string $slug, string $seccion ): string {
+				return 'help' === $seccion ? 'una-pagina-que-no-existe' : $slug;
+			},
+			20,
+			2
+		);
 		$this->assertStringNotContainsString( 'prc-tabs', Shell::render( 'Procedimientos', '', '' ) );
+		remove_all_filters( 'prc_page_slug', 20 );
 
 		$this->acting_as( $this->manager( array( $this->area( 'Área de prueba' ) ) ) );
 		$html = Shell::render( 'Procedimientos', '', '' );
@@ -298,17 +310,24 @@ class Test_Shell extends WP_UnitTestCase {
 		$this->assertStringContainsString( '>Gestionar procedimientos<', $html );
 		$this->assertStringNotContainsString( '>Sus solicitudes<', $html );
 
-		// Y sin sesión no hay menú: no hay nada que ofrecer.
+		// Y sin sesión, solo lo que se lee sin entrar: la portada y la ayuda.
 		$this->acting_as( 0 );
-		$this->assertStringNotContainsString( 'prc-tabs', Shell::render( 'Procedimientos', '', '' ) );
+		$html = Shell::render( 'Procedimientos', '', '' );
+		$this->assertStringContainsString( '>Inicio<', $html );
+		$this->assertStringContainsString( '>Ayuda<', $html );
+		$this->assertStringNotContainsString( '>Administrar<', $html );
+		$this->assertStringNotContainsString( '>Sus solicitudes<', $html );
 	}
 
 	/**
-	 * «Ayuda» es de quien despliega: sin configurarla no existe (ADR-0009).
+	 * «Ayuda» lleva siempre a la pantalla de ayuda (ADR-0045); los enlaces que
+	 * configure quien despliega cuelgan de ella, detrás de la guía (ADR-0009).
 	 */
 	public function test_the_help_entry_is_what_the_deployment_configured() {
 		$this->acting_as( $this->school_head( 'C0001' ) );
-		$this->assertStringNotContainsString( '>Ayuda<', Shell::render( 'Mi centro', '', '' ) );
+		$html = Shell::render( 'Mi centro', '', '' );
+		$this->assertStringContainsString( 'href="' . esc_url( Shell::url( 'help' ) ) . '">Ayuda</a>', $html, 'sin configurar, un enlace a la ayuda' );
+		$this->assertStringNotContainsString( 'Guías y preguntas frecuentes', $html );
 
 		add_filter(
 			'prc_chrome',
@@ -329,6 +348,7 @@ class Test_Shell extends WP_UnitTestCase {
 
 		$html = Shell::render( 'Mi centro', '', '' );
 		$this->assertStringContainsString( '>Ayuda<', $html );
+		$this->assertStringContainsString( '>Guías y preguntas frecuentes<', $html );
 		$this->assertStringContainsString( '>Incidencias técnicas<', $html );
 		$this->assertStringContainsString( 'example.org/ayuda', $html );
 	}

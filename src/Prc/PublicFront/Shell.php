@@ -43,6 +43,7 @@ final class Shell {
 		'apply'     => 'solicitud',
 		'mine'      => 'mi-centro',
 		'observe'   => 'consulta-de-solicitudes',
+		'help'      => 'ayuda',
 	);
 
 	/**
@@ -62,6 +63,7 @@ final class Shell {
 		'apply'     => 'prc_apply',
 		'mine'      => 'prc_mine',
 		'observe'   => 'prc_observe',
+		'help'      => 'prc_help',
 	);
 
 	/**
@@ -70,11 +72,11 @@ final class Shell {
 	public const SECTION_PROCEDURE = 'procedure';
 
 	/**
-	 * Secciones que se ven sin sesión: la portada y la ficha del procedimiento.
+	 * Secciones que se ven sin sesión: la portada, la ficha del procedimiento y la ayuda.
 	 *
 	 * @var string[]
 	 */
-	public const PUBLIC_SECTIONS = array( 'home', self::SECTION_PROCEDURE );
+	public const PUBLIC_SECTIONS = array( 'home', self::SECTION_PROCEDURE, 'help' );
 
 	/**
 	 * Query arg con el que el taller y la solicitud reciben el procedimiento.
@@ -718,7 +720,8 @@ final class Shell {
 	 * Lo que se puede abrir sale de {@see sections()}, que es la única lista;
 	 * aquí solo se reparte en el árbol y se marca dónde se está. La consulta
 	 * de solo lectura (ADR-0043) es una quinta entrada, que el sitio anterior
-	 * no tenía: allí era una hoja aparte por procedimiento.
+	 * no tenía: allí era una hoja aparte por procedimiento. «Ayuda» sale
+	 * siempre, también sin sesión: es una pantalla más (ADR-0045).
 	 *
 	 * @param int $user_id User ID (0 = current).
 	 * @return array<int, array{label:string, url:string, active:bool, group:bool, items:array<int, array<string, mixed>>}>
@@ -728,14 +731,13 @@ final class Shell {
 			$user_id = get_current_user_id();
 		}
 		$secciones = self::sections( $user_id );
-		if ( array() === $secciones ) {
-			return array();
-		}
-		$activa = self::current_section();
-		$menu   = array();
+		$activa    = self::current_section();
+		$menu      = array();
 
-		if ( isset( $secciones['home'] ) ) {
-			$menu[] = self::entry( 'Inicio', $secciones['home']['url'], 'home' === $activa );
+		// Sin sesión no hay secciones, pero la portada y la ayuda se leen igual.
+		$inicio = isset( $secciones['home'] ) ? $secciones['home']['url'] : self::url( 'home' );
+		if ( '' !== $inicio ) {
+			$menu[] = self::entry( 'Inicio', $inicio, 'home' === $activa );
 		}
 
 		// Solicitudes presentadas por el centro o por la persona docente.
@@ -762,20 +764,7 @@ final class Shell {
 			$menu[]           = $admin;
 		}
 
-		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ) );
-
-		// «Ayuda»: lo que haya puesto quien despliega, que es de quien son el
-		// tutorial y el buzón de incidencias. Sin configurar, no hay entrada
-		// (ADR-0009).
-		$ayuda = self::entry( 'Ayuda' );
-		foreach ( (array) ProcedureChrome::chrome()['footer_links'] as $enlace ) {
-			if ( isset( $enlace['label'], $enlace['url'] ) ) {
-				$ayuda['items'][] = self::entry( (string) $enlace['label'], (string) $enlace['url'] );
-			}
-		}
-		if ( array() !== $ayuda['items'] ) {
-			$menu[] = $ayuda;
-		}
+		$menu = array_merge( $menu, self::observe_entry( $secciones, $activa ), self::help_entry( $activa ) );
 
 		// La entrada que contiene la página actual queda marcada también, como
 		// en el original: la de primer nivel y la del desplegable.
@@ -803,6 +792,32 @@ final class Shell {
 			return array();
 		}
 		return array( self::entry( 'Consulta', $secciones['observe']['url'], 'observe' === $activa ) );
+	}
+
+	/**
+	 * «Ayuda»: always there, pointing to the help screen.
+	 *
+	 * La ayuda es una pantalla del aplicativo y se ofrece a todo el mundo,
+	 * también sin sesión (ADR-0045). Si quien despliega configuró enlaces
+	 * propios —el buzón de incidencias, un tutorial—, la entrada se vuelve un
+	 * desplegable con la guía primero y esos enlaces detrás (ADR-0009).
+	 *
+	 * @param string $activa Section being viewed.
+	 * @return array<int, array<string, mixed>> None or one entry.
+	 */
+	private static function help_entry( string $activa ): array {
+		$guia   = self::url( 'help' );
+		$dentro = 'help' === $activa;
+		$ayuda  = self::entry( 'Ayuda', $guia, $dentro );
+		foreach ( (array) ProcedureChrome::chrome()['footer_links'] as $enlace ) {
+			if ( isset( $enlace['label'], $enlace['url'] ) ) {
+				$ayuda['items'][] = self::entry( (string) $enlace['label'], (string) $enlace['url'] );
+			}
+		}
+		if ( array() !== $ayuda['items'] && '' !== $guia ) {
+			array_unshift( $ayuda['items'], self::entry( 'Guías y preguntas frecuentes', $guia, $dentro ) );
+		}
+		return '' === $guia && array() === $ayuda['items'] ? array() : array( $ayuda );
 	}
 
 	/**

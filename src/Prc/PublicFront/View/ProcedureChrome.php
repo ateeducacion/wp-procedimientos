@@ -65,6 +65,11 @@ final class ProcedureChrome {
 			// Aviso de protección de datos de la pantalla de solicitud: el órgano
 			// responsable y el tratamiento son del despliegue, no del aplicativo.
 			'privacy_notice' => '',
+			// Ayuda técnica de la pantalla «Ayuda»: a quién escribir cuando no
+			// se puede entrar o algo falla. Texto libre con enlaces, que se
+			// sanea al pintarse; vacío, la ayuda solo remite al correo de
+			// contacto de cada procedimiento (ADR-0045).
+			'help_contact'   => '',
 			// Aviso de cookies: las tres piezas que lo pintan.
 			'consent_css'    => '',
 			'consent_js'     => '',
@@ -461,6 +466,7 @@ final class ProcedureChrome {
 				<?php endif; ?>
 				<p class="prc-acceso__texto">Solicita la dirección del centro, validándose con su
 					<strong>cuenta personal</strong> en el enlace de acceso de la cabecera.</p>
+				<?php echo PanelParts::help_link( (string) ( $m['help_url'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php if ( '' !== (string) $accion['url'] ) : ?>
 					<p class="prc-acceso__accion">
 						<a class="<?php echo esc_attr( $clases ); ?>" href="<?php echo esc_url( (string) $accion['url'] ); ?>">

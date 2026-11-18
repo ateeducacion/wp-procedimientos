@@ -26,6 +26,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\EditLock;
+use Prc\PublicFront\Help;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\MyCentre;
 use Prc\PublicFront\Observe;
@@ -92,6 +93,8 @@ final class App {
 		Workspace::class,
 		ProcedureEditor::class,
 		Home::class,
+		// La ayuda: dos guías y las preguntas frecuentes (ADR-0045).
+		Help::class,
 		ProcedureView::class,
 	);
 

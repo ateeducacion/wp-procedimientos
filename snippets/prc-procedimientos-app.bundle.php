@@ -23995,6 +23995,7 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function tabs( array $m ): string {
 		$activa = (string) $m['panel'];
 		$grupos = array();
@@ -24009,14 +24010,16 @@ final class ProcedureEditorView {
 				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
 					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
 						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
-						<?php foreach ( $paneles as $clave => $panel ) : ?>
-							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-								<?php endif; ?></a>
-						<?php endforeach; ?>
+						<div class="prc-tabs-grupo__pestanas">
+							<?php foreach ( $paneles as $clave => $panel ) : ?>
+								<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+									<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+									href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+									<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+										<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+									<?php endif; ?></a>
+							<?php endforeach; ?>
+						</div>
 					</div>
 				<?php endforeach; ?>
 			</div>
@@ -35554,32 +35557,49 @@ html:has(> body.prc-app) { overflow-x: clip; }
 }
 
 /* Las pestañas del taller, en tres grupos —Preparar, Gestionar y Avanzado—
-   en una sola línea, cada uno en su caja con el rótulo encima. A 1200 px de
-   ventana caben con holgura en minúscula y sin la separación de las de arriba;
-   más estrecho, la fila se desplaza en horizontal en vez de saltar de línea:
-   sin JavaScript, y el foco del teclado trae a la vista la pestaña a la que
-   llega. */
-.prc-tabs--taller .prc-tabs-fila { flex-wrap: nowrap; gap: 8px; padding-top: 8px; overflow-x: auto; }
+   en una sola línea, cada uno en su caja con el rótulo encima. El rótulo va en
+   el flujo, así que la caja mide al menos lo que él: «Avanzado» solo con
+   «Código» no se sale. A 1200 px de ventana caben en minúscula y sin la
+   separación de las de arriba, con unos 40 px de margen con contadores de tres
+   cifras (lo mide `make test-browser`); más estrecho, la fila se desplaza en
+   horizontal en vez de saltar de línea. Sin barra, que con las barras fijas de
+   Windows se pintaría entre las cajas y la línea: donde el navegador lo sabe
+   hacer, el borde que esconde pestañas se difumina. El foco del teclado trae a
+   la vista la pestaña a la que llega, y prc-app.js la activa al cargar. */
+.prc-tabs--taller .prc-tabs-fila { flex-wrap: nowrap; gap: 6px; padding-top: 8px; overflow-x: auto; scrollbar-width: none; }
+.prc-tabs--taller .prc-tabs-fila::-webkit-scrollbar { display: none; }
+@supports (animation-timeline: scroll()) {
+  .prc-tabs--taller .prc-tabs-fila { animation: prc-tabs-borde linear both; animation-timeline: scroll(self inline); }
+  @keyframes prc-tabs-borde {
+    from { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+    to { mask-image: linear-gradient(to left, #000 calc(100% - 32px), transparent); }
+  }
+}
 .prc-tabs-grupo {
   display: flex;
   flex: none;
-  align-items: flex-end;
-  position: relative;
-  padding: 20px 4px 0;
+  flex-direction: column;
+  padding: 4px 4px 0;
   background: var(--prc-c-fondo-barra);
   border: 1px solid var(--prc-c-linea);
   border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--prc-radio) var(--prc-radio) 0 0;
 }
-.prc-tabs--taller .prc-tab { margin: 0; padding: 10px 6px 12px; text-transform: none; letter-spacing: 0; }
+.prc-tabs-grupo__pestanas { display: flex; align-items: flex-end; }
+.prc-tabs--taller .prc-tab { gap: 4px; margin: 0; padding: 10px 4px 12px; text-transform: none; letter-spacing: 0; }
+/* El azul de los enlaces sobre el gris de la caja se queda en 2,5:1; el del
+   botón pasa de 3:1 como indicador, y el del borde, de 4,5:1 como texto. */
+.prc-tabs--taller .prc-tab:hover { color: var(--prc-c-azul-borde); }
+.prc-tabs--taller .prc-tab-on { box-shadow: inset 0 -3px 0 var(--prc-c-azul); }
+/* La fila recorta lo que se sale por abajo: el anillo de foco va por dentro. */
+.prc-tabs--taller .prc-tab:focus-visible { outline-offset: -2px; }
 .prc-tabs-grupo__rotulo {
-  position: absolute;
-  top: 4px;
-  left: 10px;
+  padding: 0 6px;
   font-size: var(--prc-t-menudo);
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--prc-c-medio);
 }
 
@@ -38408,6 +38428,29 @@ body.prc-app .prc-btn-borrar {
 				salir();
 			}
 		} );
+	} );
+
+	/* --- 11. La pestaña activa del taller, a la vista ------------------- */
+
+	/*
+	 * Las pestañas del taller van en una fila que, estrecha, se desplaza en
+	 * horizontal: la activa se trae a la vista al cargar. Solo se mueve la
+	 * fila, nunca la página, que puede venir anclada en el aviso. Sin
+	 * JavaScript, la fila empieza por la izquierda.
+	 */
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		var active = document.querySelector( \'.prc-tabs--taller [aria-current="page"]\' );
+		var row = active && active.closest( \'.prc-tabs-fila\' );
+		if ( ! row ) {
+			return;
+		}
+		var tab = active.getBoundingClientRect();
+		var box = row.getBoundingClientRect();
+		if ( tab.right > box.right ) {
+			row.scrollLeft += Math.ceil( tab.right - box.right );
+		} else if ( tab.left < box.left ) {
+			row.scrollLeft -= Math.ceil( box.left - tab.left );
+		}
 	} );
 }() );
 ',

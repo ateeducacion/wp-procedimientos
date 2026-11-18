@@ -434,6 +434,21 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Whether the user may decide the read-only consultation of a procedure (ADR-0043).
+	 *
+	 * Qué se enseña a quien consulta por zona lo decide administración, no el
+	 * ámbito que gestiona el procedimiento: la pestaña no se pinta y el POST
+	 * se rechaza con la misma regla.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return bool
+	 */
+	public static function can_configure_observe( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && self::can_edit( $user_id, $post_id );
+	}
+
+	/**
 	 * Whether the user works across every ámbito (administración).
 	 *
 	 * @param int $user_id User ID (0 = current).

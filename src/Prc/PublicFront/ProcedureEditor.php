@@ -298,19 +298,21 @@ final class ProcedureEditor {
 	 * The inner tabs, in three groups, with where each one goes.
 	 *
 	 * En el orden en que se trabaja: lo que se prepara antes de publicar, lo
-	 * que se gestiona con el plazo abierto y el resto. «Acceso de consulta» y
-	 * no «Consulta», que es como se llama la entrada del menú de arriba.
+	 * que se gestiona con el plazo abierto y lo avanzado. «Acceso de consulta»
+	 * y no «Consulta», que es como se llama la entrada del menú de arriba; y
+	 * solo para administración (`ProcedureAccess::can_configure_observe()`).
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array<string, array{label:string, url:string, count:?int, group:string}>
 	 */
 	public static function panels( int $procedure_id ): array {
-		$grupos  = array(
-			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
-			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Más ajustes' => array( self::PANEL_OBSERVE, self::PANEL_CODE ),
+		$avanzado = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
+		$grupos   = array(
+			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Avanzado'  => array_merge( $avanzado, array( self::PANEL_CODE ) ),
 		);
-		$rotulos = array(
+		$rotulos  = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_LINKS        => 'Enlaces',
@@ -321,7 +323,7 @@ final class ProcedureEditor {
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
-		$cuentas = array(
+		$cuentas  = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
 			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
@@ -459,7 +461,7 @@ final class ProcedureEditor {
 		$sueltas = array(
 			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
-			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
+			self::OP_OBSERVE        => array( self::class, 'save_observe' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -531,6 +533,23 @@ final class ProcedureEditor {
 			return;
 		}
 		self::save_links( $procedure_id );
+	}
+
+	/**
+	 * Save the «Acceso de consulta» panel, only for administración.
+	 *
+	 * Esta es la capa que protege: sin la pestaña, quien gestiona su ámbito
+	 * aún podría armar el POST a mano.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	private static function save_observe( int $procedure_id ): void {
+		if ( ! ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ) {
+			self::$rejected = 'El acceso de consulta lo configura quien administra el aplicativo.';
+			return;
+		}
+		ObserveSettings::handle( $procedure_id );
 	}
 
 	/**

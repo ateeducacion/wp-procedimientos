@@ -71,9 +71,24 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		) as $clave ) {
 			$this->assertSame( ProcedureCopy::NEVER, ProcedureCopy::rule( $clave ), $clave );
 		}
-		foreach ( array( ProcedureMetaKeys::QUESTIONS, ProcedureMetaKeys::QUESTIONS_SEQ, ProcedureMetaKeys::PEOPLE_SPEC, ProcedureMetaKeys::OBSERVER_COLUMNS, ProcedureMetaKeys::CUSTOM_JS ) as $clave ) {
-			$this->assertSame( ProcedureCopy::TRANSFORM, ProcedureCopy::rule( $clave ), $clave );
+		foreach ( array( ProcedureMetaKeys::QUESTIONS, ProcedureMetaKeys::QUESTIONS_SEQ, ProcedureMetaKeys::PEOPLE_SPEC, ProcedureMetaKeys::OBSERVER_COLUMNS, ProcedureMetaKeys::CUSTOM_JS, ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) as $key ) {
+			$this->assertSame( ProcedureCopy::TRANSFORM, ProcedureCopy::rule( $key ), $key );
 		}
+	}
+
+	/**
+	 * Sin poder configurar la consulta, el duplicado nace sin ella (#82).
+	 */
+	public function test_the_consultation_is_copied_only_for_who_may_configure_it() {
+		$source = array(
+			ProcedureMetaKeys::OBSERVABLE       => true,
+			ProcedureMetaKeys::OBSERVER_FILES   => true,
+			ProcedureMetaKeys::OBSERVER_EXPORT  => true,
+			ProcedureMetaKeys::OBSERVER_NOTIFY  => true,
+			ProcedureMetaKeys::OBSERVER_COLUMNS => array( 'centre' ),
+		);
+		$this->assertSame( array(), ProcedureCopy::meta( $source, false, false )['meta'], 'quien gestiona su ámbito no la hereda' );
+		$this->assertEquals( $source, ProcedureCopy::meta( $source, false, true )['meta'], 'administración, sí' );
 	}
 
 	// ─── las preguntas ─────────────────────────────────────────────────────
@@ -287,7 +302,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 			ProcedureMetaKeys::QUESTIONS_SEQ    => 9,
 		);
 
-		$sin_js = ProcedureCopy::meta( $original, false );
+		$sin_js = ProcedureCopy::meta( $original, false, true );
 		$meta   = $sin_js['meta'];
 		foreach ( array( ProcedureMetaKeys::OPENS_AT, ProcedureMetaKeys::CLOSES_AT, ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::ARCHIVED, ProcedureMetaKeys::CUSTOM_JS ) as $clave ) {
 			$this->assertArrayNotHasKey( $clave, $meta, $clave );
@@ -302,11 +317,11 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		$this->assertSame( 1, $meta[ ProcedureMetaKeys::QUESTIONS_SEQ ] );
 		$this->assertTrue( $sin_js['js_left'], 'había JavaScript y no se copió' );
 
-		$con_js = ProcedureCopy::meta( $original, true );
+		$con_js = ProcedureCopy::meta( $original, true, true );
 		$this->assertSame( 'console.log(1);', $con_js['meta'][ ProcedureMetaKeys::CUSTOM_JS ] );
 		$this->assertFalse( $con_js['js_left'] );
 
-		$vacio = ProcedureCopy::meta( array(), false );
+		$vacio = ProcedureCopy::meta( array(), false, false );
 		$this->assertSame( array(), $vacio['meta'], 'lo que el original no tiene, el duplicado tampoco' );
 		$this->assertFalse( $vacio['js_left'] );
 	}

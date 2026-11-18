@@ -1,6 +1,6 @@
 ---
 name: manage-procedures
-description: "Lista y gestiona procedimientos educativos en el aplicativo de WordPress: buscar, crear borradores, completar datos y preguntas, editar enlaces y plazos, revisar solicitudes y publicar o cerrar cuando se pide. Actívala ante cualquier petición de gestión de convocatorias o procedimientos."
+description: "Lista y gestiona procedimientos educativos en el aplicativo de WordPress: buscar, crear borradores, completar datos y campos adicionales, editar enlaces y plazos, revisar solicitudes y publicar o cerrar cuando se pide. Actívala ante cualquier petición de gestión de convocatorias o procedimientos."
 metadata:
   author: ateeducacion
   version: "1.0.0"
@@ -28,12 +28,12 @@ Usa esta skill para actuar sobre el aplicativo de procedimientos ya instalado en
 
 - Usa «Nuevo procedimiento» desde el listado. El alta crea un borrador; no lo publiques como parte automática de la creación.
 - Rellena los datos proporcionados y los campos obligatorios que falten de la solicitud. No inventes fechas, contactos, ámbitos, cursos, compromisos ni condiciones.
-- Después del alta, completa las pestañas necesarias del taller: Datos, Preguntas, Enlaces y, si corresponde, Entregas. Guarda cada panel y comprueba el aviso de resultado.
-- Publica solo si la persona lo pide expresamente. Antes de publicar, revisa el título, ámbito, curso, fechas, preguntas y enlaces con lo solicitado.
+- Después del alta, completa las pestañas necesarias del taller: Datos, Campos adicionales, Enlaces y, si corresponde, Participantes y Entregas. Guarda cada panel y comprueba el aviso de resultado.
+- Publica solo si la persona lo pide expresamente. Antes de publicar, revisa el título, ámbito, curso, fechas, campos adicionales y enlaces con lo solicitado.
 
 ## Editar y otras acciones
 
-- En el taller, usa la pestaña correspondiente: Datos, Preguntas, Enlaces, Solicitudes, Entregas o Publicación. Abre «Código» solo si la persona lo pide y tiene permiso de administración.
+- En el taller, usa la pestaña correspondiente: Datos, Campos adicionales, Participantes, Enlaces, Solicitudes, Entregas o Publicación. Abre «Código» solo si la persona lo pide y tiene permiso de administración.
 - Cambia únicamente los campos que la persona indicó; conserva los demás. Si un campo obligatorio imprescindible no está especificado, pide ese dato antes de guardar.
 - Para revisar solicitudes, trabaja solo en la pestaña del procedimiento elegido. No incluyas datos personales ni descargues documentos. Exporta CSV únicamente si lo piden.
 - Publicar, marcar como histórico, desarchivar, borrar o cambiar decisiones de admisión son acciones explícitas: no las infieras de «crear», «actualizar» o «revisar».

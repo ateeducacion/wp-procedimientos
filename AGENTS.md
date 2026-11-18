@@ -136,7 +136,7 @@ src/Prc/
 ├── PublicFront/PeopleExport.php            Las columnas y filas que la lista de personas añade a la exportación
 ├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
 ├── PublicFront/ApplicationQuery.php        Las solicitudes de la tabla: censo, contadores, filtro y página, sin leer todas las metas
-├── PublicFront/PeopleSpecPanel.php         El panel «Personas» del taller y la lista en la revisión
+├── PublicFront/PeopleSpecPanel.php         El panel «Participantes» del taller y la lista en la revisión
 ├── PublicFront/ApplicationsPanel.php       El panel «Solicitudes»: modelo de la tabla, revisión en bloque y qué se exporta
 ├── PublicFront/ApplicationActionsPanel.php Retirar, restaurar, prórroga y en nombre de un centro desde el panel; su modelo
 ├── PublicFront/View/HomeView.php           Pinta la portada
@@ -161,7 +161,7 @@ src/Prc/
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/WithdrawForm.php            Retirar la propia solicitud desde su pantalla (ADR-0044)
-├── PublicFront/PeopleForm.php              La sección «Personas» de la solicitud y su POST
+├── PublicFront/PeopleForm.php              La sección «Participantes» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]
 ├── PublicFront/ObserveSettings.php         El panel «Consulta» del taller: qué enseña la consulta (ADR-0043)

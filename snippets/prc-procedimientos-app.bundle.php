@@ -20017,6 +20017,11 @@ final class ProcedureChrome {
 
 
 
+	public const OPTION_PRIVACY = 'prc_privacy_notice';
+
+
+
+
 
 
 
@@ -20037,7 +20042,8 @@ final class ProcedureChrome {
 			'brand_alt'      => '',
 
 
-			'privacy_notice' => '',
+
+			'privacy_notice' => (string) get_option( self::OPTION_PRIVACY, '' ),
 
 
 
@@ -28730,6 +28736,7 @@ final class ApplyFormView {
 
 
 
+
 	private static function privacy(): string {
 		$texto = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
 		if ( '' === $texto ) {
@@ -28800,8 +28807,6 @@ final class ApplyFormView {
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
 
-			<?php echo self::privacy();?>
-
 			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio">*</span> Campo obligatorio</p>
 
 			<?php if ( ! $docente ) : ?>
@@ -28868,6 +28873,8 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
+
+			<?php echo self::privacy();?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva );?>
 		</form>
@@ -33876,6 +33883,7 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
 
@@ -33914,6 +33922,11 @@ final class Settings {
 
 
 
+	public const PRIVACY_GROUP = 'prc_privacy';
+
+
+
+
 
 
 	public static function register(): void {
@@ -33924,6 +33937,7 @@ final class Settings {
 
 		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
 		add_filter( 'option_page_capability_' . self::CENTRES_GROUP, array( self::class, 'capability' ) );
+		add_filter( 'option_page_capability_' . self::PRIVACY_GROUP, array( self::class, 'capability' ) );
 	}
 
 
@@ -33958,6 +33972,18 @@ final class Settings {
 				'type'              => 'array',
 				'default'           => array(),
 				'sanitize_callback' => array( self::class, 'sanitize_private_types' ),
+				'show_in_rest'      => false,
+			)
+		);
+
+
+		register_setting(
+			self::PRIVACY_GROUP,
+			ProcedureChrome::OPTION_PRIVACY,
+			array(
+				'type'              => 'string',
+				'default'           => '',
+				'sanitize_callback' => 'wp_kses_post',
 				'show_in_rest'      => false,
 			)
 		);
@@ -34203,7 +34229,8 @@ final class Settings {
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
-				que guarda es la configuración del correo y qué tipos de centro son privados.
+				que guarda es la configuración del correo, el texto de protección de datos y qué
+				tipos de centro son privados.
 			</p>
 
 			<h2>Correo</h2>
@@ -34247,6 +34274,15 @@ final class Settings {
 					</tbody>
 				</table>
 				<?php submit_button( 'Guardar la configuración del correo' ); ?>
+			</form>
+
+			<h2>Protección de datos</h2>
+			<form method="post" action="options.php">
+				<?php settings_fields( self::PRIVACY_GROUP ); ?>
+				<p style="max-width:46rem"><label for="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>">Texto de protección de datos</label></p>
+				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" name="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( (string) get_option( ProcedureChrome::OPTION_PRIVACY, '' ) ); ?></textarea>
+				<p class="description" id="prc-privacy-ayuda" style="max-width:46rem">Sale al final de cada solicitud, antes del botón de enviar, igual para todos los procedimientos. Admite enlaces y negritas. En blanco, no se pinta.</p>
+				<?php submit_button( 'Guardar el texto de protección de datos' ); ?>
 			</form>
 
 			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) :?>

@@ -890,6 +890,41 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El aviso de protección de datos se escribe en los ajustes: sale al final
+	 * de la solicitud, saneado, y el filtro del armazón sigue mandando encima.
+	 */
+	public function test_the_data_protection_notice_comes_from_the_settings() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+
+		// Se guarda sin el saneado del registro: lo que protege aquí es el
+		// escape al pintar.
+		remove_all_filters( 'sanitize_option_' . ProcedureChrome::OPTION_PRIVACY );
+		update_option( ProcedureChrome::OPTION_PRIVACY, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script>' );
+
+		$this->assertStringContainsString( 'Texto de', ProcedureChrome::chrome()['privacy_notice'] );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '<div class="prc-aviso-legal"><p>Texto de <strong>los ajustes</strong>.</p>', $html );
+		$this->assertStringNotContainsString( '<script>alert(2)</script>', $html, 'y llega filtrado' );
+		$aviso = (int) strpos( $html, 'prc-aviso-legal' );
+		$cola  = substr( $html, $aviso, (int) strpos( $html, '</form>', $aviso ) - $aviso );
+		$this->assertGreaterThan( (int) strpos( $html, 'prc-leyenda-obligatorio' ), $aviso );
+		$this->assertStringNotContainsString( 'prc-seccion', $cola, 'al final: detrás solo queda el botón de enviar' );
+		$this->assertStringContainsString( 'type="submit"', $cola );
+
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ): array {
+				$chrome['privacy_notice'] = '<p>Del filtro.</p>';
+				return $chrome;
+			}
+		);
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '<p>Del filtro.</p>', $html, 'el filtro manda encima' );
+		$this->assertStringNotContainsString( 'los ajustes', $html );
+	}
+
+	/**
 	 * La nota de quien revisa va encima del formulario que hay que corregir,
 	 * con el estado, su tono y hasta cuándo se puede subsanar.
 	 */

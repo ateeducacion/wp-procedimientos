@@ -265,8 +265,9 @@ final class ApplyFormView {
 	 *
 	 * **Aquí no hay ni una línea de texto legal**: el órgano responsable, el
 	 * tratamiento, el enlace a la resolución y el contacto de protección de
-	 * datos son del despliegue y llegan por el filtro del armazón (ADR-0009).
-	 * Sin configurar, no se pinta nada.
+	 * datos son del despliegue: los escribe administración en los ajustes o
+	 * llegan por el filtro del armazón (ADR-0009). Va al final, justo antes de
+	 * enviar. Sin configurar, no se pinta nada.
 	 *
 	 * @return string
 	 */
@@ -340,8 +341,6 @@ final class ApplyFormView {
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
 
-			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-
 			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio">*</span> Campo obligatorio</p>
 
 			<?php if ( ! $docente ) : ?>
@@ -408,6 +407,8 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+
+			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>

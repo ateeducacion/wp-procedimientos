@@ -13,6 +13,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\View\ProcedureChrome;
 
 /**
  * El escritorio: las columnas de los dos listados, su acotado por ámbito y
@@ -230,6 +231,42 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 			$this->assertStringContainsString( 'name="' . $opcion . '"', $html );
 		}
 		$this->assertMatchesRegularExpression( '/name=[\'"]option_page[\'"] value=[\'"]' . Settings::MAIL_GROUP . '[\'"]/', $html, 'el formulario va por la API de ajustes' );
+	}
+
+	/**
+	 * El texto de protección de datos se guarda desde los ajustes con la
+	 * capacidad del aplicativo, vacío por defecto y saneado como contenido.
+	 */
+	public function test_the_privacy_notice_is_a_setting_of_the_app() {
+		Settings::register_settings();
+		$registradas = get_registered_settings();
+		$this->assertSame( Settings::PRIVACY_GROUP, $registradas[ ProcedureChrome::OPTION_PRIVACY ]['group'] ?? null );
+		$this->assertSame( '', get_option( ProcedureChrome::OPTION_PRIVACY ), 'vacío por defecto (ADR-0009)' );
+		$this->assertSame( '', ProcedureChrome::chrome()['privacy_notice'] );
+
+		// Lo que comprueba options.php antes de guardar el grupo.
+		$capacidad  = apply_filters( 'option_page_capability_' . Settings::PRIVACY_GROUP, 'manage_options' );
+		$permitidas = apply_filters( 'allowed_options', array() );
+		$this->assertContains( ProcedureChrome::OPTION_PRIVACY, (array) ( $permitidas[ Settings::PRIVACY_GROUP ] ?? array() ) );
+		$gestion = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		get_userdata( $gestion )->add_cap( ProcedureAccess::CAP_MANAGE );
+		wp_set_current_user( $gestion );
+		$this->assertFalse( current_user_can( 'manage_options' ) );
+		$this->assertTrue( current_user_can( $capacidad ), 'con prc_manage_app guarda el texto' );
+		wp_set_current_user( (int) self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertFalse( current_user_can( $capacidad ), 'sin prc_manage_app, no' );
+
+		update_option( ProcedureChrome::OPTION_PRIVACY, '<p>Responsable: <a href="https://example.org/">quien sea</a>.</p><script>alert(1)</script>' );
+		$this->assertSame( '<p>Responsable: <a href="https://example.org/">quien sea</a>.</p>alert(1)', get_option( ProcedureChrome::OPTION_PRIVACY ), 'admite enlaces, no guiones' );
+
+		$this->acting_as( $this->administrator() );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		$this->assertStringContainsString( 'Protección de datos', $html );
+		$this->assertStringContainsString( 'name="' . ProcedureChrome::OPTION_PRIVACY . '"', $html );
+		$this->assertStringContainsString( '&lt;a href=&quot;https://example.org/&quot;&gt;', $html, 'el texto vuelve escapado al campo' );
+		$this->assertMatchesRegularExpression( '/name=[\'"]option_page[\'"] value=[\'"]' . Settings::PRIVACY_GROUP . '[\'"]/', $html );
 	}
 
 	/**

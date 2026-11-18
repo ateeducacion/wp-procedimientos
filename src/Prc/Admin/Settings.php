@@ -18,6 +18,7 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
+use Prc\PublicFront\View\ProcedureChrome;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
 
@@ -27,8 +28,8 @@ use RuntimeException;
  * Muestra el estado de los tipos, taxonomías, roles, acotado y catálogo
  * de centros educativos, con capacidad para forzar la sincronización manual.
  * Lo único que guarda es el correo —remitente, respuesta, copia y el párrafo
- * del alta— y los tipos de centro privados, que son de cada instalación y
- * no del código (ADR-0009, ADR-0038, ADR-0042).
+ * del alta—, los tipos de centro privados y el texto de protección de datos,
+ * que son de cada instalación y no del código (ADR-0009, ADR-0038, ADR-0042).
  */
 final class Settings {
 
@@ -53,6 +54,11 @@ final class Settings {
 	public const CENTRES_GROUP = 'prc_centres';
 
 	/**
+	 * Settings API group of the data protection notice.
+	 */
+	public const PRIVACY_GROUP = 'prc_privacy';
+
+	/**
 	 * Register hooks.
 	 *
 	 * @return void
@@ -65,6 +71,7 @@ final class Settings {
 		// manda la capacidad del aplicativo, la misma que abre la pantalla.
 		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
 		add_filter( 'option_page_capability_' . self::CENTRES_GROUP, array( self::class, 'capability' ) );
+		add_filter( 'option_page_capability_' . self::PRIVACY_GROUP, array( self::class, 'capability' ) );
 	}
 
 	/**
@@ -99,6 +106,18 @@ final class Settings {
 				'type'              => 'array',
 				'default'           => array(),
 				'sanitize_callback' => array( self::class, 'sanitize_private_types' ),
+				'show_in_rest'      => false,
+			)
+		);
+		// Texto con enlaces y negritas: se sanea como el contenido de una
+		// entrada al guardar, y otra vez al pintar.
+		register_setting(
+			self::PRIVACY_GROUP,
+			ProcedureChrome::OPTION_PRIVACY,
+			array(
+				'type'              => 'string',
+				'default'           => '',
+				'sanitize_callback' => 'wp_kses_post',
 				'show_in_rest'      => false,
 			)
 		);
@@ -344,7 +363,8 @@ final class Settings {
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
-				que guarda es la configuración del correo y qué tipos de centro son privados.
+				que guarda es la configuración del correo, el texto de protección de datos y qué
+				tipos de centro son privados.
 			</p>
 
 			<h2>Correo</h2>
@@ -388,6 +408,15 @@ final class Settings {
 					</tbody>
 				</table>
 				<?php submit_button( 'Guardar la configuración del correo' ); ?>
+			</form>
+
+			<h2>Protección de datos</h2>
+			<form method="post" action="options.php">
+				<?php settings_fields( self::PRIVACY_GROUP ); ?>
+				<p style="max-width:46rem"><label for="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>">Texto de protección de datos</label></p>
+				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" name="<?php echo esc_attr( ProcedureChrome::OPTION_PRIVACY ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( (string) get_option( ProcedureChrome::OPTION_PRIVACY, '' ) ); ?></textarea>
+				<p class="description" id="prc-privacy-ayuda" style="max-width:46rem">Sale al final de cada solicitud, antes del botón de enviar, igual para todos los procedimientos. Admite enlaces y negritas. En blanco, no se pinta.</p>
+				<?php submit_button( 'Guardar el texto de protección de datos' ); ?>
 			</form>
 
 			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>

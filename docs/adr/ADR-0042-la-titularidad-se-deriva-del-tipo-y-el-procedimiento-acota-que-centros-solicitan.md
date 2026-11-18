@@ -250,3 +250,40 @@ el motivo es el del primero, igual que antes. La ficha gana además la fila
 `CentreEligibility::describe()`.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-18
+
+Cómo se dice en el taller que un procedimiento limita por tipo o por isla
+(#84). La regla de fondo no cambia: lista vacía, sin límite, y puede
+solicitar también un centro fuera del catálogo; lista con algo, solo los
+centros del catálogo que lo cumplan.
+
+- **Un interruptor por lista.** «Limitar por tipo de centro» y «Limitar por
+  isla», dentro de «Limitar a ciertos centros (avanzado)», plegado salvo que
+  algo limite —un interruptor encendido, la lista cerrada o una sola
+  titularidad—. Apagado, la meta se guarda `[]` y las casillas se esconden
+  (con CSS, sin guion; sin `:has()` se ven y el servidor las ignora).
+  Encendido, se guarda **exactamente** lo marcado; encendido sin nada es un
+  error de validación («marque al menos un tipo», «una isla»). Al encenderlo
+  por primera vez todas las casillas salen marcadas, para desmarcar lo que
+  sobre.
+- **Nada se deduce del catálogo al guardar.** Se descartó tratar «todo
+  marcado» como «sin límite» comparando con el catálogo vivo: con «Datos»
+  cerrado por el estado reescribía a `[]` un límite guardado y abría el
+  procedimiento a centros fuera del catálogo; si el catálogo perdía tipos,
+  un límite `{CEIP, IES}` pasaba a «sin límite» al guardar por cualquier otro
+  motivo; si ganaba uno entre pintar y guardar, un formulario sin límite se
+  convertía en límite; y no quedaba forma de decir «cualquier tipo, pero del
+  catálogo». Con el interruptor, «todos los tipos del catálogo, encendido» es
+  ese límite, y se guarda tal cual.
+- **Sin interruptor, lo guardado.** `CentreEligibility::input()` sin
+  `limit_centre_types` ni `limit_islands` —lo que se reescribe con el grupo
+  cerrado— limita si la lista trae algo, así que lo guardado sigue igual.
+- **El aviso del catálogo vacío va fuera del plegado**, para que no quede
+  escondido con la titularidad como único límite.
+
+Contra: es un control más por lista, y quien enciende el interruptor y deja
+todo marcado limita a los centros del catálogo aunque crea no limitar; el
+texto de ayuda lo dice.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

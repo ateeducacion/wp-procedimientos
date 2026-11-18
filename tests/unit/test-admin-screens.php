@@ -13,6 +13,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\View\ProcedureChrome;
 
 /**
@@ -241,14 +242,14 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 	public function test_the_privacy_notice_is_a_setting_of_the_app() {
 		Settings::register_settings();
 		$registradas = get_registered_settings();
-		$this->assertSame( Settings::PRIVACY_GROUP, $registradas[ ProcedureChrome::OPTION_PRIVACY ]['group'] ?? null );
-		$this->assertSame( '', get_option( ProcedureChrome::OPTION_PRIVACY ), 'vacío por defecto (ADR-0009)' );
-		$this->assertSame( '', ProcedureChrome::chrome()['privacy_notice'] );
+		$this->assertSame( Settings::PRIVACY_GROUP, $registradas[ ApplyForm::OPTION_PRIVACY ]['group'] ?? null );
+		$this->assertSame( '', get_option( ApplyForm::OPTION_PRIVACY ), 'vacío por defecto (ADR-0009)' );
+		$this->assertSame( '', ApplyForm::privacy_notice() );
 
 		// Lo que comprueba options.php antes de guardar el grupo.
 		$capacidad  = apply_filters( 'option_page_capability_' . Settings::PRIVACY_GROUP, 'manage_options' );
 		$permitidas = apply_filters( 'allowed_options', array() );
-		$this->assertContains( ProcedureChrome::OPTION_PRIVACY, (array) ( $permitidas[ Settings::PRIVACY_GROUP ] ?? array() ) );
+		$this->assertContains( ApplyForm::OPTION_PRIVACY, (array) ( $permitidas[ Settings::PRIVACY_GROUP ] ?? array() ) );
 		$gestion = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
 		get_userdata( $gestion )->add_cap( ProcedureAccess::CAP_MANAGE );
 		wp_set_current_user( $gestion );
@@ -257,17 +258,63 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 		wp_set_current_user( (int) self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
 		$this->assertFalse( current_user_can( $capacidad ), 'sin prc_manage_app, no' );
 
-		update_option( ProcedureChrome::OPTION_PRIVACY, '<p>Responsable: <a href="https://example.org/">quien sea</a>.</p><script>alert(1)</script>' );
-		$this->assertSame( '<p>Responsable: <a href="https://example.org/">quien sea</a>.</p>alert(1)', get_option( ProcedureChrome::OPTION_PRIVACY ), 'admite enlaces, no guiones' );
+		update_option( ApplyForm::OPTION_PRIVACY, '<p>Responsable: <a href="https://example.org/">quien sea</a> & cía.</p><script>alert(1)</script><style>p{}</style>' );
+		$this->assertSame( '<p>Responsable: <a href="https://example.org/">quien sea</a> &amp; cía.</p>', get_option( ApplyForm::OPTION_PRIVACY ), 'admite enlaces; ni guiones ni estilos, ni su contenido' );
 
 		$this->acting_as( $this->administrator() );
+		$html = $this->settings_screen();
+		$this->assertStringContainsString( 'Protección de datos', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::OPTION_PRIVACY . '"', $html );
+		$this->assertStringContainsString( '&lt;a href=&quot;https://example.org/&quot;&gt;', $html, 'el texto vuelve escapado al campo' );
+		$this->assertStringContainsString( 'quien sea&lt;/a&gt; &amp; cía.', $html, 'el & vuelve como se escribió, sin escaparse dos veces' );
+		$this->assertMatchesRegularExpression( '/name=[\'"]option_page[\'"] value=[\'"]' . Settings::PRIVACY_GROUP . '[\'"]/', $html );
+		$this->assertStringNotContainsString( 'filtro prc_chrome', $html, 'sin filtro, no hay aviso' );
+	}
+
+	/**
+	 * Lo que guarda Ajustes cabe dentro de un formulario: ni controles ni
+	 * etiquetas sin cerrar que lo rompan.
+	 */
+	public function test_the_privacy_notice_cannot_break_the_form() {
+		$limpio = ApplyForm::sanitize_privacy( '<form action="https://example.org/"><p>Texto <strong>fuerte</p><input name="x" /><button>Ya</button><select><option>1</option></select><textarea>t</textarea><fieldset><label>L</label></fieldset></form>' );
+		$this->assertStringStartsWith( '<p>Texto <strong>fuerte</strong></p>', $limpio, 'las etiquetas se cierran' );
+		foreach ( array( 'form', 'input', 'button', 'select', 'option', 'textarea', 'fieldset', 'label' ) as $etiqueta ) {
+			$this->assertStringNotContainsString( '<' . $etiqueta, $limpio, $etiqueta );
+		}
+		$this->assertSame( '<p>Sin cerrar</p>', ApplyForm::sanitize_privacy( '<p>Sin cerrar<script>alert(1)' ) );
+		$this->assertSame( '', ApplyForm::sanitize_privacy( array( 'no' ) ) );
+	}
+
+	/**
+	 * Si el texto lo fija el filtro del armazón, manda él, y Ajustes lo dice
+	 * en vez de guardar en silencio algo que no se va a ver.
+	 */
+	public function test_the_settings_say_when_the_filter_owns_the_privacy_notice() {
+		Settings::register_settings();
+		update_option( ApplyForm::OPTION_PRIVACY, '<p>De los ajustes.</p>' );
+		$this->assertSame( '<p>De los ajustes.</p>', ApplyForm::privacy_notice() );
+		add_filter(
+			ProcedureChrome::HOOK,
+			static function ( array $chrome ): array {
+				$chrome['privacy_notice'] = '<p>Del filtro.</p>';
+				return $chrome;
+			}
+		);
+		$this->assertSame( '<p>Del filtro.</p>', ApplyForm::privacy_notice(), 'el filtro manda encima' );
+
+		$this->acting_as( $this->administrator() );
+		$this->assertStringContainsString( 'Este texto lo fija la configuración de la instalación (filtro prc_chrome) y se ignora lo que escriba aquí.', $this->settings_screen() );
+	}
+
+	/**
+	 * The settings screen, painted.
+	 *
+	 * @return string
+	 */
+	private function settings_screen(): string {
 		ob_start();
 		Settings::render();
-		$html = (string) ob_get_clean();
-		$this->assertStringContainsString( 'Protección de datos', $html );
-		$this->assertStringContainsString( 'name="' . ProcedureChrome::OPTION_PRIVACY . '"', $html );
-		$this->assertStringContainsString( '&lt;a href=&quot;https://example.org/&quot;&gt;', $html, 'el texto vuelve escapado al campo' );
-		$this->assertMatchesRegularExpression( '/name=[\'"]option_page[\'"] value=[\'"]' . Settings::PRIVACY_GROUP . '[\'"]/', $html );
+		return (string) ob_get_clean();
 	}
 
 	/**

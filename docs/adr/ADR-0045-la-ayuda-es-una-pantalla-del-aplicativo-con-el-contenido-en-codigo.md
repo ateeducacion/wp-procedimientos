@@ -183,3 +183,12 @@ no es salir, así que no dispara el aviso de cambios sin guardar del taller.
 
 Contra: el contenido del apartado viaja en cada página que lo enlaza, aunque
 nadie lo abra; son unos pocos párrafos.
+
+## Adenda — 2026-11-18: el aviso de protección de datos sí es un ajuste
+
+La ayuda técnica (`help_contact`) sigue saliendo solo del filtro `prc_chrome`,
+como dice la neutra de arriba. El aviso de protección de datos de la
+solicitud, que es la otra clave de texto libre del armazón, toma otro camino:
+se escribe también en Ajustes, con el filtro mandando encima, porque lo cambia
+administración sin tocar código. Los motivos y el saneado, en la adenda del
+2026-11-18 de [ADR-0009](ADR-0009-el-repositorio-se-publica-sin-nada-de-nadie.md).

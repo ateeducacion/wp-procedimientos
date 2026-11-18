@@ -635,6 +635,58 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Sin límite, «Limitar a ciertos centros» sale plegado y con todo marcado;
+	 * reenviarlo así no acota (ADR-0042). Con un límite, sale abierto.
+	 */
+	public function test_the_data_panel_folds_the_centre_limits_and_ticks_everything() {
+		add_filter(
+			'prc_centres',
+			static function () {
+				return array(
+					array(
+						'code'   => 'C0001',
+						'name'   => 'Escuela Inventada',
+						'type'   => 'CEIP',
+						'island' => 'Isla Uno',
+					),
+					array(
+						'code'   => 'C0002',
+						'name'   => 'Instituto Inventado',
+						'type'   => 'IES',
+						'island' => 'Isla Dos',
+					),
+				);
+			}
+		);
+		list( $area, $uid, $procedimiento ) = $this->mio();
+		$curso                              = $this->course( '2027-2028' );
+
+		$this->acting_as( $uid );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( '<details class="prc-acotar">', $html, 'plegado sin límite' );
+		$this->assertStringContainsString( 'Limitar a ciertos centros (avanzado)', $html );
+		$this->assertStringContainsString( 'data-prc-tick-all', $html );
+		$marcadas = array();
+		foreach ( array( ProcedureMetaKeys::CENTRE_TYPES, ProcedureMetaKeys::ISLANDS ) as $nombre ) {
+			preg_match_all( '/name="' . preg_quote( $nombre, '/' ) . '\[\]" value="([^"]*)"\s*checked=/', $html, $coincidencias );
+			$marcadas[ $nombre ] = array_map( 'html_entity_decode', $coincidencias[1] );
+		}
+		$this->assertSame( array( 'CEIP', 'IES' ), $marcadas[ ProcedureMetaKeys::CENTRE_TYPES ], 'todos marcados' );
+		$this->assertSame( array( 'Isla Dos', 'Isla Uno' ), $marcadas[ ProcedureMetaKeys::ISLANDS ] );
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $marcadas ) ) );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ), 'todos marcados se guarda sin límite' );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+
+		$this->assertNotNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::CENTRE_TYPES => array( 'IES' ) ) ) )
+		);
+		$this->assertSame( array( 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->acting_as( $uid );
+		$this->assertStringContainsString( '<details class="prc-acotar" open>', ProcedureEditorView::html( $this->modelo( $procedimiento ) ), 'con un límite, abierto' );
+	}
+
+	/**
 	 * Lo guardado con otras mayúsculas que el catálogo sale marcado, y guardar
 	 * «Datos» sin tocar las casillas no borra el acotado.
 	 */

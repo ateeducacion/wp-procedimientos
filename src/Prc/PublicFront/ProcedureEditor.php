@@ -799,6 +799,9 @@ final class ProcedureEditor {
 			'centre_types'         => $tipos,
 			'islands'              => $islas,
 			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
+			// Lo que ofrece el catálogo: marcarlo todo es no acotar (ADR-0042).
+			'centre_type_options'  => CentreCatalog::values( 'type' ),
+			'island_options'       => CentreCatalog::values( 'island' ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;

@@ -1052,3 +1052,37 @@ describe( 'unsaved changes in the workshop forms', () => {
 		expect( leave().defaultPrevented ).toBe( false );
 	} );
 } );
+
+describe( 'tick all or none in a group of checkboxes', () => {
+	const MARKUP = `
+		<form data-prc-dirty-guard>
+			<fieldset data-prc-tick-group>
+				<p hidden>
+					<button type="button" data-prc-tick-all="1">Marcar todos</button>
+					<button type="button" data-prc-tick-all="0">Ninguno</button>
+				</p>
+				<input type="checkbox" id="a" checked />
+				<input type="checkbox" id="b" />
+			</fieldset>
+			<fieldset><input type="checkbox" id="otra" /></fieldset>
+		</form>`;
+
+	it( 'shows the buttons only with JavaScript', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		expect( document.querySelector( '[data-prc-tick-all]' ).parentElement.hidden ).toBe( false );
+	} );
+
+	it( 'ticks and unticks the boxes of its group only, and marks the form dirty', async () => {
+		document.body.innerHTML = MARKUP;
+		await load();
+		document.querySelector( '[data-prc-tick-all="1"]' ).click();
+		expect( document.getElementById( 'a' ).checked ).toBe( true );
+		expect( document.getElementById( 'b' ).checked ).toBe( true );
+		expect( document.getElementById( 'otra' ).checked ).toBe( false );
+		expect( document.querySelector( 'form' ).hasAttribute( 'data-prc-sucio' ) ).toBe( true );
+		document.querySelector( '[data-prc-tick-all="0"]' ).click();
+		expect( document.getElementById( 'a' ).checked ).toBe( false );
+		expect( document.getElementById( 'b' ).checked ).toBe( false );
+	} );
+} );

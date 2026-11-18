@@ -257,6 +257,10 @@
 /* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
 .prc-preguntas-mas { margin: 0 0 16px; }
 .prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+/* «Limitar a ciertos centros», plegado como avanzado, con el mismo rótulo. */
+.prc-acotar > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
+.prc-acotar__marcar[hidden] { display: none; }
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }

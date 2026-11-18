@@ -1141,7 +1141,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'type="file"', $html );
 		$this->assertStringContainsString( 'name="' . ApplicationFiles::FIELD . '[q1]"', $html );
 		$this->assertStringContainsString( 'Acta del claustro', $html );
-		$this->assertStringContainsString( 'application/pdf', $html );
+		$this->assertStringContainsString( 'accept=".pdf,', $html, 'accept con las extensiones admitidas' );
 		$this->assertStringContainsString( esc_html( size_format( ApplicationFiles::max_bytes() ) ), $html );
 		// Sin Base64 por ningún lado: sube como fichero HTTP normal.
 		$this->assertStringNotContainsString( 'base64', strtolower( $html ) );

@@ -49,6 +49,13 @@ final class ApplyFormView {
 	);
 
 	/**
+	 * The decorative asterisk of a required field; `required` is what assistive technology reads.
+	 *
+	 * @var string
+	 */
+	private const REQUIRED_MARK = '<span class="prc-campo__obligatorio" aria-hidden="true">*</span>';
+
+	/**
 	 * Paint the screen.
 	 *
 	 * @param array<string, mixed> $m What ApplyForm::model() returned.
@@ -335,6 +342,8 @@ final class ApplyFormView {
 
 			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
+			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio">*</span> Campo obligatorio</p>
+
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
 					<h2 class="prc-seccion__titulo">Datos del centro educativo</h2>
@@ -377,6 +386,7 @@ final class ApplyFormView {
 									<label for="prc-accept">
 										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
+										<?php echo self::REQUIRED_MARK; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- constante. ?>
 									</label>
 								</div>
 							</div>
@@ -542,12 +552,15 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( '.' . str_replace( '|', ',.', implode( ',.', array_keys( ApplicationFiles::mimes() ) ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 				<div class="prc-campo__ayuda">
-					Un solo documento, de hasta <?php echo esc_html( size_format( ApplicationFiles::max_bytes() ) ); ?>.
-					Se admiten PDF, JPG, PNG, DOCX y ODT.
+					<?php
+					// Una extensión por formato (la primera de `jpg|jpeg|jpe`), de la misma lista que valida el servidor.
+					$formatos = array_map( static fn( $ext ) => strtoupper( strtok( (string) $ext, '|' ) ), array_keys( ApplicationFiles::mimes() ) );
+					echo esc_html( 'Un solo documento. Formatos admitidos: ' . implode( ', ', $formatos ) . ' · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ) );
+					?>
 				</div>
 			<?php elseif ( ProcedureQuestions::TYPE_YESNO === $tipo ) : ?>
 				<div class="prc-opciones prc-opciones--vertical">
@@ -557,6 +570,7 @@ final class ApplyFormView {
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
 								<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>
+							<?php echo $obliga ? self::REQUIRED_MARK : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- constante. ?>
 						</label>
 					</div>
 				</div>

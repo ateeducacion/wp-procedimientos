@@ -7,6 +7,7 @@
 
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
+use Prc\Meta\ProcedureMetaKeys;
 
 /**
  * Los acotados de un procedimiento sobre los centros (ADR-0042), sin WordPress.
@@ -79,40 +80,68 @@ class Test_Centre_Eligibility extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Todos los tipos o islas del catálogo marcados es no acotar: se guarda
-	 * vacío, que deja solicitar también a quien no está en el catálogo
-	 * (ADR-0042). Ninguno marcado, igual. Algunos, esos.
+	 * Cada lista tiene su interruptor: apagado, sin límite aunque lleguen
+	 * casillas marcadas; encendido, exactamente lo marcado, sin compararlo con
+	 * el catálogo; encendido y sin nada, error. Sin interruptor —lo guardado
+	 * que se reescribe con el grupo cerrado—, la lista tal cual (#84).
 	 */
-	public function test_ticking_every_option_stores_no_limit() {
-		$opciones = array(
-			'centre_type_options' => array( 'CEIP', 'IES' ),
-			'island_options'      => array( 'Isla Uno', 'Isla Dos' ),
-		);
-
-		$todas = ProcedureInput::validate(
-			$opciones + array(
-				'centre_types' => array( 'ies', 'CEIP' ),
-				'islands'      => array( 'Isla Uno', 'Isla Dos', 'Isla Perdida' ),
+	public function test_the_limit_switches_decide_each_list() {
+		$off = ProcedureInput::validate(
+			array(
+				'limit_centre_types' => false,
+				'centre_types'       => array( 'CEIP', 'IES' ),
+				'limit_islands'      => false,
+				'islands'            => array( 'Isla Uno' ),
 			)
 		);
-		$this->assertSame( array(), $todas['data']['centre_types'], 'todos los tipos marcados: sin límite' );
-		$this->assertSame( array(), $todas['data']['islands'], 'todas las islas, aunque haya una perdida marcada: sin límite' );
+		$this->assertSame( array(), $off['data']['centre_types'], 'apagado: sin límite' );
+		$this->assertSame( array(), $off['data']['islands'] );
 
-		$algunas = ProcedureInput::validate(
-			$opciones + array(
-				'centre_types' => array( 'CEIP' ),
-				'islands'      => array( 'Isla Dos', 'Isla Perdida' ),
+		$on = ProcedureInput::validate(
+			array(
+				'limit_centre_types' => true,
+				'centre_types'       => array( 'CEIP', 'IES' ),
+				'limit_islands'      => true,
+				'islands'            => array( 'Isla Dos', 'Isla Perdida' ),
 			)
 		);
-		$this->assertSame( array( 'CEIP' ), $algunas['data']['centre_types'] );
-		$this->assertSame( array( 'Isla Dos', 'Isla Perdida' ), $algunas['data']['islands'] );
+		$this->assertSame( array( 'CEIP', 'IES' ), $on['data']['centre_types'], 'encendido: lo marcado, aunque sea todo el catálogo' );
+		$this->assertSame( array( 'Isla Dos', 'Isla Perdida' ), $on['data']['islands'] );
+		$this->assertNotContains( 'centre_types', $on['errors'] );
 
-		$ninguna = ProcedureInput::validate( $opciones );
-		$this->assertSame( array(), $ninguna['data']['centre_types'], 'ninguno marcado no es «nadie»: sin límite' );
-		$this->assertSame( array(), $ninguna['data']['islands'] );
+		$empty = ProcedureInput::validate(
+			array(
+				'limit_centre_types' => true,
+				'limit_islands'      => true,
+			)
+		);
+		$this->assertContains( 'centre_types', $empty['errors'], 'encendido y sin ningún tipo' );
+		$this->assertContains( 'islands', $empty['errors'], 'encendido y sin ninguna isla' );
+		$this->assertStringContainsString( 'marque al menos un tipo', ProcedureInput::why( array( 'centre_types' ) ) );
+		$this->assertStringContainsString( 'marque al menos una isla', ProcedureInput::why( array( 'islands' ) ) );
 
-		$sin_catalogo = ProcedureInput::validate( array( 'centre_types' => array( 'CEIP' ) ) );
-		$this->assertSame( array( 'CEIP' ), $sin_catalogo['data']['centre_types'], 'sin opciones que cubrir, se guarda lo marcado' );
+		$stored = ProcedureInput::validate( array( 'centre_types' => array( 'CEIP' ) ) );
+		$this->assertSame( array( 'CEIP' ), $stored['data']['centre_types'], 'sin interruptor, lo que llega' );
+		$this->assertSame( array(), $stored['data']['islands'] );
+		$this->assertNotContains( 'centre_types', $stored['errors'] );
+		$this->assertNotContains( 'islands', $stored['errors'] );
+
+		$teachers = ProcedureInput::validate(
+			array(
+				'audience'           => ProcedureMetaKeys::AUDIENCE_TEACHERS,
+				'limit_centre_types' => true,
+			)
+		);
+		$this->assertNotContains( 'centre_types', $teachers['errors'], 'el profesorado no acota centros' );
+	}
+
+	/**
+	 * The form values carry each switch: on when the stored list limits.
+	 */
+	public function test_form_values_carry_the_switches() {
+		$values = CentreEligibility::form_values( array( 'types' => array( 'CEIP' ) ) );
+		$this->assertTrue( $values['limit_centre_types'] );
+		$this->assertFalse( $values['limit_islands'] );
 	}
 
 	/**

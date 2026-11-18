@@ -135,6 +135,14 @@ final class ProcedureEditor {
 	public const FIELD_COORDINATOR_KIND = 'prc_coordinator_kind';
 
 	/**
+	 * Switches «Limitar por tipo de centro» and «Limitar por isla» (#84).
+	 *
+	 * No se guardan: apagados, la lista se guarda vacía, sin límite.
+	 */
+	public const FIELD_LIMIT_TYPES   = 'prc_limit_centre_types';
+	public const FIELD_LIMIT_ISLANDS = 'prc_limit_islands';
+
+	/**
 	 * Prefix of the parallel fields of the question rows.
 	 */
 	public const FIELD_Q = 'prc_q_';
@@ -796,12 +804,11 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'limit_centre_types'   => isset( $_POST[ self::FIELD_LIMIT_TYPES ] ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
 			'centre_types'         => $tipos,
+			'limit_islands'        => isset( $_POST[ self::FIELD_LIMIT_ISLANDS ] ), // phpcs:ignore WordPress.Security.NonceVerification.Missing -- el nonce lo comprobó handle().
 			'islands'              => $islas,
 			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
-			// Lo que ofrece el catálogo: marcarlo todo es no acotar (ADR-0042).
-			'centre_type_options'  => CentreCatalog::values( 'type' ),
-			'island_options'       => CentreCatalog::values( 'island' ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -1736,7 +1743,9 @@ final class ProcedureEditor {
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
+		$guardado[ self::FIELD_LIMIT_TYPES ]            = $acotados['limit_centre_types'];
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ self::FIELD_LIMIT_ISLANDS ]          = $acotados['limit_islands'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
 		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
@@ -1774,6 +1783,12 @@ final class ProcedureEditor {
 				$valor              = $tecleado[ $clave ];
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
+		}
+		// Un interruptor apagado no se envía: si llegó el formulario de los
+		// acotados —la lista cerrada siempre viaja—, se repintan como se enviaron.
+		if ( in_array( ProcedureMetaKeys::ALLOWED_CENTRES, $enviados, true ) ) {
+			$guardado[ self::FIELD_LIMIT_TYPES ]   = $tecleado['limit_centre_types'];
+			$guardado[ self::FIELD_LIMIT_ISLANDS ] = $tecleado['limit_islands'];
 		}
 		if ( in_array( ProcedureMetaKeys::COORDINATOR_COUNT, $enviados, true ) ) {
 			$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) $tecleado['coordinator_count'];

@@ -116,6 +116,7 @@ class Test_Views extends WP_UnitTestCase {
 		$fila['state_label'] = '<b>Abierto</b>';
 		$fila['deadline']    = '"><img src=x onerror=alert(1)>';
 		$fila['poster']      = 'x" onload="alert(1)';
+		$fila['poster_set']  = 'x 1w" onerror="alert(1)';
 		$fila['areas']       = array( 1 => '<b>Ámbito</b>' );
 		$fila['url']         = 'javascript:alert(1)';
 		unset( $fila );
@@ -132,6 +133,7 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '<b>Ámbito</b>', $html );
 		$this->assertStringNotContainsString( '<b>Abierto</b>', $html );
 		$this->assertStringNotContainsString( 'onload="alert(1)"', $html );
+		$this->assertStringNotContainsString( 'onerror="alert(1)"', $html );
 		$this->assertStringNotContainsString( 'href="javascript:', $html );
 		$this->assertStringContainsString( '&lt;script&gt;', $html );
 	}

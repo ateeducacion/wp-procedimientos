@@ -18788,7 +18788,7 @@ final class HomeView {
 		<li class="prc-proc">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
 				<?php if ( '' !== (string) $row['poster'] ) : ?>
-					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>" alt="" loading="lazy" decoding="async"></span>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="(max-width: 600px) 50vw, 240px"' : ''; ?> alt="" loading="lazy" decoding="async"></span>
 				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
 					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="lazy" decoding="async"></span>
 				<?php else : ?>
@@ -19183,8 +19183,11 @@ final class Home {
 
 		$solicitados = self::applied_by_centre();
 
-		$rows = array();
-		foreach ( get_posts( $args ) as $post ) {
+		$rows  = array();
+		$query = new \WP_Query( $args );
+
+		update_post_thumbnail_cache( $query );
+		foreach ( $query->posts as $post ) {
 			$rows[] = self::row( $post, $solicitados );
 		}
 
@@ -19265,8 +19268,8 @@ final class Home {
 			? self::days_until( $fin )
 			: null;
 		$areas  = self::terms( $id );
-		$cartel = (int) get_post_thumbnail_id( $id );
-		$cartel = $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'medium_large' ) : '';
+		$imagen = (int) get_post_thumbnail_id( $id );
+		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
 			'id'          => $id,
@@ -19275,6 +19278,7 @@ final class Home {
 			'excerpt'     => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
 			'areas'       => $areas,
 			'poster'      => $cartel,
+			'poster_set'  => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
 			'area_logo'   => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
 			'state'       => $state,
 			'state_label' => ProcedureState::label(
@@ -19338,17 +19342,36 @@ final class Home {
 
 
 
+
+
 	private static function area_logo( array $term_ids ): string {
+
+		static $vistos = array();
 		foreach ( $term_ids as $term_id ) {
-			$linea = array_merge( array( (int) $term_id ), get_ancestors( (int) $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
-			foreach ( $linea as $id ) {
-				$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
-				if ( $imagen > 0 ) {
-					$url = wp_get_attachment_image_url( $imagen, 'medium_large' );
-					if ( is_string( $url ) && '' !== $url ) {
-						return $url;
-					}
-				}
+			$term_id = (int) $term_id;
+			if ( ! array_key_exists( $term_id, $vistos ) ) {
+				$vistos[ $term_id ] = self::logo_of( $term_id );
+			}
+			if ( '' !== $vistos[ $term_id ] ) {
+				return $vistos[ $term_id ];
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+	private static function logo_of( int $term_id ): string {
+		$linea = array_merge( array( $term_id ), get_ancestors( $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
+		foreach ( $linea as $id ) {
+			$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
+			$url    = $imagen > 0 ? wp_get_attachment_image_url( $imagen, 'medium_large' ) : false;
+			if ( is_string( $url ) && '' !== $url ) {
+				return $url;
 			}
 		}
 		return '';
@@ -24948,7 +24971,7 @@ final class ProcedureEditorView {
 						</label>
 					<?php endforeach; ?>
 				</div>
-				<p class="prc-campo__ayuda">Es la banda de color de la tarjeta de la portada y de la ficha.</p>
+				<p class="prc-campo__ayuda">Es la banda de color de la ficha y de «Mis procedimientos».</p>
 			</fieldset>
 		</div>
 		<?php
@@ -38201,7 +38224,10 @@ body.prc-app .prc-btn-borrar {
   background: var(--prc-c-fondo);
 }
 .prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.prc-proc__cartel--logo img { object-fit: contain; padding: 18%; }
+.prc-proc__cartel--logo img { box-sizing: border-box; object-fit: contain; padding: 18%; }
+/* Sin cartel ni logo, el gris neutro de la banda de antes: no parece una
+   imagen que no ha cargado. */
+.prc-proc__cartel--vacio { background: #c9c9c9; }
 
 /* El título no se trunca: de una a seis líneas, como esté escrito. */
 .prc-proc__titulo {

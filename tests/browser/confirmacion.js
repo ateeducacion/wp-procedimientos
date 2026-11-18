@@ -546,6 +546,106 @@ async function abrir( ctx, conSwal ) {
 		}
 	}
 
+	// --- 9. Cambios sin guardar en el taller --------------------------------
+	//
+	// Un panel con su formulario marcado `data-prc-dirty-guard` y la barra de
+	// pestañas. Escrito algo, la pestaña pregunta antes de irse —SweetAlert2 o
+	// `confirm()`—, cerrar la página da el aviso del navegador y guardar no
+	// pregunta nada. Sin guion, la pestaña se sigue sin más.
+	{
+		const SUCIO = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<nav class="prc-tabs"><a id="pestana" href="/otra">Campos adicionales</a></nav>
+<form class="prc-form prc-form--taller" method="post" action="/enviado" data-prc-dirty-guard>
+  <input type="text" id="titulo" name="prc_title" value="Red de ejemplo" />
+  <button id="guardar" type="submit">Guardar los datos</button>
+</form>
+</body>`;
+		const abrirSucio = async ( contexto, conSwal ) => {
+			const pagina = await contexto.newPage();
+			await pagina.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						url.includes( '/otra' ) ? '<!doctype html><h1>OTRA</h1>' :
+						'<style>' + CSS + '</style>' + SUCIO + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
+				} );
+			} );
+			await pagina.goto( 'https://prc.test/taller' );
+			return pagina;
+		};
+		const PREGUNTA = 'Hay cambios sin guardar. ¿Salir sin guardar?';
+
+		// Sin JavaScript: la pestaña se sigue.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		let page = await abrirSucio( sinJs, true );
+		await page.fill( '#titulo', 'Otro título' );
+		await Promise.all( [ page.waitForURL( '**/otra' ), page.click( '#pestana' ) ] );
+		ok( page.url().includes( 'otra' ), 'sin guion, la pestaña se sigue sin preguntar' );
+		await sinJs.close();
+
+		// Sin cambios no se pregunta nada.
+		page = await abrirSucio( ctx, false );
+		page.on( 'dialog', async ( d ) => { ok( false, 'sin cambios no debería preguntar: ' + d.message() ); await d.dismiss(); } );
+		await Promise.all( [ page.waitForURL( '**/otra' ), page.click( '#pestana' ) ] );
+		ok( page.url().includes( 'otra' ), 'sin cambios, la pestaña se sigue sin preguntar' );
+		await page.close();
+
+		// Con el confirm() del navegador.
+		page = await abrirSucio( ctx, false );
+		let pregunta = null;
+		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.dismiss(); } );
+		await page.fill( '#titulo', 'Otro título' );
+		await page.click( '#pestana' );
+		await page.waitForTimeout( 300 );
+		ok( PREGUNTA === pregunta, 'con cambios, la pestaña pregunta con confirm(): ' + JSON.stringify( pregunta ) );
+		ok( ! page.url().includes( 'otra' ), 'al cancelar se queda, con lo escrito' );
+		ok( 'Otro título' === await page.inputValue( '#titulo' ), 'y lo escrito sigue ahí' );
+		page.removeAllListeners( 'dialog' );
+		let preguntas = 0;
+		page.on( 'dialog', ( d ) => { preguntas++; d.accept(); } );
+		await Promise.all( [ page.waitForURL( '**/otra' ), page.click( '#pestana' ) ] );
+		ok( page.url().includes( 'otra' ) && 1 === preguntas, 'al aceptar se va, y el navegador no vuelve a preguntar: ' + preguntas );
+		await page.close();
+
+		// Cerrar la página: el aviso del propio navegador.
+		page = await abrirSucio( ctx, false );
+		let aviso = null;
+		page.on( 'dialog', async ( d ) => { aviso = d.type(); await d.dismiss(); } );
+		await page.fill( '#titulo', 'Otro título' );
+		await page.close( { runBeforeUnload: true } );
+		await new Promise( ( r ) => setTimeout( r, 300 ) );
+		ok( 'beforeunload' === aviso, 'con cambios, cerrar la página da el aviso del navegador: ' + aviso );
+
+		// Guardar el propio formulario no pregunta.
+		page = await abrirSucio( ctx, false );
+		page.on( 'dialog', async ( d ) => { ok( false, 'guardar no debería preguntar: ' + d.type() ); await d.dismiss(); } );
+		await page.fill( '#titulo', 'Otro título' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#guardar' ) ] );
+		ok( page.url().includes( 'enviado' ), 'guardar envía sin preguntar' );
+		await page.close();
+
+		// Con SweetAlert2.
+		page = await abrirSucio( ctx, true );
+		page.on( 'dialog', async ( d ) => { ok( false, 'no debería salir el diálogo del navegador: ' + d.type() ); await d.dismiss(); } );
+		await page.fill( '#titulo', 'Otro título' );
+		await page.click( '#pestana' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		ok( PREGUNTA === ( await page.textContent( '.swal2-title' ) ).trim(), 'sale SweetAlert2 con la pregunta' );
+		ok( 'Salir sin guardar' === ( await page.textContent( '.swal2-confirm' ) ).trim(), 'el botón dice «Salir sin guardar»' );
+		ok( await page.evaluate( () => document.activeElement.classList.contains( 'swal2-cancel' ) ), 'el foco arranca en Cancelar' );
+		await page.keyboard.press( 'Escape' );
+		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
+		ok( ! page.url().includes( 'otra' ), 'Escape se queda' );
+		await page.click( '#pestana' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		await Promise.all( [ page.waitForURL( '**/otra' ), page.click( '.swal2-confirm' ) ] );
+		ok( page.url().includes( 'otra' ), 'confirmar sigue la pestaña' );
+		await page.close();
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

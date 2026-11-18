@@ -252,6 +252,28 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $this->modelo( $procedimiento, 'inventado' )['panel'] );
 	}
 
+	/** The editing forms warn about unsaved changes; the action panels do not. */
+	public function test_editing_panels_guard_unsaved_changes() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->acting_as( $uid );
+
+		$paneles = array(
+			ProcedureEditor::PANEL_DATA,
+			ProcedureEditor::PANEL_QUESTIONS,
+			ProcedureEditor::PANEL_PEOPLE,
+			ProcedureEditor::PANEL_LINKS,
+			ProcedureEditor::PANEL_NOTICES,
+			ProcedureEditor::PANEL_OBSERVE,
+			ProcedureEditor::PANEL_CODE,
+		);
+		foreach ( $paneles as $panel ) {
+			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
+			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html, $panel );
+		}
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
+		$this->assertStringNotContainsString( 'data-prc-dirty-guard', $html, 'publicar es un botón, no un formulario que se rellena' );
+	}
+
 	/** A manager's forged JavaScript is ignored while CSS is saved. */
 	public function test_managers_can_save_css_but_cannot_save_javascript() {
 		list( , $uid, $procedure ) = $this->mio();

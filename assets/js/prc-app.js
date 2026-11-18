@@ -38,6 +38,34 @@
 			'Sí, continuar';
 	}
 
+	/*
+	 * Las opciones del diálogo de SweetAlert2, las mismas para enviar algo sin
+	 * vuelta atrás y para salir con cambios sin guardar.
+	 */
+	function dialogo( pregunta, ok ) {
+		// «¿Marcar «X» como histórico? No hay vuelta atrás.» → titular y detalle.
+		var corte = pregunta.indexOf( '? ' );
+		return {
+			title: -1 === corte ? pregunta : pregunta.slice( 0, corte + 1 ),
+			text: -1 === corte ? '' : pregunta.slice( corte + 2 ),
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: ok,
+			cancelButtonText: 'Cancelar',
+			// Lo que no tiene vuelta atrás no se confirma sin querer.
+			focusCancel: true,
+			reverseButtons: true,
+			// Sin tocar el alto del `html`: la barra de pestañas es pegajosa.
+			heightAuto: false,
+			// Los botones son los de la página, no los de la librería.
+			buttonsStyling: false,
+			customClass: {
+				confirmButton: 'prc-btn prc-btn-borrar btn',
+				cancelButton: 'prc-btn prc-btn-sec btn btn-outline-secondary'
+			}
+		};
+	}
+
 	document.addEventListener( 'submit', function ( e ) {
 		var form = e.target;
 		// La marca la pone el envío que sale del diálogo: se deja pasar.
@@ -60,27 +88,7 @@
 		// repite luego; el `confirm()` de arriba, no, y por eso va aparte.
 		e.preventDefault();
 		var boton = e.submitter || form.querySelector( '[type="submit"]' );
-		// «¿Marcar «X» como histórico? No hay vuelta atrás.» → titular y detalle.
-		var corte = pregunta.indexOf( '? ' );
-		window.Swal.fire( {
-			title: -1 === corte ? pregunta : pregunta.slice( 0, corte + 1 ),
-			text: -1 === corte ? '' : pregunta.slice( corte + 2 ),
-			icon: 'warning',
-			showCancelButton: true,
-			confirmButtonText: verbo( form, boton ),
-			cancelButtonText: 'Cancelar',
-			// Lo que no tiene vuelta atrás no se confirma sin querer.
-			focusCancel: true,
-			reverseButtons: true,
-			// Sin tocar el alto del `html`: la barra de pestañas es pegajosa.
-			heightAuto: false,
-			// Los botones son los de la página, no los de la librería.
-			buttonsStyling: false,
-			customClass: {
-				confirmButton: 'prc-btn prc-btn-borrar btn',
-				cancelButton: 'prc-btn prc-btn-sec btn btn-outline-secondary'
-			}
-		} ).then( function ( respuesta ) {
+		window.Swal.fire( dialogo( pregunta, verbo( form, boton ) ) ).then( function ( respuesta ) {
 			if ( ! respuesta.isConfirmed ) {
 				return;
 			}
@@ -566,6 +574,78 @@
 		Array.prototype.forEach.call( menusAbiertos(), function ( menu ) {
 			if ( ! menu.contains( e.target ) ) {
 				menu.open = false;
+			}
+		} );
+	} );
+
+	/* --- 10. Cambios sin guardar en el taller ---------------------------- */
+
+	/*
+	 * `data-prc-dirty-guard` en los formularios de edición del taller. Al
+	 * primer `input` o `change` el formulario queda «sucio» y, mientras lo
+	 * esté, salir de la página pide confirmación: el aviso estándar del
+	 * navegador al cerrar o recargar, y la pregunta de la sección 1 —SweetAlert2
+	 * o `confirm()`— al pulsar una pestaña u otro enlace del sitio. Enviar el
+	 * propio formulario limpia la marca. Sin guion, se sale sin aviso.
+	 */
+	var SIN_GUARDAR = 'Hay cambios sin guardar. ¿Salir sin guardar?';
+
+	function sucios() {
+		return document.querySelectorAll( 'form[data-prc-dirty-guard][data-prc-sucio]' );
+	}
+
+	function marcar( e ) {
+		var form = e.target && e.target.form;
+		if ( form && form.hasAttribute( 'data-prc-dirty-guard' ) ) {
+			form.setAttribute( 'data-prc-sucio', '' );
+		}
+	}
+	document.addEventListener( 'input', marcar );
+	document.addEventListener( 'change', marcar );
+
+	// En `window`, detrás de la confirmación: un envío cancelado sigue sucio.
+	window.addEventListener( 'submit', function ( e ) {
+		if ( ! e.defaultPrevented && e.target instanceof HTMLFormElement ) {
+			e.target.removeAttribute( 'data-prc-sucio' );
+		}
+	} );
+
+	window.addEventListener( 'beforeunload', function ( e ) {
+		if ( sucios().length ) {
+			e.preventDefault();
+			// Navegadores antiguos: sin `returnValue` no preguntan.
+			e.returnValue = '';
+		}
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		var enlace = e.target.closest ? e.target.closest( 'a[href]' ) : null;
+		if ( ! enlace || e.defaultPrevented || 0 !== e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey ||
+			( enlace.target && '_self' !== enlace.target ) || enlace.hasAttribute( 'download' ) ||
+			enlace.origin !== window.location.origin || ! sucios().length ) {
+			return;
+		}
+		// Un ancla de la misma página no se lleva lo escrito.
+		if ( enlace.hash && enlace.pathname === window.location.pathname && enlace.search === window.location.search ) {
+			return;
+		}
+		e.preventDefault();
+		var salir = function () {
+			Array.prototype.forEach.call( sucios(), function ( form ) {
+				form.removeAttribute( 'data-prc-sucio' );
+			} );
+			// El mismo enlace, ya limpio: el navegador lo sigue como siempre.
+			enlace.click();
+		};
+		if ( ! window.Swal ) {
+			if ( window.confirm( SIN_GUARDAR ) ) {
+				salir();
+			}
+			return;
+		}
+		window.Swal.fire( dialogo( SIN_GUARDAR, 'Salir sin guardar' ) ).then( function ( respuesta ) {
+			if ( respuesta.isConfirmed ) {
+				salir();
 			}
 		} );
 	} );

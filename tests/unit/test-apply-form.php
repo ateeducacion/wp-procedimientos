@@ -230,6 +230,41 @@ class Test_Apply_Form extends WP_UnitTestCase {
 	}
 
 	/**
+	 * El correo de contacto de un borrador no sale en ningún aviso: ni en el
+	 * de «no existe», con sesión, ni en el de entrar, sin ella. Si saliera,
+	 * probar identificadores daría el correo y distinguiría un borrador de un
+	 * procedimiento que no existe.
+	 */
+	public function test_a_draft_does_not_leak_its_contact_address() {
+		$borrador = $this->procedure(
+			$this->administrator(),
+			array( $this->area() ),
+			array(
+				ProcedureMetaKeys::OPENS_AT       => $this->dia( -1 ),
+				ProcedureMetaKeys::CLOSES_AT      => $this->dia( 1 ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'borrador@example.org' ),
+			),
+			array( 'post_status' => 'draft' )
+		);
+
+		foreach ( array( $this->school_head( 'C0001' ), 0 ) as $quien ) {
+			$this->acting_as( $quien );
+			$m = $this->modelo( $borrador );
+			$this->assertSame( '', $m['contact_email'], (string) $quien );
+			$html = ApplyFormView::html( $m );
+			$this->assertStringNotContainsString( 'borrador@example.org', $html, (string) $quien );
+			$this->assertStringNotContainsString( '¿Cree que es un error?', $html, (string) $quien );
+		}
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertStringContainsString( 'no existe o todavía no está publicado', $this->modelo( $borrador )['aviso'] );
+
+		// Publicado, el correo sí acompaña al aviso.
+		$publicado = $this->procedimiento( array( ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ) ) );
+		$this->acting_as( 0 );
+		$this->assertSame( 'contacto@example.org', $this->modelo( $publicado )['contact_email'] );
+	}
+
+	/**
 	 * Y un perfil que no presenta solicitudes tampoco la ve, aunque tenga sesión.
 	 */
 	public function test_the_screen_asks_for_the_capability() {
@@ -283,6 +318,69 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->olvidar_rechazo();
 		$this->assertNotNull( $this->enviar( $this->school_head( 'C0001' ), $procedimiento ), 'el público sí solicita' );
 		$this->assertSame( 1, Applications::count( $procedimiento ) );
+	}
+
+	/**
+	 * La pantalla de «no puede» no se queda en el aviso: dice a quién
+	 * escribir, vuelve a la ficha y lleva a la ayuda.
+	 */
+	public function test_the_refused_screen_says_what_to_do_next() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::OWNERSHIP      => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0002' ) );
+
+		$m = $this->modelo( $procedimiento );
+		$this->assertSame( 'Este procedimiento es solo para centros públicos. Si cree que es un error, escriba a contacto@example.org.', $m['why'] );
+		$html = ApplyFormView::html( $m );
+		$this->assertStringContainsString( 'Volver a la ficha del procedimiento', $html );
+		$this->assertStringContainsString( esc_url( (string) get_permalink( $procedimiento ) ), $html );
+		$this->assertStringContainsString( 'Ayuda: cómo presentar una solicitud', $html );
+		$this->assertStringContainsString( esc_url( \Prc\PublicFront\Help::url( \Prc\PublicFront\HelpContent::GUIDE_APPLY, 'antes-de-empezar' ) ), $html );
+		$this->assertStringContainsString( 'Salir y entrar con otra cuenta', $html, 'el motivo es de la cuenta: se puede entrar con otra' );
+		$this->assertSame( 1, substr_count( $html, 'contacto@example.org' ), 'el correo, una vez: ya va en el motivo' );
+
+		// Con el plazo cerrado el motivo no es la cuenta: no se ofrece cambiarla,
+		// pero sí el correo de contacto.
+		$cerrado = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::OPENS_AT       => $this->dia( -20 ),
+				ProcedureMetaKeys::CLOSES_AT      => $this->dia( -10 ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$html = ApplyFormView::html( $this->modelo( $cerrado ) );
+		$this->assertStringContainsString( 'Volver a la ficha del procedimiento', $html );
+		$this->assertStringNotContainsString( 'Salir y entrar con otra cuenta', $html );
+		$this->assertStringContainsString( 'mailto:contacto@example.org', $html );
+	}
+
+	/**
+	 * Sin el perfil de dirección, la pantalla ofrece salir y entrar con otra cuenta.
+	 */
+	public function test_a_profile_that_does_not_apply_can_switch_accounts() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( (int) self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+
+		$m    = $this->modelo( $procedimiento );
+		$html = ApplyFormView::html( $m );
+		$this->assertStringContainsString( 'cuenta genérica del centro', $html );
+		$this->assertStringContainsString( 'Salir y entrar con otra cuenta', $html );
+		$this->assertStringContainsString( esc_url( wp_logout_url( wp_login_url( ApplyForm::url( $procedimiento ) ) ) ), $html );
+		$this->assertStringContainsString( 'Ayuda: cómo presentar una solicitud', $html );
+	}
+
+	/**
+	 * La cabecera de la solicitud lleva a la ayuda de rellenarla.
+	 */
+	public function test_the_header_offers_help_to_fill_it_in() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$this->assertStringContainsString( '¿Dudas al rellenar? <a', $this->pintar( $procedimiento ) );
 	}
 
 	/**

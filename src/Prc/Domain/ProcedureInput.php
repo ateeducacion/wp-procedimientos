@@ -183,7 +183,7 @@ final class ProcedureInput {
 			'final_list_url'       => 'el enlace al listado definitivo',
 			'contact_emails'       => 'los correos de contacto, que empiezan por uno obligatorio',
 			'header_color'         => 'el color de la cabecera',
-			'ownership'            => 'a qué centros se dirige',
+			'ownership'            => 'a qué centros se dirige («Dirigido a»): públicos, privados y concertados, o los dos',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
 			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
@@ -302,6 +302,21 @@ final class ProcedureInput {
 	 */
 	public static function ownership( $raw ): array {
 		return self::keys_of( $raw, ProcedureMetaKeys::ownerships() );
+	}
+
+	/**
+	 * The ownerships a stored procedure is really for: none stored is all.
+	 *
+	 * Uno de antes sin titularidad guardada se dirige a todos —es lo que hace
+	 * `ProcedureAccess::can_apply()`—, y así lo enseña y lo vuelve a guardar
+	 * el taller. Uno **nuevo** no pasa por aquí: empieza sin ninguna.
+	 *
+	 * @param mixed $stored Stored value of `prc_ownership`.
+	 * @return string[]
+	 */
+	public static function stored_ownership( $stored ): array {
+		$titular = self::ownership( $stored );
+		return array() === $titular ? array_keys( ProcedureMetaKeys::ownerships() ) : $titular;
 	}
 
 	/**

@@ -9,6 +9,7 @@ namespace Prc\PublicFront;
 
 use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -126,6 +127,8 @@ final class ProcedureView {
 		$mia       = self::mine( $post_id, $user_id );
 		$audiencia = ProcedureMetaKeys::in_list( $meta[ ProcedureMetaKeys::AUDIENCE ], ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
 		$contenido = (string) apply_filters( 'the_content', (string) get_post_field( 'post_content', $post_id ) );
+		$accion    = self::action( $post_id, $state, $user_id, $mia );
+		$gestion   = self::manage_url( $post_id, $user_id );
 
 		return array_merge(
 			$m,
@@ -159,7 +162,9 @@ final class ProcedureView {
 				'areas'                => self::terms( $post_id, ProcedureTaxonomies::AREA ),
 				'courses'              => self::terms( $post_id, ProcedureTaxonomies::COURSE ),
 				'audience'             => (string) ( ProcedureMetaKeys::audiences()[ $audiencia ] ?? '' ),
+				'audience_key'         => $audiencia,
 				'ownership'            => ProcedureChrome::ownership_label( $ownership ),
+				'who_can_apply'        => self::who_can_apply( $post_id, $audiencia ),
 				'coordinator_count'    => Applications::coordinator_count( $post_id ),
 				'requires_coordinator' => Applications::coordinator_count( $post_id ) > 0,
 				// `contact_email` es el primero de la lista: la caja resumen
@@ -173,8 +178,11 @@ final class ProcedureView {
 				'image'                => $cartel > 0 ? (string) wp_get_attachment_image_url( $cartel, 'large' ) : '',
 				'image_alt'            => $cartel > 0 ? (string) get_post_meta( $cartel, '_wp_attachment_image_alt', true ) : '',
 				'mine'                 => $mia,
-				'action'               => self::action( $post_id, $state, $user_id, $mia ),
-				'manage_url'           => self::manage_url( $post_id, $user_id ),
+				'action'               => $accion,
+				'manage_url'           => $gestion,
+				'why_not'              => self::why_not( $post_id, $state, $user_id, array( $accion['url'], $gestion ) ),
+				'account'              => self::account( $user_id ),
+				'switch_url'           => self::switch_url( $post_id, $user_id ),
 			)
 		);
 	}
@@ -205,7 +213,9 @@ final class ProcedureView {
 			'areas'                => '',
 			'courses'              => '',
 			'audience'             => '',
+			'audience_key'         => '',
 			'ownership'            => '',
+			'who_can_apply'        => '',
 			'requires_coordinator' => false,
 			'coordinator_count'    => 0,
 			'contact_emails'       => array(),
@@ -219,8 +229,17 @@ final class ProcedureView {
 			'mine'                 => array(),
 			'action'               => self::no_action(),
 			'manage_url'           => '',
+			// Por qué no hay botón para quien ha entrado, y con qué cuenta.
+			'why_not'              => '',
+			'account'              => array(
+				'name'  => '',
+				'email' => '',
+			),
+			'switch_url'           => '',
 			// Junto al acceso, el apartado de la ayuda que explica cómo entrar.
 			'help_url'             => Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ),
+			// Y, junto al motivo, la pregunta frecuente que lo explica entero.
+			'faq_url'              => Help::url( HelpContent::GUIDE_FAQ, 'no-veo-el-boton-solicitar' ),
 		);
 	}
 
@@ -487,7 +506,7 @@ final class ProcedureView {
 
 		if ( $user_id <= 0 ) {
 			return $abierto ? array(
-				'label'   => 'Solicitar',
+				'label'   => 'Entrar y solicitar',
 				'url'     => wp_login_url( $apply ),
 				'icon'    => 'edit_note',
 				'primary' => true,
@@ -519,6 +538,95 @@ final class ProcedureView {
 			);
 		}
 		return $vacio;
+	}
+
+	/**
+	 * Why whoever is looking gets no button, when they should be told.
+	 *
+	 * Solo con sesión, con el plazo abierto y sin botón: sin sesión el botón
+	 * lleva al acceso, y fuera de plazo no hay botón para nadie y lo dice el
+	 * estado. A quien gestiona procedimientos no se le explica que no
+	 * solicita, ni a quien, sin `prc_apply`, revisa o consulta solicitudes:
+	 * no solicita por su función, y mandarle a pedir el cargo de dirección le
+	 * diría algo falso. El motivo lo da {@see ProcedureAccess::why_not_apply()}.
+	 *
+	 * @param int      $post_id Procedure.
+	 * @param string   $state   Derived state.
+	 * @param int      $user_id Who is looking.
+	 * @param string[] $buttons The URLs of the button and of the workshop link; empty when there is none.
+	 * @return string Empty when there is nothing to explain.
+	 */
+	private static function why_not( int $post_id, string $state, int $user_id, array $buttons ): string {
+		if ( $user_id <= 0 || array() !== array_filter( $buttons ) || ! ProcedureState::accepts_applications( $state )
+			|| user_can( $user_id, ProcedureAccess::CAP_MANAGE_PROCEDURES ) ) {
+			return '';
+		}
+		if ( ! user_can( $user_id, ProcedureAccess::CAP_APPLY ) ) {
+			foreach ( array( ProcedureAccess::CAP_REVIEW, ProcedureAccess::CAP_VIEW_APPLICATIONS, ProcedureAccess::CAP_MANAGE ) as $funcion ) {
+				if ( user_can( $user_id, $funcion ) ) {
+					return '';
+				}
+			}
+		}
+		return ProcedureAccess::why_not_apply( $user_id, $post_id );
+	}
+
+	/**
+	 * The account whoever is looking came in with: name and address.
+	 *
+	 * Es lo primero que hay que saber para entender un «no puede»: con la
+	 * cuenta genérica del centro, el motivo es la cuenta.
+	 *
+	 * @param int $user_id Who is looking (0 = nobody).
+	 * @return array{name:string, email:string}
+	 */
+	private static function account( int $user_id ): array {
+		$quien = $user_id > 0 ? get_userdata( $user_id ) : false;
+		return array(
+			'name'  => $quien instanceof \WP_User ? (string) $quien->display_name : '',
+			'email' => $quien instanceof \WP_User ? (string) $quien->user_email : '',
+		);
+	}
+
+	/**
+	 * Log out and come back to the login, with this page as the destination.
+	 *
+	 * @param int $post_id Procedure.
+	 * @param int $user_id Who is looking (0 = nobody).
+	 * @return string Empty without a session.
+	 */
+	private static function switch_url( int $post_id, int $user_id ): string {
+		return $user_id > 0 ? wp_logout_url( wp_login_url( (string) get_permalink( $post_id ) ) ) : '';
+	}
+
+	/**
+	 * Who may apply, written out for the «Pueden solicitar» row of the summary.
+	 *
+	 * Lo que antes solo se sabía cuando el botón no aparecía: a quién se
+	 * dirige, con la titularidad, el tipo, la isla y la lista cerrada. Un
+	 * procedimiento sin titularidad guardada se dirige a todos, como dice
+	 * {@see ProcedureAccess::can_apply()}.
+	 *
+	 * Solo para CER, el texto lleva también los acotados que les aplican —el
+	 * tipo, la isla y la lista cerrada—; la titularidad no, como en
+	 * `ProcedureAccess::why_not_code()`. Es también la pastilla de «Mis
+	 * procedimientos» y de la cabecera del taller, para que digan lo mismo.
+	 *
+	 * @param int    $post_id  Procedure.
+	 * @param string $audience One of ProcedureMetaKeys::audiences().
+	 * @return string
+	 */
+	public static function who_can_apply( int $post_id, string $audience ): string {
+		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === $audience ) {
+			return 'Profesorado: cada docente con su cuenta';
+		}
+		$rules = ProcedureAccess::eligibility( $post_id );
+		if ( in_array( ProcedureMetaKeys::KIND_SCHOOL, ProcedureAccess::centre_kinds( $post_id ), true ) ) {
+			return CentreEligibility::describe( $rules );
+		}
+		$cer                = 'Agrupaciones de escuelas rurales (CER), como colectivo';
+		$rules['ownership'] = array();
+		return CentreEligibility::restricted( $rules ) ? $cer . ': ' . lcfirst( CentreEligibility::describe( $rules ) ) : $cer;
 	}
 
 	/**

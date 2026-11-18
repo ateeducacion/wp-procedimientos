@@ -235,3 +235,18 @@ byte; solo salen si se marcan.
 - `CentreScope::codes_for()` y la unicidad de la solicitud no cambian.
 - El catálogo de desarrollo (`scripts/mu-plugins/prc-dev-tools.php`) gana
   tipo, isla, municipio y zona, todos inventados, y un tipo privado inventado.
+
+## Adenda — 2026-11-10
+
+El motivo ya no lo da `ProcedureAccess::why_not_eligible()`, que desaparece,
+sino `ProcedureAccess::why_not_apply()`: un solo motivo para la ficha y para
+la pantalla de solicitud, que cubre también la cuenta —sin perfil de
+dirección, sin centro, un procedimiento de profesorado— y, con los acotados,
+termina en el correo de contacto del procedimiento
+(`CentreEligibility::with_contact()`). La regla de esta ADR no cambia: con
+`can_apply()` en falso ningún código de la cuenta pasa los acotados, así que
+el motivo es el del primero, igual que antes. La ficha gana además la fila
+«Pueden solicitar», que escribe estos mismos acotados con
+`CentreEligibility::describe()`.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

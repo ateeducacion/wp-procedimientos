@@ -63,7 +63,7 @@ const SCENES = [
 	{
 		chapter: 'Lo público',
 		title: 'Ficha del procedimiento',
-		note: 'Descripción, fechas, estado, ámbito, contacto y los enlaces a la resolución y a los listados. Sin entrar, el botón «Solicitar» lleva a iniciar sesión.',
+		note: 'Descripción, fechas, estado, ámbito, contacto y los enlaces a la resolución y a los listados. Sin entrar, el botón «Entrar y solicitar» lleva a iniciar sesión; el resumen dice quién puede solicitar.',
 		who: '',
 		go: '/?post_type=prc_procedure&p={ID}',
 		screens: [ 'desktop', 'mobile' ],

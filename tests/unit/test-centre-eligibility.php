@@ -200,4 +200,57 @@ class Test_Centre_Eligibility extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'puede solicitar cualquier centro', CentreEligibility::warnings( $publico, true, false )['catalogue'] );
 		$this->assertStringContainsString( 'ningún centro puede solicitar', CentreEligibility::warnings( $tipos, true, false )['catalogue'] );
 	}
+
+	/**
+	 * Quién puede solicitar, escrito para la fila «Pueden solicitar» de la ficha.
+	 */
+	public function test_who_may_apply_is_written_out() {
+		$this->assertSame( 'Todos los centros', CentreEligibility::describe( CentreEligibility::rules( array() ) ) );
+		$this->assertSame( 'Todos los centros', CentreEligibility::describe( CentreEligibility::rules( array( 'ownership' => array( 'public', 'private' ) ) ) ) );
+		$this->assertSame( 'Centros públicos', CentreEligibility::describe( CentreEligibility::rules( array( 'ownership' => array( 'public' ) ) ) ) );
+		$this->assertSame( 'Centros privados y concertados', CentreEligibility::describe( CentreEligibility::rules( array( 'ownership' => array( 'private' ) ) ) ) );
+		$this->assertSame(
+			'Centros públicos de tipo CEIP o CEO de Isla Dos',
+			CentreEligibility::describe(
+				CentreEligibility::rules(
+					array(
+						'ownership' => array( 'public' ),
+						'types'     => array( 'CEIP', 'CEO' ),
+						'islands'   => array( 'Isla Dos' ),
+					)
+				)
+			)
+		);
+		$this->assertSame( 'Solo los centros de una lista cerrada', CentreEligibility::describe( CentreEligibility::rules( array( 'codes' => array( 'C0001' ) ) ) ) );
+		$this->assertSame(
+			'Centros de Isla Uno, solo los de una lista cerrada',
+			CentreEligibility::describe(
+				CentreEligibility::rules(
+					array(
+						'islands' => array( 'Isla Uno' ),
+						'codes'   => array( 'C0001' ),
+					)
+				)
+			)
+		);
+	}
+
+	/**
+	 * El motivo de «no puede» termina en a quién escribir, sin repetirlo.
+	 */
+	public function test_a_reason_ends_with_whom_to_write_to() {
+		$this->assertSame(
+			'Este procedimiento es solo para centros públicos. Si cree que es un error, escriba a contacto@example.org.',
+			CentreEligibility::with_contact( 'Este procedimiento es solo para centros públicos.', 'contacto@example.org' )
+		);
+		$this->assertSame( 'Sin correo.', CentreEligibility::with_contact( 'Sin correo.', '' ), 'sin correo no se inventa uno' );
+		$this->assertSame( '', CentreEligibility::with_contact( '', 'contacto@example.org' ), 'sin motivo no hay nada que añadir' );
+
+		// El motivo del catálogo ya remitía a los correos en general: se cambia
+		// por el correo de verdad, no se escribe dos veces.
+		$catalogo = CentreEligibility::why_not( CentreEligibility::rules( array( 'ownership' => array( 'public' ) ) ), 'X9999', array() );
+		$con      = CentreEligibility::with_contact( $catalogo, 'contacto@example.org' );
+		$this->assertSame( 1, substr_count( $con, 'Si cree que es un error' ) );
+		$this->assertStringEndsWith( 'escriba a contacto@example.org.', $con );
+	}
 }

@@ -5,6 +5,7 @@
  * @package Prc
  */
 
+use Prc\Access\CentreScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
@@ -540,12 +541,12 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertTrue( ProcedureAccess::can_apply( $uno, $por_tipo ) );
 		$this->assertTrue( ProcedureAccess::can_apply( $tres, $por_tipo ), 'el tipo, sin distinguir mayúsculas; inactivo, sigue en el catálogo' );
 		$this->assertFalse( ProcedureAccess::can_apply( $dos, $por_tipo ) );
-		$this->assertSame( 'Este procedimiento es solo para centros de tipo CEIP.', ProcedureAccess::why_not_eligible( $dos, $por_tipo ) );
-		$this->assertSame( '', ProcedureAccess::why_not_eligible( $uno, $por_tipo ) );
+		$this->assertSame( 'Este procedimiento es solo para centros de tipo CEIP.', ProcedureAccess::why_not_apply( $dos, $por_tipo ) );
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $uno, $por_tipo ) );
 
 		$this->assertFalse( ProcedureAccess::can_apply( $uno, $por_isla ) );
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $por_isla ) );
-		$this->assertSame( 'Este procedimiento es solo para centros de Isla Dos.', ProcedureAccess::why_not_eligible( $uno, $por_isla ) );
+		$this->assertSame( 'Este procedimiento es solo para centros de Isla Dos.', ProcedureAccess::why_not_apply( $uno, $por_isla ) );
 
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $por_lista ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $uno, $por_lista ) );
@@ -560,7 +561,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		);
 		$this->assertTrue( ProcedureAccess::can_apply( $dos, $lista_e_isla ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $fuera, $lista_e_isla ), 'lista y más acotados: hace falta el catálogo' );
-		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_eligible( $fuera, $lista_e_isla ) );
+		$this->assertStringContainsString( 'no está en el catálogo', ProcedureAccess::why_not_apply( $fuera, $lista_e_isla ) );
 		$minusculas = $this->school_head( 'ie002' );
 		$this->assertTrue( ProcedureAccess::can_apply( $minusculas, $por_lista ), 'la lista no distingue mayúsculas del código de la cuenta' );
 
@@ -588,7 +589,7 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, array( 'C0001' ) );
 
 		$this->assertTrue( ProcedureAccess::can_apply( $head, $procedimiento ), 'la suya la sigue editando' );
-		$this->assertSame( '', ProcedureAccess::why_not_eligible( $head, $procedimiento ) );
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $head, $procedimiento ) );
 		$this->assertFalse( ProcedureAccess::can_apply( $nuevo, $procedimiento ), 'una nueva, no' );
 		wp_trash_post( $solicitud );
 		$this->assertFalse( ProcedureAccess::can_apply( $head, $procedimiento ), 'en la papelera ya no cuenta' );
@@ -925,6 +926,219 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		}
 		$this->assertCount( 8, ProcedureAccess::area_managers( $procedimiento ) );
 		$this->assertSame( $con_dos, $contar(), 'seis cuentas más, las mismas consultas' );
+	}
+
+	// ─── por qué no puede solicitar ────────────────────────────────────────
+
+	/**
+	 * La cuenta genérica del centro o un perfil sin cargo: se dice qué cuenta usar.
+	 */
+	public function test_why_not_apply_without_the_capability_names_the_account_to_use() {
+		$procedimiento = $this->procedure( $this->administrator() );
+		$sin_cargo     = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		$porque = ProcedureAccess::why_not_apply( $sin_cargo, $procedimiento );
+		$this->assertStringContainsString( 'Su perfil no presenta solicitudes de centro', $porque );
+		$this->assertStringContainsString( 'cuenta genérica del centro', $porque );
+		$this->assertStringContainsString( 'cuenta personal', $porque );
+		$this->assertStringContainsString( 'cargo de dirección', $porque );
+	}
+
+	/**
+	 * Sin centro en el perfil: lo mismo, con el código de centro.
+	 */
+	public function test_why_not_apply_without_a_school_code() {
+		$procedimiento = $this->procedure( $this->administrator() );
+
+		$porque = ProcedureAccess::why_not_apply( $this->school_head(), $procedimiento );
+		$this->assertStringContainsString( 'no tiene centro asignado', $porque );
+		$this->assertStringContainsString( 'cuenta genérica del centro', $porque );
+		$this->assertStringContainsString( 'código de centro', $porque );
+	}
+
+	/**
+	 * Un procedimiento de profesorado no lo presenta la dirección, y se dice así.
+	 */
+	public function test_why_not_apply_to_a_teachers_procedure_as_a_school() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+
+		$porque = ProcedureAccess::why_not_apply( $this->school_head( 'C0001' ), $procedimiento );
+		$this->assertStringContainsString( 'lo solicita cada docente', $porque );
+		$this->assertStringContainsString( 'La dirección no presenta solicitud en nombre del centro', $porque );
+		$this->assertStringNotContainsString( 'centros como el suyo', $porque );
+	}
+
+	/**
+	 * Un acotado dice cuál, el centro y a quién escribir.
+	 */
+	public function test_why_not_apply_by_the_rules_ends_with_the_contact() {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code'      => 'C0002',
+						'name'      => 'Centro de prueba Sur',
+						'ownership' => 'private',
+					),
+				);
+			}
+		);
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array(
+				ProcedureMetaKeys::OWNERSHIP      => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+
+		$this->assertSame(
+			'Este procedimiento es solo para centros públicos. Si cree que es un error, escriba a contacto@example.org.',
+			ProcedureAccess::why_not_apply( $this->school_head( 'C0002' ), $procedimiento )
+		);
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $this->school_head( 'C0001' ), $this->procedure( $this->administrator() ) ), 'quien puede no tiene motivo' );
+	}
+
+	/**
+	 * Un código ajeno y un procedimiento sin publicar también tienen su motivo.
+	 */
+	public function test_why_not_apply_with_a_foreign_code_or_an_unpublished_procedure() {
+		$procedimiento = $this->procedure(
+			$this->administrator(),
+			array(),
+			array(
+				ProcedureMetaKeys::CENTRE_KINDS   => array( ProcedureMetaKeys::KIND_SCHOOL ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+		// Un código que el procedimiento no admite por clase, pedido a mano.
+		$porque = ProcedureAccess::why_not_apply( $this->school_head( 'C0001' ), $procedimiento, 'Z0009' );
+		$this->assertStringContainsString( 'no es de su cuenta', $porque );
+
+		wp_update_post(
+			array(
+				'ID'          => $procedimiento,
+				'post_status' => 'draft',
+			)
+		);
+		$this->assertStringContainsString( 'todavía no está publicado', ProcedureAccess::why_not_apply( $this->school_head( 'C0001' ), $procedimiento ) );
+	}
+
+	/**
+	 * Un docente sin centro, en un procedimiento de centros: lo presenta la
+	 * dirección, no se le pide un código de centro.
+	 */
+	public function test_why_not_apply_as_a_teacher_without_a_school_to_a_schools_procedure() {
+		$procedure = $this->procedure( $this->administrator() );
+
+		$reason = ProcedureAccess::why_not_apply( $this->teacher(), $procedure );
+		$this->assertStringContainsString( 'lo presenta la dirección del centro, no cada docente', $reason );
+		$this->assertStringNotContainsString( 'código de centro', $reason );
+	}
+
+	/**
+	 * Sin `prc_apply`, en un procedimiento de profesorado: entre con su cuenta personal.
+	 */
+	public function test_why_not_apply_without_apply_capability_to_a_teachers_procedure() {
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+		$no_role   = (int) self::factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		$reason = ProcedureAccess::why_not_apply( $no_role, $procedure );
+		$this->assertStringContainsString( 'cada docente con su cuenta personal', $reason );
+		$this->assertStringContainsString( 'si ha entrado con otra, salga', $reason );
+	}
+
+	/**
+	 * Un docente que pide un código en un procedimiento de profesorado no puede.
+	 */
+	public function test_why_not_apply_as_a_teacher_with_a_code_to_a_teachers_procedure() {
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS )
+		);
+
+		$this->assertSame( '', ProcedureAccess::why_not_apply( $this->teacher(), $procedure ) );
+		$this->assertStringContainsString( 'no está disponible para su cuenta', ProcedureAccess::why_not_apply( $this->teacher(), $procedure, 'C0001' ) );
+	}
+
+	/**
+	 * Pedir con un código de la cuenta cuya clase el procedimiento no admite:
+	 * el motivo general, con el centro y el correo de contacto.
+	 */
+	public function test_why_not_apply_with_a_code_of_a_kind_the_procedure_does_not_take() {
+		add_filter(
+			'prc_centres',
+			static function (): array {
+				return array(
+					array(
+						'code' => 'C0001',
+						'name' => 'Centro de prueba Norte',
+					),
+					array(
+						'code' => 'G0001',
+						'name' => 'Agrupación rural de prueba',
+						'kind' => ProcedureMetaKeys::KIND_RURAL_GROUP,
+					),
+				);
+			}
+		);
+		$procedure = $this->procedure(
+			$this->administrator(),
+			array(),
+			array(
+				ProcedureMetaKeys::CENTRE_KINDS   => array( ProcedureMetaKeys::KIND_SCHOOL ),
+				ProcedureMetaKeys::CONTACT_EMAILS => array( 'contacto@example.org' ),
+			)
+		);
+		$head      = $this->school_head( 'C0001' );
+		update_user_meta( $head, CentreScope::group_meta_key(), 'G0001' );
+
+		$this->assertSame(
+			'Su centro (Agrupación rural de prueba, G0001) no cumple las condiciones de este procedimiento: consulte «Pueden solicitar» en el resumen de la ficha. Si cree que es un error, escriba a contacto@example.org.',
+			ProcedureAccess::why_not_apply( $head, $procedure, 'G0001' )
+		);
+	}
+
+	/**
+	 * Un borrador no dice a quién va dirigido: responde lo mismo que un
+	 * identificador que no existe.
+	 */
+	public function test_why_not_apply_to_a_draft_does_not_say_who_it_is_for() {
+		$teachers_draft = $this->procedure(
+			$this->administrator(),
+			array(),
+			array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ),
+			array( 'post_status' => 'draft' )
+		);
+		$schools_draft  = $this->procedure( $this->administrator(), array(), array(), array( 'post_status' => 'draft' ) );
+		$missing        = $this->procedure( $this->administrator() );
+		wp_delete_post( $missing, true );
+
+		foreach ( array( $this->school_head( 'C0001' ), $this->teacher() ) as $account ) {
+			$expected = ProcedureAccess::why_not_apply( $account, $missing );
+			$this->assertStringContainsString( 'todavía no está publicado', $expected );
+			$this->assertSame( $expected, ProcedureAccess::why_not_apply( $account, $teachers_draft ) );
+			$this->assertSame( $expected, ProcedureAccess::why_not_apply( $account, $schools_draft ) );
+		}
+	}
+
+	/**
+	 * Docente sin código de centro.
+	 *
+	 * @return int User ID.
+	 */
+	private function teacher(): int {
+		return (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
 	}
 
 	/**

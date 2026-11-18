@@ -667,4 +667,27 @@
 			}
 		} );
 	} );
+
+	/* --- 11. La pestaña activa del taller, a la vista ------------------- */
+
+	/*
+	 * Las pestañas del taller van en una fila que, estrecha, se desplaza en
+	 * horizontal: la activa se trae a la vista al cargar. Solo se mueve la
+	 * fila, nunca la página, que puede venir anclada en el aviso. Sin
+	 * JavaScript, la fila empieza por la izquierda.
+	 */
+	document.addEventListener( 'DOMContentLoaded', function () {
+		var active = document.querySelector( '.prc-tabs--taller [aria-current="page"]' );
+		var row = active && active.closest( '.prc-tabs-fila' );
+		if ( ! row ) {
+			return;
+		}
+		var tab = active.getBoundingClientRect();
+		var box = row.getBoundingClientRect();
+		if ( tab.right > box.right ) {
+			row.scrollLeft += Math.ceil( tab.right - box.right );
+		} else if ( tab.left < box.left ) {
+			row.scrollLeft -= Math.ceil( box.left - tab.left );
+		}
+	} );
 }() );

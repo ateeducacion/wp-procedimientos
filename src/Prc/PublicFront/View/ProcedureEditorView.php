@@ -371,7 +371,8 @@ final class ProcedureEditorView {
 	 * The inner tabs, in their groups, each with its count where there is something to count.
 	 *
 	 * Cada grupo —Preparar, Gestionar, Avanzado— lleva su rótulo pequeño
-	 * encima y un `role="group"` con su nombre para quien no lo ve.
+	 * encima, en el flujo para que la caja mida al menos lo que él, y un
+	 * `role="group"` con su nombre para quien no lo ve.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
@@ -390,14 +391,16 @@ final class ProcedureEditorView {
 				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
 					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
 						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
-						<?php foreach ( $paneles as $clave => $panel ) : ?>
-							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-								<?php endif; ?></a>
-						<?php endforeach; ?>
+						<div class="prc-tabs-grupo__pestanas">
+							<?php foreach ( $paneles as $clave => $panel ) : ?>
+								<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+									<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+									href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+									<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+										<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+									<?php endif; ?></a>
+							<?php endforeach; ?>
+						</div>
 					</div>
 				<?php endforeach; ?>
 			</div>

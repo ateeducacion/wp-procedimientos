@@ -1,5 +1,6 @@
 /*
- * Los tres escalones de la confirmación, en un navegador de verdad.
+ * Los tres escalones de la confirmación, el menú «⋮» y la disposición de las
+ * pestañas del taller, en un navegador de verdad.
  *
  *   npm run test:browser
  *
@@ -646,44 +647,70 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
-	// Las pestañas del taller: a 1200 px, los tres grupos en una línea; en un
-	// móvil, la fila se desplaza en horizontal y la página no.
+	// Las pestañas del taller: a 1200 px, los tres grupos en una línea y con
+	// margen; en un móvil, la fila se desplaza en horizontal y la página no.
+	// Dos casos: administración, con «Acceso de consulta», y quien gestiona su
+	// ámbito, con «Avanzado» solo con «Código»; contadores de dos y tres cifras.
 	{
-		const tab = ( t, on ) => `<a class="prc-tab${ on ? ' prc-tab-on' : '' }"${ on ? ' aria-current="page"' : '' } href="#">${ t }</a>`;
-		const grupo = ( g, ts ) => `<div class="prc-tabs-grupo" role="group" aria-label="${ g }"><span class="prc-tabs-grupo__rotulo" aria-hidden="true">${ g }</span>${ ts.join( '' ) }</div>`;
-		const n = ( t, c ) => `${ t } <span class="prc-tab-n">${ c }</span>`;
-		const TABS = '<!doctype html><meta charset="utf-8"><style>' + CSS + '</style><body class="prc-app">' +
+		const tab = ( label, on ) => `<a class="prc-tab${ on ? ' prc-tab-on' : '' }"${ on ? ' aria-current="page"' : '' } href="#">${ label }</a>`;
+		const group = ( name, tabs ) => `<div class="prc-tabs-grupo" role="group" aria-label="${ name }"><span class="prc-tabs-grupo__rotulo" aria-hidden="true">${ name }</span><div class="prc-tabs-grupo__pestanas">${ tabs.join( '' ) }</div></div>`;
+		const count = ( label, n ) => `${ label } <span class="prc-tab-n">${ n }</span>`;
+		const page = ( active, advanced ) => '<!doctype html><meta charset="utf-8"><style>' + CSS + '</style><body class="prc-app">' +
 			'<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento"><div class="prc-tabs-fila">' +
-			grupo( 'Preparar', [ tab( 'Datos', true ), tab( n( 'Campos adicionales', 12 ) ), tab( 'Participantes' ), tab( 'Enlaces' ), tab( 'Publicación' ) ] ) +
-			grupo( 'Gestionar', [ tab( n( 'Solicitudes', 128 ) ), tab( n( 'Entregas', 0 ) ) ] ) +
-			grupo( 'Avanzado', [ tab( 'Acceso de consulta' ), tab( 'Código' ) ] ) +
-			'</div></nav></body>';
-		for ( const ancho of [ 1200, 390 ] ) {
-			const contexto = await browser.newContext( { viewport: { width: ancho, height: 600 } } );
-			const page = await contexto.newPage();
-			await page.setContent( TABS );
-			const m = await page.evaluate( () => {
-				const fila = document.querySelector( '.prc-tabs-fila' );
-				return {
-					alturas: [ ...document.querySelectorAll( '.prc-tab' ) ].map( ( a ) => Math.round( a.getBoundingClientRect().top ) ),
-					desborda: fila.scrollWidth > fila.clientWidth,
-					pagina: document.documentElement.scrollWidth,
-					fondo: getComputedStyle( document.querySelector( '.prc-tabs-grupo' ) ).backgroundColor,
-				};
-			} );
-			ok( 1 === new Set( m.alturas ).size, ancho + ' px: todas las pestañas en la misma línea' );
-			ok( m.pagina <= ancho, ancho + ' px: la página no se desplaza en horizontal (' + m.pagina + ')' );
-			ok( 'rgba(0, 0, 0, 0)' !== m.fondo, ancho + ' px: cada grupo tiene fondo propio' );
-			if ( 1200 === ancho ) {
-				ok( ! m.desborda, '1200 px: caben sin desplazar' );
-			} else {
-				ok( m.desborda, '390 px: la fila se desplaza en horizontal' );
-				await page.keyboard.press( 'Tab' );
-				for ( let i = 0; i < 8; i++ ) { await page.keyboard.press( 'Tab' ); }
-				ok( 'Código' === await page.evaluate( () => document.activeElement.textContent ), 'con el teclado se llega a la última pestaña' );
-				ok( await page.evaluate( () => document.activeElement.getBoundingClientRect().right <= innerWidth ), 'y el foco la trae a la vista' );
+			group( 'Preparar', [ tab( 'Datos', 'Datos' === active ), tab( count( 'Campos adicionales', 40 ) ), tab( 'Participantes' ), tab( 'Enlaces' ), tab( 'Publicación' ) ] ) +
+			group( 'Gestionar', [ tab( count( 'Solicitudes', 999 ) ), tab( count( 'Entregas', 40 ) ) ] ) +
+			group( 'Avanzado', advanced.map( ( label ) => tab( label, label === active ) ) ) +
+			'</div></nav><script>' + APP + '</script></body>';
+		const cases = [
+			{ who: 'administración', advanced: [ 'Acceso de consulta', 'Código' ] },
+			{ who: 'gestión de ámbito', advanced: [ 'Código' ] },
+		];
+		for ( const { who, advanced } of cases ) {
+			for ( const width of [ 1200, 390 ] ) {
+				const context = await browser.newContext( { viewport: { width, height: 600 } } );
+				const tabsPage = await context.newPage();
+				await tabsPage.setContent( page( 390 === width ? 'Código' : 'Datos', advanced ) );
+				const at = `${ who }, ${ width } px`;
+				const m = await tabsPage.evaluate( () => {
+					const row = document.querySelector( '.prc-tabs-fila' );
+					const groups = [ ...document.querySelectorAll( '.prc-tabs-grupo' ) ];
+					const box = row.getBoundingClientRect();
+					const active = document.querySelector( '[aria-current="page"]' ).getBoundingClientRect();
+					return {
+						tops: [ ...document.querySelectorAll( '.prc-tab' ) ].map( ( a ) => Math.round( a.getBoundingClientRect().top ) ),
+						overflows: row.scrollWidth > row.clientWidth,
+						slack: Math.round( box.right - groups[ groups.length - 1 ].getBoundingClientRect().right ),
+						page: document.documentElement.scrollWidth,
+						background: getComputedStyle( groups[ 0 ] ).backgroundColor,
+						labelsFit: groups.every( ( g ) => g.querySelector( '.prc-tabs-grupo__rotulo' ).getBoundingClientRect().right <= g.getBoundingClientRect().right ),
+						activeInView: active.left >= box.left && active.right <= box.right,
+					};
+				} );
+				ok( 1 === new Set( m.tops ).size, at + ': todas las pestañas en la misma línea' );
+				ok( m.page <= width, at + ': la página no se desplaza en horizontal (' + m.page + ')' );
+				ok( 'rgba(0, 0, 0, 0)' !== m.background, at + ': cada grupo tiene fondo propio' );
+				ok( m.labelsFit, at + ': cada rótulo cabe en su caja' );
+				if ( 1200 === width ) {
+					ok( ! m.overflows && m.slack >= 24, at + ': caben sin desplazar, con margen (' + m.slack + ' px)' );
+				} else {
+					ok( m.overflows, at + ': la fila se desplaza en horizontal' );
+					ok( m.activeInView, at + ': al cargar, la pestaña activa está a la vista' );
+					await tabsPage.evaluate( () => {
+						document.querySelector( '.prc-tabs-fila' ).scrollLeft = 0;
+					} );
+					const tabs = await tabsPage.locator( '.prc-tab' ).count();
+					for ( let i = 0; i < tabs; i++ ) {
+						await tabsPage.keyboard.press( 'Tab' );
+					}
+					ok( 'Código' === await tabsPage.evaluate( () => document.activeElement.textContent ), at + ': con el teclado se llega a la última pestaña' );
+					ok( await tabsPage.evaluate( () => {
+						const box = document.querySelector( '.prc-tabs-fila' ).getBoundingClientRect();
+						const focused = document.activeElement.getBoundingClientRect();
+						return focused.left >= box.left && focused.right <= box.right;
+					} ), at + ': y el foco la trae a la vista de la fila' );
+				}
+				await context.close();
 			}
-			await contexto.close();
 		}
 	}
 

@@ -9,6 +9,7 @@
  */
 
 use Prc\Access\CentreScope;
+use Prc\Access\ObserverScope;
 use Prc\Access\ProcedureAccess;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -115,6 +116,24 @@ trait Prc_Fixtures {
 		$id = (int) self::factory()->user->create( array( 'role' => 'prc_school_head' ) );
 		if ( '' !== $centre ) {
 			update_user_meta( $id, CentreScope::meta_key(), $centre );
+		}
+		return $id;
+	}
+
+	/**
+	 * Alguien que consulta las solicitudes de una o varias zonas.
+	 *
+	 * Sin zonas es el perfil con el que `prc_view_applications` no abre nada.
+	 *
+	 * @param string[] $zones Zone codes; none for an account without zone.
+	 * @param string   $role  Role to start from.
+	 * @return int User ID.
+	 */
+	protected function observer( array $zones = array(), string $role = 'prc_observer' ): int {
+		$this->app();
+		$id = (int) self::factory()->user->create( array( 'role' => $role ) );
+		if ( array() !== $zones ) {
+			update_user_meta( $id, ObserverScope::meta_key(), $zones );
 		}
 		return $id;
 	}

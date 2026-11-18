@@ -59,10 +59,11 @@ final class ApplicationQuery {
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param array<string, mixed> $filter       What {@see ApplicationFilter::sanitize()} returned.
 	 * @param array<string, mixed> $scope        `codes`: only applications of these centre codes; absent, no narrowing.
+	 * @param bool                 $incomplete   Whether to work out which may be incomplete; the consultation neither shows nor filters them.
 	 * @return array{filter:array, active:bool, ids:int[], all:int, total:int, counts:array<string,int>, incomplete:int, may_be_incomplete:bool, options:array{islands:array<string,string>, zones:array<string,string>}, posts:\WP_Post[], reasons:array<int,string[]>, stored:array<int,array<string,mixed>>, page:int, pages:int, offset:int, from:int, to:int}
 	 */
-	public static function run( int $procedure_id, array $filter, array $scope = array() ): array {
-		$census = self::census( $procedure_id, $scope );
+	public static function run( int $procedure_id, array $filter, array $scope = array(), bool $incomplete = true ): array {
+		$census = self::census( $procedure_id, $scope, $incomplete );
 		// El catálogo, una vez y solo si alguna es de un centro con código.
 		$catalogo = CentreColumns::index_for( array_filter( array_column( $census['stored'], ApplicationMetaKeys::CENTRE_CODE ) ) );
 		$opciones = self::options( $census['stored'], $catalogo );
@@ -99,10 +100,11 @@ final class ApplicationQuery {
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param array<string, mixed> $filter       What {@see ApplicationFilter::sanitize()} returned.
 	 * @param array<string, mixed> $scope        As in {@see run()}.
+	 * @param bool                 $incomplete   As in {@see run()}.
 	 * @return int[]
 	 */
-	public static function ids( int $procedure_id, array $filter, array $scope = array() ): array {
-		return self::run( $procedure_id, $filter, $scope )['ids'];
+	public static function ids( int $procedure_id, array $filter, array $scope = array(), bool $incomplete = true ): array {
+		return self::run( $procedure_id, $filter, $scope, $incomplete )['ids'];
 	}
 
 	/**
@@ -125,9 +127,10 @@ final class ApplicationQuery {
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
 	 * @param array<string, mixed> $scope        As in {@see run()}.
+	 * @param bool                 $incomplete   As in {@see run()}.
 	 * @return array{posts:array<int, \WP_Post>, stored:array<int, array<string, mixed>>, check:bool} `check`: whether people and documents were read, because some may be incomplete.
 	 */
-	private static function census( int $procedure_id, array $scope ): array {
+	private static function census( int $procedure_id, array $scope, bool $incomplete = true ): array {
 		$vacio = array(
 			'posts'  => array(),
 			'stored' => array(),
@@ -161,7 +164,7 @@ final class ApplicationQuery {
 			$por_id[ (int) $post->ID ] = $post;
 		}
 		$claves = self::CENSUS;
-		$mirar  = self::can_be_incomplete( $procedure_id );
+		$mirar  = $incomplete && self::can_be_incomplete( $procedure_id );
 		if ( $mirar ) {
 			$claves[] = ApplicationMetaKeys::PEOPLE;
 			$claves[] = ApplicationMetaKeys::FILES;

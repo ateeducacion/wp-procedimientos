@@ -62,6 +62,11 @@ if ( ! function_exists( 'prc_dev_demo_accounts' ) ) {
 				'pass'  => 'password',
 				'label' => 'Docente de ejemplo',
 			),
+			array(
+				'login' => 'consulta',
+				'pass'  => 'password',
+				'label' => 'Consulta (Zona Norte)',
+			),
 		);
 	}
 }

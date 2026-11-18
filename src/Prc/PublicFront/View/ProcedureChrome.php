@@ -69,7 +69,7 @@ final class ProcedureChrome {
 			// Aviso de protección de datos de la pantalla de solicitud: el órgano
 			// responsable y el tratamiento son del despliegue, no del aplicativo.
 			// Lo escribe administración en los ajustes
-			// ({@see \Prc\PublicFront\ApplyForm::privacy_notice()}); si el
+			// ({@see \Prc\PublicFront\PrivacyNotice::text()}); si el
 			// filtro lo trae, manda él.
 			'privacy_notice' => '',
 			// Ayuda técnica de la pantalla «Ayuda»: a quién escribir cuando no

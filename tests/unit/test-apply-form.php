@@ -11,6 +11,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
@@ -899,8 +900,8 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		// Se guarda sin el saneado del registro: lo que protege aquí es el
 		// saneado al pintar, dentro de un formulario.
-		remove_all_filters( 'sanitize_option_' . ApplyForm::OPTION_PRIVACY );
-		update_option( ApplyForm::OPTION_PRIVACY, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script><form action="https://example.org/"><button>Otro</button></form><p>Sin cerrar' );
+		remove_all_filters( 'sanitize_option_' . PrivacyNotice::OPTION );
+		update_option( PrivacyNotice::OPTION, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script><form action="https://example.org/"><button>Otro</button></form><p>Sin cerrar' );
 
 		$this->assertSame( '', ProcedureChrome::chrome()['privacy_notice'], 'el armazón no lee la opción en cada pantalla' );
 		$html = $this->pintar( $procedimiento );

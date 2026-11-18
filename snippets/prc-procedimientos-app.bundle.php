@@ -11467,7 +11467,7 @@ final class Shell {
 
 
 		if ( ! apply_filters( 'prc_show_chrome', true ) ) {
-			return '<div class="prc-hoja">' . $body . '</div>';
+			return '<div class="prc-hoja">' . $body . '</div>' . self::subfooter();
 		}
 
 		ob_start();
@@ -11744,6 +11744,51 @@ final class Shell {
 					<?php if ( isset( $enlace['label'], $enlace['url'] ) ) : ?>
 						<a href="<?php echo esc_url( (string) $enlace['url'] ); ?>" rel="noopener"><?php echo esc_html( (string) $enlace['label'] ); ?></a>
 					<?php endif; ?>
+				<?php endforeach; ?>
+			</span>
+		</div></div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function subfooter(): string {
+
+
+
+
+
+		$chrome = ProcedureChrome::chrome();
+		$credit = (string) $chrome['credit'];
+		$links  = array_filter(
+			(array) $chrome['footer_links'],
+			static function ( $link ): bool {
+				return isset( $link['label'], $link['url'] );
+			}
+		);
+		if ( '' === $credit && array() === $links ) {
+			return '';
+		}
+		$help    = self::url( 'help' );
+		$current = 'help' === self::current_section() ? ' aria-current="page"' : '';
+
+		ob_start();
+		?>
+		<div class="prc-subpie"><div>
+			<span class="prc-subpie-credito"><?php echo esc_html( $credit ); ?></span>
+			<span class="prc-subpie-enlaces">
+				<?php if ( '' !== $help ) : ?>
+					<a href="<?php echo esc_url( $help ); ?>"<?php echo $current;?>><?php echo self::icon( 'ayuda' );?> Ayuda</a>
+				<?php endif; ?>
+				<?php foreach ( $links as $link ) : ?>
+					<a href="<?php echo esc_url( (string) $link['url'] ); ?>" rel="noopener"><?php echo esc_html( (string) $link['label'] ); ?></a>
 				<?php endforeach; ?>
 			</span>
 		</div></div>
@@ -36099,6 +36144,7 @@ body.prc-app #main-content .container::before { display: none; }
 body.prc-app .prc-top,
 body.prc-app .prc-tabs,
 body.prc-app .prc-hoja,
+body.prc-app .prc-subpie,
 body.prc-app .prc-pie {
   position: relative;
   left: 50%;
@@ -36174,6 +36220,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
    que la fila medida. */
 .prc-top-fila,
 .prc-tabs-fila,
+.prc-subpie > div,
 .prc-pie div {
   width: var(--prc-fila-ancho);
   max-width: var(--prc-fila-max);
@@ -36521,6 +36568,24 @@ body.prc-app .prc-mas > .prc-mas__boton { box-sizing: border-box; display: inlin
 .prc-pie-enlaces { display: flex; gap: 18px; flex-wrap: wrap; }
 .prc-pie a { color: #fff; text-decoration: underline; }
 .prc-pie a:hover { color: #fff; text-decoration: none; }
+
+/* El sub-pie: crédito y ayuda cuando el pie lo pinta el tema. Va dentro de la
+   columna del tema, encima de su pie, sin fondo propio. */
+.prc-subpie { margin-top: 32px; }
+
+.prc-subpie > div {
+  border-top: 1px solid var(--prc-linea);
+  padding: 12px 0;
+  display: flex;
+  gap: 8px 24px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.prc-subpie-enlaces { display: flex; gap: 18px; flex-wrap: wrap; }
+.prc-subpie-enlaces a { display: inline-flex; gap: 6px; align-items: center; }
 
 /* --- el cartel de la ficha ------------------------------------------------ */
 
@@ -36969,6 +37034,7 @@ body.prc-app .prc-btn-borrar {
 @media (max-width: 640px) {
   .prc-top-fila,
   .prc-tabs-fila,
+  .prc-subpie > div,
   .prc-pie div { width: auto; margin-inline: 16px; }
   .prc-top-fila { padding: 11px 0; gap: 10px; flex-wrap: nowrap; }
   .prc-marca { display: none; }

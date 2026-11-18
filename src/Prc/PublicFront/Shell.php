@@ -659,7 +659,7 @@ final class Shell {
 		 * @param bool $pintar Whether to render the chrome.
 		 */
 		if ( ! apply_filters( 'prc_show_chrome', true ) ) {
-			return '<div class="prc-hoja">' . $body . '</div>';
+			return '<div class="prc-hoja">' . $body . '</div>' . self::subfooter();
 		}
 
 		ob_start();
@@ -936,6 +936,51 @@ final class Shell {
 					<?php if ( isset( $enlace['label'], $enlace['url'] ) ) : ?>
 						<a href="<?php echo esc_url( (string) $enlace['url'] ); ?>" rel="noopener"><?php echo esc_html( (string) $enlace['label'] ); ?></a>
 					<?php endif; ?>
+				<?php endforeach; ?>
+			</span>
+		</div></div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The strip above the theme's own footer: credit, help and footer links.
+	 *
+	 * Painted only when the chrome is off and `prc_chrome` brings a credit or
+	 * footer links; otherwise empty.
+	 *
+	 * @return string
+	 */
+	private static function subfooter(): string {
+		// Cuando el pie lo pinta el tema (`prc_show_chrome` en «no»), el crédito
+		// y la ayuda —que estaba en el menú, también oculto— se quedaban sin
+		// sitio. La franja va debajo de la pantalla, encima del pie del tema, y
+		// solo si quien despliega configuró algo: sin configurar, nada (ADR-0009,
+		// adenda de ADR-0045).
+		$chrome = ProcedureChrome::chrome();
+		$credit = (string) $chrome['credit'];
+		$links  = array_filter(
+			(array) $chrome['footer_links'],
+			static function ( $link ): bool {
+				return isset( $link['label'], $link['url'] );
+			}
+		);
+		if ( '' === $credit && array() === $links ) {
+			return '';
+		}
+		$help    = self::url( 'help' );
+		$current = 'help' === self::current_section() ? ' aria-current="page"' : '';
+
+		ob_start();
+		?>
+		<div class="prc-subpie"><div>
+			<span class="prc-subpie-credito"><?php echo esc_html( $credit ); ?></span>
+			<span class="prc-subpie-enlaces">
+				<?php if ( '' !== $help ) : ?>
+					<a href="<?php echo esc_url( $help ); ?>"<?php echo $current; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- atributo fijo. ?>><?php echo self::icon( 'ayuda' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- SVG fijo. ?> Ayuda</a>
+				<?php endif; ?>
+				<?php foreach ( $links as $link ) : ?>
+					<a href="<?php echo esc_url( (string) $link['url'] ); ?>" rel="noopener"><?php echo esc_html( (string) $link['label'] ); ?></a>
 				<?php endforeach; ?>
 			</span>
 		</div></div>

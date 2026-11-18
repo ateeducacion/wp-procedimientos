@@ -112,6 +112,7 @@ src/Prc/
 ├── PublicFront/View/PanelParts.php         Piezas comunes de los paneles
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
+├── PublicFront/ApplicationExport.php       Exportar a medida: columnas, una fila por persona y fichero de alta de usuarios (ADR-0039)
 ├── PublicFront/View/HomeView.php           Pinta la portada
 ├── PublicFront/Home.php                    [prc_home]
 ├── PublicFront/View/ProcedureChrome.php    Pinta la ficha pública

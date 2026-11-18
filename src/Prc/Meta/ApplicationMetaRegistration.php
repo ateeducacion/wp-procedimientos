@@ -129,10 +129,14 @@ final class ApplicationMetaRegistration {
 	}
 
 	/**
-	 * Coordinators as a list of `{name, dni, email}`; a saved single coordinator is upgraded on read.
+	 * Coordinators as a list of `{name, surname, dni, email}`; a saved single coordinator is upgraded on read.
+	 *
+	 * Los apellidos llegaron después que el nombre (ADR-0039): lo guardado
+	 * antes los lee vacíos y el nombre se queda entero, como se tecleó. Solo
+	 * el fichero de alta de usuarios lo parte, al exportar.
 	 *
 	 * @param mixed $value Raw value.
-	 * @return array<int, array{name:string, dni:string, email:string}>
+	 * @return array<int, array{name:string, surname:string, dni:string, email:string}>
 	 */
 	public static function sanitize_coordinator( $value ): array {
 		$value = is_array( $value ) ? $value : array();
@@ -146,12 +150,76 @@ final class ApplicationMetaRegistration {
 			}
 			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
 			$out[] = array(
-				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
-				'dni'   => strtoupper( (string) preg_replace( '/[ -]/', '', sanitize_text_field( isset( $coordinator['dni'] ) && is_scalar( $coordinator['dni'] ) ? (string) $coordinator['dni'] : '' ) ) ),
-				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
+				'name'    => self::text( $coordinator, 'name' ),
+				'surname' => self::text( $coordinator, 'surname' ),
+				'dni'     => strtoupper( (string) preg_replace( '/[ -]/', '', self::text( $coordinator, 'dni' ) ) ),
+				'email'   => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
 			);
 		}
 		return $out;
+	}
+
+	/**
+	 * One field of a stored person, as plain text.
+	 *
+	 * @param array<string, mixed> $person Stored person.
+	 * @param string               $key    Field.
+	 * @return string
+	 */
+	private static function text( array $person, string $key ): string {
+		return sanitize_text_field( isset( $person[ $key ] ) && is_scalar( $person[ $key ] ) ? (string) $person[ $key ] : '' );
+	}
+
+	/**
+	 * Name and surname of a coordinator, as one reads them.
+	 *
+	 * @param array<string, mixed> $coordinator One stored coordinator.
+	 * @return string
+	 */
+	public static function full_name( array $coordinator ): string {
+		return trim( (string) ( $coordinator['name'] ?? '' ) . ' ' . (string) ( $coordinator['surname'] ?? '' ) );
+	}
+
+	/**
+	 * Split a full name at its first space: first name, then the rest.
+	 *
+	 * Para lo que se guardó antes de que la coordinación tuviera apellidos
+	 * (ADR-0039) y para el nombre público de una cuenta sin nombre ni
+	 * apellidos. Un nombre compuesto sale mal partido; por eso ahora se piden
+	 * aparte.
+	 *
+	 * @param string $full Full name.
+	 * @return array{0:string, 1:string}
+	 */
+	public static function split_name( string $full ): array {
+		$partes = explode( ' ', trim( (string) preg_replace( '/\s+/u', ' ', $full ) ), 2 );
+		return array( $partes[0], $partes[1] ?? '' );
+	}
+
+	/**
+	 * A stored coordinator with name and surname apart.
+	 *
+	 * Lo guardado antes de los apellidos lleva el nombre entero en `name`; se
+	 * parte por el primer espacio. Lo que ya tiene apellidos no se toca.
+	 *
+	 * @param array<string, mixed> $coordinator One stored coordinator.
+	 * @return array<string, mixed>
+	 */
+	public static function with_surname( array $coordinator ): array {
+		if ( '' === (string) ( $coordinator['surname'] ?? '' ) && '' !== (string) ( $coordinator['name'] ?? '' ) ) {
+			list( $coordinator['name'], $coordinator['surname'] ) = self::split_name( (string) $coordinator['name'] );
+		}
+		return $coordinator;
+	}
+
+	/**
+	 * Every coordinator's full name, joined for one cell.
+	 *
+	 * @param array<int, array<string, mixed>> $coordinators Stored coordinators.
+	 * @return string
+	 */
+	public static function full_names( array $coordinators ): string {
+		return implode( ', ', array_filter( array_map( array( self::class, 'full_name' ), $coordinators ) ) );
 	}
 
 	/**

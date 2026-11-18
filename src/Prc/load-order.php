@@ -85,6 +85,7 @@ return array(
 	'PublicFront/View/MeasuredQuestionView.php',
 	'PublicFront/View/PeopleView.php',
 	'PublicFront/View/ApplicationProgressView.php',
+	'PublicFront/PrivacyNotice.php',
 	'PublicFront/View/ApplyFormView.php',
 	'PublicFront/ApplyForm.php',
 	'PublicFront/WithdrawForm.php',

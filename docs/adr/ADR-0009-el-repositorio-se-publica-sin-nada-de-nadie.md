@@ -237,12 +237,12 @@ lo que se versiona.
 
 La clave `privacy_notice` del filtro `prc_chrome` **sigue mandando**: si la
 trae, se pinta la del filtro, y Ajustes avisa de que lo que se escriba allí se
-ignora (`PublicFront/ApplyForm::privacy_notice()`, `Admin/Settings::render()`).
+ignora (`PublicFront/PrivacyNotice::text()`, `Admin/Settings::render()`).
 La opción se lee solo en la pantalla de solicitud, no en cada
 `ProcedureChrome::chrome()`, que corre en todas.
 
 Como el texto va dentro del formulario de la solicitud, se sanea al guardar y
-al pintar (`ApplyForm::sanitize_privacy()`): la lista de etiquetas de una
+al pintar (`PrivacyNotice::sanitize()`): la lista de etiquetas de una
 entrada **sin** `form`, `button`, `input`, `select`, `option`, `textarea`,
 `label` ni `fieldset`, el contenido de `script` y `style` quitado entero y las
 etiquetas abiertas, cerradas.

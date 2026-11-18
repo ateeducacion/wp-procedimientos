@@ -15,6 +15,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Shell;
 
 /**
@@ -98,9 +99,7 @@ final class ApplyFormView {
 		}
 		// Con el formulario cerrado, la lista de personas o una entrega siguen
 		// recogiendo datos: el aviso va detrás de ellas.
-		if ( true !== $m['can_submit'] && self::still_collects( $m ) ) {
-			echo self::privacy( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy().
-		}
+		echo self::privacy( PrivacyNotice::after_sections( $m ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy().
 		// Retirar la solicitud, al final: es lo último que se busca.
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -275,34 +274,15 @@ final class ApplyFormView {
 	 * enviar, y se vuelve a sanear aquí: puede ir dentro de un formulario. Sin
 	 * configurar, no se pinta nada.
 	 *
-	 * @param array<string, mixed> $m Model.
+	 * @param string $notice The notice as written, from the model.
 	 * @return string
 	 */
-	private static function privacy( array $m ): string {
-		$text = ApplyForm::sanitize_privacy( (string) ( $m['privacy'] ?? '' ) );
+	private static function privacy( string $notice ): string {
+		$text = PrivacyNotice::sanitize( $notice );
 		if ( '' === $text ) {
 			return '';
 		}
 		return '<div class="prc-aviso-legal">' . $text . '</div>';
-	}
-
-	/**
-	 * Whether the screen still collects data with the application form closed.
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return bool
-	 */
-	private static function still_collects( array $m ): bool {
-		$people = (array) ( $m['people'] ?? array() );
-		if ( ! empty( $people['show'] ) && ! empty( $people['can_edit'] ) ) {
-			return true;
-		}
-		foreach ( (array) ( $m['deliveries'] ?? array() ) as $delivery ) {
-			if ( ! empty( $delivery['can_submit'] ) ) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/**
@@ -434,7 +414,7 @@ final class ApplyFormView {
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<?php echo self::privacy( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy(). ?>
+			<?php echo self::privacy( (string) ( $m['privacy'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy(). ?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>

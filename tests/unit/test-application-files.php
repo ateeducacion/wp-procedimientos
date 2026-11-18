@@ -13,6 +13,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ApplyFormView;
@@ -1670,7 +1671,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 	 */
 	public function test_the_privacy_notice_follows_an_open_delivery() {
 		$data = $this->delivery_fixture();
-		update_option( ApplyForm::OPTION_PRIVACY, '<p>Aviso de los ajustes.</p>' );
+		update_option( PrivacyNotice::OPTION, '<p>Aviso de los ajustes.</p>' );
 		$this->acting_as( $data['head'] );
 		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $data['procedure'];
 		$model                            = ApplyForm::model();

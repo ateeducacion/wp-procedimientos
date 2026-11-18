@@ -448,29 +448,30 @@ final class Home {
 		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
-			'id'          => $id,
-			'title'       => '' !== $titulo ? $titulo : 'Procedimiento sin título',
-			'url'         => (string) get_permalink( $id ),
-			'excerpt'     => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
-			'areas'       => $areas,
-			'poster'      => $cartel,
-			'poster_set'  => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
-			'area_logo'   => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
-			'state'       => $state,
-			'state_label' => ProcedureState::label(
+			'id'           => $id,
+			'title'        => '' !== $titulo ? $titulo : 'Procedimiento sin título',
+			'url'          => (string) get_permalink( $id ),
+			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
+			'areas'        => $areas,
+			'poster'       => $cartel,
+			'poster_set'   => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
+			'area_logo'    => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
+			'state'        => $state,
+			'state_label'  => ProcedureState::label(
 				$state,
 				(bool) get_post_meta( $id, ProcedureMetaKeys::APPLICATIONS_CLOSED, true )
 			),
-			'closes_at'   => $cierra,
-			'days_left'   => $quedan,
-			'deadline'    => self::deadline( $quedan ),
-			'urgent'      => null !== $quedan && $quedan <= 3,
-			'applied'     => isset( $solicitados[ $id ] ),
-			'dates'       => DateRange::of(
+			'closes_at'    => $cierra,
+			'days_left'    => $quedan,
+			'deadline'     => self::deadline( $quedan ),
+			'urgent'       => null !== $quedan && $quedan <= 3,
+			'applied'      => isset( $solicitados[ $id ] ),
+			'header_color' => ProcedureMetaKeys::header_hex( get_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, true ) ),
+			'dates'        => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::CLOSES_AT, true )
 			),
-			'amend_dates' => DateRange::of(
+			'amend_dates'  => DateRange::of(
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_OPENS_AT, true ),
 				(string) get_post_meta( $id, ProcedureMetaKeys::AMEND_CLOSES_AT, true )
 			),

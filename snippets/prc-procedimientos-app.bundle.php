@@ -28390,6 +28390,13 @@ final class ApplyFormView {
 
 
 
+	private const REQUIRED_MARK = '<span class="prc-campo__obligatorio" aria-hidden="true">*</span>';
+
+
+
+
+
+
 
 	public static function html( array $m ): string {
 		if ( '' !== (string) $m['aviso'] ) {
@@ -28672,6 +28679,8 @@ final class ApplyFormView {
 
 			<?php echo self::privacy();?>
 
+			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio">*</span> Campo obligatorio</p>
+
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
 					<h2 class="prc-seccion__titulo">Datos del centro educativo</h2>
@@ -28714,6 +28723,7 @@ final class ApplyFormView {
 									<label for="prc-accept">
 										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' );?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
+										<?php echo self::REQUIRED_MARK;?>
 									</label>
 								</div>
 							</div>
@@ -28879,12 +28889,15 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( '.' . str_replace( '|', ',.', implode( ',.', array_keys( ApplicationFiles::mimes() ) ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie;?> />
 				<div class="prc-campo__ayuda">
-					Un solo documento, de hasta <?php echo esc_html( size_format( ApplicationFiles::max_bytes() ) ); ?>.
-					Se admiten PDF, JPG, PNG, DOCX y ODT.
+					<?php
+
+					$formatos = array_map( static fn( $ext ) => strtoupper( strtok( (string) $ext, '|' ) ), array_keys( ApplicationFiles::mimes() ) );
+					echo esc_html( 'Un solo documento. Formatos admitidos: ' . implode( ', ', $formatos ) . ' · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ) );
+					?>
 				</div>
 			<?php elseif ( ProcedureQuestions::TYPE_YESNO === $tipo ) : ?>
 				<div class="prc-opciones prc-opciones--vertical">
@@ -28894,6 +28907,7 @@ final class ApplyFormView {
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
 								<?php echo $pie;?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>
+							<?php echo $obliga ? self::REQUIRED_MARK : '';?>
 						</label>
 					</div>
 				</div>
@@ -36990,9 +37004,11 @@ body.prc-app .prc-btn-borrar {
   font-size: 18px;
   font-weight: 200;
   line-height: 1.3;
-  color: var(--prc-c-medio);
+  color: var(--prc-c-fuerte);
   background: var(--prc-c-fondo);
-  border: 1px solid var(--prc-c-borde-campo);
+  /* Lo que se rellena tiene que verse: borde de 3:1 sobre blanco (WCAG
+     1.4.11), y no el #ccc del original, que se perdía en la página (#87). */
+  border: 1px solid var(--prc-c-borde-editable, #8a8a8a);
   border-radius: var(--prc-radio-caja);
   outline: none;
   box-shadow: none;
@@ -37014,18 +37030,24 @@ body.prc-app .prc-btn-borrar {
 
 .prc-form.prc-form--solicitud .prc-control:focus-visible { outline: 2px solid var(--prc-c-foco); outline-offset: 1px; }
 
-/* Bloqueado: **solo el color**. Mismo alto, mismo borde, mismo radio y el
-   fondo sigue blanco; lo que se aclara es el texto y el borde. Sin candado y
-   sin fondo gris, que es como está medido.
-
-   `#a1a1a1` sobre blanco da 2,5:1: quien despliegue lo sube redefiniendo
-   `--prc-c-bloq-texto` sin tocar esta hoja. */
+/* Bloqueado: lo que viene dado —centro, código, nombre, correo— no se
+   rellena, y tiene que notarse a la primera: fondo gris, borde claro y sin
+   cursor de texto (#87). El texto se queda en 5,7:1 para leerse bien.
+   Quien despliegue lo cambia redefiniendo `--prc-c-bloq-*` sin tocar esta hoja. */
 .prc-form.prc-form--solicitud .prc-control--bloqueado,
 .prc-form.prc-form--solicitud .prc-control[readonly],
 .prc-form.prc-form--solicitud .prc-control[disabled] {
-  color: var(--prc-c-bloq-texto, #a1a1a1);
-  background: var(--prc-c-fondo);
-  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+  color: var(--prc-c-bloq-texto, #666);
+  cursor: not-allowed;
+  background: var(--prc-c-bloq-fondo, #ececec);
+  border-color: var(--prc-c-bloq-borde, #e0e0e0);
+}
+
+/* La leyenda del asterisco, encima del primer campo. */
+.prc-form--solicitud .prc-leyenda-obligatorio {
+  margin: 0 0 10px;
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
 }
 
 /* --- bloque de texto fijo entre campos ---------------------------------- */

@@ -148,8 +148,8 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_contact_email` | string email | Correo de contacto del ámbito convocante |
 | `prc_audience` | string | `schools` (fase 1) o `teachers`; lista cerrada `ProcedureMetaKeys::audiences()` |
 | `prc_ownership` | array de string | A quién se dirige: `public`, `private` (concertados y privados); lista cerrada |
-| `prc_centre_types` | array de string | Tipos de centro admitidos, como los escribe el catálogo; vacía, todos (ADR-0042) |
-| `prc_islands` | array de string | Islas admitidas; vacía, todas (ADR-0042) |
+| `prc_centre_types` | array de string | Tipos de centro admitidos, como los escribe el catálogo; vacía, todos, que es lo que guarda el taller con «Limitar por tipo de centro» apagado (ADR-0042) |
+| `prc_islands` | array de string | Islas admitidas; vacía, todas, que es lo que guarda el taller con «Limitar por isla» apagado (ADR-0042) |
 | `prc_allowed_centres` | array de string | Lista cerrada de códigos de centro, hasta 2000; vacía, sin lista (ADR-0042) |
 | `prc_requires_coordinator` | boolean | La solicitud pide una persona coordinadora |
 | `prc_questions` | array | Preguntas del procedimiento (ver más abajo) |

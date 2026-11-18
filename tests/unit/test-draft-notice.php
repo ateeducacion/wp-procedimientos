@@ -26,6 +26,17 @@ class Test_Draft_Notice extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Deja los enlaces como estaban: la estructura vive en `$wp_rewrite`, que
+	 * no se deshace con la base de datos, y los tests de después armarían
+	 * enlaces bonitos que no resuelven.
+	 */
+	public function tear_down() {
+		$this->set_permalink_structure( '' );
+		ProcedurePostType::register();
+		parent::tear_down();
+	}
+
+	/**
 	 * The address of a procedure by number, the one a draft without a name has.
 	 *
 	 * @param int $id Procedure.

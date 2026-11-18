@@ -524,15 +524,17 @@ final class Home {
 	 * @return string Image URL, or '' when none has one.
 	 */
 	private static function area_logo( array $term_ids ): string {
-		// Muchas tarjetas comparten ámbito: se resuelve una vez por término.
-		static $vistos = array();
+		// Muchas tarjetas comparten ámbito: se resuelve una vez por término y
+		// por sitio, que el mismo ID es otro término tras un switch_to_blog().
+		static $cache = array();
+		$blog         = get_current_blog_id();
 		foreach ( $term_ids as $term_id ) {
 			$term_id = (int) $term_id;
-			if ( ! array_key_exists( $term_id, $vistos ) ) {
-				$vistos[ $term_id ] = self::logo_of( $term_id );
+			if ( ! isset( $cache[ $blog ][ $term_id ] ) ) {
+				$cache[ $blog ][ $term_id ] = self::logo_of( $term_id );
 			}
-			if ( '' !== $vistos[ $term_id ] ) {
-				return $vistos[ $term_id ];
+			if ( '' !== $cache[ $blog ][ $term_id ] ) {
+				return $cache[ $blog ][ $term_id ];
 			}
 		}
 		return '';

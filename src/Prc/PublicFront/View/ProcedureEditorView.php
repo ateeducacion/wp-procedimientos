@@ -1436,6 +1436,14 @@ final class ProcedureEditorView {
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
+			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
+				<div class="prc-aviso prc-aviso-info">
+					<p>La consulta por zona está activa en este procedimiento. La configura quien administra el aplicativo.</p>
+					<?php if ( true === ( $m['observe_status']['gone'] ?? false ) ) : ?>
+						<p>Pero las columnas que se eligieron ya no existen, así que ahora no enseña ninguna. Avise a quien administra el aplicativo.</p>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />

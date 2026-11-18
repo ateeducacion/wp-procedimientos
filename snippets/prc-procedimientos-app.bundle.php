@@ -2439,6 +2439,8 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige («Dirigido a»): públicos, privados y concertados, o los dos',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
+			'centre_types'         => 'los tipos de centro: para limitar por tipo, marque al menos un tipo',
+			'islands'              => 'las islas: para limitar por isla, marque al menos una isla',
 			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);
@@ -4769,31 +4771,29 @@ final class CentreEligibility {
 
 
 
+
+
+
 	public static function input( array $raw, bool $schools ): array {
 		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
 		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
+		$lists    = array();
+		foreach ( array( 'centre_types', 'islands' ) as $list ) {
+			$values         = self::values( $raw[ $list ] ?? array() );
+			$limit          = (bool) ( $raw[ 'limit_' . $list ] ?? ( array() !== $values ) );
+			$lists[ $list ] = $limit ? $values : array();
+			if ( $limit && array() === $values ) {
+				$errors[] = $list;
+			}
+		}
 		return array(
 			'data'   => array(
-				'centre_types'    => $schools ? self::ticked( $raw['centre_types'] ?? array(), $raw['centre_type_options'] ?? array() ) : array(),
-				'islands'         => $schools ? self::ticked( $raw['islands'] ?? array(), $raw['island_options'] ?? array() ) : array(),
+				'centre_types'    => $schools ? $lists['centre_types'] : array(),
+				'islands'         => $schools ? $lists['islands'] : array(),
 				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
 			),
 			'errors' => $schools ? $errors : array(),
 		);
-	}
-
-
-
-
-
-
-
-
-	private static function ticked( $ticked, $options ): array {
-		$ticked  = self::values( $ticked );
-		$options = array_map( array( self::class, 'fold' ), self::values( $options ) );
-		$faltan  = array_diff( $options, array_map( array( self::class, 'fold' ), $ticked ) );
-		return array() !== $options && array() === $faltan ? array() : $ticked;
 	}
 
 
@@ -4821,9 +4821,11 @@ final class CentreEligibility {
 	public static function form_values( array $rules ): array {
 		$rules = self::rules( $rules );
 		return array(
-			'centre_types'    => $rules['types'],
-			'islands'         => $rules['islands'],
-			'allowed_centres' => implode( "\n", $rules['codes'] ),
+			'limit_centre_types' => array() !== $rules['types'],
+			'centre_types'       => $rules['types'],
+			'limit_islands'      => array() !== $rules['islands'],
+			'islands'            => $rules['islands'],
+			'allowed_centres'    => implode( "\n", $rules['codes'] ),
 		);
 	}
 
@@ -19251,7 +19253,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>, dentro de «Limitar a ciertos centros (avanzado)»: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Tipos e islas vienen todos marcados: así, y con la lista en blanco, puede solicitar cualquier centro. Para limitar, desmarque lo que sobre; desmarcarlo todo cuenta como no limitar.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>, dentro de «Limitar a ciertos centros (avanzado)»: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -24509,50 +24511,65 @@ final class ProcedureEditorView {
 
 
 
+
+
+
 	private static function eligibility_fields( array $m, array $v ): string {
-		$opciones = (array) ( $m['centre_options'] ?? array() );
-		$listas   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $opciones['types'] ?? array() ) ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $opciones['islands'] ?? array() ) ),
+		$options = (array) ( $m['centre_options'] ?? array() );
+		$lists   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.' ),
 		);
 
-		$elegidos = array();
-		foreach ( array_keys( $listas ) as $nombre ) {
-			$elegidos[ $nombre ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $nombre ] ) );
+		$chosen = array();
+		foreach ( array_keys( $lists ) as $name ) {
+			$chosen[ $name ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $name ] ) );
 		}
-		$abierto = array() !== array_filter( $elegidos ) || '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] );
+		$open = ! empty( $v[ ProcedureEditor::FIELD_LIMIT_TYPES ] )
+			|| ! empty( $v[ ProcedureEditor::FIELD_LIMIT_ISLANDS ] )
+			|| '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] )
+			|| 1 === count( (array) $v[ ProcedureMetaKeys::OWNERSHIP ] );
 
 		ob_start();
 		?>
-		<details class="prc-acotar"<?php echo $abierto ? ' open' : ''; ?>>
+		<?php echo self::centre_warning( $m, 'catalogue' );?>
+		<details class="prc-acotar"<?php echo $open ? ' open' : ''; ?>>
 		<summary>Limitar a ciertos centros (avanzado)</summary>
 		<div class="prc-seccion__cuerpo">
 			<div class="prc-campo prc-campo--completo">
-				<p class="prc-campo__ayuda">Con todo marcado y la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Para limitar, desmarca lo que sobre: con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Desmarcarlo todo cuenta como no limitar. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
-				<?php echo self::centre_warning( $m, 'catalogue' );?>
+				<p class="prc-campo__ayuda">Sin limitar por tipo ni por isla y con la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
 			</div>
-			<?php foreach ( $listas as $nombre => $lista ) : ?>
+			<?php foreach ( $lists as $name => $list ) : ?>
+				<?php $limited = ! empty( $v[ $list[2] ] ); ?>
 				<div class="prc-campo prc-campo--medio">
-					<fieldset data-prc-tick-group>
-						<legend class="prc-campo__etiqueta"><?php echo esc_html( $lista[0] ); ?></legend>
-						<?php if ( array() === $lista[1] ) : ?>
+					<fieldset class="prc-acotar__lista">
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $list[0] ); ?></legend>
+						<?php if ( array() === $list[1] ) : ?>
 							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
 						<?php else : ?>
-							<p class="prc-acotar__marcar" hidden>
-								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
-								<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
-							</p>
-						<?php endif; ?>
-						<div class="prc-opciones prc-opciones--vertical">
-							<?php foreach ( $lista[1] as $i => $valor ) : ?>
-								<div class="prc-opcion">
-									<input type="checkbox" id="<?php echo esc_attr( $nombre . '-' . $i ); ?>"
-										name="<?php echo esc_attr( $nombre ); ?>[]" value="<?php echo esc_attr( (string) $valor ); ?>"
-										<?php checked( array() === $elegidos[ $nombre ] || in_array( CentreEligibility::fold( (string) $valor ), $elegidos[ $nombre ], true ) ); ?> />
-									<label for="<?php echo esc_attr( $nombre . '-' . $i ); ?>"><?php echo esc_html( (string) $valor ); ?></label>
+							<div class="prc-opcion prc-acotar__interruptor">
+								<input type="checkbox" id="<?php echo esc_attr( $list[2] ); ?>" name="<?php echo esc_attr( $list[2] ); ?>" value="1"
+									<?php checked( $limited ); ?> />
+								<label for="<?php echo esc_attr( $list[2] ); ?>"><?php echo esc_html( $list[3] ); ?></label>
+							</div>
+							<div class="prc-acotar__opciones" data-prc-tick-group>
+								<p class="prc-campo__ayuda"><?php echo esc_html( $list[4] ); ?></p>
+								<p class="prc-acotar__marcar" hidden>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
+								</p>
+								<div class="prc-opciones prc-opciones--vertical">
+									<?php foreach ( $list[1] as $i => $value ) : ?>
+										<div class="prc-opcion">
+											<input type="checkbox" id="<?php echo esc_attr( $name . '-' . $i ); ?>"
+												name="<?php echo esc_attr( $name ); ?>[]" value="<?php echo esc_attr( (string) $value ); ?>"
+												<?php checked( ! $limited || in_array( CentreEligibility::fold( (string) $value ), $chosen[ $name ], true ) ); ?> />
+											<label for="<?php echo esc_attr( $name . '-' . $i ); ?>"><?php echo esc_html( (string) $value ); ?></label>
+										</div>
+									<?php endforeach; ?>
 								</div>
-							<?php endforeach; ?>
-						</div>
+							</div>
+						<?php endif; ?>
 					</fieldset>
 				</div>
 			<?php endforeach; ?>
@@ -25376,6 +25393,14 @@ final class ProcedureEditor {
 
 
 
+
+
+	public const FIELD_LIMIT_TYPES   = 'prc_limit_centre_types';
+	public const FIELD_LIMIT_ISLANDS = 'prc_limit_islands';
+
+
+
+
 	public const FIELD_Q = 'prc_q_';
 
 
@@ -26035,12 +26060,11 @@ final class ProcedureEditor {
 			'centre_kinds'         => $clases,
 			'requires_coordinator' => '' !== $coordina && '0' !== $coordina,
 			'commitments'          => self::textarea( ProcedureMetaKeys::COMMITMENTS ),
+			'limit_centre_types'   => isset( $_POST[ self::FIELD_LIMIT_TYPES ] ),
 			'centre_types'         => $tipos,
+			'limit_islands'        => isset( $_POST[ self::FIELD_LIMIT_ISLANDS ] ),
 			'islands'              => $islas,
 			'allowed_centres'      => self::textarea( ProcedureMetaKeys::ALLOWED_CENTRES ),
-
-			'centre_type_options'  => CentreCatalog::values( 'type' ),
-			'island_options'       => CentreCatalog::values( 'island' ),
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
@@ -26975,7 +26999,9 @@ final class ProcedureEditor {
 		);
 		$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) Applications::coordinator_count( $procedure_id );
 		$acotados                                       = CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) );
+		$guardado[ self::FIELD_LIMIT_TYPES ]            = $acotados['limit_centre_types'];
 		$guardado[ ProcedureMetaKeys::CENTRE_TYPES ]    = $acotados['centre_types'];
+		$guardado[ self::FIELD_LIMIT_ISLANDS ]          = $acotados['limit_islands'];
 		$guardado[ ProcedureMetaKeys::ISLANDS ]         = $acotados['islands'];
 		$guardado[ ProcedureMetaKeys::ALLOWED_CENTRES ] = $acotados['allowed_centres'];
 		if ( '' === self::$rejected ) {
@@ -27013,6 +27039,12 @@ final class ProcedureEditor {
 				$valor              = $tecleado[ $clave ];
 				$guardado[ $campo ] = is_array( $valor ) ? $valor : (string) $valor;
 			}
+		}
+
+
+		if ( in_array( ProcedureMetaKeys::ALLOWED_CENTRES, $enviados, true ) ) {
+			$guardado[ self::FIELD_LIMIT_TYPES ]   = $tecleado['limit_centre_types'];
+			$guardado[ self::FIELD_LIMIT_ISLANDS ] = $tecleado['limit_islands'];
 		}
 		if ( in_array( ProcedureMetaKeys::COORDINATOR_COUNT, $enviados, true ) ) {
 			$guardado[ ProcedureMetaKeys::COORDINATOR_COUNT ] = (string) $tecleado['coordinator_count'];
@@ -37749,6 +37781,10 @@ body.prc-app .prc-btn-borrar {
 .prc-acotar > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
 .prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
 .prc-acotar__marcar[hidden] { display: none; }
+/* Con el interruptor apagado, las casillas de esa lista no cuentan: se
+   esconden sin guion. Sin :has(), se ven y el servidor las ignora igual. */
+.prc-acotar__lista:has(.prc-acotar__interruptor input:not(:checked)) .prc-acotar__opciones { display: none; }
+.prc-acotar__opciones { margin: 8px 0 0 24px; }
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
@@ -38255,23 +38291,23 @@ body.prc-app .prc-btn-borrar {
 	 * una a una.
 	 */
 	document.addEventListener( \'DOMContentLoaded\', function () {
-		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-tick-all]\' ), function ( boton ) {
-			boton.parentElement.hidden = false;
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-tick-all]\' ), function ( button ) {
+			button.parentElement.hidden = false;
 		} );
 	} );
 
 	document.addEventListener( \'click\', function ( e ) {
-		var boton = e.target.closest ? e.target.closest( \'[data-prc-tick-all]\' ) : null;
-		var grupo = boton ? boton.closest( \'[data-prc-tick-group]\' ) : null;
-		if ( ! grupo ) {
+		var button = e.target.closest ? e.target.closest( \'[data-prc-tick-all]\' ) : null;
+		var group = button ? button.closest( \'[data-prc-tick-group]\' ) : null;
+		if ( ! group ) {
 			return;
 		}
-		var marcar = \'1\' === boton.getAttribute( \'data-prc-tick-all\' );
-		Array.prototype.forEach.call( grupo.querySelectorAll( \'input[type="checkbox"]\' ), function ( casilla ) {
-			casilla.checked = marcar;
+		var tick = \'1\' === button.getAttribute( \'data-prc-tick-all\' );
+		Array.prototype.forEach.call( group.querySelectorAll( \'input[type="checkbox"]\' ), function ( box ) {
+			box.checked = tick;
 		} );
-		// Cuenta como un cambio del formulario: el aviso de cambios sin guardar lo ve.
-		boton.dispatchEvent( new Event( \'change\', { bubbles: true } ) );
+		// Cuenta como un cambio del formulario, para el aviso de cambios sin guardar.
+		marcar( { target: button } );
 	} );
 
 	/* --- 8. Un solo envío ------------------------------------------------ */

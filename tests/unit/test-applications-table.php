@@ -12,6 +12,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationExport;
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\ApplicationQuery;
 use Prc\PublicFront\ApplicationsPanel;
 use Prc\PublicFront\PeopleSpecPanel;
@@ -552,6 +553,8 @@ class Test_Applications_Table extends WP_UnitTestCase {
 		foreach ( $ids as $id ) {
 			$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_ROW . '" value="' . $id . '"', $html );
 		}
+		// La acción principal de la pantalla: azul y con icono.
+		$this->assertMatchesRegularExpression( '#<summary class="' . preg_quote( Assets::button_class( true ), '#' ) . ' prc-exportar__abrir">\s*<svg[^>]*aria-hidden="true"#', $html );
 		$this->assertStringNotContainsString( 'Se exportarán', $html, 'sin filtro no hay nada que elegir al exportar' );
 		$this->assertStringNotContainsString( 'Solo las incompletas', $html, 'sin lista ni entregas no hay incompletas que buscar' );
 		$this->assertStringContainsString( 'prc-contadores', $html );

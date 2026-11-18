@@ -19,7 +19,8 @@ use Prc\PublicFront\Workspace;
  * ocho iconos y una tabla de once columnas en dos niveles— y se ha quedado con
  * lo que se usa: el título corriente de las pantallas de dentro con «Nuevo
  * procedimiento» a su lado, el buscador con su rótulo, la leyenda plegada, una
- * pestaña por curso y seis columnas. El estado sale una vez, en su pastilla.
+ * pestaña por curso y seis columnas, la última con los iconos de editar,
+ * ver las solicitudes y ver la ficha. El estado sale una vez, en su pastilla.
  */
 final class WorkspaceView {
 
@@ -299,6 +300,7 @@ final class WorkspaceView {
 						<th scope="col">Plazo</th>
 						<th scope="col">Dirigido a</th>
 						<th scope="col">Solicitudes</th>
+						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -356,6 +358,13 @@ final class WorkspaceView {
 			</td>
 			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
 				<?php self::applications( $row ); ?>
+			</td>
+			<td class="prc-celda-accion" data-rotulo="Acciones">
+				<span class="prc-acciones">
+					<?php echo PanelParts::icon_link( (string) $row['url'], 'lapiz', 'Editar en el taller' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					<?php echo PanelParts::icon_link( (string) $row['applications_url'], 'lista', 'Ver las solicitudes' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					<?php echo PanelParts::icon_link( (string) $row['view_url'], 'ojo', (string) $row['view_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				</span>
 			</td>
 		</tr>
 		<?php

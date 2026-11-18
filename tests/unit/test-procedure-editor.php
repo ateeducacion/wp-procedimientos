@@ -38,6 +38,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->app();
 		$this->pages();
 		remove_all_filters( 'prc_centres' );
+		// Guardar «Enlaces» descarga una copia del PDF (ADR-0048): aquí nunca
+		// sale a la red; la copia se prueba en test-link-copies.php.
+		add_filter( 'pre_http_request', array( $this, 'sin_red' ) );
 		$this->olvidar_rechazo();
 	}
 
@@ -1396,6 +1399,15 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS );
 		$this->assertStringContainsString( 'enlace a la resolución', $m['flash']['texto'] );
 		$this->assertSame( 'esto no es un enlace', $m['values'][ ProcedureMetaKeys::RESOLUTION_URL ], 'lo tecleado vuelve' );
+	}
+
+	/**
+	 * Una red que no contesta.
+	 *
+	 * @return \WP_Error
+	 */
+	public function sin_red(): \WP_Error {
+		return new \WP_Error( 'http_request_failed', 'sin red en los tests' );
 	}
 
 	// ─── Publicación ───────────────────────────────────────────────────────

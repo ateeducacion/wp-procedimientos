@@ -789,6 +789,21 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Whether the user may download the private copy of a link of this procedure (ADR-0048).
+	 *
+	 * Quien abre el procedimiento en su taller, histórico incluido: es
+	 * justo cuando el enlace oficial más suele haber muerto. Ni centros ni
+	 * quien consulta: en público se enlaza la dirección oficial.
+	 *
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
+	 * @return bool
+	 */
+	public static function can_download_link_copy( int $user_id, int $post_id ): bool {
+		return ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && self::can_open( $user_id, $post_id );
+	}
+
+	/**
 	 * Whether the user may duplicate this procedure, and under which ámbitos (PR 8 del PLAN-0003).
 	 *
 	 * Quien lo abre en el taller y puede crear procedimientos —quien solo

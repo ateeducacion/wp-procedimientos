@@ -55,6 +55,7 @@ return array(
 	'PublicFront/CentreColumns.php',
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
+	'PublicFront/LinkCopies.php',
 	'PublicFront/ApplicationLog.php',
 	'PublicFront/ApplicationOperations.php',
 	'PublicFront/ApplicationHistory.php',

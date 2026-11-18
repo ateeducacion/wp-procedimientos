@@ -380,6 +380,7 @@ PublicFront/Workspace.php + View/WorkspaceView.php
 PublicFront/ProcedureEditor.php + View/ProcedureEditorView.php + View/PanelParts.php
 PublicFront/Applications.php        crear/editar/buscar solicitudes, revisión, CSV
 PublicFront/ApplicationFiles.php    documentos privados: política, almacén, descarga autorizada (ADR-0028)
+PublicFront/LinkCopies.php          copia privada del PDF de cada enlace y su descarga (ADR-0048)
 PublicFront/ApplyForm.php + View/ApplyFormView.php
 PublicFront/MyCentre.php + View/MyCentreView.php
 Admin/ProcedureAdmin.php            columnas, filtro por ámbito, acotado del listado
@@ -487,6 +488,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
 | La solicitud es un núcleo fijo más preguntas configurables | ADR-0019 | Propuesta |
 | La subsanación es un plazo del procedimiento y un estado de la solicitud | ADR-0020 | Propuesta |
 | La resolución y los listados son enlaces, no copias | ADR-0021 | Propuesta |
+| El aplicativo guarda una copia privada del PDF de la resolución y los listados | ADR-0048 | Propuesta |
 | Las pantallas son páginas de WordPress pintadas enteras por código | ADR-0022 | Propuesta |
 | El estado histórico cierra la edición | ADR-0023 | Propuesta |
 | Las solicitudes y documentos de hoy no se migran en la fase 1 | ADR-0024 | Propuesta |

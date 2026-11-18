@@ -1235,13 +1235,14 @@ final class ProcedureEditorView {
 	// ─── Enlaces ───────────────────────────────────────────────────────────
 
 	/**
-	 * The «Enlaces» panel: resolution and lists are links, not copies (ADR-0021).
+	 * The «Enlaces» panel: links in public, a private copy for the workshop (ADR-0021, ADR-0048).
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function links_panel( array $m ): string {
 		$v      = (array) $m['values'];
+		$copias = (array) ( $m['link_copies'] ?? array() );
 		$op     = ProcedureEditor::PANEL_LINKS;
 		$campos = array(
 			ProcedureMetaKeys::RESOLUTION_URL       => array( 'Resolución', 'La resolución que aprueba el procedimiento, donde esté publicada.' ),
@@ -1257,13 +1258,21 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados, y en público se enlaza esa dirección.
+					Al guardar, el aplicativo se queda además una copia privada del PDF por si el enlace deja de funcionar:
+					solo la descarga quien gestiona el procedimiento.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php if ( isset( $copias[ $clave ] ) ) : ?>
+							<p class="prc-campo__ayuda">
+								<?php echo esc_html( 'Copia guardada el ' . $copias[ $clave ]['date'] . ( $copias[ $clave ]['stale'] ? ', de un enlace anterior' : '' ) ); ?>
+								· <a href="<?php echo esc_url( $copias[ $clave ]['url'] ); ?>">Descargar</a>
+							</p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>

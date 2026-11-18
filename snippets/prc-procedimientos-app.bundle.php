@@ -89,6 +89,14 @@ final class ProcedureMetaKeys {
 
 
 
+
+
+
+	public const LINK_COPIES = 'prc_link_copies';
+
+
+
+
 	public const CONTACT_EMAILS = 'prc_contact_emails';
 
 
@@ -262,6 +270,7 @@ final class ProcedureMetaKeys {
 			self::RESOLUTION_URL,
 			self::PROVISIONAL_LIST_URL,
 			self::FINAL_LIST_URL,
+			self::LINK_COPIES,
 			self::CONTACT_EMAILS,
 			self::HEADER_COLOR,
 			self::AUDIENCE,
@@ -3628,6 +3637,8 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::RESOLUTION_URL       => self::NEVER,
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::NEVER,
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::NEVER,
+
+			ProcedureMetaKeys::LINK_COPIES          => self::NEVER,
 
 			ProcedureMetaKeys::ARCHIVED             => self::NEVER,
 			ProcedureMetaKeys::APPLICATIONS_CLOSED  => self::NEVER,
@@ -7282,6 +7293,21 @@ final class ProcedureAccess {
 
 
 
+	public static function can_download_link_copy( int $user_id, int $post_id ): bool {
+		return ProcedurePostType::POST_TYPE === get_post_type( $post_id ) && self::can_open( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8900,6 +8926,8 @@ use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\LinkCopies;
 
 
 
@@ -8960,6 +8988,10 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::FINAL_LIST_URL       => array(
 				'type'     => 'string',
 				'sanitize' => array( self::class, 'sanitize_url' ),
+			),
+			ProcedureMetaKeys::LINK_COPIES          => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_link_copies' ),
 			),
 			ProcedureMetaKeys::CONTACT_EMAILS       => array(
 				'type'     => 'array',
@@ -9097,6 +9129,35 @@ final class ProcedureMetaRegistration {
 			'integer' => 0,
 			'array'   => array(),
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize_link_copies( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $key => $copy ) {
+			if ( ! isset( LinkCopies::links()[ $key ] ) || ! is_array( $copy ) ) {
+				continue;
+			}
+			$stored = (string) ( $copy['stored'] ?? '' );
+			if ( ! (bool) preg_match( ApplicationFiles::STORED_SHAPE, $stored ) ) {
+				continue;
+			}
+			$out[ $key ] = array(
+				'url'      => esc_url_raw( (string) ( $copy['url'] ?? '' ) ),
+				'stored'   => $stored,
+				'saved_at' => absint( $copy['saved_at'] ?? 0 ),
+				'size'     => absint( $copy['size'] ?? 0 ),
+			);
+		}
+		return $out;
 	}
 
 
@@ -13672,7 +13733,7 @@ final class ApplicationFiles {
 
 
 
-	private const STORED_SHAPE = '#^[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{32}\.[a-z0-9]{1,8}$#';
+	public const STORED_SHAPE = '#^[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{32}\.[a-z0-9]{1,8}$#';
 
 
 
@@ -14012,9 +14073,8 @@ final class ApplicationFiles {
 			return null;
 		}
 
-		$raiz = self::root();
-		$fs   = self::filesystem();
-		if ( '' === $raiz || null === $fs ) {
+		$fs = self::filesystem();
+		if ( null === $fs ) {
 			return null;
 		}
 
@@ -14027,19 +14087,10 @@ final class ApplicationFiles {
 			return null;
 		}
 
-		$opaco  = bin2hex( random_bytes( 16 ) );
-		$stored = substr( $opaco, 0, 2 ) . '/' . substr( $opaco, 2, 2 ) . '/' . $opaco . '.' . $ext;
-		$camino = $raiz . '/' . $stored;
-
-		if ( ! self::prepare_dir( dirname( $camino ) ) ) {
+		$stored = self::put( $bytes, $ext );
+		if ( '' === $stored ) {
 			return null;
 		}
-		if ( ! $fs->put_contents( $camino, $bytes, self::MODE_CLOSED ) ) {
-			return null;
-		}
-
-
-		$fs->chmod( $camino, self::MODE_CLOSED );
 
 		return array(
 			'id'     => bin2hex( random_bytes( 16 ) ),
@@ -14049,6 +14100,40 @@ final class ApplicationFiles {
 			'sha256' => hash( 'sha256', $bytes ),
 			'stored' => $stored,
 		);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function put( string $bytes, string $ext ): string {
+		$raiz = self::root();
+		$fs   = self::filesystem();
+		if ( '' === $raiz || null === $fs || '' === $bytes ) {
+			return '';
+		}
+
+		$opaco  = bin2hex( random_bytes( 16 ) );
+		$stored = substr( $opaco, 0, 2 ) . '/' . substr( $opaco, 2, 2 ) . '/' . $opaco . '.' . $ext;
+		$camino = $raiz . '/' . $stored;
+
+		if ( ! self::prepare_dir( dirname( $camino ) ) ) {
+			return '';
+		}
+		if ( ! $fs->put_contents( $camino, $bytes, self::MODE_CLOSED ) ) {
+			return '';
+		}
+
+
+		$fs->chmod( $camino, self::MODE_CLOSED );
+		return $stored;
 	}
 
 
@@ -14218,7 +14303,7 @@ final class ApplicationFiles {
 
 
 
-	private static function erase( array $descriptor ): void {
+	public static function erase( array $descriptor ): void {
 		$camino = self::path( $descriptor );
 		$fs     = self::filesystem();
 		if ( '' !== $camino && null !== $fs && $fs->exists( $camino ) ) {
@@ -14349,7 +14434,7 @@ final class ApplicationFiles {
 
 
 
-	private static function deny( int $codigo = 403, string $texto = 'No puede descargar este documento.' ): void {
+	public static function deny( int $codigo = 403, string $texto = 'No puede descargar este documento.' ): void {
 		status_header( $codigo );
 		Shell::send_header( 'Content-Type: text/plain; charset=utf-8' );
 		Shell::send_header( 'X-Content-Type-Options: nosniff' );
@@ -14394,6 +14479,341 @@ final class ApplicationFiles {
 			WP_Filesystem();
 		}
 		return $wp_filesystem instanceof \WP_Filesystem_Base ? $wp_filesystem : null;
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ProcedurePostType;
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\LinkCopies', false ) ) {
+final class LinkCopies {
+
+
+
+
+	public const ARG_PROCEDURE = 'prc_link_procedure';
+
+
+
+
+	public const ARG_LINK = 'prc_link_copy';
+
+
+
+
+	public const ARG_FAILED = 'prc_sin_copia';
+
+
+
+
+	public const MAX_BYTES = 20 * MB_IN_BYTES;
+
+
+
+
+	public const TIMEOUT = 15;
+
+
+
+
+
+
+
+
+	public const BUDGET = 20;
+
+
+
+
+	private const WHY = array(
+		'red'     => 'el enlace no respondió o devolvió un error',
+		'pdf'     => 'lo que hay en el enlace no es un PDF',
+		'grande'  => 'el PDF ocupa más de 20 MB',
+		'almacen' => 'no se pudo escribir en el almacén privado',
+	);
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'init', array( self::class, 'handle' ), 20 );
+		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
+	}
+
+
+
+
+
+
+	public static function links(): array {
+		return array(
+			ProcedureMetaKeys::RESOLUTION_URL       => array( 'de la resolución', 'resolucion.pdf' ),
+			ProcedureMetaKeys::PROVISIONAL_LIST_URL => array( 'del listado provisional', 'listado-provisional.pdf' ),
+			ProcedureMetaKeys::FINAL_LIST_URL       => array( 'del listado definitivo', 'listado-definitivo.pdf' ),
+		);
+	}
+
+
+
+
+
+
+
+	public static function copies( int $procedure_id ): array {
+		$copies = get_post_meta( $procedure_id, ProcedureMetaKeys::LINK_COPIES, true );
+		return is_array( $copies ) ? $copies : array();
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function sync( int $procedure_id, array $urls ): array {
+		$failed   = array();
+		$deadline = time() + self::BUDGET;
+		foreach ( array_intersect_key( $urls, self::links() ) as $key => $url ) {
+			$url     = esc_url_raw( $url );
+			$current = self::copies( $procedure_id )[ $key ] ?? null;
+			if ( '' === $url ) {
+				if ( null !== $current ) {
+					self::write( $procedure_id, $key, null );
+					ApplicationFiles::erase( $current );
+				}
+				continue;
+			}
+
+
+			$path = null === $current ? '' : ApplicationFiles::path( $current );
+			if ( null !== $current && $current['url'] === $url && '' !== $path && file_exists( $path ) ) {
+				continue;
+			}
+			$bytes = self::fetch( $url, $deadline - time() );
+			if ( isset( self::WHY[ $bytes ] ) ) {
+				$failed[ $key ] = $bytes;
+				continue;
+			}
+			$stored = ApplicationFiles::put( $bytes, 'pdf' );
+			if ( '' === $stored ) {
+				$failed[ $key ] = 'almacen';
+				continue;
+			}
+
+
+
+			self::write(
+				$procedure_id,
+				$key,
+				array(
+					'url'      => $url,
+					'stored'   => $stored,
+					'saved_at' => time(),
+					'size'     => strlen( $bytes ),
+				)
+			);
+			if ( null !== $current ) {
+				ApplicationFiles::erase( $current );
+			}
+		}
+		return $failed;
+	}
+
+
+
+
+
+
+
+
+
+	private static function write( int $procedure_id, string $key, ?array $copy ): void {
+		$copies = self::copies( $procedure_id );
+		if ( null === $copy ) {
+			unset( $copies[ $key ] );
+		} else {
+			$copies[ $key ] = $copy;
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::LINK_COPIES, $copies );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function fetch( string $url, int $seconds ): string {
+		if ( $seconds < 1 ) {
+			return 'red';
+		}
+		$response = wp_safe_remote_get(
+			$url,
+			array(
+				'timeout'             => min( self::TIMEOUT, $seconds ),
+				'redirection'         => 3,
+				'limit_response_size' => self::MAX_BYTES + 1,
+			)
+		);
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			return 'red';
+		}
+		$bytes = (string) wp_remote_retrieve_body( $response );
+		if ( strlen( $bytes ) > self::MAX_BYTES ) {
+			return 'grande';
+		}
+		return false !== strpos( substr( $bytes, 0, 1024 ), '%PDF-' ) ? $bytes : 'pdf';
+	}
+
+
+
+
+
+
+
+	public static function notice( array $query ): array {
+		$failed    = isset( $query[ self::ARG_FAILED ] ) && is_array( $query[ self::ARG_FAILED ] ) ? $query[ self::ARG_FAILED ] : array();
+		$sentences = array();
+		foreach ( self::links() as $key => $text ) {
+			$reason = isset( $failed[ $key ] ) ? sanitize_key( (string) $failed[ $key ] ) : '';
+			if ( isset( self::WHY[ $reason ] ) ) {
+				$sentences[] = 'No se pudo guardar una copia ' . $text[0] . ': ' . self::WHY[ $reason ] . '.';
+			}
+		}
+		if ( array() === $sentences ) {
+			return array(
+				'tipo'  => 'ok',
+				'texto' => 'Enlaces guardados.',
+			);
+		}
+		return array(
+			'tipo'  => 'aviso',
+			'texto' => 'Enlaces guardados. ' . implode( ' ', $sentences ) . ' Se volverá a intentar la próxima vez que guarde los enlaces.',
+		);
+	}
+
+
+
+
+
+
+
+	public static function summary( int $procedure_id ): array {
+		$out = array();
+		foreach ( self::copies( $procedure_id ) as $key => $copy ) {
+			$out[ $key ] = array(
+				'date'  => (string) wp_date( 'd/m/Y', (int) $copy['saved_at'] ),
+				'url'   => self::url( $procedure_id, $key ),
+				'stale' => (string) get_post_meta( $procedure_id, $key, true ) !== $copy['url'],
+			);
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	public static function url( int $procedure_id, string $key ): string {
+		return add_query_arg(
+			array(
+				self::ARG_PROCEDURE => $procedure_id,
+				self::ARG_LINK      => $key,
+			),
+			home_url( '/' )
+		);
+	}
+
+
+
+
+
+
+	public static function handle(): void {
+
+		$key = isset( $_GET[ self::ARG_LINK ] ) ? sanitize_key( wp_unslash( $_GET[ self::ARG_LINK ] ) ) : '';
+		if ( '' === $key ) {
+			return;
+		}
+		$procedure_id = isset( $_GET[ self::ARG_PROCEDURE ] ) ? absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ) ) : 0;
+
+
+		$links = self::links();
+		if ( ! isset( $links[ $key ] ) || ! ProcedureAccess::can_download_link_copy( get_current_user_id(), $procedure_id ) ) {
+			ApplicationFiles::deny();
+			return;
+		}
+
+		$copy  = self::copies( $procedure_id )[ $key ] ?? null;
+		$bytes = null === $copy ? null : ApplicationFiles::read( $copy );
+		if ( null === $bytes ) {
+			ApplicationFiles::deny( 404, 'No hay copia guardada de ese enlace.' );
+			return;
+		}
+
+		$descriptor = array(
+			'name' => $links[ $key ][1],
+			'mime' => 'application/pdf',
+		);
+		foreach ( ApplicationFiles::headers( $descriptor, strlen( $bytes ) ) as $line ) {
+			Shell::send_header( $line );
+		}
+		echo $bytes;
+		Shell::leave();
+	}
+
+
+
+
+
+
+
+
+	public static function on_delete( int $post_id, $post = null ): void {
+		$type = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
+		if ( ProcedurePostType::POST_TYPE !== $type ) {
+			return;
+		}
+		foreach ( self::copies( $post_id ) as $copy ) {
+			ApplicationFiles::erase( $copy );
+		}
 	}
 }
 
@@ -24975,6 +25395,7 @@ final class ProcedureEditorView {
 
 	private static function links_panel( array $m ): string {
 		$v      = (array) $m['values'];
+		$copias = (array) ( $m['link_copies'] ?? array() );
 		$op     = ProcedureEditor::PANEL_LINKS;
 		$campos = array(
 			ProcedureMetaKeys::RESOLUTION_URL       => array( 'Resolución', 'La resolución que aprueba el procedimiento, donde esté publicada.' ),
@@ -24990,13 +25411,21 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Resolución y listados</legend>
-				<p class="prc-intro">Son enlaces a donde ya están publicados: aquí no se guarda ninguna copia.</p>
+				<p class="prc-intro">Son enlaces a donde ya están publicados, y en público se enlaza esa dirección.
+					Al guardar, el aplicativo se queda además una copia privada del PDF por si el enlace deja de funcionar:
+					solo la descarga quien gestiona el procedimiento.</p>
 				<?php foreach ( $campos as $clave => $texto ) : ?>
 					<div class="prc-campo">
 						<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $clave ); ?>"><?php echo esc_html( $texto[0] ); ?></label>
 						<input class="prc-control" type="url" id="<?php echo esc_attr( $clave ); ?>" name="<?php echo esc_attr( $clave ); ?>" placeholder="https://"
 							value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
 						<p class="prc-campo__ayuda"><?php echo esc_html( $texto[1] ); ?></p>
+						<?php if ( isset( $copias[ $clave ] ) ) : ?>
+							<p class="prc-campo__ayuda">
+								<?php echo esc_html( 'Copia guardada el ' . $copias[ $clave ]['date'] . ( $copias[ $clave ]['stale'] ? ', de un enlace anterior' : '' ) ); ?>
+								· <a href="<?php echo esc_url( $copias[ $clave ]['url'] ); ?>">Descargar</a>
+							</p>
+						<?php endif; ?>
 					</div>
 				<?php endforeach; ?>
 			</fieldset>
@@ -25568,7 +25997,6 @@ final class ProcedureEditor {
 		'preguntas'    => 'Campos adicionales guardados.',
 		'ordenadas'    => 'Orden de los campos guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
-		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
@@ -26438,20 +26866,27 @@ final class ProcedureEditor {
 
 
 	private static function save_links( int $procedure_id ): void {
-		$claves = array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL );
-		$urls   = array();
-		foreach ( $claves as $clave ) {
-			$url = self::field( $clave );
+		$urls = array();
+		foreach ( array_keys( LinkCopies::links() ) as $clave ) {
+
+
+			$url = trim( wp_unslash( (string) ( $_POST[ $clave ] ?? '' ) ) );
 			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
 				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
 				return;
 			}
-			$urls[ $clave ] = $url;
+			$urls[ $clave ] = esc_url_raw( $url );
 		}
 		foreach ( $urls as $clave => $url ) {
 			update_post_meta( $procedure_id, $clave, $url );
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, array( self::ARG_NOTICE => 'enlaces' ) ) );
+
+		$aviso  = array( self::ARG_NOTICE => 'enlaces' );
+		$fallos = LinkCopies::sync( $procedure_id, $urls );
+		if ( array() !== $fallos ) {
+			$aviso[ LinkCopies::ARG_FAILED ] = $fallos;
+		}
+		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, $aviso ) );
 	}
 
 
@@ -26859,6 +27294,7 @@ final class ProcedureEditor {
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
 			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
+			'link_copies'             => array(),
 			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
@@ -27002,6 +27438,7 @@ final class ProcedureEditor {
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
 		$m['view_url']       = ProcedureView::link( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
+		$m['link_copies']    = self::PANEL_LINKS === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
@@ -27045,6 +27482,10 @@ final class ProcedureEditor {
 				'tipo'  => 'ok',
 				'texto' => ApplicationActionsPanel::NOTICES[ $hecho ],
 			);
+		}
+		if ( 'enlaces' === $hecho ) {
+
+			return LinkCopies::notice( $_GET );
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 
@@ -34612,6 +35053,7 @@ use Prc\PublicFront\ApplicationHistory;
 use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\LinkCopies;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\DraftNotice;
@@ -34668,6 +35110,7 @@ final class App {
 
 
 		ApplicationFiles::class,
+		LinkCopies::class,
 
 
 		ApplicationExport::class,

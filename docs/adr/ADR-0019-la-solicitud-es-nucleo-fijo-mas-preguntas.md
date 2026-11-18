@@ -232,3 +232,16 @@ el [Ministerio del Interior](https://www.interior.gob.es/opencms/eu/servicios-al
 Este control detecta errores de escritura; no verifica que el documento exista
 ni quién lo presenta. El DNI/NIE queda protegido con los datos de la solicitud
 y solo se muestra en esta, en la revisión y en la exportación autorizada.
+
+## Adenda — 2026-11-10
+
+La [ADR-0040](ADR-0040-numero-fecha-rejilla-y-puntos-amplian-las-preguntas.md)
+amplía el alcance de esta sin cambiar su decisión. El máximo pasa de veinte a
+**cuarenta** preguntas, y hay tres tipos más: `number` (un entero, con mínimo
+y máximo opcionales), `date` (un día del calendario) y `grid` (una cantidad
+entera por fila). Las opciones de `multiple` pueden valer puntos. Además, el
+tipo de una pregunta que ya tiene respuestas deja de poder cambiarse, que es
+el bloqueo que esta ADR dejaba en «Negativas» para cuando hiciera falta, y las
+claves nuevas salen de un contador que nunca baja (`prc_questions_seq`).
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

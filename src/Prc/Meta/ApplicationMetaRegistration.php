@@ -37,6 +37,10 @@ final class ApplicationMetaRegistration {
 	 */
 	public static function schema(): array {
 		return array(
+			ApplicationMetaKeys::APPLICANT_TYPE     => array(
+				'type'     => 'string',
+				'sanitize' => array( self::class, 'sanitize_applicant_type' ),
+			),
 			ApplicationMetaKeys::CENTRE_CODE        => array(
 				'type'     => 'string',
 				'sanitize' => 'sanitize_text_field',
@@ -70,6 +74,16 @@ final class ApplicationMetaRegistration {
 				'sanitize' => 'sanitize_textarea_field',
 			),
 		);
+	}
+
+	/**
+	 * One supported applicant type; old records default to a centre.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public static function sanitize_applicant_type( $value ): string {
+		return ApplicationMetaKeys::TYPE_TEACHER === $value ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE;
 	}
 
 	/**
@@ -115,18 +129,29 @@ final class ApplicationMetaRegistration {
 	}
 
 	/**
-	 * The coordinator, as `{name, email}` and nothing else.
+	 * Coordinators as a list of `{name, dni, email}`; a saved single coordinator is upgraded on read.
 	 *
 	 * @param mixed $value Raw value.
-	 * @return array{name:string, email:string}
+	 * @return array<int, array{name:string, dni:string, email:string}>
 	 */
 	public static function sanitize_coordinator( $value ): array {
 		$value = is_array( $value ) ? $value : array();
-		$email = sanitize_email( isset( $value['email'] ) && is_scalar( $value['email'] ) ? (string) $value['email'] : '' );
-		return array(
-			'name'  => sanitize_text_field( isset( $value['name'] ) && is_scalar( $value['name'] ) ? (string) $value['name'] : '' ),
-			'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
-		);
+		if ( isset( $value['name'] ) || isset( $value['email'] ) ) {
+			$value = array( $value );
+		}
+		$out = array();
+		foreach ( array_slice( $value, 0, ProcedureMetaKeys::COORDINATOR_COUNT_MAX ) as $coordinator ) {
+			if ( ! is_array( $coordinator ) ) {
+				continue;
+			}
+			$email = sanitize_email( isset( $coordinator['email'] ) && is_scalar( $coordinator['email'] ) ? (string) $coordinator['email'] : '' );
+			$out[] = array(
+				'name'  => sanitize_text_field( isset( $coordinator['name'] ) && is_scalar( $coordinator['name'] ) ? (string) $coordinator['name'] : '' ),
+				'dni'   => strtoupper( (string) preg_replace( '/[ -]/', '', sanitize_text_field( isset( $coordinator['dni'] ) && is_scalar( $coordinator['dni'] ) ? (string) $coordinator['dni'] : '' ) ) ),
+				'email' => ProcedureInput::is_email( $email ) ? strtolower( $email ) : '',
+			);
+		}
+		return $out;
 	}
 
 	/**

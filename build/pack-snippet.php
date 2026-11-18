@@ -101,6 +101,11 @@ function prc_strip_comments( string $code ): string {
 			continue;
 		}
 		if ( T_COMMENT === $token[0] || T_DOC_COMMENT === $token[0] ) {
+			// Quita también el espacio anterior a un comentario en línea, salvo
+			// el que sigue a la etiqueta de apertura: sin él, una etiqueta que
+			// solo lleva un comentario se queda pegada a la de cierre, y con
+			// `short_open_tag` eso es la etiqueta corta y la constante `php`.
+			$out = '<?php ' === substr( $out, -6 ) ? $out : rtrim( $out, " \t" );
 			// Los saltos que tuviera dentro se conservan; el texto no.
 			$out .= str_repeat( "\n", substr_count( $token[1], "\n" ) );
 			continue;
@@ -149,6 +154,14 @@ foreach ( $order as $rel ) {
 			exit( 1 );
 		}
 	}
+	// El validador estático necesita una guarda por clase, además de la del bundle.
+	if ( 1 !== preg_match( '/^namespace ([^;]+);/m', $code, $namespace )
+		|| 1 !== preg_match( '/^final class (\w+)/m', $code, $class ) ) {
+		fwrite( STDERR, "Expected one namespaced final class: {$rel}\n" );
+		exit( 1 );
+	}
+	$guard = "if ( ! class_exists( '" . $namespace[1] . '\\' . $class[1] . "', false ) ) {\n";
+	$code  = preg_replace( '/^final class /m', $guard . '$0', $code, 1 ) . "\n}\n";
 	$body .= "\n// ---- src/Prc/{$rel} ----\n";
 	$body .= trim( $code ) . "\n";
 }

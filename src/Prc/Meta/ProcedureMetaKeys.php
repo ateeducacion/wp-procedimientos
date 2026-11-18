@@ -14,6 +14,7 @@ namespace Prc\Meta;
  * del gestor de formularios: fechas, ficheros, textos, casillas de diseño y un
  * desplegable de estado que alguien tiene que acordarse de cambiar. Aquí se
  * quedan las que describen el procedimiento y nada más: el estado se calcula
+ * con fechas y enlaces, salvo la pausa manual de solicitudes
  * ({@see \Prc\Domain\ProcedureState}), la resolución y los listados son
  * enlaces (ADR-0021) y las opciones son preguntas configurables (ADR-0019).
  *
@@ -99,6 +100,16 @@ final class ProcedureMetaKeys {
 	 */
 	public const REQUIRES_COORDINATOR = 'prc_requires_coordinator';
 
+	/** Number of coordinators requested; the legacy boolean remains readable. */
+	public const COORDINATOR_COUNT = 'prc_coordinator_count';
+
+	// shortcut: diez personas como máximo; ampliar cuando una convocatoria necesite más.
+	public const COORDINATOR_COUNT_MAX = 10;
+
+	/** CSS and JavaScript intended for a single procedure's public page. */
+	public const CUSTOM_CSS = 'prc_custom_css';
+	public const CUSTOM_JS  = 'prc_custom_js';
+
 	/**
 	 * Las preguntas del procedimiento ({@see \Prc\Domain\ProcedureQuestions}).
 	 */
@@ -117,6 +128,11 @@ final class ProcedureMetaKeys {
 	 * pública se sigue viendo y el taller se abre en solo lectura.
 	 */
 	public const ARCHIVED = 'prc_archived';
+
+	/**
+	 * Close applications manually without changing the published deadlines.
+	 */
+	public const APPLICATIONS_CLOSED = 'prc_applications_closed';
 
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
@@ -165,9 +181,13 @@ final class ProcedureMetaKeys {
 			self::OWNERSHIP,
 			self::CENTRE_KINDS,
 			self::REQUIRES_COORDINATOR,
+			self::COORDINATOR_COUNT,
+			self::CUSTOM_CSS,
+			self::CUSTOM_JS,
 			self::QUESTIONS,
 			self::COMMITMENTS,
 			self::ARCHIVED,
+			self::APPLICATIONS_CLOSED,
 		);
 	}
 
@@ -229,7 +249,7 @@ final class ProcedureMetaKeys {
 	public static function centre_kinds(): array {
 		return array(
 			self::KIND_SCHOOL      => 'Cada centro educativo, con su código',
-			self::KIND_RURAL_GROUP => 'Agrupaciones de escuelas rurales, como colectivo',
+			self::KIND_RURAL_GROUP => 'Un CER, como colectivo y con su código',
 		);
 	}
 

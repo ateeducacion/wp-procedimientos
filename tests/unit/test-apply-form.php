@@ -304,8 +304,9 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_POSITION . '"', $html );
 		$this->assertStringContainsString( 'Jefatura de estudios', $html );
 
-		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORD_NAME . '"', $html );
-		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORD_EMAIL . '"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][name]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][dni]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[0][email]"', $html );
 
 		$this->assertStringContainsString( 'El centro se compromete a sostener la red.', $html );
 		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_ACCEPT . '"', $html );
@@ -358,6 +359,59 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'class="prc-campo__obligatorio" aria-hidden="true">*', $html, 'el asterisco es decorativo' );
 		$this->assertStringContainsString( 'placeholder="Escriba aquí"', $html, 'la caja de respuesta libre' );
 		$this->assertStringContainsString( 'class="prc-boton-enviar"', $html );
+	}
+
+	/** A procedure requesting two coordinators shows two independently labelled rows. */
+	public function test_multiple_requested_coordinators_have_separate_fields() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 2 ) );
+		$this->acting_as( $this->school_head( 'C0001' ) );
+		$html = $this->pintar( $procedure );
+		$this->assertStringContainsString( 'Persona coordinadora 1', $html );
+		$this->assertStringContainsString( 'Persona coordinadora 2', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][email]"', $html );
+		$this->assertStringContainsString( 'name="' . ApplyForm::FIELD_COORDINATORS . '[1][dni]"', $html );
+		$this->assertStringNotContainsString( ApplyForm::FIELD_COORD_NAME . '"', $html );
+	}
+
+	/** Multiple coordinator rows are validated and saved together. */
+	public function test_multiple_coordinators_are_saved_on_the_application() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 2 ) );
+		$uid       = $this->school_head( 'C0001' );
+		$redirect  = $this->enviar(
+			$uid,
+			$procedure,
+			array(
+				ApplyForm::FIELD_COORDINATORS => array(
+					array(
+						'name'  => 'Ana Pérez',
+						'dni'   => '12345678Z',
+						'email' => 'ana@example.org',
+					),
+					array(
+						'name'  => 'Luis Díaz',
+						'dni'   => 'X0000000T',
+						'email' => 'luis@example.org',
+					),
+				),
+			)
+		);
+		$this->assertNotNull( $redirect );
+		$id = Applications::find( $procedure, 'C0001' );
+		$this->assertSame(
+			array(
+				array(
+					'name'  => 'Ana Pérez',
+					'dni'   => '12345678Z',
+					'email' => 'ana@example.org',
+				),
+				array(
+					'name'  => 'Luis Díaz',
+					'dni'   => 'X0000000T',
+					'email' => 'luis@example.org',
+				),
+			),
+			Applications::meta( (int) $id )[ ApplicationMetaKeys::COORDINATOR ]
+		);
 	}
 
 	/**
@@ -426,7 +480,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Su solicitud: A subsanar · hasta el ', $html );
 		$this->assertStringContainsString( 'Falta la memoria.', $html );
 		// El día, como en el resto del aplicativo y no en ISO.
-		$this->assertStringContainsString( 'Presentada el ' . gmdate( 'd-m-Y' ) . '.', $html );
+		$this->assertStringContainsString( 'Presentada el ' . current_time( 'd-m-Y' ) . '.', $html );
 		$this->assertTrue( $this->modelo( $procedimiento )['can_submit'], 'y el formulario sigue abierto' );
 	}
 
@@ -455,6 +509,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				$respuestas,
 				array(
 					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
+					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
 					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
 					ApplyForm::FIELD_ACCEPT      => '1',
 				)
@@ -469,7 +524,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertNotNull( $id );
 		$meta = Applications::meta( $id );
 		$this->assertSame( ApplicationMetaKeys::POSITION_HEAD, $meta[ ApplicationMetaKeys::APPLICANT_POSITION ] );
-		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ]['email'] );
+		$this->assertSame( 'ana@example.org', $meta[ ApplicationMetaKeys::COORDINATOR ][0]['email'] );
 		$this->assertSame(
 			array(
 				'q1' => 'Nada que añadir',
@@ -488,6 +543,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 				array(
 					ApplyForm::FIELD_POSITION    => ApplicationMetaKeys::POSITION_SECRETARY,
 					ApplyForm::FIELD_COORD_NAME  => 'Ana Pérez',
+					ApplyForm::FIELD_COORD_DNI   => '12345678Z',
 					ApplyForm::FIELD_COORD_EMAIL => 'ana@example.org',
 					ApplyForm::FIELD_ACCEPT      => '1',
 				)
@@ -536,7 +592,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->acting_as( $direccion );
 
 		$this->assertSame( 'El plazo de solicitud todavía no está abierto.', $this->modelo( $proximo )['why'] );
-		$this->assertSame( 'El plazo de solicitud está cerrado.', $this->modelo( $cerrado )['why'] );
+		$this->assertSame( 'Las solicitudes están cerradas.', $this->modelo( $cerrado )['why'] );
 
 		$this->assertNull( $this->enviar( $direccion, $proximo ) );
 		$this->olvidar_rechazo();
@@ -593,9 +649,13 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertNotSame( '', ApplyForm::window( ProcedureMetaKeys::STATE_AMENDMENT, '' ) );
 		$this->assertNotSame( '', ApplyForm::window( ProcedureMetaKeys::STATE_AMENDMENT, ApplicationMetaKeys::REVIEW_SUBMITTED ) );
 		$this->assertSame( 'El plazo de solicitud todavía no está abierto.', ApplyForm::window( ProcedureMetaKeys::STATE_UPCOMING, '' ) );
+		$this->assertSame(
+			'La inscripción se ha cerrado manualmente, antes de la fecha prevista.',
+			ApplyForm::window( ProcedureMetaKeys::STATE_CLOSED, '', true )
+		);
 
 		foreach ( array( ProcedureMetaKeys::STATE_CLOSED, ProcedureMetaKeys::STATE_DRAFT, ProcedureMetaKeys::STATE_RESOLVED, ProcedureMetaKeys::STATE_ARCHIVED ) as $estado ) {
-			$this->assertSame( 'El plazo de solicitud está cerrado.', ApplyForm::window( $estado, ApplicationMetaKeys::REVIEW_AMEND ), $estado );
+			$this->assertSame( 'Las solicitudes están cerradas.', ApplyForm::window( $estado, ApplicationMetaKeys::REVIEW_AMEND ), $estado );
 		}
 	}
 
@@ -664,5 +724,41 @@ class Test_Apply_Form extends WP_UnitTestCase {
 			get_post_meta( $id, ApplicationMetaKeys::ANSWERS, true )['q1'],
 			'la respuesta a la pregunta borrada se conserva en la meta'
 		);
+	}
+
+	/** Individual applications use the teacher account and omit centre fields. */
+	public function test_teacher_can_submit_and_see_an_individual_application() {
+		$procedure = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::AUDIENCE    => ProcedureMetaKeys::AUDIENCE_TEACHERS,
+				ProcedureMetaKeys::COMMITMENTS => 'Completar la formación.',
+			)
+		);
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$this->acting_as( $teacher );
+		$model = $this->modelo( $procedure );
+		$this->assertTrue( $model['can_submit'] );
+		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, $model['applicant_type'] );
+		$school_procedure = $this->procedimiento();
+		$this->assertFalse( \Prc\Access\ProcedureAccess::can_apply( $teacher, $school_procedure ), 'el perfil docente no solicita procedimientos de centros' );
+
+		$html = $this->pintar( $procedure );
+		$this->assertStringContainsString( 'DATOS DE LA PERSONA PARTICIPANTE', $html );
+		$this->assertStringNotContainsString( 'DATOS DEL CENTRO EDUCATIVO', $html );
+		$this->assertStringNotContainsString( 'Cargo en el centro', $html );
+
+		$url = $this->enviar( $teacher, $procedure, array( ApplyForm::FIELD_ACCEPT => '1' ) );
+		$this->assertNotNull( $url );
+		$id = Applications::find_for_teacher( $procedure, $teacher );
+		$this->assertNotNull( $id );
+		$this->assertSame( $teacher, (int) get_post_field( 'post_author', $id ) );
+		$this->assertSame( ApplicationMetaKeys::TYPE_TEACHER, get_post_meta( $id, ApplicationMetaKeys::APPLICANT_TYPE, true ) );
+		$this->assertSame( '', get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true ) );
+		$this->assertSame( array(), get_post_meta( $id, ApplicationMetaKeys::COORDINATOR, true ) );
 	}
 }

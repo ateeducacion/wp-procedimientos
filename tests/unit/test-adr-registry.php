@@ -81,6 +81,36 @@ class Test_Adr_Registry extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Las filas de la tabla del registro forman un único bloque contiguo.
+	 *
+	 * Una línea en blanco entre dos filas corta la tabla en Markdown: lo que
+	 * queda debajo se pinta como un párrafo de barras y la ADR deja de verse
+	 * en el índice, aunque su fila siga en el fichero.
+	 */
+	public function test_the_registry_table_rows_are_contiguous() {
+		$lineas = explode( "\n", $this->texto( 'registro.md' ) );
+		$filas  = array_keys(
+			array_filter(
+				$lineas,
+				static function ( $linea ) {
+					return 0 === strpos( $linea, '| [ADR-' );
+				}
+			)
+		);
+
+		$this->assertNotEmpty( $filas, 'registro.md no tiene filas de ADR' );
+		$primera = (int) min( $filas );
+		$ultima  = (int) max( $filas );
+		foreach ( range( $primera, $ultima ) as $n ) {
+			$this->assertStringStartsWith(
+				'|',
+				$lineas[ $n ],
+				'la línea ' . ( $n + 1 ) . ' de registro.md corta la tabla de ADR'
+			);
+		}
+	}
+
+	/**
 	 * Y al revés: el registro no cita ninguna ADR que no exista.
 	 */
 	public function test_the_registry_cites_no_missing_adr() {

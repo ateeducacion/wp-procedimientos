@@ -73,6 +73,12 @@ if ( ! function_exists( 'prc_demo_accounts' ) ) {
 				'centre' => '90000002',
 				'label'  => 'Dirección 2 (IES Ejemplo Dos)',
 			),
+			'profesor'       => array(
+				'role'   => 'prc_teacher',
+				'areas'  => array(),
+				'centre' => '',
+				'label'  => 'Docente de ejemplo',
+			),
 		);
 	}
 }
@@ -268,6 +274,18 @@ if ( ! function_exists( 'prc_demo_procedures' ) ) {
 					'prc_final_list_url'       => 'https://www.example.org/salud/listado-definitivo.pdf',
 					'prc_ownership'            => array( 'public', 'private' ),
 					'prc_requires_coordinator' => true,
+					'prc_questions'            => array(
+						array(
+							'key'       => 'q1',
+							'label'     => 'Memoria final',
+							'help'      => 'Adjunte la memoria del proyecto en un único documento.',
+							'type'      => 'file',
+							'required'  => true,
+							'delivery'  => true,
+							'opens_at'  => prc_demo_day( -2 ),
+							'closes_at' => prc_demo_day( 30 ),
+						),
+					),
 				),
 				'applications' => array(
 					'direccion' => array( 'state' => 'admitted' ),
@@ -317,6 +335,37 @@ if ( ! function_exists( 'prc_demo_procedures' ) ) {
 					'prc_ownership' => array( 'public', 'private' ),
 				),
 				'applications' => array(),
+			),
+			array(
+				'slug'                 => 'formacion-docente-de-ejemplo',
+				'title'                => 'Formación docente de ejemplo',
+				'author'               => 'gestion',
+				'areas'                => array( 'subambito-1a' ),
+				'status'               => 'publish',
+				'meta'                 => array(
+					'prc_audience'       => 'teachers',
+					'prc_opens_at'       => prc_demo_day( -2 ),
+					'prc_closes_at'      => prc_demo_day( 10 ),
+					'prc_contact_emails' => array( 'formacion@example.org' ),
+					'prc_ownership'      => array(),
+					'prc_questions'      => array(
+						array(
+							'key'      => 'q1',
+							'label'    => '¿Qué espera aprender en esta formación?',
+							'help'     => 'Cuente brevemente qué le interesa.',
+							'type'     => 'text',
+							'required' => true,
+						),
+					),
+					'prc_commitments'    => 'La persona participante se compromete a completar la formación.',
+				),
+				'applications'         => array(),
+				'teacher_applications' => array(
+					'profesor' => array(
+						'state'   => 'submitted',
+						'answers' => array( 'q1' => 'Quiero aprender actividades sencillas para trabajar la ciencia en el aula.' ),
+					),
+				),
 			),
 		);
 	}
@@ -478,6 +527,9 @@ if ( ! function_exists( 'prc_seed_procedure' ) ) {
 		foreach ( $procedure['applications'] as $login => $application ) {
 			$creadas += prc_seed_application( $root, $login, $application ) ? 1 : 0;
 		}
+		foreach ( (array) ( $procedure['teacher_applications'] ?? array() ) as $login => $application ) {
+			$creadas += prc_seed_teacher_application( $root, $login, $application ) ? 1 : 0;
+		}
 
 		echo esc_html(
 			sprintf(
@@ -492,6 +544,65 @@ if ( ! function_exists( 'prc_seed_procedure' ) ) {
 		) . "\n";
 
 		return $nuevo;
+	}
+}
+
+if ( ! function_exists( 'prc_seed_teacher_application' ) ) {
+	/**
+	 * Create or refresh one demo teacher's individual application.
+	 *
+	 * @param int                  $root        Procedure post ID.
+	 * @param string               $login       Demo teacher login.
+	 * @param array<string, mixed> $application Application review data.
+	 * @return bool Whether a new application was created.
+	 * @throws RuntimeException If the account or post cannot be read or written.
+	 */
+	function prc_seed_teacher_application( int $root, string $login, array $application ): bool {
+		$user = get_user_by( 'login', $login );
+		if ( ! $user instanceof WP_User ) {
+			throw new RuntimeException( esc_html( "No existe la cuenta «{$login}» para solicitar." ) );
+		}
+		$existing = get_posts(
+			array(
+				'post_type'   => 'prc_application',
+				'post_parent' => $root,
+				'post_status' => 'any',
+				'numberposts' => 1,
+				'author'      => (int) $user->ID,
+				'meta_key'    => 'prc_applicant_type', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- identifica solicitudes individuales del perfil.
+				'meta_value'  => 'teacher', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		$new      = array() === $existing;
+		$post     = array(
+			'post_type'   => 'prc_application',
+			'post_status' => 'publish',
+			'post_parent' => $root,
+			'post_author' => (int) $user->ID,
+			'post_title'  => 'Solicitud individual — ' . get_the_title( $root ),
+		);
+		if ( ! $new ) {
+			$post['ID'] = (int) $existing[0]->ID;
+		}
+		$id = $new ? wp_insert_post( $post, true ) : wp_update_post( $post, true );
+		if ( is_wp_error( $id ) ) {
+			throw new RuntimeException( esc_html( "No se pudo guardar la solicitud de «{$login}»: " . $id->get_error_message() ) );
+		}
+		foreach (
+			array(
+				'prc_applicant_type'     => 'teacher',
+				'prc_centre_code'        => '',
+				'prc_centre_name'        => '',
+				'prc_applicant_position' => '',
+				'prc_coordinator'        => array(),
+				'prc_answers'            => (array) ( $application['answers'] ?? array() ),
+				'prc_review_state'       => (string) $application['state'],
+				'prc_review_note'        => (string) ( $application['note'] ?? '' ),
+			) as $key => $value
+		) {
+			update_post_meta( (int) $id, $key, $value );
+		}
+		return $new;
 	}
 }
 
@@ -570,6 +681,63 @@ if ( ! function_exists( 'prc_seed_application' ) ) {
 
 if ( ! function_exists( 'prc_seed_demo' ) ) {
 	/**
+	 * Set example contact details on the demo scopes.
+	 *
+	 * @return void
+	 * @throws RuntimeException If a scope or the demo image cannot be saved.
+	 */
+	function prc_seed_scope_details(): void {
+		$image    = get_posts(
+			array(
+				'post_type'   => 'attachment',
+				'post_status' => 'inherit',
+				'numberposts' => 1,
+				'fields'      => 'ids',
+				'meta_key'    => '_prc_demo_scope_image', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- identifica la imagen de demostración para no duplicarla.
+				'meta_value'  => '1', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		$image_id = (int) ( $image[0] ?? 0 );
+		if ( ! $image_id ) {
+			require_once ABSPATH . 'wp-admin/includes/image.php';
+			$path = __DIR__ . '/assets/demo-scope.png';
+			$data = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- es un recurso local del repositorio, no una URL.
+			if ( false === $data ) {
+				throw new RuntimeException( 'No se pudo leer scripts/assets/demo-scope.png.' );
+			}
+			$bits = wp_upload_bits( basename( $path ), null, $data );
+			if ( ! empty( $bits['error'] ) ) {
+				throw new RuntimeException( esc_html( 'No se pudo cargar la imagen de demostración: ' . $bits['error'] ) );
+			}
+			$image_id = wp_insert_attachment(
+				array(
+					'post_mime_type' => $bits['type'],
+					'post_title'     => 'Imagen de ámbito de demostración',
+					'post_status'    => 'inherit',
+				),
+				$bits['file'],
+				0,
+				true
+			);
+			if ( is_wp_error( $image_id ) ) {
+				throw new RuntimeException( esc_html( 'No se pudo registrar la imagen de demostración: ' . $image_id->get_error_message() ) );
+			}
+			wp_update_attachment_metadata( $image_id, wp_generate_attachment_metadata( $image_id, $bits['file'] ) );
+			update_post_meta( $image_id, '_wp_attachment_image_alt', 'Ilustración de un centro educativo' );
+			update_post_meta( $image_id, '_prc_demo_scope_image', '1' );
+		}
+
+		foreach ( array( 'ambito-1', 'subambito-1a', 'subambito-1b', 'subambito-1c', 'ambito-2', 'subambito-2a', 'subambito-2b' ) as $slug ) {
+			$term = get_term_by( 'slug', $slug, 'prc_area' );
+			if ( ! $term instanceof WP_Term ) {
+				throw new RuntimeException( esc_html( "No existe el ámbito de demostración «{$slug}». Ejecute antes scripts/setup-vocabulary.php." ) );
+			}
+			update_term_meta( $term->term_id, \Prc\Taxonomy\ProcedureTaxonomies::EMAIL, sanitize_email( $slug . '@example.org' ) );
+			update_term_meta( $term->term_id, \Prc\Taxonomy\ProcedureTaxonomies::IMAGE_ID, $image_id );
+		}
+	}
+
+	/**
 	 * Seed the whole demo dataset.
 	 *
 	 * @return void
@@ -582,6 +750,7 @@ if ( ! function_exists( 'prc_seed_demo' ) ) {
 		if ( ! get_role( 'prc_manager' ) || ! get_role( 'prc_school_head' ) ) {
 			throw new RuntimeException( 'Faltan los roles del aplicativo: ejecute antes scripts/provision-roles.php.' );
 		}
+		prc_seed_scope_details();
 
 		foreach ( prc_demo_accounts() as $login => $account ) {
 			prc_seed_account( $login, $account );

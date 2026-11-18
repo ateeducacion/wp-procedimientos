@@ -263,11 +263,42 @@ class Test_Workspace extends WP_UnitTestCase {
 		$_GET[ Workspace::VAR_COURSE ] = (string) $viejo;
 		$this->assertSame( array( 'La del curso pasado' ), $this->titulos( Workspace::model() ) );
 
-		// Un curso que no está deja de acotar en vez de vaciar la pantalla.
+		// Un curso inválido vuelve al más reciente, sin mezclar cursos.
 		$_GET[ Workspace::VAR_COURSE ] = '999999';
 		$m                             = Workspace::model();
-		$this->assertSame( 0, $m['selection']['course'] );
-		$this->assertSame( array( 'La de este curso', 'La del curso pasado' ), $this->titulos( $m ) );
+		$this->assertSame( $nuevo, $m['selection']['course'] );
+		$this->assertSame( array( 'La de este curso' ), $this->titulos( $m ) );
+	}
+
+	/**
+	 * Un procedimiento sin curso tiene su pestaña: no desaparece de la lista.
+	 *
+	 * Uno dado de alta desde el escritorio o por REST, o cuyo curso se borró,
+	 * no tiene término de curso; acotar siempre por un curso lo dejaría fuera.
+	 */
+	public function test_a_procedure_without_course_is_still_reachable() {
+		$area   = $this->area( 'Área de prueba' );
+		$course = $this->course( '2026-2027' );
+		$who    = $this->manager( array( $area ) );
+
+		$with = $this->procedure( $who, array( $area ), $this->abierto(), array( 'post_title' => 'La de este curso' ) );
+		$this->procedure( $who, array( $area ), $this->abierto(), array( 'post_title' => 'La que no tiene curso' ) );
+		wp_set_object_terms( $with, array( $course ), ProcedureTaxonomies::COURSE );
+
+		$this->acting_as( $who );
+		$m = Workspace::model();
+		$this->assertSame( array( 'La de este curso' ), $this->titulos( $m ), 'sin pedir nada, el curso más reciente' );
+		$this->assertSame( array( $course, Workspace::NO_COURSE ), array_keys( $m['courses'] ) );
+		$this->assertSame( 'Sin curso', $m['courses'][ Workspace::NO_COURSE ] );
+
+		$url = Workspace::url( $m['selection'], array( 'course' => Workspace::NO_COURSE ) );
+		$this->assertStringContainsString( Workspace::VAR_COURSE . '=' . Workspace::NO_COURSE, $url );
+
+		$_GET[ Workspace::VAR_COURSE ] = (string) Workspace::NO_COURSE;
+		$m                             = Workspace::model();
+		$this->assertSame( Workspace::NO_COURSE, $m['selection']['course'] );
+		$this->assertSame( array( 'La que no tiene curso' ), $this->titulos( $m ) );
+		$this->assertStringContainsString( 'value="' . Workspace::NO_COURSE . '"', \Prc\PublicFront\View\WorkspaceView::html( $m ) );
 	}
 
 	/**
@@ -473,7 +504,7 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Buscar en la tabla', $html );
 		$this->assertStringContainsString( 'value="red"', $html );
 		$seguido = (string) preg_replace( '/\s+/', ' ', $html );
-		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento de <strong>todos los cursos</strong> que contiene «<strong>red</strong>»:', $seguido, 'una fila es un procedimiento, no «1 procedimientos»' );
+		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento que contiene «<strong>red</strong>»:', $seguido, 'una fila es un procedimiento, no «1 procedimientos»' );
 	}
 
 	/**
@@ -519,12 +550,12 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertSame( 7, count( Workspace::state_icons() ) );
 		$this->assertStringContainsString( 'fechas no cuadran', $html );
 
-		// Una pestaña por curso, navegables por URL, más la de todos.
+		// Una pestaña por curso, navegables por URL.
 		// El rótulo de la pestaña es el nombre del término tal cual: en el sitio
 		// el vocabulario ya se llama «Curso 2026-2027» y aquí «2026-2027».
 		$this->assertStringContainsString( 'aria-current="page"> 2026-2027 </a>', $seguido );
 		$this->assertStringContainsString( '> 2025-2026 </a>', $seguido );
-		$this->assertStringContainsString( 'Todos los cursos', $html );
+		$this->assertStringNotContainsString( 'Todos los cursos', $html );
 		$this->assertStringContainsString( esc_url( Workspace::url( $m['selection'], array( 'course' => $viejo ) ) ), $html );
 
 		// El recuento del curso que se está mirando.

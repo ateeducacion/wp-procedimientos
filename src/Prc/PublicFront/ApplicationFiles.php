@@ -32,8 +32,8 @@ use Prc\PostType\ApplicationPostType;
  *   guardián del aplicativo.
  *
  * La política —qué tipos y qué tamaño— es **del aplicativo entero y no de cada
- * pregunta**: una pregunta de tipo `file` acepta un fichero y no configura
- * nada más. Está en {@see mimes()} y {@see max_bytes()}, en un solo sitio. Una
+ * pregunta**: una pregunta de tipo `file` acepta un fichero; su plazo propio
+ * no cambia formatos ni tamaños. La política está en {@see mimes()} y {@see max_bytes()}, en un solo sitio. Una
  * solicitud puede llevar varios documentos, uno por cada pregunta de ese tipo.
  */
 final class ApplicationFiles {
@@ -339,8 +339,13 @@ final class ApplicationFiles {
 			$nuevos[ (string) $question_key ] = $descriptor;
 		}
 
-		$antes = self::descriptors( $application_id );
-		update_post_meta( $application_id, ApplicationMetaKeys::FILES, wp_slash( array_merge( $antes, $nuevos ) ) );
+		$antes = self::merge_descriptors( $application_id, $nuevos );
+		if ( null === $antes ) {
+			foreach ( $nuevos as $descriptor ) {
+				self::erase( $descriptor );
+			}
+			return false;
+		}
 
 		// Y ahora, con el descriptor nuevo ya guardado, el fichero al que
 		// ninguno apunta.
@@ -350,6 +355,41 @@ final class ApplicationFiles {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Add the new descriptors to the stored ones, only if nobody wrote in between.
+	 *
+	 * Otra persona del centro puede entregar otro documento o reenviar la
+	 * solicitud a la vez: se escribe solo si la meta sigue como se leyó y, si
+	 * no, se relee y se vuelve a fusionar. Así una entrega no borra la otra.
+	 *
+	 * @param int                                 $application_id Application post ID.
+	 * @param array<string, array<string, mixed>> $added          New descriptors by question key.
+	 * @return array<string, array<string, mixed>>|null The descriptors that were there, or null when it could not be written.
+	 */
+	private static function merge_descriptors( int $application_id, array $added ): ?array {
+		for ( $try = 0; $try < 3; ++$try ) {
+			wp_cache_delete( $application_id, 'post_meta' );
+			$read   = get_metadata_raw( 'post', $application_id, ApplicationMetaKeys::FILES, true );
+			$before = self::descriptors( $application_id );
+			$value  = wp_slash( array_merge( $before, $added ) );
+			if ( null === $read || empty( $read ) ) {
+				// Sin meta, o vacía (que update_post_meta() no sabe comparar):
+				// se crea solo si nadie la creó entretanto.
+				if ( null !== $read ) {
+					delete_post_meta( $application_id, ApplicationMetaKeys::FILES );
+				}
+				$written = false !== add_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, true );
+			} else {
+				$written = false !== update_post_meta( $application_id, ApplicationMetaKeys::FILES, $value, $read );
+			}
+			if ( $written ) {
+				wp_cache_delete( $application_id, 'post_meta' );
+				return $before;
+			}
+		}
+		return null;
 	}
 
 	/**

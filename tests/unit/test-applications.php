@@ -7,6 +7,7 @@
 
 use Prc\Domain\ApplicationInput;
 use Prc\Domain\ProcedureQuestions;
+use Prc\Access\ProcedureAccess;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
@@ -148,6 +149,34 @@ class Test_Applications extends WP_UnitTestCase {
 		$this->assertSame( array(), Applications::for_centre( '' ) );
 	}
 
+	/** A teacher has one personal application per procedure. */
+	public function test_teacher_applications_are_found_and_saved_per_person() {
+		$procedure = $this->procedimiento( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$teacher   = (int) self::factory()->user->create(
+			array(
+				'role'         => 'prc_teacher',
+				'display_name' => 'Docente de prueba',
+			)
+		);
+		$other     = (int) self::factory()->user->create( array( 'role' => 'prc_teacher' ) );
+
+		$this->assertNull( Applications::find_for_teacher( $procedure, $teacher ) );
+		$this->assertSame( array(), Applications::for_teacher( $teacher ) );
+		$this->assertNull( Applications::find_for_teacher( 0, $teacher ) );
+		$this->assertSame( array(), Applications::for_teacher( 0 ) );
+
+		$id = Applications::save_teacher( $procedure, $teacher, array( 'answers' => array() ) );
+		$this->assertGreaterThan( 0, $id );
+		$this->assertSame( $id, Applications::save_teacher( $procedure, $teacher, array( 'answers' => array() ) ) );
+		$this->assertSame( $id, Applications::find_for_teacher( $procedure, $teacher ) );
+		$this->assertCount( 1, Applications::for_teacher( $teacher ) );
+		$this->assertNull( Applications::find_for_teacher( $procedure, $other ) );
+		$this->assertSame( 'Solicitud individual — Red de prueba', get_the_title( $id ) );
+		$this->assertSame( 'Profesorado', Applications::row( get_post( $id ), array() )['centre'] );
+		$this->assertSame( 0, Applications::save_teacher( $procedure, 0, array() ), 'sin una persona válida no se guarda' );
+		$this->assertSame( 0, Applications::save_teacher( $this->procedimiento(), $teacher, array() ), 'un procedimiento para centros no acepta solicitudes individuales' );
+	}
+
 	/**
 	 * Si dos solicitudes del mismo centro llegaran a existir, manda la más
 	 * antigua: la que ya estaba, no la que decida la base de datos.
@@ -285,6 +314,7 @@ class Test_Applications extends WP_UnitTestCase {
 			array(
 				'position'          => ApplicationMetaKeys::POSITION_HEAD,
 				'coordinator_name'  => 'Ana Pérez',
+				'coordinator_dni'   => '12345678Z',
 				'coordinator_email' => 'ana@example.org',
 				'accept'            => '1',
 				'answers'           => array( 'q1' => 'B' ),
@@ -328,6 +358,7 @@ class Test_Applications extends WP_UnitTestCase {
 				array(
 					'coordinator' => array(
 						'name'  => 'Ana Pérez',
+						'dni'   => '12345678Z',
 						'email' => 'ana@example.org',
 					),
 					'answers'     => array(
@@ -352,6 +383,8 @@ class Test_Applications extends WP_UnitTestCase {
 		$this->assertSame( 'C0001', $fila['code'] );
 		$this->assertSame( 'Dirección', $fila['position'] );
 		$this->assertSame( 'Ana Pérez', $fila['coordinator'] );
+		$this->assertSame( '12345678Z', $fila['coordinator_dni'] );
+		$this->assertSame( 'DNI o NIE de coordinación', $columnas['coordinator_dni'] );
 		$this->assertSame( 'Presentada', $fila['state'] );
 		$this->assertSame( ApplicationMetaKeys::REVIEW_SUBMITTED, $fila['state_key'] );
 		$this->assertSame( 'B', $fila['q1'] );

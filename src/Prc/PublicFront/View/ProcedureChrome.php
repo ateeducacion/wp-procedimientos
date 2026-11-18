@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\Domain\DateRange;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
 
@@ -127,18 +128,29 @@ final class ProcedureChrome {
 			echo self::access( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escapado dentro.
 			?>
 
+			<?php if ( ! empty( $m['deliveries'] ) ) : ?>
+				<section class="prc-seccion" aria-labelledby="prc-delivery-dates">
+					<h2 id="prc-delivery-dates">Entregas de documentación</h2>
+					<p>Los centros que hayan presentado solicitud pueden entregar estos documentos desde «Mi centro», dentro de cada plazo.</p>
+					<ul>
+						<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+							<li><strong><?php echo esc_html( (string) $delivery['label'] ); ?></strong>: <?php echo esc_html( DateRange::of( (string) $delivery['opens_at'], (string) $delivery['closes_at'] ) ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</section>
+			<?php endif; ?>
 			<hr class="prc-filete" />
 			<div class="prc-ficha-pie">
+				<?php if ( '' !== (string) $m['manage_url'] ) : ?>
+					<a class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" href="<?php echo esc_url( (string) $m['manage_url'] ); ?>">
+						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+						Editar procedimiento</a>
+				<?php endif; ?>
 				<p class="prc-ficha-meta">
 					<?php foreach ( self::footer_meta( $m ) as $linea ) : ?>
 						<?php echo esc_html( $linea ); ?><br />
 					<?php endforeach; ?>
 				</p>
-				<?php if ( '' !== (string) $m['manage_url'] ) : ?>
-					<a class="<?php echo esc_attr( Assets::button_class() ); ?>" href="<?php echo esc_url( (string) $m['manage_url'] ); ?>">
-						<span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
-						Editar procedimiento</a>
-				<?php endif; ?>
 			</div>
 		</div>
 		<?php
@@ -324,7 +336,7 @@ final class ProcedureChrome {
 			array( 'Curso', (string) $m['courses'], '' ),
 			array( 'Inscripción', (string) $m['dates'], '' ),
 			array( 'Subsanación', (string) $m['amend_dates'], '' ),
-			array( 'Coordinación', empty( $m['requires_coordinator'] ) ? '' : 'Pide una persona coordinadora', '' ),
+			array( 'Coordinación', (int) ( $m['coordinator_count'] ?? 0 ) < 1 ? '' : sprintf( 'Pide %d %s coordinadora%s', (int) $m['coordinator_count'], 1 === (int) $m['coordinator_count'] ? 'persona' : 'personas', 1 === (int) $m['coordinator_count'] ? '' : 's' ), '' ),
 			array( 'Contacto', (string) $m['contact_email'], (string) $m['contact_email'] ),
 		);
 

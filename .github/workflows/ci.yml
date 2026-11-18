@@ -188,7 +188,20 @@ jobs:
           retention-days: 30
 
       - name: Start wp-env
-        run: npx wp-env start --update
+        run: |
+          set -euo pipefail
+          # wp-env puede recibir un 502 temporal mientras descarga WordPress.
+          for attempt in 1 2 3; do
+            if npx wp-env start --update; then
+              exit 0
+            fi
+            if [ "${attempt}" -lt 3 ]; then
+              delay=$((attempt * 10))
+              echo "wp-env no arrancó; reintento $((attempt + 1))/3 en ${delay}s."
+              sleep "${delay}"
+            fi
+          done
+          exit 1
 
       - name: Provision environment
         run: make provision

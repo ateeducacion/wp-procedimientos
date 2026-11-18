@@ -6,6 +6,7 @@
  */
 
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\Domain\ProcedureState;
 use Prc\PublicFront\Home;
 use Prc\PublicFront\Shell;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -22,6 +23,16 @@ use Prc\Taxonomy\ProcedureTaxonomies;
 class Test_Home extends WP_UnitTestCase {
 
 	use Prc_Fixtures;
+
+	/**
+	 * A calendar day relative to the WordPress site's timezone.
+	 *
+	 * @param int $offset Offset in days.
+	 * @return string
+	 */
+	private function dia( int $offset ): string {
+		return gmdate( 'Y-m-d', strtotime( ProcedureState::today() . ' ' . $offset . ' days' ) );
+	}
 
 	/**
 	 * Con el aplicativo y sus páginas.
@@ -60,8 +71,8 @@ class Test_Home extends WP_UnitTestCase {
 	 */
 	private function abierto(): array {
 		return array(
-			ProcedureMetaKeys::OPENS_AT  => gmdate( 'Y-m-d', strtotime( '-3 days' ) ),
-			ProcedureMetaKeys::CLOSES_AT => gmdate( 'Y-m-d', strtotime( '+3 days' ) ),
+			ProcedureMetaKeys::OPENS_AT  => $this->dia( -3 ),
+			ProcedureMetaKeys::CLOSES_AT => $this->dia( 3 ),
 		);
 	}
 
@@ -72,8 +83,8 @@ class Test_Home extends WP_UnitTestCase {
 	 */
 	private function cerrado(): array {
 		return array(
-			ProcedureMetaKeys::OPENS_AT  => gmdate( 'Y-m-d', strtotime( '-30 days' ) ),
-			ProcedureMetaKeys::CLOSES_AT => gmdate( 'Y-m-d', strtotime( '-10 days' ) ),
+			ProcedureMetaKeys::OPENS_AT  => $this->dia( -30 ),
+			ProcedureMetaKeys::CLOSES_AT => $this->dia( -10 ),
 		);
 	}
 
@@ -88,7 +99,7 @@ class Test_Home extends WP_UnitTestCase {
 
 		$this->convocatoria( 'La que está abierta', $curso, $area, $this->abierto() );
 		$this->convocatoria( 'La que ya cerró', $curso, $area, $this->cerrado() );
-		$this->convocatoria( 'La que viene', $curso, $area, array( ProcedureMetaKeys::OPENS_AT => gmdate( 'Y-m-d', strtotime( '+30 days' ) ) ) );
+		$this->convocatoria( 'La que viene', $curso, $area, array( ProcedureMetaKeys::OPENS_AT => $this->dia( 30 ) ) );
 		// Un borrador no es de la portada: todavía no se ha publicado.
 		$this->convocatoria( 'La que se está escribiendo', $curso, $area, $this->abierto(), array( 'post_status' => 'draft' ) );
 
@@ -320,8 +331,8 @@ class Test_Home extends WP_UnitTestCase {
 			$curso,
 			$area,
 			array(
-				ProcedureMetaKeys::OPENS_AT  => gmdate( 'Y-m-d', strtotime( '-3 days' ) ),
-				ProcedureMetaKeys::CLOSES_AT => gmdate( 'Y-m-d', strtotime( '+7 days' ) ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( -3 ),
+				ProcedureMetaKeys::CLOSES_AT => $this->dia( 7 ),
 			)
 		);
 		$this->convocatoria(
@@ -329,8 +340,8 @@ class Test_Home extends WP_UnitTestCase {
 			$curso,
 			$area,
 			array(
-				ProcedureMetaKeys::OPENS_AT  => gmdate( 'Y-m-d', strtotime( '-3 days' ) ),
-				ProcedureMetaKeys::CLOSES_AT => gmdate( 'Y-m-d', strtotime( '+1 day' ) ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( -3 ),
+				ProcedureMetaKeys::CLOSES_AT => $this->dia( 1 ),
 			)
 		);
 
@@ -350,14 +361,14 @@ class Test_Home extends WP_UnitTestCase {
 	 */
 	public function test_the_last_day_says_so() {
 		$curso = $this->course( '2026-2027' );
-		$hoy   = gmdate( 'Y-m-d' );
+		$hoy   = $this->dia( 0 );
 
 		$this->convocatoria(
 			'La que cierra hoy',
 			$curso,
 			0,
 			array(
-				ProcedureMetaKeys::OPENS_AT  => gmdate( 'Y-m-d', strtotime( '-3 days' ) ),
+				ProcedureMetaKeys::OPENS_AT  => $this->dia( -3 ),
 				ProcedureMetaKeys::CLOSES_AT => $hoy,
 			)
 		);

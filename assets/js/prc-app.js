@@ -261,10 +261,26 @@
 				input.disabled = ! soloCentros;
 			} );
 		} );
+		numeroDeCoordinadores();
+	}
+
+	/*
+	 * El número de personas coordinadoras solo se elige con «Sí, varias
+	 * personas»; con profesorado las opciones están apagadas y el número
+	 * también, para que no se envíe solo. Sin guion queda activo.
+	 */
+	function numeroDeCoordinadores() {
+		var numero = document.getElementById( 'prc-coordinator-count' );
+		var varias = document.querySelector( 'input[name="prc_coordinator_kind"][value="several"]' );
+		if ( numero && varias ) {
+			numero.disabled = ! varias.checked || varias.disabled;
+		}
 	}
 	document.addEventListener( 'change', function ( e ) {
 		if ( e.target && 'prc-audience' === e.target.id ) {
 			mostrarCamposDeCentro();
+		} else if ( e.target && 'prc_coordinator_kind' === e.target.name ) {
+			numeroDeCoordinadores();
 		}
 	} );
 	document.addEventListener( 'DOMContentLoaded', mostrarCamposDeCentro );

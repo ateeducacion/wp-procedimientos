@@ -111,6 +111,30 @@ class Test_Views extends WP_UnitTestCase {
 	}
 
 	/**
+	 * The first row of posters loads at once, the first one first; the rest, lazily.
+	 */
+	public function test_the_first_row_of_posters_is_not_lazy() {
+		$curso = $this->course( '2026-2027' );
+		$area  = $this->area( 'Área de prueba' );
+		for ( $i = 1; $i <= 6; $i++ ) {
+			$id = $this->procedure( $this->administrator(), array( $area ), $this->abierto(), array( 'post_title' => 'Red ' . $i ) );
+			wp_set_object_terms( $id, array( $curso ), ProcedureTaxonomies::COURSE );
+		}
+
+		$this->acting_as( 0 );
+		$m = Home::model();
+		foreach ( $m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'] as $n => $fila ) {
+			$m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'][ $n ]['poster'] = 'https://example.org/cartel-' . $n . '.jpg';
+		}
+		$html = HomeView::html( $m );
+
+		$this->assertSame( 6, substr_count( $html, '<img ' ) );
+		$this->assertSame( 1, substr_count( $html, 'loading="lazy"' ), 'solo el sexto, que ya no cabe en la primera fila' );
+		$this->assertSame( 1, substr_count( $html, 'fetchpriority="high"' ) );
+		$this->assertMatchesRegularExpression( '/cartel-0\.jpg"[^>]*fetchpriority="high"/', $html, 'y es el primero' );
+	}
+
+	/**
 	 * Y lo escapa: lo que llega en el modelo sale como texto, no como etiquetas.
 	 *
 	 * Se envenena el modelo y no el post: al guardarlo, WordPress ya limpia el

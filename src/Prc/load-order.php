@@ -50,6 +50,7 @@ return array(
 	'PublicFront/Shell.php',
 	'PublicFront/EditLock.php',
 	'PublicFront/View/PanelParts.php',
+	'PublicFront/View/FieldErrorView.php',
 	'PublicFront/CentreColumns.php',
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',

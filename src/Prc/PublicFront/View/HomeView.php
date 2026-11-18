@@ -7,6 +7,7 @@
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
 
 /**
@@ -116,7 +117,8 @@ final class HomeView {
 	 * One card: the colour band, the whole title and what is known of its term.
 	 *
 	 * La etiqueta de estado va **fuera** del enlace: dentro entraría en el
-	 * nombre accesible del enlace, que es el título del procedimiento.
+	 * nombre accesible del enlace, que es el título del procedimiento. Es la
+	 * misma pastilla que en el resto del aplicativo ({@see Assets::state_class()}).
 	 *
 	 * @param array<string, mixed> $row One row of a group.
 	 * @return void
@@ -131,7 +133,7 @@ final class HomeView {
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
-				<p class="prc-proc__estado"><?php echo esc_html( (string) $row['state_label'] ); ?></p>
+				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>
 			<?php if ( '' !== (string) $row['deadline'] ) : ?>
 				<p class="prc-proc__plazo<?php echo empty( $row['urgent'] ) ? '' : ' prc-proc__plazo--urgente'; ?>">

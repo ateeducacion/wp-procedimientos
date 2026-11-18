@@ -28,6 +28,7 @@
 			celdas[ nodo.getAttribute( 'data-prc-cuenta' ) ] = nodo;
 		} );
 
+		// El reloj va con dos cifras; los días, tal cual: «010» se lee mal.
 		function escribe( clave, valor, digitos ) {
 			if ( celdas[ clave ] ) {
 				celdas[ clave ].textContent = String( valor ).padStart( digitos, '0' );
@@ -36,7 +37,7 @@
 
 		function pinta() {
 			var queda = Math.max( 0, Math.floor( ( fin - Date.now() ) / 1000 ) );
-			escribe( 'dias', Math.floor( queda / 86400 ), 3 );
+			escribe( 'dias', Math.floor( queda / 86400 ), 1 );
 			escribe( 'horas', Math.floor( queda / 3600 ) % 24, 2 );
 			escribe( 'minutos', Math.floor( queda / 60 ) % 60, 2 );
 			escribe( 'segundos', queda % 60, 2 );

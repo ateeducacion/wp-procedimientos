@@ -179,9 +179,10 @@ class Test_People_Form extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringContainsString( 'Las solicitudes están cerradas.', $html, 'la solicitud, cerrada' );
 		$this->assertStringContainsString( 'id="' . PeopleForm::ANCHOR . '"', $html );
-		$this->assertStringContainsString( 'PERSONAS QUE PARTICIPAN', $html );
+		$this->assertStringContainsString( '>Personas que participan</h2>', $html );
 		$this->assertStringContainsString( 'Dar de alta a una persona', $html );
 		$this->assertStringContainsString( 'Sustituir o corregir', $html );
+		$this->assertStringContainsString( '>Guardar los cambios de la persona</button>', $html, 'guardar y qué' );
 		$this->assertStringContainsString( 'data-prc-confirm="¿Dar de baja a Ana Pérez de la lista de personas?', $html, 'la baja pide confirmación' );
 		$this->assertStringContainsString( 'Participante', $html, 'el papel, por su rótulo' );
 		$this->assertStringContainsString( 'queda incompleta', $html, 'una de dos: incompleta, no rechazada' );
@@ -236,7 +237,7 @@ class Test_People_Form extends WP_UnitTestCase {
 		$this->acting_as( $director );
 		$html = $this->pintar( $procedimiento );
 		$this->assertStringNotContainsString( PeopleForm::ANCHOR, $html );
-		$this->assertStringNotContainsString( 'PERSONAS QUE PARTICIPAN', $html );
+		$this->assertStringNotContainsString( '>Personas que participan</h2>', $html );
 	}
 
 	/**

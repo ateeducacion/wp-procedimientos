@@ -1,6 +1,6 @@
 <?php
 /**
- * The «Consulta» panel of the workshop: whether a procedure admits the
+ * The «Acceso de consulta» panel of the workshop: whether a procedure admits the
  * read-only consultation by zone, and what it shows.
  *
  * @package Prc

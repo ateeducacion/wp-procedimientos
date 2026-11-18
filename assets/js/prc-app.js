@@ -78,7 +78,7 @@
 			buttonsStyling: false,
 			customClass: {
 				confirmButton: 'prc-btn prc-btn-borrar btn',
-				cancelButton: 'prc-btn btn btn-light'
+				cancelButton: 'prc-btn prc-btn-sec btn btn-outline-secondary'
 			}
 		} ).then( function ( respuesta ) {
 			if ( ! respuesta.isConfirmed ) {
@@ -356,7 +356,7 @@
 		}
 		var cancelar = document.createElement( 'button' );
 		cancelar.type = 'button';
-		cancelar.className = 'prc-btn btn btn-light';
+		cancelar.className = 'prc-btn prc-btn-sec btn btn-outline-secondary';
 		cancelar.textContent = 'Cancelar';
 		cancelar.setAttribute( 'data-prc-export-close', '' );
 		var acciones = form.querySelector( '.prc-acciones' ) || form;

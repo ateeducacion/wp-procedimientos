@@ -334,8 +334,8 @@ final class ProcedureView {
 		$queda = max( 0, $fin->getTimestamp() - time() );
 		return array(
 			'iso'      => $fin->format( 'c' ),
-			// Los días con tres dígitos y el resto con dos, como el original.
-			'dias'     => sprintf( '%03d', intdiv( $queda, DAY_IN_SECONDS ) ),
+			// El reloj con dos cifras; los días sin relleno, que «010» se lee mal.
+			'dias'     => (string) intdiv( $queda, DAY_IN_SECONDS ),
 			'horas'    => sprintf( '%02d', intdiv( $queda % DAY_IN_SECONDS, HOUR_IN_SECONDS ) ),
 			'minutos'  => sprintf( '%02d', intdiv( $queda % HOUR_IN_SECONDS, MINUTE_IN_SECONDS ) ),
 			'segundos' => sprintf( '%02d', $queda % MINUTE_IN_SECONDS ),

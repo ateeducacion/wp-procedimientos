@@ -27,17 +27,19 @@ final class MeasuredQuestionView {
 	 * navegador que no los conozca, se teclea igual. En una rejilla, cada
 	 * fila es un número con su propia etiqueta.
 	 *
-	 * @param array<string, mixed> $p     Normalised question.
-	 * @param mixed                $valor Stored or typed answer.
+	 * @param array<string, mixed>  $p     Normalised question.
+	 * @param mixed                 $valor   Stored or typed answer.
+	 * @param array<string, string> $invalid Failing field code => what names it.
 	 * @return string
 	 */
-	public static function html( array $p, $valor ): string {
+	public static function html( array $p, $valor, array $invalid = array() ): string {
 		$key     = (string) $p['key'];
 		$id      = 'prc-q-' . $key;
 		$nombre  = ApplyForm::FIELD_ANSWERS . '[' . $key . ']';
 		$obliga  = ! empty( $p['required'] );
 		$ayuda   = (string) $p['help'];
-		$pie     = '' !== $ayuda ? ' aria-describedby="' . esc_attr( $id . '-ayuda' ) . '"' : '';
+		$codigo  = 'answer:' . $key;
+		$pie     = FieldErrorView::attrs( $invalid, $codigo, '' !== $ayuda ? $id . '-ayuda' : '' );
 		$rejilla = ProcedureQuestions::TYPE_GRID === (string) $p['type'];
 
 		$control = '';
@@ -50,17 +52,18 @@ final class MeasuredQuestionView {
 					. self::number_input( $id . '-' . $rk, $nombre . '[' . $rk . ']', $dadas[ $rk ] ?? '', 0, null, $obliga )
 					. '</div>';
 			}
-			$control = '<div class="prc-opciones prc-rejilla" role="group" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
+			$control = '<div class="prc-opciones prc-rejilla" role="group" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $id . '-rotulo' ) . '"' . $pie . '>' . $control . '</div>';
 		} elseif ( ProcedureQuestions::TYPE_NUMBER === (string) $p['type'] ) {
-			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie );
+			$control = self::number_input( $id, $nombre, $valor, ProcedureQuestions::integer( $p['min'] ?? null ) ?? 0, ProcedureQuestions::integer( $p['max'] ?? null ), $obliga, $pie, FieldErrorView::css( $invalid, $codigo ) );
 		} else {
-			$control = '<input type="date" class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
+			$control = '<input type="date" class="prc-control' . esc_attr( FieldErrorView::css( $invalid, $codigo ) ) . '" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '" value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '"'
 				. ( $obliga ? ' required' : '' ) . $pie . ' />';
 		}
 
 		return '<div class="prc-campo prc-pregunta ' . esc_attr( $rejilla ? 'prc-campo--completo' : 'prc-campo--medio' ) . '">'
 			. self::label( $rejilla ? $id . '-rotulo' : $id, (string) $p['label'], $obliga, $rejilla )
 			. $control
+			. FieldErrorView::feedback( $invalid, $codigo )
 			. ( '' !== $ayuda ? '<div class="prc-campo__ayuda" id="' . esc_attr( $id . '-ayuda' ) . '">' . esc_html( $ayuda ) . '</div>' : '' )
 			. '</div>';
 	}
@@ -75,10 +78,11 @@ final class MeasuredQuestionView {
 	 * @param int|null $maximo  Highest value, null for none.
 	 * @param bool     $obliga  Whether it is required.
 	 * @param string   $extra   Extra attributes, already escaped.
+	 * @param string   $clase   Extra class, with a leading space; empty for none.
 	 * @return string
 	 */
-	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '' ): string {
-		return '<input type="number" class="prc-control" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
+	private static function number_input( string $id, string $nombre, $valor, int $minimo, ?int $maximo, bool $obliga, string $extra = '', string $clase = '' ): string {
+		return '<input type="number" class="prc-control' . esc_attr( $clase ) . '" inputmode="numeric" step="1" id="' . esc_attr( $id ) . '" name="' . esc_attr( $nombre ) . '"'
 			. ' value="' . esc_attr( is_scalar( $valor ) ? (string) $valor : '' ) . '" min="' . esc_attr( (string) $minimo ) . '"'
 			. ( null !== $maximo ? ' max="' . esc_attr( (string) $maximo ) . '"' : '' )
 			. ( $obliga ? ' required' : '' ) . $extra . ' />';

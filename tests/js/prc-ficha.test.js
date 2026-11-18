@@ -67,18 +67,18 @@ describe( 'countdown', () => {
 		ready();
 	}
 
-	it( 'paints the time left, padded, and ticks every second', async () => {
+	it( 'paints the time left, the clock padded and the days not, and ticks every second', async () => {
 		await start( counter( '2026-10-02T12:03:04Z' ) );
-		expect( cells() ).toEqual( [ '001', '02', '03', '04' ] );
+		expect( cells() ).toEqual( [ '1', '02', '03', '04' ] );
 
 		vi.advanceTimersByTime( 1000 );
-		expect( cells() ).toEqual( [ '001', '02', '03', '03' ] );
+		expect( cells() ).toEqual( [ '1', '02', '03', '03' ] );
 	} );
 
 	it( 'counts to the end instant in the site zone, not the viewer’s', async () => {
 		// Las 23:59:00 de un sitio en UTC+1 son las 22:59:00 UTC.
 		await start( counter( '2026-10-01T23:59:00+01:00' ) );
-		expect( cells() ).toEqual( [ '000', '12', '59', '00' ] );
+		expect( cells() ).toEqual( [ '0', '12', '59', '00' ] );
 	} );
 
 	it( 'stops at zero', async () => {
@@ -86,14 +86,14 @@ describe( 'countdown', () => {
 
 		vi.advanceTimersByTime( 5000 );
 
-		expect( cells() ).toEqual( [ '000', '00', '00', '00' ] );
+		expect( cells() ).toEqual( [ '0', '00', '00', '00' ] );
 		expect( vi.getTimerCount() ).toBe( 0 );
 	} );
 
 	it( 'shows zero and does not tick when the deadline has passed', async () => {
 		await start( counter( '2026-09-30T23:59:00Z' ) );
 
-		expect( cells() ).toEqual( [ '000', '00', '00', '00' ] );
+		expect( cells() ).toEqual( [ '0', '00', '00', '00' ] );
 		expect( vi.getTimerCount() ).toBe( 0 );
 	} );
 
@@ -107,7 +107,7 @@ describe( 'countdown', () => {
 	it( 'paints only the cells the counter has', async () => {
 		await start( counter( '2026-10-02T12:03:04Z', [ 'dias', 'horas' ] ) );
 
-		expect( cells() ).toEqual( [ '001', '02', undefined, undefined ] );
+		expect( cells() ).toEqual( [ '1', '02', undefined, undefined ] );
 	} );
 } );
 

@@ -43,7 +43,7 @@ if ( ! function_exists( 'prc_page_titles' ) ) {
 			'workspace' => 'Gestión de procedimientos',
 			'editor'    => 'Editar procedimiento',
 			'apply'     => 'Solicitud',
-			'mine'      => 'Mi centro',
+			'mine'      => 'Solicitudes de mi centro',
 			'observe'   => 'Consulta de solicitudes',
 			'help'      => 'Ayuda',
 		);

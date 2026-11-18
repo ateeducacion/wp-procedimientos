@@ -72,7 +72,7 @@ const SCENES = [
 	// ── Quien gestiona: solo ordenador ────────────────────────────────────
 	{
 		chapter: 'Quien gestiona',
-		title: 'Mis procedimientos',
+		title: 'Gestión de procedimientos',
 		note: 'El listado con el que se abre: los procedimientos de mis ámbitos por curso, con su estado y cuántas solicitudes tienen; «Nuevo procedimiento».',
 		who: 'gestion',
 		go: '/gestion-de-procedimientos/',
@@ -147,7 +147,7 @@ const SCENES = [
 	},
 	{
 		chapter: 'Quien solicita',
-		title: 'Mi centro',
+		title: 'Solicitudes de mi centro',
 		note: 'Las solicitudes del centro: procedimiento, fecha, estado del procedimiento y estado de revisión con su nota.',
 		who: 'direccion',
 		go: '/mi-centro/',
@@ -223,7 +223,7 @@ async function procedureId( page ) {
 	);
 	if ( ! id ) {
 		throw new Error(
-			'No encuentro ningún procedimiento abierto en «Mis procedimientos»: ¿está provisionado el entorno?'
+			'No encuentro ningún procedimiento abierto en «Gestión de procedimientos»: ¿está provisionado el entorno?'
 		);
 	}
 	return id;

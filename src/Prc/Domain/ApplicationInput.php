@@ -29,7 +29,11 @@ final class ApplicationInput {
 	 * @param array<string, mixed> $procedure What the procedure asks for:
 	 *                                        `coordinator_count` (int), `commitments` (string)
 	 *                                        and `questions` (normalised list).
-	 * @return array{ok:bool, errors:string[], data:array<string, mixed>}
+	 * `errors` son los códigos de siempre, los que lee {@see why()}; `fields`
+	 * dice además **dónde**: la coordinación con su fila (`coordinator_dni:1`),
+	 * para que la pantalla marque el campo que falla y no solo lo cuente.
+	 *
+	 * @return array{ok:bool, errors:string[], fields:string[], data:array<string, mixed>}
 	 */
 	public static function validate( array $raw, array $procedure ): array {
 		$errors  = array();
@@ -61,6 +65,7 @@ final class ApplicationInput {
 		return array(
 			'ok'     => array() === $errors,
 			'errors' => $errors,
+			'fields' => array_values( array_merge( array_diff( $errors, $coordinacion['errors'] ), $coordinacion['fields'] ) ),
 			'data'   => array(
 				'position'    => $position,
 				'coordinator' => $coordinators,
@@ -79,7 +84,7 @@ final class ApplicationInput {
 	 *
 	 * @param array<string, mixed> $raw   Raw fields: `coordinators`, or the single `coordinator_*` fields.
 	 * @param int                  $count How many the procedure asks for.
-	 * @return array{errors:string[], data:array<int, array{name:string, surname:string, dni:string, email:string}>}
+	 * @return array{errors:string[], fields:string[], data:array<int, array{name:string, surname:string, dni:string, email:string}>}
 	 */
 	private static function coordinators( array $raw, int $count ): array {
 		$filas = is_array( $raw['coordinators'] ?? null ) ? $raw['coordinators'] : array();
@@ -92,6 +97,7 @@ final class ApplicationInput {
 			);
 		}
 		$errors = array();
+		$fields = array();
 		$data   = array();
 		for ( $i = 0; $i < $count; ++$i ) {
 			$fila        = is_array( $filas[ $i ] ?? null ) ? $filas[ $i ] : array();
@@ -110,12 +116,14 @@ final class ApplicationInput {
 			foreach ( $checks as $error => $ok ) {
 				if ( ! $ok ) {
 					$errors[] = $error;
+					$fields[] = $error . ':' . $i;
 				}
 			}
 			$data[] = $coordinator;
 		}
 		return array(
 			'errors' => $errors,
+			'fields' => $fields,
 			'data'   => $data,
 		);
 	}
@@ -128,17 +136,7 @@ final class ApplicationInput {
 	 * @return string
 	 */
 	public static function why( array $errors, array $questions = array() ): string {
-		$textos = array(
-			'position'            => 'el cargo',
-			'coordinator_name'    => 'el nombre de cada persona coordinadora',
-			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
-			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
-			'coordinator_email'   => 'el correo de cada persona coordinadora',
-			'accept'              => 'la aceptación de los compromisos',
-		);
-		foreach ( $questions as $pregunta ) {
-			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
-		}
+		$textos = self::texts( $questions );
 
 		$faltan = array();
 		foreach ( $errors as $error ) {
@@ -156,6 +154,52 @@ final class ApplicationInput {
 
 		$ultimo = array_pop( $faltan );
 		return 'Revise ' . implode( ', ', $faltan ) . ' y ' . $ultimo . '.';
+	}
+
+	/**
+	 * What names each failing field, by where it failed.
+	 *
+	 * Lo que {@see validate()} devuelve en `fields`, con su rótulo: la
+	 * coordinación por su número («la persona coordinadora 2»). Lo que no se
+	 * sabe nombrar se queda fuera.
+	 *
+	 * @param string[]                         $fields    What validate() returned in `fields`.
+	 * @param array<int, array<string, mixed>> $questions Normalised questions, to name the unanswered ones.
+	 * @return array<string, string> Field code => what names it.
+	 */
+	public static function labels( array $fields, array $questions = array() ): array {
+		$textos = self::texts( $questions );
+		$out    = array();
+		foreach ( $fields as $field ) {
+			$partes = explode( ':', (string) $field, 2 );
+			$fila   = 0 === strpos( $partes[0], 'coordinator_' ) && isset( $partes[1] ) ? (int) $partes[1] + 1 : 0;
+			$texto  = (string) ( $textos[ $fila > 0 ? $partes[0] : (string) $field ] ?? '' );
+			if ( '' !== $texto ) {
+				$out[ (string) $field ] = $fila > 0 ? str_replace( 'cada persona coordinadora', 'la persona coordinadora ' . $fila, $texto ) : $texto;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * What names each error code, the questions included.
+	 *
+	 * @param array<int, array<string, mixed>> $questions Normalised questions.
+	 * @return array<string, string>
+	 */
+	private static function texts( array $questions ): array {
+		$textos = array(
+			'position'            => 'el cargo',
+			'coordinator_name'    => 'el nombre de cada persona coordinadora',
+			'coordinator_surname' => 'los apellidos de cada persona coordinadora',
+			'coordinator_dni'     => 'el DNI o NIE de cada persona coordinadora',
+			'coordinator_email'   => 'el correo de cada persona coordinadora',
+			'accept'              => 'la aceptación de los compromisos',
+		);
+		foreach ( $questions as $pregunta ) {
+			$textos[ 'answer:' . (string) ( $pregunta['key'] ?? '' ) ] = 'la respuesta a «' . (string) ( $pregunta['label'] ?? '' ) . '»';
+		}
+		return $textos;
 	}
 
 	/**

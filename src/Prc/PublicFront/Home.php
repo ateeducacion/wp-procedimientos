@@ -346,6 +346,8 @@ final class Home {
 			'order'               => 'ASC',
 			'no_found_rows'       => true,
 			'ignore_sticky_posts' => true,
+			// Como get_posts(), que era lo de antes: sin los filtros posts_*.
+			'suppress_filters'    => true,
 		);
 		if ( $course > 0 ) {
 			$args['tax_query'] = array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- listar por curso es el requisito.

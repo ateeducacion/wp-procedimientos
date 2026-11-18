@@ -577,14 +577,29 @@ html:has(> body.prc-app) { overflow-x: clip; }
   font-weight: 700;
 }
 
-/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
-   entre uno y otro: Preparar, Gestionar y Avanzado. */
-.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
-.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
-.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
+/* Las pestañas del taller, en tres grupos —Preparar, Gestionar y Avanzado—
+   en una sola línea, cada uno en su caja con el rótulo encima. A 1200 px de
+   ventana caben con holgura en minúscula y sin la separación de las de arriba;
+   más estrecho, la fila se desplaza en horizontal en vez de saltar de línea:
+   sin JavaScript, y el foco del teclado trae a la vista la pestaña a la que
+   llega. */
+.prc-tabs--taller .prc-tabs-fila { flex-wrap: nowrap; gap: 8px; padding-top: 8px; overflow-x: auto; }
+.prc-tabs-grupo {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  position: relative;
+  padding: 20px 4px 0;
+  background: var(--prc-c-fondo-barra);
+  border: 1px solid var(--prc-c-linea);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+}
+.prc-tabs--taller .prc-tab { margin: 0; padding: 10px 6px 12px; text-transform: none; letter-spacing: 0; }
 .prc-tabs-grupo__rotulo {
   position: absolute;
-  top: 0;
+  top: 4px;
+  left: 10px;
   font-size: var(--prc-t-menudo);
   font-weight: 700;
   letter-spacing: .04em;

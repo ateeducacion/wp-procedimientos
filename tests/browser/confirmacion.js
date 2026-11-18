@@ -646,6 +646,47 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// Las pestañas del taller: a 1200 px, los tres grupos en una línea; en un
+	// móvil, la fila se desplaza en horizontal y la página no.
+	{
+		const tab = ( t, on ) => `<a class="prc-tab${ on ? ' prc-tab-on' : '' }"${ on ? ' aria-current="page"' : '' } href="#">${ t }</a>`;
+		const grupo = ( g, ts ) => `<div class="prc-tabs-grupo" role="group" aria-label="${ g }"><span class="prc-tabs-grupo__rotulo" aria-hidden="true">${ g }</span>${ ts.join( '' ) }</div>`;
+		const n = ( t, c ) => `${ t } <span class="prc-tab-n">${ c }</span>`;
+		const TABS = '<!doctype html><meta charset="utf-8"><style>' + CSS + '</style><body class="prc-app">' +
+			'<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento"><div class="prc-tabs-fila">' +
+			grupo( 'Preparar', [ tab( 'Datos', true ), tab( n( 'Campos adicionales', 12 ) ), tab( 'Participantes' ), tab( 'Enlaces' ), tab( 'Publicación' ) ] ) +
+			grupo( 'Gestionar', [ tab( n( 'Solicitudes', 128 ) ), tab( n( 'Entregas', 0 ) ) ] ) +
+			grupo( 'Avanzado', [ tab( 'Acceso de consulta' ), tab( 'Código' ) ] ) +
+			'</div></nav></body>';
+		for ( const ancho of [ 1200, 390 ] ) {
+			const contexto = await browser.newContext( { viewport: { width: ancho, height: 600 } } );
+			const page = await contexto.newPage();
+			await page.setContent( TABS );
+			const m = await page.evaluate( () => {
+				const fila = document.querySelector( '.prc-tabs-fila' );
+				return {
+					alturas: [ ...document.querySelectorAll( '.prc-tab' ) ].map( ( a ) => Math.round( a.getBoundingClientRect().top ) ),
+					desborda: fila.scrollWidth > fila.clientWidth,
+					pagina: document.documentElement.scrollWidth,
+					fondo: getComputedStyle( document.querySelector( '.prc-tabs-grupo' ) ).backgroundColor,
+				};
+			} );
+			ok( 1 === new Set( m.alturas ).size, ancho + ' px: todas las pestañas en la misma línea' );
+			ok( m.pagina <= ancho, ancho + ' px: la página no se desplaza en horizontal (' + m.pagina + ')' );
+			ok( 'rgba(0, 0, 0, 0)' !== m.fondo, ancho + ' px: cada grupo tiene fondo propio' );
+			if ( 1200 === ancho ) {
+				ok( ! m.desborda, '1200 px: caben sin desplazar' );
+			} else {
+				ok( m.desborda, '390 px: la fila se desplaza en horizontal' );
+				await page.keyboard.press( 'Tab' );
+				for ( let i = 0; i < 8; i++ ) { await page.keyboard.press( 'Tab' ); }
+				ok( 'Código' === await page.evaluate( () => document.activeElement.textContent ), 'con el teclado se llega a la última pestaña' );
+				ok( await page.evaluate( () => document.activeElement.getBoundingClientRect().right <= innerWidth ), 'y el foco la trae a la vista' );
+			}
+			await contexto.close();
+		}
+	}
+
 	await browser.close();
 	console.log( fallos ? '\n' + fallos + ' FALLOS' : '\nTodo verde' );
 	process.exit( fallos ? 1 : 0 );

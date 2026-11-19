@@ -7,7 +7,6 @@
 
 namespace Prc\PublicFront\View;
 
-use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -100,12 +99,10 @@ final class ProcedureEditorView {
 		return match ( $panel ) {
 			ProcedureEditor::PANEL_QUESTIONS => self::questions_panel( $m ),
 			ProcedureEditor::PANEL_LINKS => self::links_panel( $m ),
-			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
-			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
+			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ) . self::deliveries_section( $m ),
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
-			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
-			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
+			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
 			default => self::data_panel( $m ),
 		};
 	}
@@ -127,9 +124,6 @@ final class ProcedureEditorView {
 			// El panel apaga él mismo lo que escribe: filtrar y pasar de
 			// página siguen abiertos aunque no se gestionen las solicitudes.
 			return false;
-		}
-		if ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
-			return true !== $m['can_edit'];
 		}
 		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
 			return ! self::open_group( $m, ProcedureState::GROUP_QUESTIONS );
@@ -155,32 +149,42 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * Extend the closing date of independent deliveries.
+	 * «Plazos de entregas documentales», at the end of «Solicitudes».
+	 *
+	 * Antes era la pestaña «Entregas» (#80). Solo sale con entregas de plazo
+	 * propio, y apagada a quien no edita el procedimiento: la tabla de
+	 * encima se sigue filtrando igual.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
-	private static function deliveries_panel( array $m ): string {
+	private static function deliveries_section( array $m ): string {
+		if ( empty( $m['deliveries'] ) ) {
+			return '';
+		}
+		$cerrado = true !== $m['can_edit'];
 		ob_start();
 		?>
-		<section aria-labelledby="prc-deliveries-title">
-			<h2 id="prc-deliveries-title">Plazos de entregas documentales</h2>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_DELIVERIES ); ?>" aria-labelledby="prc-deliveries-title">
+			<h2 class="prc-seccion__titulo" id="prc-deliveries-title">Plazos de entregas documentales</h2>
 			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y los campos adicionales se conservan; el nuevo cierre no puede ser anterior al actual.</p>
-			<?php if ( empty( $m['deliveries'] ) ) : ?>
-				<p>Este procedimiento no tiene entregas con plazo propio.</p>
-			<?php else : ?>
-				<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<?php foreach ( $m['deliveries'] as $delivery ) : ?>
-						<div class="prc-campo">
-							<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
-							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
-						</div>
-					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar los nuevos cierres' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				</form>
+			<?php if ( $cerrado ) : ?>
+				<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Plazos en solo lectura</legend>
+			<?php endif; ?>
+			<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+					<div class="prc-campo">
+						<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
+						<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
+					</div>
+				<?php endforeach; ?>
+				<?php echo PanelParts::submit( 'Guardar los nuevos cierres' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			</form>
+			<?php if ( $cerrado ) : ?>
+				</fieldset>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -368,37 +372,27 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The inner tabs, in their groups, each with its count where there is something to count.
+	 * The inner tabs, each with its count where there is something to count.
 	 *
-	 * Cada grupo —Preparar, Gestionar, Avanzado— lleva su rótulo pequeño
-	 * encima y un `role="group"` con su nombre para quien no lo ve.
+	 * En una fila y sin grupos (#80): «Avanzado» es una pestaña más.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function tabs( array $m ): string {
 		$activa = (string) $m['panel'];
-		$grupos = array();
-		foreach ( (array) $m['panels'] as $clave => $panel ) {
-			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
-		}
 
 		ob_start();
 		?>
 		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
-					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
-						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
-						<?php foreach ( $paneles as $clave => $panel ) : ?>
-							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-								<?php endif; ?></a>
-						<?php endforeach; ?>
-					</div>
+				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
+					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+							<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+						<?php endif; ?></a>
 				<?php endforeach; ?>
 			</div>
 		</nav>
@@ -463,10 +457,7 @@ final class ProcedureEditorView {
 		if ( ! $nuevo ) {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
-			// La sección entera, con su título, es solo de centros.
-			$secciones .= '<div data-prc-schools-only ' . self::hidden_unless_schools( $v ) . '>'
-				. PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo )
-				. '</div>';
+			// Qué centros pueden solicitar va en «Avanzado» (#80).
 		}
 
 		ob_start();
@@ -861,99 +852,13 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * «Qué centros pueden solicitar»: tipos, islas y una lista cerrada de códigos.
-	 *
-	 * Plegado como avanzado, y abierto si algo limita: un interruptor
-	 * encendido, la lista cerrada o una sola titularidad. Tipos e islas llevan
-	 * cada uno su interruptor; apagado, sus casillas se esconden —con CSS, sin
-	 * guion— y salen todas marcadas, para que al encenderlo se desmarque lo que
-	 * sobre (CentreEligibility::input(), #84). Las casillas son los tipos y las
-	 * islas que trae el catálogo, más los ya elegidos aunque el catálogo los
-	 * haya perdido. El aviso del catálogo vacío va fuera del plegado, a la vista.
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @param array<string, mixed> $v Field values.
-	 * @return string
-	 */
-	private static function eligibility_fields( array $m, array $v ): string {
-		$options = (array) ( $m['centre_options'] ?? array() );
-		$lists   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.' ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.' ),
-		);
-
-		$chosen = array();
-		foreach ( array_keys( $lists ) as $name ) {
-			$chosen[ $name ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $name ] ) );
-		}
-		$open = ! empty( $v[ ProcedureEditor::FIELD_LIMIT_TYPES ] )
-			|| ! empty( $v[ ProcedureEditor::FIELD_LIMIT_ISLANDS ] )
-			|| '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] )
-			|| 1 === count( (array) $v[ ProcedureMetaKeys::OWNERSHIP ] );
-
-		ob_start();
-		?>
-		<?php echo self::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-		<details class="prc-acotar"<?php echo $open ? ' open' : ''; ?>>
-		<summary>Limitar a ciertos centros (avanzado)</summary>
-		<div class="prc-seccion__cuerpo">
-			<div class="prc-campo prc-campo--completo">
-				<p class="prc-campo__ayuda">Sin limitar por tipo ni por isla y con la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
-			</div>
-			<?php foreach ( $lists as $name => $list ) : ?>
-				<?php $limited = ! empty( $v[ $list[2] ] ); ?>
-				<div class="prc-campo prc-campo--medio">
-					<fieldset class="prc-acotar__lista">
-						<legend class="prc-campo__etiqueta"><?php echo esc_html( $list[0] ); ?></legend>
-						<?php if ( array() === $list[1] ) : ?>
-							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
-						<?php else : ?>
-							<div class="prc-opcion prc-acotar__interruptor">
-								<input type="checkbox" id="<?php echo esc_attr( $list[2] ); ?>" name="<?php echo esc_attr( $list[2] ); ?>" value="1"
-									<?php checked( $limited ); ?> />
-								<label for="<?php echo esc_attr( $list[2] ); ?>"><?php echo esc_html( $list[3] ); ?></label>
-							</div>
-							<div class="prc-acotar__opciones" data-prc-tick-group>
-								<p class="prc-campo__ayuda"><?php echo esc_html( $list[4] ); ?></p>
-								<p class="prc-acotar__marcar" hidden>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
-								</p>
-								<div class="prc-opciones prc-opciones--vertical">
-									<?php foreach ( $list[1] as $i => $value ) : ?>
-										<div class="prc-opcion">
-											<input type="checkbox" id="<?php echo esc_attr( $name . '-' . $i ); ?>"
-												name="<?php echo esc_attr( $name ); ?>[]" value="<?php echo esc_attr( (string) $value ); ?>"
-												<?php checked( ! $limited || in_array( CentreEligibility::fold( (string) $value ), $chosen[ $name ], true ) ); ?> />
-											<label for="<?php echo esc_attr( $name . '-' . $i ); ?>"><?php echo esc_html( (string) $value ); ?></label>
-										</div>
-									<?php endforeach; ?>
-								</div>
-							</div>
-						<?php endif; ?>
-					</fieldset>
-				</div>
-			<?php endforeach; ?>
-			<div class="prc-campo prc-campo--completo">
-				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
-				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
-					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
-				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
-			</div>
-		</div>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
 	 * One warning about the centre rules, when the model has it.
 	 *
 	 * @param array<string, mixed> $m   Model.
 	 * @param string               $key `ownership` or `catalogue`.
 	 * @return string
 	 */
-	private static function centre_warning( array $m, string $key ): string {
+	public static function centre_warning( array $m, string $key ): string {
 		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
 		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
@@ -1454,77 +1359,6 @@ final class ProcedureEditorView {
 			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
 			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
 			. '</form>';
-	}
-
-	/**
-	 * CSS for managers and executable JavaScript for trusted administrators.
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return string
-	 */
-	private static function custom_code_panel( array $m ): string {
-		$op = ProcedureEditor::OP_CUSTOM_CODE;
-		ob_start();
-		?>
-		<section class="prc-seccion-campos">
-			<h2 class="prc-seccion__titulo">Código adicional</h2>
-			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
-			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
-				<div class="prc-aviso prc-aviso-info">
-					<p>La consulta por zona está activa en este procedimiento. La configura quien administra el aplicativo.</p>
-					<?php if ( true === ( $m['observe_status']['gone'] ?? false ) ) : ?>
-						<p>Pero las columnas que se eligieron ya no existen, así que ahora no enseña ninguna. Avise a quien administra el aplicativo.</p>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
-			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
-					<div class="prc-aviso prc-aviso-warning prc-codigo-admin">
-						<h3 id="prc-codigo-admin-titulo">Solo para administración</h3>
-						<p>Este JavaScript se ejecuta en la ficha pública del procedimiento. Revíselo antes de guardarlo.</p>
-					</div>
-					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php endif; ?>
-				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
-			</form>
-		</section>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-	/**
-	 * Render a labelled textarea that WordPress may enhance with CodeMirror.
-	 *
-	 * @param string $id       Field ID.
-	 * @param string $name     Field name.
-	 * @param string $label    Visible label.
-	 * @param string $value    Saved value.
-	 * @param bool   $disabled Whether editing is unavailable.
-	 * @return string
-	 */
-	private static function code_editor_field( string $id, string $name, string $label, string $value, bool $disabled ): string {
-		ob_start();
-		?>
-		<div class="prc-code">
-			<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $label ); ?></label>
-			<textarea
-				class="prc-control"
-				id="<?php echo esc_attr( $id ); ?>"
-				name="<?php echo esc_attr( $name ); ?>"
-				rows="14"
-				spellcheck="false"
-				autocapitalize="off"
-				autocomplete="off"
-				autocorrect="off"
-				<?php disabled( $disabled ); ?>
-				><?php echo esc_textarea( $value ); ?></textarea>
-		</div>
-		<?php
-		return (string) ob_get_clean();
 	}
 
 	/**

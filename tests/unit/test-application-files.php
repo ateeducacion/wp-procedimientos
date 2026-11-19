@@ -1625,7 +1625,7 @@ class Test_Application_Files extends WP_UnitTestCase {
 
 		$this->assertTrue( ApplicationFiles::deliver( $data['application'], 'q1', array( 'q1' => $this->un_pdf( 'memoria.pdf' ) ), $otra ) );
 
-		$taller    = ProcedureEditor::url( $data['procedure'], ProcedureEditor::PANEL_DELIVERIES );
+		$taller    = ProcedureEditor::url( $data['procedure'], ProcedureEditor::PANEL_APPLICATIONS );
 		$solicitud = ApplyForm::url( $data['procedure'] );
 		$this->assertArrayHasKey( 'ambito@example.org', $enviados );
 		$this->assertArrayHasKey( 'jefatura@example.org', $enviados );

@@ -534,10 +534,12 @@
 	 * «Marcar todos» y «Ninguno» (`data-prc-tick-all="1"` o `"0"`) dentro de un
 	 * `data-prc-tick-group`: marcan o desmarcan las casillas del grupo. Salen
 	 * escondidos y solo los enseña el guion; sin él, las casillas se marcan
-	 * una a una.
+	 * una a una. «Imprimir justificante» (`data-prc-print`), igual: sin guion,
+	 * se imprime desde el menú del navegador. Se enseña el contenedor propio
+	 * del botón, nunca un antepasado más lejano.
 	 */
 	document.addEventListener( 'DOMContentLoaded', function () {
-		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-tick-all]' ), function ( button ) {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-tick-all], [data-prc-print]' ), function ( button ) {
 			button.parentElement.hidden = false;
 		} );
 	} );
@@ -556,20 +558,7 @@
 		marcar( { target: button } );
 	} );
 
-	/*
-	 * «Imprimir justificante» (`data-prc-print`): sale escondido y solo lo
-	 * enseña el guion, que abre el diálogo de imprimir del navegador. Sin
-	 * guion, el justificante se imprime igual desde el menú del navegador.
-	 */
-	document.addEventListener( 'DOMContentLoaded', function () {
-		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-print]' ), function ( button ) {
-			var escondido = button.closest( '[hidden]' );
-			if ( escondido ) {
-				escondido.hidden = false;
-			}
-		} );
-	} );
-
+	// «Imprimir justificante» abre el diálogo de imprimir del navegador.
 	document.addEventListener( 'click', function ( e ) {
 		if ( e.target.closest && e.target.closest( '[data-prc-print]' ) ) {
 			window.print();

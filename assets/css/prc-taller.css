@@ -196,6 +196,9 @@
   white-space: normal;
 }
 
+/* El color del procedimiento (`prc_header_color`), en una franja fina como
+   la de la portada. */
+.prc-tabla--taller tbody .prc-celda-titulo { border-left: 5px solid var(--prc-banda, #c9c9c9); }
 .prc-celda-titulo a { color: var(--prc-c-azul-tabla); font-weight: 600; }
 .prc-celda-titulo__meta { display: block; margin-top: 2px; font-size: .875rem; color: var(--prc-c-medio); font-weight: 400; }
 .prc-celda-estado .prc-state { white-space: normal; }
@@ -234,7 +237,7 @@
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller tbody th { display: block; padding: 6px 0; border: 0; text-align: left; }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; border-left: 5px solid var(--prc-banda, #c9c9c9); text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
 }
 

@@ -158,3 +158,13 @@ que la gente busca en la tarjeta es el ámbito. La tarjeta pasa a ser el cartel
 ámbito debajo del título. La meta `prc_header_color` no cambia, y la portada
 es el único sitio donde se pinta: ni la ficha ni «Mis procedimientos» la
 usan.
+
+## Adenda — 2026-11-19
+
+«Mis procedimientos» también pinta el color (#114): la misma franja fina,
+con la misma variable `--prc-banda`, a la izquierda del título de cada fila.
+`Workspace` ya lo calculaba y la tabla no lo usaba; en una lista larga ayuda a
+reconocer de un vistazo los procedimientos de una misma familia sin añadir
+una columna. Lo que la adenda anterior decía —que la portada era el único
+sitio donde se pinta— deja de valer para «Mis procedimientos»; la ficha sigue
+sin usarlo.

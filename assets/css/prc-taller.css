@@ -169,6 +169,8 @@
 /* Seis columnas: por debajo de 720px `prc-app.css` y la regla de abajo la
    convierten en tarjetas. */
 .prc-tabla--taller { width: 100%; }
+/* Editar, ver las solicitudes y ver la ficha: tres iconos en fila. */
+.prc-tabla--taller .prc-celda-accion .prc-acciones { gap: 6px; margin: 0; flex-wrap: nowrap; }
 
 .prc-tabla--taller thead th {
   font-size: var(--prc-t-base);

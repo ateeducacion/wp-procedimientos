@@ -11869,9 +11869,13 @@ final class Shell {
 	public static function icon( string $nombre ): string {
 		$caminos = array(
 
-			'lapiz' => '<path fill="currentColor" d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8.4 17.6l-3.9.9.9-3.9L16.5 3.5Z"/>',
+			'lapiz'    => '<path fill="currentColor" d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8.4 17.6l-3.9.9.9-3.9L16.5 3.5Z"/>',
 
-			'ojo'   => '<path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>',
+			'ojo'      => '<path fill="currentColor" d="M12 5c-5 0-9 4.5-9 7s4 7 9 7 9-4.5 9-7-4-7-9-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>',
+
+			'lista'    => '<path fill="currentColor" d="M4 5h2v2H4V5Zm4 0h12v2H8V5Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Z"/>',
+
+			'descarga' => '<path fill="currentColor" d="M11 4h2v8.6l3.3-3.3 1.4 1.4L12 16.4l-5.7-5.7 1.4-1.4 3.3 3.3V4ZM4 18h16v2H4v-2Z"/>',
 		);
 		if ( ! isset( $caminos[ $nombre ] ) ) {
 			return '';
@@ -19185,7 +19189,7 @@ final class HelpContent {
 				'id'    => 'su-lista',
 				'level' => 2,
 				'title' => 'Su lista: «Gestión de procedimientos»',
-				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, y cuántas <strong>solicitudes</strong> tiene (abre la lista). Ver la ficha, duplicar y borrar se hacen dentro del taller, desde el menú <strong>«⋮»</strong> de arriba a la derecha. Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
+				'html'  => '<p>Menú <strong>«Administrar» → <a href="%workspace%">«Gestionar procedimientos»</a></strong>. Elija el curso arriba y verá una tabla con cada procedimiento: su <strong>título</strong> (abre el taller, y debajo lleva su número y su ámbito), su <strong>estado</strong>, el <strong>plazo</strong> de solicitud, a quién va <strong>dirigido</strong>, cuántas <strong>solicitudes</strong> tiene (abre la lista) y, al final, tres iconos: el <strong>lápiz</strong> abre el taller, la <strong>lista</strong> sus solicitudes y el <strong>ojo</strong> la ficha —en un borrador, la vista previa—. Duplicar y borrar se hacen dentro del taller, desde el menú <strong>«⋮»</strong> de arriba a la derecha. Busque por título, número o ámbito en <strong>«Buscar por título, número o ámbito»</strong>. Si duda de lo que significa un estado, abra <strong>«¿Qué significa cada estado?»</strong>; el aviso de que <strong>las fechas no cuadran</strong> indica que hay que repasar los plazos.</p>',
 				'shots' => array(
 					array(
 						'caption' => '«Gestión de procedimientos» con la tabla y la leyenda de estados',
@@ -19212,7 +19216,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -21399,6 +21403,7 @@ use Prc\PublicFront\Workspace;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\View\WorkspaceView', false ) ) {
 final class WorkspaceView {
 
@@ -21678,6 +21683,7 @@ final class WorkspaceView {
 						<th scope="col">Plazo</th>
 						<th scope="col">Dirigido a</th>
 						<th scope="col">Solicitudes</th>
+						<th scope="col">Acciones</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -21735,6 +21741,13 @@ final class WorkspaceView {
 			</td>
 			<td class="prc-celda-solicitudes" data-rotulo="Solicitudes">
 				<?php self::applications( $row ); ?>
+			</td>
+			<td class="prc-celda-accion" data-rotulo="Acciones">
+				<span class="prc-acciones">
+					<?php echo PanelParts::icon_link( (string) $row['url'], 'lapiz', 'Editar en el taller' );?>
+					<?php echo PanelParts::icon_link( (string) $row['applications_url'], 'lista', 'Ver las solicitudes' );?>
+					<?php echo PanelParts::icon_link( (string) $row['view_url'], 'ojo', (string) $row['view_label'] );?>
+				</span>
 			</td>
 		</tr>
 		<?php
@@ -22179,6 +22192,9 @@ final class Workspace {
 			'applications'     => 0,
 			'url'              => Shell::url( 'editor', array( Shell::ARG_PROCEDURE => $id ) ),
 			'applications_url' => ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ),
+
+			'view_url'         => ProcedureView::link( $post ),
+			'view_label'       => 'publish' === $post->post_status ? 'Ver la ficha' : 'Vista previa',
 		);
 	}
 
@@ -22529,7 +22545,10 @@ final class ExportDialogView {
 		ob_start();
 		?>
 		<details class="prc-exportar" data-prc-export>
-			<summary class="<?php echo esc_attr( Assets::button_class() ); ?> prc-exportar__abrir">Exportar…</summary>
+			<summary class="<?php echo esc_attr( Assets::button_class( true ) ); ?> prc-exportar__abrir">
+				<?php echo Shell::icon( 'descarga' );?>
+				Exportar…
+			</summary>
 			<form class="prc-form prc-form--taller prc-exportar__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" aria-labelledby="prc-exportar-titulo">
 				<h2 class="prc-exportar__titulo" id="prc-exportar-titulo">Exportar las solicitudes</h2>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -23840,6 +23859,7 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] );?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] );?>
 			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) );?>
+			<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa', 'prc-cabecera__ojo' );?>
 			<?php echo self::menu( $m );?>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
@@ -35660,6 +35680,9 @@ body.prc-app .prc-hoja {
    persona: sin guion se abre y se cierra igual. Cada opción mide al menos
    44 px de alto, y la capa no pasa del ancho de la pantalla en el móvil. */
 .prc-mas { position: relative; margin-left: auto; }
+/* El ojo de «Ver la ficha», a la vista junto al menú: él empuja a la derecha. */
+.prc-cabecera__ojo { margin-left: auto; }
+.prc-cabecera__ojo + .prc-mas { margin-left: 0; }
 .prc-mas > summary { list-style: none; cursor: pointer; }
 .prc-mas > summary::-webkit-details-marker { display: none; }
 /* Con más peso que `.prc-mini` y que `body.prc-app .btn`, que lo dejarían
@@ -37636,6 +37659,8 @@ body.prc-app .prc-btn-borrar {
 /* Seis columnas: por debajo de 720px `prc-app.css` y la regla de abajo la
    convierten en tarjetas. */
 .prc-tabla--taller { width: 100%; }
+/* Editar, ver las solicitudes y ver la ficha: tres iconos en fila. */
+.prc-tabla--taller .prc-celda-accion .prc-acciones { gap: 6px; margin: 0; flex-wrap: nowrap; }
 
 .prc-tabla--taller thead th {
   font-size: var(--prc-t-base);
@@ -38099,7 +38124,10 @@ body.prc-app .prc-btn-borrar {
 		var abrir = document.createElement( \'button\' );
 		abrir.type = \'button\';
 		abrir.className = resumen.className;
-		abrir.textContent = resumen.textContent;
+		// Con sus hijos, no solo el texto: el icono viaja con el rótulo.
+		Array.prototype.forEach.call( resumen.childNodes, function ( nodo ) {
+			abrir.appendChild( nodo.cloneNode( true ) );
+		} );
 		abrir.setAttribute( \'aria-haspopup\', \'dialog\' );
 		abrir.setAttribute( \'aria-controls\', dialogo.id );
 		abrir.setAttribute( \'data-prc-export-open\', dialogo.id );

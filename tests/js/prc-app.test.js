@@ -900,3 +900,155 @@ describe( 'the «Más acciones» menu', () => {
 		expect( ajeno.open ).toBe( true );
 	} );
 } );
+
+describe( 'unsaved changes in the workshop forms', () => {
+	const TALLER = `
+		<nav><a id="tab" href="/gestion-de-procedimientos/?panel=preguntas">Campos adicionales</a>
+		<a id="ancla" href="#prc-aviso">Saltar</a>
+		<a id="nueva" href="/ficha" target="_blank">Ver la ficha</a>
+		<a id="ajeno" href="https://otro.example/">Fuera</a></nav>
+		<form id="f" data-prc-dirty-guard><input id="t" name="prc_title" /><button type="submit">Guardar</button></form>
+		<form id="otro"><input id="o" name="q" /></form>`;
+
+	const QUESTION = 'Hay cambios sin guardar. ¿Salir sin guardar?';
+
+	function leave() {
+		const event = new Event( 'beforeunload', { cancelable: true } );
+		window.dispatchEvent( event );
+		return event;
+	}
+
+	function click( id, init = {} ) {
+		const event = new MouseEvent( 'click', { bubbles: true, cancelable: true, ...init } );
+		document.getElementById( id ).dispatchEvent( event );
+		return event;
+	}
+
+	function type( id ) {
+		document.getElementById( id ).dispatchEvent( new Event( 'input', { bubbles: true } ) );
+	}
+
+	it( 'lets the page go while nothing changed, or when only an unguarded form changed', async () => {
+		document.body.innerHTML = TALLER;
+		window.confirm = vi.fn();
+		await load();
+		type( 'o' );
+
+		expect( leave().defaultPrevented ).toBe( false );
+		expect( click( 'tab' ).defaultPrevented ).toBe( false );
+		expect( window.confirm ).not.toHaveBeenCalled();
+	} );
+
+	it( 'warns on leaving the page once a guarded field changed', async () => {
+		document.body.innerHTML = TALLER;
+		await load();
+		document.getElementById( 't' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
+
+		expect( leave().defaultPrevented ).toBe( true );
+	} );
+
+	it( 'asks with confirm() before following a tab, and stays when cancelled', async () => {
+		document.body.innerHTML = TALLER;
+		window.confirm = vi.fn( () => false );
+		await load();
+		type( 't' );
+
+		expect( click( 'tab' ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( QUESTION );
+		expect( leave().defaultPrevented ).toBe( true );
+	} );
+
+	it( 'follows the tab once confirmed, without asking again on unload', async () => {
+		document.body.innerHTML = TALLER;
+		window.confirm = vi.fn( () => true );
+		await load();
+		type( 't' );
+		// After the script's own listener: sees what the browser would follow.
+		const sigue = vi.fn();
+		document.addEventListener( 'click', ( e ) => {
+			sigue( e.defaultPrevented );
+			e.preventDefault();
+		} );
+
+		click( 'tab' );
+
+		// confirm() answers at once, so the clean click runs inside the first one.
+		expect( sigue.mock.calls ).toEqual( [ [ false ], [ true ] ] );
+		expect( leave().defaultPrevented ).toBe( false );
+	} );
+
+	it( 'asks with SweetAlert2 when it loaded, naming the button after leaving', async () => {
+		document.body.innerHTML = TALLER;
+		window.Swal = { fire: vi.fn( () => Promise.resolve( { isConfirmed: false } ) ) };
+		await load();
+		type( 't' );
+
+		expect( click( 'tab' ).defaultPrevented ).toBe( true );
+		await flush();
+		expect( window.Swal.fire ).toHaveBeenCalledWith( expect.objectContaining( {
+			title: QUESTION,
+			confirmButtonText: 'Salir sin guardar',
+			cancelButtonText: 'Cancelar',
+		} ) );
+		expect( leave().defaultPrevented ).toBe( true );
+	} );
+
+	it( 'leaves alone in-page anchors, new tabs, other sites and modified clicks', async () => {
+		document.body.innerHTML = TALLER;
+		window.confirm = vi.fn();
+		await load();
+		type( 't' );
+
+		expect( click( 'ancla' ).defaultPrevented ).toBe( false );
+		expect( click( 'nueva' ).defaultPrevented ).toBe( false );
+		expect( click( 'ajeno' ).defaultPrevented ).toBe( false );
+		expect( click( 'tab', { ctrlKey: true } ).defaultPrevented ).toBe( false );
+		expect( window.confirm ).not.toHaveBeenCalled();
+	} );
+
+	it( 'asks with confirm() from a link inside an open modal dialog, where SweetAlert2 would sit underneath', async () => {
+		document.body.innerHTML = TALLER + '<dialog id="bloqueo" open><a id="volver" href="/mis-procedimientos/">Dejarlo</a></dialog>';
+		window.Swal = { fire: vi.fn( () => Promise.resolve( { isConfirmed: false } ) ) };
+		window.confirm = vi.fn( () => false );
+		await load();
+		type( 't' );
+
+		expect( click( 'volver' ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( QUESTION );
+		expect( window.Swal.fire ).not.toHaveBeenCalled();
+	} );
+
+	it( 'marks the form when a CodeMirror editor inside it changes, edits that fire no input event', async () => {
+		document.body.innerHTML = TALLER.replace( '<input id="t" name="prc_title" />', '<textarea id="css" name="prc_custom_css"></textarea><div class="CodeMirror"><textarea id="cm-input"></textarea></div>' );
+		await load();
+		const handlers = [];
+		const textarea = document.getElementById( 'css' );
+		document.querySelector( '.CodeMirror' ).CodeMirror = {
+			on: ( event, handler ) => handlers.push( [ event, handler ] ),
+			getTextArea: () => textarea,
+		};
+
+		document.getElementById( 'cm-input' ).dispatchEvent( new FocusEvent( 'focusin', { bubbles: true } ) );
+		document.getElementById( 'cm-input' ).dispatchEvent( new FocusEvent( 'focusin', { bubbles: true } ) );
+		expect( leave().defaultPrevented ).toBe( false );
+		expect( handlers.map( ( [ event ] ) => event ) ).toEqual( [ 'change' ] );
+
+		handlers[ 0 ][ 1 ]();
+		expect( leave().defaultPrevented ).toBe( true );
+	} );
+
+	it( 'clears the mark when its own form is sent, not when the send is stopped', async () => {
+		document.body.innerHTML = TALLER.replace( 'data-prc-dirty-guard', 'data-prc-dirty-guard data-prc-confirm="¿Guardar?"' );
+		window.confirm = vi.fn( () => false );
+		await load();
+		type( 't' );
+		const form = document.getElementById( 'f' );
+
+		submit( form );
+		expect( leave().defaultPrevented ).toBe( true );
+
+		window.confirm = vi.fn( () => true );
+		submit( form );
+		expect( leave().defaultPrevented ).toBe( false );
+	} );
+} );

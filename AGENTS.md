@@ -153,8 +153,10 @@ src/Prc/
 ├── PublicFront/View/ExportDialogView.php   Pinta el diálogo de exportar
 ├── PublicFront/View/ApplicationActionsView.php Pinta retirar, «Retiradas», la prórroga, la nota interna y el historial
 ├── PublicFront/View/ApplicationsPanelView.php Pinta la tabla de solicitudes: contadores, filtros, páginas y bloque
+├── PublicFront/View/AdvancedPanelView.php  Pinta «Avanzado»: qué centros pueden solicitar, la consulta y el código
 ├── PublicFront/View/ProcedureEditorView.php Pinta el taller y sus paneles
 ├── PublicFront/ProcedureEditor.php         [prc_editor]
+├── PublicFront/AdvancedPanel.php           «Avanzado»: qué secciones ve cada cual, guardar qué centros solicitan y adónde van las pestañas de antes
 ├── PublicFront/ProcedureDuplicate.php      Duplicar un procedimiento: el borrador nuevo y su aviso
 ├── PublicFront/ProcedureDelete.php         Borrar un borrador desde el taller: la palabra BORRAR y la papelera
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla

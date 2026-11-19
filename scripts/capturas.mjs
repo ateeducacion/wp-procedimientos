@@ -143,8 +143,16 @@ const SCENES = [
 	},
 	{
 		chapter: 'El taller del procedimiento',
+		title: 'Avanzado',
+		note: 'Lo que rara vez se toca, en secciones con su botón: qué centros pueden solicitar (tipos, islas y lista cerrada), el acceso de consulta, que solo ve administración, y el código.',
+		who: 'gestion',
+		go: '/editar-procedimiento/?procedimiento={ID}&panel=avanzado',
+		screens: [ 'desktop', 'mobile' ],
+	},
+	{
+		chapter: 'El taller del procedimiento',
 		title: 'Solicitudes',
-		note: 'La tabla de centros con cargo, coordinación y estado de revisión; admitir, pedir subsanar o excluir con nota, y exportar a CSV por POST.',
+		note: 'La tabla de centros con cargo, coordinación y estado de revisión; admitir, pedir subsanar o excluir con nota, exportar a CSV por POST y, al final, los plazos de las entregas con plazo propio.',
 		who: 'gestion',
 		go: '/editar-procedimiento/?procedimiento={ID}&panel=solicitudes',
 		screens: [ 'desktop' ],

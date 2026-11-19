@@ -325,7 +325,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Avanzado</strong> (Acceso de consulta, solo para quien administra el aplicativo, y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -337,7 +337,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>, dentro de «Limitar a ciertos centros (avanzado)»: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -345,7 +345,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => 'pestaña «Datos», bloques de la solicitud y de qué centros pueden solicitar',
+						'caption' => 'pestaña «Datos», bloque de la solicitud',
 						'image'   => '',
 					),
 				),
@@ -399,18 +399,19 @@ final class HelpContent {
 				'shots' => array(),
 			),
 			array(
-				'id'    => 'taller-consulta',
+				'id'    => 'taller-avanzado',
 				'level' => 3,
-				'title' => 'Acceso de consulta',
-				'html'  => '<p>Solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
-				'shots' => array(),
-			),
-			array(
-				'id'    => 'taller-codigo',
-				'level' => 3,
-				'title' => 'Código',
-				'html'  => '<p>Estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</p>',
-				'shots' => array(),
+				'title' => 'Avanzado',
+				'html'  => '<p>Lo que rara vez se toca, en secciones que se guardan cada una con su botón:</p>'
+					. '<ul><li><strong>Qué centros pueden solicitar</strong>, solo en los procedimientos para centros: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado. Pulse <strong>«Guardar qué centros pueden solicitar»</strong>. Se cierra con el resto de «Datos» cuando el estado del procedimiento ya no deja cambiarlo.</li>'
+					. '<li><strong>Acceso de consulta</strong>: solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</li>'
+					. '<li><strong>Código</strong>: estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Avanzado», con qué centros pueden solicitar',
+						'image'   => '',
+					),
+				),
 			),
 			array(
 				'id'    => 'publicar',
@@ -459,7 +460,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Al final de la pestaña <strong>«Solicitudes»</strong>, <strong>«Plazos de entregas documentales»</strong>: los de las entregas con plazo propio, si las hay. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(

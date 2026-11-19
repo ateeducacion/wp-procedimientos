@@ -13,6 +13,8 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\AdvancedPanel;
+use Prc\PublicFront\ApplicationActionsPanel;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -214,29 +216,23 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_PEOPLE,
 				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_PUBLISH,
+				ProcedureEditor::PANEL_ADVANCED,
 				ProcedureEditor::PANEL_APPLICATIONS,
-				ProcedureEditor::PANEL_DELIVERIES,
-				ProcedureEditor::PANEL_CODE,
 			),
 			array_keys( $m['panels'] ),
-			'en el orden en que se trabaja: preparar, gestionar y el resto; el acceso de consulta es de administración'
+			'en el orden en que se trabaja, sin grupos: lo de preparar, «Avanzado» y las solicitudes'
 		);
-		$this->assertSame(
-			array( 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Preparar', 'Gestionar', 'Gestionar', 'Avanzado' ),
-			array_values( wp_list_pluck( $m['panels'], 'group' ) )
-		);
-		$this->acting_as( $this->administrator() );
-		$this->assertSame( 'Acceso de consulta', ProcedureEditor::panels( $procedimiento )[ ProcedureEditor::PANEL_OBSERVE ]['label'], 'no se llama como el menú de arriba' );
-		$this->acting_as( $uid );
+		$this->assertSame( 'Avanzado', $m['panels'][ ProcedureEditor::PANEL_ADVANCED ]['label'] );
+		$this->assertArrayNotHasKey( 'group', $m['panels'][ ProcedureEditor::PANEL_DATA ] );
 
 		$html = ProcedureEditorView::html( $m );
-		$this->assertStringContainsString( 'role="group" aria-label="Gestionar"', $html, 'cada grupo se nombra' );
-		$this->assertStringContainsString( '<span class="prc-tabs-grupo__rotulo" aria-hidden="true">Avanzado</span>', $html );
+		$this->assertStringNotContainsString( 'prc-tabs-grupo', $html, 'ni grupos ni rótulos de grupo' );
+		$this->assertStringNotContainsString( 'role="group"', $html );
 		$this->assertStringContainsString( '<span class="prc-tab-n">1</span>', $html, 'el contador sin la clase de Bootstrap que lo pinta en blanco' );
 		$this->assertSame( ProcedureEditor::PANEL_DATA, $m['panel'], 'por defecto, los datos' );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
-		$this->assertSame( 0, $m['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
+		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_ADVANCED ]['count'] );
 		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_LINKS ]['count'] );
 		$this->assertSame( $procedimiento, $m['procedure_id'] );
 		$this->assertSame( (string) get_permalink( $procedimiento ), $m['view_url'] );
@@ -265,18 +261,18 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_QUESTIONS,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_LINKS,
-			ProcedureEditor::PANEL_CODE,
+			ProcedureEditor::PANEL_ADVANCED,
 		);
 		foreach ( $paneles as $panel ) {
 			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
 			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html, $panel );
 		}
-		// «Acceso de consulta» solo lo ve administración: con quien gestiona
-		// su ámbito, el modelo caería a «Datos» y no se comprobaría nada.
+		// En «Avanzado», cada sección con su formulario: los centros y el
+		// código para quien gestiona; administración, además, la consulta.
+		$this->assertSame( 2, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html ) );
 		$this->acting_as( $this->administrator() );
-		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_OBSERVE );
-		$this->assertSame( ProcedureEditor::PANEL_OBSERVE, $m['panel'] );
-		$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ), ProcedureEditor::PANEL_OBSERVE );
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
+		$this->assertSame( 3, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ) ) );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringNotContainsString( 'data-prc-dirty-guard', $html, 'publicar es un botón, no un formulario que se rellena' );
@@ -303,10 +299,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_custom_code_panel_explains_and_limits_javascript_access() {
 		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::CUSTOM_CSS => 'h1 { color: red; }' ) );
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'name="prc_custom_css"', $html );
 		$this->assertStringNotContainsString( 'name="prc_custom_js"', $html );
-		$this->assertStringNotContainsString( 'JavaScript', $html );
+		$this->assertStringNotContainsString( 'prc-custom-js', $html );
 		$this->assertStringContainsString( '>Guardar el código</button>', $html, 'guardar y qué' );
 	}
 
@@ -314,7 +310,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_administrators_see_the_javascript_warning_and_editor() {
 		list( , , $procedure ) = $this->mio();
 		$this->acting_as( $this->administrator() );
-		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'name="prc_custom_js"', $html );
 		$this->assertStringContainsString( 'class="prc-aviso prc-aviso-warning prc-codigo-admin"', $html );
 		$this->assertStringContainsString( 'Solo para administración', $html );
@@ -325,9 +321,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		list( , $uid, $procedure ) = $this->mio();
 		update_user_option( $uid, 'syntax_highlighting', 'true', true );
 		$this->acting_as( $uid );
-		$this->go_to( ProcedureEditor::url( $procedure, ProcedureEditor::PANEL_CODE ) );
+		$this->go_to( ProcedureEditor::url( $procedure, ProcedureEditor::PANEL_ADVANCED ) );
 
-		ProcedureEditor::enqueue_code_editor();
+		AdvancedPanel::enqueue_code_editor();
 		$scripts = wp_scripts();
 		$inline  = implode( '', (array) ( $scripts->registered['code-editor']->extra['after'] ?? array() ) );
 		$this->assertTrue( $scripts->query( 'code-editor', 'enqueued' ) );
@@ -443,9 +439,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Con profesorado, la coordinación y la sección entera de centros, con su
-	 * título, salen escondidas; los compromisos siguen, porque también se le
-	 * piden a cada docente.
+	 * Con profesorado, la coordinación sale escondida; los compromisos
+	 * siguen, porque también se le piden a cada docente. Qué centros pueden
+	 * solicitar ya no está en «Datos», sino en «Avanzado» (#80).
 	 */
 	public function test_teachers_hide_coordination_and_the_centre_section() {
 		list( , $uid, $docentes ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
@@ -453,12 +449,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( $this->modelo( $docentes, ProcedureEditor::PANEL_DATA ) );
 
 		$this->assertMatchesRegularExpression( '#<fieldset class="prc-campo" data-prc-schools-only hidden>\s*<legend class="prc-campo__etiqueta">¿Pide la solicitud personas coordinadoras\?#u', $html );
-		$this->assertMatchesRegularExpression( '#<div data-prc-schools-only hidden><fieldset class="prc-seccion-campos"[^>]*><legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>#u', $html );
 		$this->assertDoesNotMatchRegularExpression( '#data-prc-schools-only hidden>\s*<div class="prc-campo">\s*<label class="prc-campo__etiqueta" for="prc-commitments"#u', $html );
-
-		update_post_meta( $docentes, ProcedureMetaKeys::AUDIENCE, ProcedureMetaKeys::AUDIENCE_SCHOOLS );
-		$html = ProcedureEditorView::html( $this->modelo( $docentes, ProcedureEditor::PANEL_DATA ) );
-		$this->assertMatchesRegularExpression( '#<div data-prc-schools-only ><fieldset class="prc-seccion-campos"[^>]*><legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>#u', $html );
+		$this->assertStringNotContainsString( 'Qué centros pueden solicitar', $html );
 	}
 
 	/**
@@ -564,10 +556,23 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * «Qué centros pueden solicitar»: las casillas salen del catálogo, se
-	 * guardan, y una lista mal escrita no guarda nada y repinta lo tecleado.
+	 * Lo que manda el formulario de «Qué centros pueden solicitar», como el
+	 * navegador: la lista cerrada viaja siempre, y los interruptores solo
+	 * encendidos.
+	 *
+	 * @param array<string, mixed> $cambios What to add or override.
+	 * @return array<string, mixed>
 	 */
-	public function test_the_data_panel_narrows_which_centres_may_apply() {
+	private function centros( array $cambios = array() ): array {
+		return array_merge( array( ProcedureMetaKeys::ALLOWED_CENTRES => '' ), $cambios );
+	}
+
+	/**
+	 * «Qué centros pueden solicitar» vive en «Avanzado», con su formulario:
+	 * las casillas salen del catálogo, se guardan, y una lista mal escrita no
+	 * guarda nada y repinta lo tecleado. «Datos» ya no lo pinta.
+	 */
+	public function test_the_advanced_panel_narrows_which_centres_may_apply() {
 		add_filter(
 			'prc_centres',
 			static function () {
@@ -587,26 +592,30 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				);
 			}
 		);
-		list( $area, $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::ISLANDS => array( 'Isla Perdida' ) ) );
-		$curso                              = $this->course( '2027-2028' );
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::ISLANDS => array( 'Isla Perdida' ) ) );
 
 		$this->acting_as( $uid );
-		$m    = $this->modelo( $procedimiento );
+		$datos = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringNotContainsString( 'Qué centros pueden solicitar', $datos, 'ya no está en «Datos»' );
+		$this->assertStringNotContainsString( 'name="' . ProcedureMetaKeys::ALLOWED_CENTRES . '"', $datos );
+
+		$m    = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
 		$html = ProcedureEditorView::html( $m );
 		$this->assertSame( array( 'CEIP', 'IES' ), $m['centre_options']['types'] );
 		$this->assertSame( array( 'Isla Dos', 'Isla Perdida', 'Isla Uno' ), $m['centre_options']['islands'], 'lo elegido se ofrece aunque el catálogo ya no lo traiga' );
-		$this->assertStringContainsString( '<legend class="prc-seccion__titulo">Qué centros pueden solicitar</legend>', $html );
+		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_CENTRES . '"', $html );
+		$this->assertStringContainsString( '>Qué centros pueden solicitar</h2>', $html );
+		$this->assertStringContainsString( 'value="' . ProcedureEditor::OP_CENTRES . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::CENTRE_TYPES . '[]" value="IES"', $html );
-		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::ALLOWED_CENTRES . '"', $html );
+		$this->assertStringContainsString( '>Guardar qué centros pueden solicitar</button>', $html );
+		$this->assertStringNotContainsString( '<details class="prc-acotar"', $html, 'en «Avanzado» ya no se pliega' );
 
 		$url = $this->submit(
 			$uid,
-			ProcedureEditor::PANEL_DATA,
+			ProcedureEditor::OP_CENTRES,
 			$procedimiento,
 			0,
-			$this->datos(
-				$area,
-				$curso,
+			$this->centros(
 				array(
 					ProcedureEditor::FIELD_LIMIT_TYPES   => '1',
 					ProcedureMetaKeys::CENTRE_TYPES      => array( 'CEIP' ),
@@ -616,7 +625,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				)
 			)
 		);
-		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( 'centros', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( ProcedureEditor::PANEL_ADVANCED, $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ), 'vuelve a «Avanzado»' );
 		$this->assertSame( array( 'CEIP' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->assertSame( array( 'Isla Uno' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
 		$this->assertSame( array( 'C0001', 'C0002' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
@@ -625,35 +635,34 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->olvidar_rechazo();
 		$this->assertNull(
-			$this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001, mal-escrito' ) ) )
+			$this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001, mal-escrito' ) ) )
 		);
 		$this->assertSame( array( 'C0001', 'C0002' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'no se guarda nada' );
-		$m = $this->modelo( $procedimiento );
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
 		$this->assertStringContainsString( 'lista cerrada de centros', $m['flash']['texto'] );
 		$this->assertSame( 'C0001, mal-escrito', $m['values'][ ProcedureMetaKeys::ALLOWED_CENTRES ], 'se repinta lo tecleado' );
 
 		// Sin marcar nada se quita el acotado: vuelve a ser para todos.
 		$this->olvidar_rechazo();
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso ) ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros() ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
 	}
 
 	/**
-	 * «Limitar a ciertos centros» sale plegado sin límite, con un interruptor
-	 * por lista: apagado no acota aunque las casillas vayan marcadas;
-	 * encendido guarda exactamente lo marcado, también si es todo el catálogo;
-	 * encendido sin nada se rechaza y se repinta como se envió (#84).
+	 * Un interruptor por lista: apagado no acota aunque las casillas vayan
+	 * marcadas; encendido guarda exactamente lo marcado, también si es todo
+	 * el catálogo; encendido sin nada se rechaza y se repinta como se envió
+	 * (#84). El aviso del catálogo vacío, a la vista en la sección.
 	 */
-	public function test_the_limit_switches_fold_and_decide_the_centre_lists() {
-		add_filter( 'prc_centres', array( $this, 'two_centres' ) );
-		list( $area, $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC, ProcedureMetaKeys::OWNERSHIP_PRIVATE ) ) );
-		$curso                              = $this->course( '2027-2028' );
-
+	public function test_the_limit_switches_decide_the_centre_lists() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) ) );
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		$this->assertStringContainsString( '<details class="prc-acotar">', $html, 'plegado sin límite' );
-		$this->assertStringContainsString( 'Limitar a ciertos centros (avanzado)', $html );
+		$this->assertStringContainsString( 'El catálogo de centros está vacío', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) ) );
+
+		add_filter( 'prc_centres', array( $this, 'two_centres' ) );
+		\Prc\Domain\CentreCatalog::flush();
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*\/>/', $html, 'el interruptor, apagado' );
 		$this->assertStringContainsString( 'Limitar por tipo de centro', $html );
 		$this->assertStringContainsString( 'Limitar por isla', $html );
@@ -661,48 +670,140 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( array( 'CEIP', 'IES' ), $ticked[ ProcedureMetaKeys::CENTRE_TYPES ], 'al encenderlo, todos marcados' );
 
 		// Apagado, las casillas marcadas no acotan.
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $ticked ) ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( $ticked ) ) );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 
 		// Encendido con todo el catálogo: se guarda tal cual, no se deduce nada.
 		$on = array( ProcedureEditor::FIELD_LIMIT_TYPES => '1' ) + $ticked;
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $on ) ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( $on ) ) );
 		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'con un límite, abierto' );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*checked=/', $html );
 		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_ISLANDS . '" value="1"\s*\/>/', $html, 'las islas, sin límite' );
 
 		// Encendido y sin nada: se rechaza, no se guarda y se repinta encendido.
-		// La lista cerrada viaja siempre, como en el navegador.
-		$empty = array(
-			ProcedureEditor::FIELD_LIMIT_ISLANDS => '1',
-			ProcedureMetaKeys::ALLOWED_CENTRES   => '',
-		);
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $empty ) ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( array( ProcedureEditor::FIELD_LIMIT_ISLANDS => '1' ) ) ) );
 		$this->assertSame( array( 'CEIP', 'IES' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ), 'no se guarda nada' );
 		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
-		$m    = $this->modelo( $procedimiento );
+		$m    = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
 		$html = ProcedureEditorView::html( $m );
 		$this->assertStringContainsString( 'marque al menos una isla', $m['flash']['texto'] );
-		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'repintado con la regla de los interruptores' );
 		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_ISLANDS . '" value="1"\s*checked=/', $html, 'como se envió' );
 		$this->assertMatchesRegularExpression( '/name="' . ProcedureEditor::FIELD_LIMIT_TYPES . '" value="1"\s*\/>/', $html, 'el de tipos, como se envió: apagado' );
 	}
 
 	/**
-	 * Una titularidad que limita, o el aviso del catálogo vacío, abren el
-	 * plegado; el aviso va fuera, a la vista.
+	 * Guardar «Datos», que ya no lleva los límites, no los toca; y si pasa a
+	 * ser de profesorado, se quitan, como antes.
 	 */
-	public function test_the_fold_opens_for_ownership_and_the_warning_stays_outside() {
-		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::OWNERSHIP => array( ProcedureMetaKeys::OWNERSHIP_PUBLIC ) ) );
+	public function test_saving_the_data_panel_keeps_the_centre_limits() {
+		list( $area, $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::CENTRE_TYPES    => array( 'CEIP' ),
+				ProcedureMetaKeys::ISLANDS         => array( 'Isla Uno' ),
+				ProcedureMetaKeys::ALLOWED_CENTRES => array( 'C0001' ),
+			)
+		);
+		$curso                              = $this->course( '2027-2028' );
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso ) ) );
+		$this->assertSame( array( 'CEIP' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
+		$this->assertSame( array( 'Isla Uno' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
+		$this->assertSame( array( 'C0001' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ) );
+
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) ) ) );
+		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ), 'el profesorado no acota centros' );
+	}
+
+	/**
+	 * Los límites se guardan con las mismas reglas que tenían en «Datos»:
+	 * con su grupo cerrado por el estado, ni se guardan ni se pintan
+	 * encendidos; y quien no edita el procedimiento no los cambia.
+	 */
+	public function test_the_centre_limits_keep_the_rules_of_the_data_group() {
+		list( , $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
+		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedimiento, ProcedureState::GROUP_DATA ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001' ) ) ) );
+		$this->assertSame( array(), (array) get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'cerrado, no se guarda' );
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		$this->assertStringContainsString( '<details class="prc-acotar" open>', $html, 'una sola titularidad limita' );
-		$aviso = strpos( $html, 'El catálogo de centros está vacío' );
-		$this->assertNotFalse( $aviso );
-		$this->assertLessThan( strpos( $html, '<details class="prc-acotar"' ), $aviso, 'el aviso, fuera del plegado' );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
+		$this->assertMatchesRegularExpression( '/Qué centros pueden solicitar<\/h2>\s*<p class="prc-seccion__bloqueo">Cerrado por el estado del procedimiento\.<\/p>.*?<fieldset class="prc-seccion-campos" disabled>/s', $html, 'pintado apagado, y por qué, bajo el título' );
+
+		$this->olvidar_rechazo();
+		$ajeno = $this->procedure( $this->administrator(), array( $this->area( 'Otro ámbito' ) ) );
+		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $ajeno, 0, $this->centros( array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001' ) ) ) );
+		$this->assertSame( array(), (array) get_post_meta( $ajeno, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'de otro ámbito, no' );
+	}
+
+	/**
+	 * Un procedimiento de profesorado no acota centros: «Avanzado» no pinta
+	 * la sección y lo dice.
+	 */
+	public function test_a_teachers_procedure_has_no_centre_limits() {
+		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
+		$this->acting_as( $uid );
+		$this->assertSame( array( 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
+		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_CENTRES . '"', $html );
+	}
+
+	/**
+	 * Las secciones de «Avanzado» según quién mira: «Acceso de consulta»
+	 * solo para administración; los centros y el código, para quien abre el
+	 * taller. Cada una con su ancla.
+	 */
+	public function test_the_advanced_sections_follow_who_is_looking() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->acting_as( $uid );
+		$this->assertSame( array( 'centres', 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
+		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_CODE . '"', $html );
+		$this->assertStringNotContainsString( 'id="' . ProcedureEditor::SECTION_OBSERVE . '"', $html );
+		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_OBSERVE . '"', $html );
+
+		$this->acting_as( $this->administrator() );
+		$this->assertSame( array( 'centres', 'observe', 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
+		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_OBSERVE . '"', $html );
+		$this->assertStringContainsString( '>Acceso de consulta</h2>', $html );
+		$this->assertLessThan( strpos( $html, 'id="' . ProcedureEditor::SECTION_CODE . '"' ), strpos( $html, 'id="' . ProcedureEditor::SECTION_OBSERVE . '"' ), 'en el orden de las pestañas que sustituyen' );
+	}
+
+	/**
+	 * Las pestañas que ya no existen llevan a donde está ahora lo suyo, con
+	 * el resto de la dirección: un enlace guardado o un correo viejo no
+	 * rompen.
+	 */
+	public function test_the_old_panels_redirect_to_where_they_live_now() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->acting_as( $uid );
+		$casos = array(
+			'entregas' => array( ProcedureEditor::PANEL_APPLICATIONS, ProcedureEditor::SECTION_DELIVERIES ),
+			'consulta' => array( ProcedureEditor::PANEL_ADVANCED, ProcedureEditor::SECTION_OBSERVE ),
+			'codigo'   => array( ProcedureEditor::PANEL_ADVANCED, ProcedureEditor::SECTION_CODE ),
+		);
+		foreach ( $casos as $viejo => $nuevo ) {
+			$this->go_to( ProcedureEditor::url( $procedimiento, $viejo, array( ProcedureEditor::ARG_NOTICE => 'datos' ) ) );
+			$url = $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) );
+			$this->assertNotNull( $url, $viejo );
+			$this->assertSame( $nuevo[0], $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ), $viejo );
+			$this->assertSame( (string) $procedimiento, $this->query_arg( (string) $url, ProcedureEditor::ARG_PROCEDURE ), $viejo );
+			$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), 'el resto de la dirección se queda' );
+			$this->assertStringEndsWith( '#' . $nuevo[1], (string) $url, $viejo );
+		}
+
+		// Un «&» dentro de un valor no cuela otro parámetro.
+		$this->go_to( ProcedureEditor::url( $procedimiento, 'codigo', array( 'x' => rawurlencode( 'a&aviso=publicado' ) ) ) );
+		$url = (string) $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) );
+		$this->assertSame( '', $this->query_arg( $url, ProcedureEditor::ARG_NOTICE ), $url );
+
+		// Un envío rechazado desde una pestaña vieja se repinta, no se redirige.
+		$_POST = array( ProcedureEditor::FIELD_DO => ProcedureEditor::OP_CUSTOM_CODE );
+		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ) );
+		$_POST = array();
+		$this->go_to( ProcedureEditor::url( $procedimiento, ProcedureEditor::PANEL_LINKS ) );
+		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ), 'una pestaña que existe no se toca' );
 	}
 
 	/**
@@ -771,9 +872,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 	/**
 	 * Lo guardado con otras mayúsculas que el catálogo sale marcado, y guardar
-	 * «Datos» sin tocar las casillas no borra el acotado.
+	 * sin tocar las casillas no borra el acotado.
 	 */
-	public function test_the_data_panel_keeps_choices_that_differ_only_in_case() {
+	public function test_the_centre_limits_keep_choices_that_differ_only_in_case() {
 		add_filter(
 			'prc_centres',
 			static function () {
@@ -793,16 +894,15 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				);
 			}
 		);
-		list( $area, $uid, $procedimiento ) = $this->mio(
+		list( , $uid, $procedimiento ) = $this->mio(
 			array(
 				ProcedureMetaKeys::CENTRE_TYPES => array( 'ceip' ),
 				ProcedureMetaKeys::ISLANDS      => array( 'isla uno (inventada)' ),
 			)
 		);
-		$curso                              = $this->course( '2027-2028' );
 
 		$this->acting_as( $uid );
-		$m    = $this->modelo( $procedimiento );
+		$m    = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
 		$html = ProcedureEditorView::html( $m );
 		$this->assertSame( array( 'ceip', 'IES' ), $m['centre_options']['types'], 'una sola casilla, con la grafía guardada' );
 		$this->assertSame( array( 'Isla Dos (inventada)', 'isla uno (inventada)' ), $m['centre_options']['islands'] );
@@ -820,14 +920,15 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::FIELD_LIMIT_TYPES   => '1',
 			ProcedureEditor::FIELD_LIMIT_ISLANDS => '1',
 		);
-		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, $switches + $marcadas ) ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( $switches + $marcadas ) ) );
 		$this->assertSame( array( 'ceip' ), get_post_meta( $procedimiento, ProcedureMetaKeys::CENTRE_TYPES, true ) );
 		$this->assertSame( array( 'isla uno (inventada)' ), get_post_meta( $procedimiento, ProcedureMetaKeys::ISLANDS, true ) );
 	}
 
 	/**
-	 * El panel «Datos» avisa de lo que cierra sin verse: el catálogo vacío y
-	 * una sola titularidad sin ningún tipo de centro marcado como privado.
+	 * El taller avisa de lo que cierra sin verse: «Datos», de una sola
+	 * titularidad sin ningún tipo de centro marcado como privado; «Avanzado»,
+	 * del catálogo vacío.
 	 */
 	public function test_the_data_panel_warns_about_silent_closures() {
 		remove_all_filters( 'prc_private_centre_types' );
@@ -838,8 +939,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 		$this->acting_as( $uid );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $html );
+		$datos = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $datos );
+		$this->assertStringContainsString( 'El catálogo de centros está vacío', $datos, 'también junto a «Dirigido a»: la titularidad no se puede comprobar' );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'El catálogo de centros está vacío', $html );
 		$this->assertStringContainsString( 'ningún centro puede solicitar hasta que se cargue', $html );
 		$this->assertStringContainsString( 'un centro que ya la presentó la sigue editando o subsanando', $html );
@@ -863,13 +966,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				return array( 'Colegio privado inventado' );
 			}
 		);
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
-		$this->assertStringNotContainsString( 'prc-aviso-centros', $html );
+		$this->assertStringNotContainsString( 'prc-aviso-centros', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) ) );
+		$this->assertStringNotContainsString( 'prc-aviso-centros', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA ) ) );
 	}
 
 	/**
-	 * Solo el panel «Datos» construye el catálogo para sus avisos: los demás
-	 * paneles no lo recorren.
+	 * Solo «Datos» y «Avanzado» construyen el catálogo, para sus avisos y sus
+	 * casillas: los demás paneles no lo recorren.
 	 */
 	public function test_other_panels_do_not_build_the_catalogue() {
 		list( , $uid, $procedimiento ) = $this->mio(
@@ -896,6 +999,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		\Prc\Domain\CentreCatalog::flush();
 		$this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA );
 		$this->assertSame( 1, $llamadas );
+		\Prc\Domain\CentreCatalog::flush();
+		$this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
+		$this->assertSame( 2, $llamadas );
 	}
 
 	/**
@@ -1926,10 +2032,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( $m );
 		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
-		$this->assertSame( 6, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los seis bloques que ya no se tocan, con «Qué centros pueden solicitar»' );
+		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan; «Qué centros pueden solicitar» está en «Avanzado»' );
 		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
 		// Y cada bloque apagado dice por qué lo está, junto al bloque.
-		$this->assertSame( 6, substr_count( $html, 'class="prc-seccion__bloqueo"' ) );
+		$this->assertSame( 5, substr_count( $html, 'class="prc-seccion__bloqueo"' ) );
 
 		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) ), 'las preguntas no se pintan editables' );
 		$this->assertStringNotContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS ) ), 'los enlaces sí' );
@@ -1968,8 +2074,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			'Datos',
 			'Campos adicionales',
 			'Participantes',
-			'Entregas',
 			'Enlaces',
+			'Avanzado',
 			'Solicitudes',
 			'Publicación',
 			'Ver la ficha',
@@ -1978,7 +2084,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
-		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación' ) as $pestana ) {
+		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Enlaces', 'Publicación', 'Avanzado', 'Solicitudes' ) as $pestana ) {
 			$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*>' . preg_quote( $pestana, '#' ) . '\s#', $html, 'falta la pestaña ' . $pestana );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -2030,8 +2136,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Devolver a borrador', $html );
 		$this->assertStringNotContainsString( 'Publicar el procedimiento', $html, 'ya está publicado' );
 		$this->assertStringNotContainsString( 'Solo administración', $html );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
-		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', $html );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertStringNotContainsString( 'Plazos de entregas documentales', $html, 'sin entregas con plazo propio, la sección no sale' );
 	}
 
 	/**
@@ -2068,8 +2174,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'histórico', $html );
 		$this->assertMatchesRegularExpression( '/<h3>Histórico\s*<span[^>]*>Etapa actual/s', $html );
 		$this->assertStringNotContainsString( 'Volver a abrir', $html );
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DELIVERIES ) );
-		$this->assertStringContainsString( 'prc-solo-lectura', $html, 'el ámbito consulta el histórico sin poder ampliar plazos' );
 
 		$this->acting_as( $this->administrator() );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
@@ -2157,7 +2261,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertTrue( $before[0]['delivery'] );
 		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
-		$this->assertSame( 1, $this->modelo( $procedure )['panels'][ ProcedureEditor::PANEL_DELIVERIES ]['count'] );
+		$this->acting_as( $uid );
+		$this->assertCount( 1, $this->modelo( $procedure )['deliveries'] );
 		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
@@ -2190,9 +2295,20 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 
 		$this->assertNotNull( $redirect );
 		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
-		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES ) );
+		$this->assertSame( ProcedureEditor::PANEL_APPLICATIONS, $this->query_arg( (string) $redirect, ProcedureEditor::ARG_PANEL ), 'vuelve a «Solicitudes»' );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_DELIVERIES . '"', $html, 'al final de «Solicitudes»' );
+		$this->assertGreaterThan( strpos( $html, 'Exportar las solicitudes' ), strpos( $html, 'Plazos de entregas documentales' ) );
 		$this->assertStringContainsString( 'Guardar los nuevos cierres', $html );
-		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
+		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_DELIVERIES . '"(?:(?!disabled).)*Guardar los nuevos cierres/s', $html, 'abierta aunque los campos ya estén cerrados' );
+		$_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] = '1';
+		$this->assertStringNotContainsString( 'Plazos de entregas documentales', ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) ), 'debajo de «Retiradas», no' );
+		unset( $_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] );
+
+		// Histórico: el ámbito lo consulta sin poder ampliar plazos.
+		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
+		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_DELIVERIES . '".*?<fieldset class="prc-solo-lectura" disabled>.*?Guardar los nuevos cierres/s', $html );
 		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertSame( $new_close, $after[0]['closes_at'] );
 		$after[0]['closes_at'] = $before[0]['closes_at'];
@@ -2252,10 +2368,10 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $this->dia( '+30 days' ) ) ) ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
 		$this->acting_as( $uid );
-		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_DELIVERIES );
+		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS );
 		$this->assertSame( 'error', $model['flash']['tipo'] );
 		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
-		$this->assertStringContainsString( 'Este procedimiento no tiene entregas con plazo propio.', ProcedureEditorView::html( $model ) );
+		$this->assertStringNotContainsString( 'Guardar los nuevos cierres', ProcedureEditorView::html( $model ) );
 	}
 
 	// ─── tipos de pregunta y orden (ADR-0040) ──────────────────────────────
@@ -2760,11 +2876,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_QUESTIONS,
 			ProcedureEditor::PANEL_LINKS,
 			ProcedureEditor::PANEL_APPLICATIONS,
-			ProcedureEditor::PANEL_DELIVERIES,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_PUBLISH,
-			ProcedureEditor::PANEL_OBSERVE,
-			ProcedureEditor::PANEL_CODE,
+			ProcedureEditor::PANEL_ADVANCED,
 		);
 		foreach ( $paneles as $panel ) {
 			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );

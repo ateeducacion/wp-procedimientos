@@ -13,6 +13,7 @@ use Prc\Domain\ApplicationFilter;
 use Prc\Domain\CentreCatalog;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\Observe;
 use Prc\PublicFront\ObserveSettings;
@@ -624,6 +625,7 @@ class Test_Observe extends WP_UnitTestCase {
 		$url = $this->exit_url( array( ProcedureEditor::class, 'handle' ) );
 
 		$this->assertSame( 'consulta', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( ProcedureEditor::PANEL_ADVANCED, $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ), 'vuelve a «Avanzado»' );
 		$this->assertTrue( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVABLE, true ) );
 		$this->assertSame( array( 'code', 'state' ), get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_COLUMNS, true ) );
 		$this->assertTrue( (bool) get_post_meta( $caso['procedure'], ProcedureMetaKeys::OBSERVER_EXPORT, true ) );
@@ -640,8 +642,8 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->acting_as( $gestor );
 
 		$this->assertFalse( ProcedureAccess::can_configure_observe( $gestor, $caso['procedure'] ) );
-		$this->assertArrayNotHasKey( ProcedureEditor::PANEL_OBSERVE, ProcedureEditor::panels( $caso['procedure'] ), 'sin pestaña' );
-		$this->assertArrayHasKey( ProcedureEditor::PANEL_CODE, ProcedureEditor::panels( $caso['procedure'] ), 'el código sí' );
+		$this->assertNotContains( 'observe', AdvancedPanel::sections( $caso['procedure'] ), 'sin sección en «Avanzado»' );
+		$this->assertContains( 'code', AdvancedPanel::sections( $caso['procedure'] ), 'el código sí' );
 		foreach ( self::OBSERVE_KEYS as $key ) {
 			$this->assertFalse( user_can( $gestor, 'edit_post_meta', $caso['procedure'], $key ), 'ni por la meta: ' . $key );
 		}
@@ -662,14 +664,14 @@ class Test_Observe extends WP_UnitTestCase {
 		$admin = $this->administrator();
 		$this->acting_as( $admin );
 		$this->assertTrue( ProcedureAccess::can_configure_observe( $admin, $caso['procedure'] ) );
-		$this->assertSame( 'Avanzado', ProcedureEditor::panels( $caso['procedure'] )[ ProcedureEditor::PANEL_OBSERVE ]['group'] );
+		$this->assertContains( 'observe', AdvancedPanel::sections( $caso['procedure'] ), 'una sección de «Avanzado»' );
 		foreach ( self::OBSERVE_KEYS as $key ) {
 			$this->assertTrue( user_can( $admin, 'edit_post_meta', $caso['procedure'], $key ), $key );
 		}
 	}
 
 	/**
-	 * Sin la pestaña, quien gestiona su ámbito ve en «Código» que la consulta
+	 * Sin la sección, quien gestiona su ámbito ve en «Código» que la consulta
 	 * está activa, y si sus columnas ya no existen; sin poder cambiarla.
 	 */
 	public function test_a_scope_manager_sees_the_consultation_is_on_without_editing_it() {
@@ -683,7 +685,7 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->acting_as( $gestor );
 		$_GET = array(
 			ProcedureEditor::ARG_PROCEDURE => (string) $caso['procedure'],
-			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_CODE,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_ADVANCED,
 		);
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'La consulta por zona está activa en este procedimiento', $html );
@@ -728,7 +730,7 @@ class Test_Observe extends WP_UnitTestCase {
 		$this->acting_as( $uid );
 		$_GET = array(
 			ProcedureEditor::ARG_PROCEDURE => (string) $pid,
-			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_OBSERVE,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_ADVANCED,
 		);
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 

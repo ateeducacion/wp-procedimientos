@@ -190,6 +190,8 @@ final class ProcedureInput {
 			'header_color'         => 'el color de la cabecera',
 			'ownership'            => 'a qué centros se dirige («Dirigido a»): públicos, privados y concertados, o los dos',
 			'centre_kinds'         => 'quién puede presentar solicitud: los centros, un CER como colectivo o ambos',
+			'centre_types'         => 'los tipos de centro: para limitar por tipo, marque al menos un tipo',
+			'islands'              => 'las islas: para limitar por isla, marque al menos una isla',
 			'allowed_centres'      => 'la lista cerrada de centros: cada código, de 3 a 20 letras o cifras, en su línea o separado por comas, y no más de 2000',
 			'coordinator_count'    => 'cuántas personas coordinadoras se piden',
 		);

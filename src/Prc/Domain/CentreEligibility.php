@@ -129,18 +129,34 @@ final class CentreEligibility {
 	 * Validate the three lists of the «Datos» form.
 	 *
 	 * Un procedimiento de profesorado no acota centros: las tres, vacías.
+	 * Tipos e islas llevan cada uno su interruptor («Limitar por tipo de
+	 * centro», «Limitar por isla»): apagado, la lista se guarda vacía, sin
+	 * límite; encendido, exactamente lo marcado —sin compararlo con el
+	 * catálogo, que puede cambiar entre pintar y guardar—, y sin nada marcado
+	 * es un error. Sin interruptor, como lo que se reescribe con el grupo
+	 * cerrado, se limita si la lista trae algo: lo guardado sigue igual (#84).
 	 *
-	 * @param array<string, mixed> $raw     `centre_types`, `islands`, `allowed_centres`.
+	 * @param array<string, mixed> $raw     `centre_types`, `islands`, `allowed_centres`, and the
+	 *                                      switches `limit_centre_types` and `limit_islands`.
 	 * @param bool                 $schools Whether the procedure is for schools.
 	 * @return array{data:array{centre_types:string[], islands:string[], allowed_centres:string[]}, errors:string[]}
 	 */
 	public static function input( array $raw, bool $schools ): array {
 		$alloweda = self::parse_codes( $raw['allowed_centres'] ?? '' );
 		$errors   = array() !== $alloweda['invalid'] || count( $alloweda['codes'] ) > self::MAX_CODES ? array( 'allowed_centres' ) : array();
+		$lists    = array();
+		foreach ( array( 'centre_types', 'islands' ) as $list ) {
+			$values         = self::values( $raw[ $list ] ?? array() );
+			$limit          = (bool) ( $raw[ 'limit_' . $list ] ?? ( array() !== $values ) );
+			$lists[ $list ] = $limit ? $values : array();
+			if ( $limit && array() === $values ) {
+				$errors[] = $list;
+			}
+		}
 		return array(
 			'data'   => array(
-				'centre_types'    => $schools ? self::values( $raw['centre_types'] ?? array() ) : array(),
-				'islands'         => $schools ? self::values( $raw['islands'] ?? array() ) : array(),
+				'centre_types'    => $schools ? $lists['centre_types'] : array(),
+				'islands'         => $schools ? $lists['islands'] : array(),
 				'allowed_centres' => $schools ? array_slice( $alloweda['codes'], 0, self::MAX_CODES ) : array(),
 			),
 			'errors' => $schools ? $errors : array(),
@@ -167,14 +183,16 @@ final class CentreEligibility {
 	 * The rules as the «Datos» form holds them: the closed list, one code per line.
 	 *
 	 * @param array<string, string[]> $rules What {@see rules()} returned.
-	 * @return array{centre_types:string[], islands:string[], allowed_centres:string}
+	 * @return array{limit_centre_types:bool, centre_types:string[], limit_islands:bool, islands:string[], allowed_centres:string}
 	 */
 	public static function form_values( array $rules ): array {
 		$rules = self::rules( $rules );
 		return array(
-			'centre_types'    => $rules['types'],
-			'islands'         => $rules['islands'],
-			'allowed_centres' => implode( "\n", $rules['codes'] ),
+			'limit_centre_types' => array() !== $rules['types'],
+			'centre_types'       => $rules['types'],
+			'limit_islands'      => array() !== $rules['islands'],
+			'islands'            => $rules['islands'],
+			'allowed_centres'    => implode( "\n", $rules['codes'] ),
 		);
 	}
 

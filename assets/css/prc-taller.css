@@ -257,6 +257,14 @@
 /* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
 .prc-preguntas-mas { margin: 0 0 16px; }
 .prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+/* «Limitar a ciertos centros», plegado como avanzado, con el mismo rótulo. */
+.prc-acotar > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+.prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
+.prc-acotar__marcar[hidden] { display: none; }
+/* Con el interruptor apagado, las casillas de esa lista no cuentan: se
+   esconden sin guion. Sin :has(), se ven y el servidor las ignora igual. */
+.prc-acotar__lista:has(.prc-acotar__interruptor input:not(:checked)) .prc-acotar__opciones { display: none; }
+.prc-acotar__opciones { margin: 8px 0 0 24px; }
 .prc-pregunta__orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }

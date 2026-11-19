@@ -288,8 +288,8 @@ del procedimiento: **lo configura solo administración** (#82). El factor
 decisión.
 
 - **Una regla, `ProcedureAccess::can_configure_observe()`**: `prc_manage_app`
-  y poder editar el procedimiento. La sección «Acceso de consulta» solo se
-  pinta con ella, en la pestaña «Avanzado» junto a «Código»; el POST del
+  y poder editar el procedimiento. La pestaña «Acceso de consulta» solo se
+  pinta con ella, ahora en el grupo «Avanzado» junto a «Código»; el POST del
   panel se rechaza sin ella, y las cinco metas (`prc_observable`,
   `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`,
   `prc_observer_notify`) llevan `auth_callback` con la misma regla, así que

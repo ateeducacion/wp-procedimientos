@@ -153,13 +153,14 @@ final class ProcedureEditorView {
 	 *
 	 * Antes era la pestaña «Entregas» (#80). Solo sale con entregas de plazo
 	 * propio, y apagada a quien no edita el procedimiento: la tabla de
-	 * encima se sigue filtrando igual.
+	 * encima se sigue filtrando igual. Debajo de «Retiradas», no: esa vista
+	 * es la lista de las retiradas y nada más.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function deliveries_section( array $m ): string {
-		if ( empty( $m['deliveries'] ) ) {
+		if ( empty( $m['deliveries'] ) || ! empty( $m['actions']['withdrawn_open'] ) ) {
 			return '';
 		}
 		$cerrado = true !== $m['can_edit'];

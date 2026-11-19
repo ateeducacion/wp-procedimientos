@@ -14,6 +14,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\AdvancedPanel;
+use Prc\PublicFront\ApplicationActionsPanel;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
@@ -2300,6 +2301,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertGreaterThan( strpos( $html, 'Exportar las solicitudes' ), strpos( $html, 'Plazos de entregas documentales' ) );
 		$this->assertStringContainsString( 'Guardar los nuevos cierres', $html );
 		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_DELIVERIES . '"(?:(?!disabled).)*Guardar los nuevos cierres/s', $html, 'abierta aunque los campos ya estén cerrados' );
+		$_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] = '1';
+		$this->assertStringNotContainsString( 'Plazos de entregas documentales', ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) ), 'debajo de «Retiradas», no' );
+		unset( $_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] );
 
 		// Histórico: el ámbito lo consulta sin poder ampliar plazos.
 		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );

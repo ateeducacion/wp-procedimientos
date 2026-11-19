@@ -692,6 +692,18 @@ class Test_Centres extends WP_UnitTestCase {
 		$html = (string) ob_get_clean();
 		$this->assertStringContainsString( 'name="prc_manifest_url"', $html );
 		$this->assertStringContainsString( 'value="https://example.org/manifest.json"', $html );
+		$this->assertStringNotContainsString( 'fijada por configuración', $html );
+
+		$fixed = static function (): string {
+			return 'https://config.example.org/manifest.json';
+		};
+		add_filter( 'prc_centres_manifest_url', $fixed );
+		ob_start();
+		Settings::render();
+		$html = (string) ob_get_clean();
+		remove_filter( 'prc_centres_manifest_url', $fixed );
+		$this->assertStringContainsString( 'fijada por configuración', $html );
+		$this->assertStringContainsString( 'https://config.example.org/manifest.json', $html );
 	}
 
 	/**

@@ -159,16 +159,10 @@ final class Settings {
 				'page'      => self::PAGE,
 			);
 
-			// La dirección del listado se escribe aquí mismo: sin ella no se
-			// descarga nada. Una que no sea https no se guarda.
-			if ( isset( $_POST['prc_manifest_url'] ) ) {
-				$url = esc_url_raw( trim( sanitize_text_field( wp_unslash( $_POST['prc_manifest_url'] ) ) ) );
-				if ( '' !== $url && ! CentreCatalogueSync::is_valid_https_url( $url ) ) {
-					$redirect_args['error'] = rawurlencode( 'La dirección del manifest tiene que empezar por https://. No se ha guardado.' );
-					self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
-					return;
-				}
-				update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, $url, false );
+			$url_error = self::save_manifest_url();
+			if ( '' !== $url_error ) {
+				$redirect_args['error'] = rawurlencode( $url_error );
+				self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 			}
 
 			try {
@@ -188,6 +182,29 @@ final class Settings {
 
 			self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 		}
+	}
+
+	/**
+	 * Store the manifest URL sent with the catalogue form, if any.
+	 *
+	 * Caller must have checked the nonce and the capability.
+	 *
+	 * @return string Error message, or '' when stored or not sent.
+	 */
+	private static function save_manifest_url(): string {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- handle_actions() ya comprobó el nonce.
+		if ( ! isset( $_POST['prc_manifest_url'] ) ) {
+			return '';
+		}
+		// La dirección del listado se escribe aquí mismo: sin ella no se
+		// descarga nada. Una que no sea https no se guarda.
+		$url = esc_url_raw( trim( sanitize_text_field( wp_unslash( $_POST['prc_manifest_url'] ) ) ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		if ( '' !== $url && ! CentreCatalogueSync::is_valid_https_url( $url ) ) {
+			return 'La dirección del manifest tiene que empezar por https://. No se ha guardado.';
+		}
+		update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, $url, false );
+		return '';
 	}
 
 	/**

@@ -237,7 +237,7 @@
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; border-left: 5px solid var(--prc-banda, #c9c9c9); text-align: left; }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
 }
 

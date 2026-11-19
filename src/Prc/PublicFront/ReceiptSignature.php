@@ -10,7 +10,6 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\SignedReceipt;
 use Prc\Meta\ApplicationMetaKeys;
-use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -235,7 +234,7 @@ final class ReceiptSignature {
 			'centre'       => $centro,
 			'submitted'    => ApplicationProgress::when( $cuando ),
 			// El DNI o NIE de coordinación va en el justificante y en su huella.
-			'coordination' => ApplicationMetaRegistration::receipt_coordinators( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) ),
+			'coordination' => ApplicationProgress::coordination( $application_id ),
 		);
 		$datos['fingerprint'] = SignedReceipt::fingerprint( $datos );
 		$datos['created']     = SignedReceipt::pdf_date( $cuando );

@@ -9918,12 +9918,13 @@ final class ApplicationMetaRegistration {
 
 
 
-	public static function receipt_coordinators( $value ): string {
+	public static function receipt_coordinators( array $people ): string {
 		$out = array();
-		foreach ( self::sanitize_coordinator( $value ) as $persona ) {
-			$nombre = self::full_name( $persona );
+		foreach ( $people as $persona ) {
+			$nombre = self::full_name( (array) $persona );
+			$dni    = (string) ( $persona['dni'] ?? '' );
 			if ( '' !== $nombre ) {
-				$out[] = '' !== $persona['dni'] ? $nombre . ' (DNI o NIE ' . $persona['dni'] . ')' : $nombre;
+				$out[] = '' !== $dni ? $nombre . ' (DNI o NIE ' . $dni . ')' : $nombre;
 			}
 		}
 		return implode( '; ', $out );
@@ -29484,7 +29485,6 @@ final class PeopleView {
 namespace Prc\PublicFront\View;
 
 use Prc\Meta\ApplicationMetaKeys;
-use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ReceiptSignature;
@@ -29716,7 +29716,7 @@ final class ApplicationProgressView {
 			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
 			'Fecha y hora de presentación' => (string) $p['submitted'],
 			'Presentada por'               => $quien,
-			'Coordinación'                 => ApplicationMetaRegistration::receipt_coordinators( $s['coordinator'] ?? array() ),
+			'Coordinación'                 => (string) ( $p['coordination'] ?? '' ),
 			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
@@ -31975,6 +31975,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 
 
 
@@ -32055,6 +32056,7 @@ final class ApplicationProgress {
 			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'coordination'   => $id > 0 ? self::coordination( $id ) : '',
 			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 
@@ -32062,6 +32064,23 @@ final class ApplicationProgress {
 		);
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function coordination( int $application_id ): string {
+		$en_lista = Applications::spec( (int) wp_get_post_parent_id( $application_id ) )['coordinators_in_list'];
+		return ApplicationMetaRegistration::receipt_coordinators(
+			$en_lista ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
 	}
 
 
@@ -32247,7 +32266,6 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\SignedReceipt;
 use Prc\Meta\ApplicationMetaKeys;
-use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -32473,7 +32491,7 @@ final class ReceiptSignature {
 			'centre'       => $centro,
 			'submitted'    => ApplicationProgress::when( $cuando ),
 
-			'coordination' => ApplicationMetaRegistration::receipt_coordinators( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) ),
+			'coordination' => ApplicationProgress::coordination( $application_id ),
 		);
 		$datos['fingerprint'] = SignedReceipt::fingerprint( $datos );
 		$datos['created']     = SignedReceipt::pdf_date( $cuando );
@@ -40065,7 +40083,7 @@ body.prc-app .prc-btn-borrar {
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; border-left: 5px solid var(--prc-banda, #c9c9c9); text-align: left; }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
 }
 
@@ -41023,16 +41041,18 @@ body.prc-app .prc-btn-borrar {
 		doc.text( \'Justificante de presentación\', 56, 72 );
 
 		var y = 110;
-		// La coordinación, con su DNI o NIE, solo si la hay (va en la huella).
-		[
+		// En el orden de la huella; la coordinación, con su DNI o NIE, solo
+		// si la hay.
+		var filas = [
 			[ \'N.º de solicitud\', r.number ],
 			[ \'Procedimiento\', r.procedure ],
 			[ \'Centro\', r.centre ],
-			[ \'Coordinación\', r.coordination ],
 			[ \'Fecha y hora de presentación\', r.submitted ]
-		].filter( function ( fila ) {
-			return \'\' !== String( fila[ 1 ] || \'\' );
-		} ).forEach( function ( fila ) {
+		];
+		if ( r.coordination ) {
+			filas.push( [ \'Coordinación\', r.coordination ] );
+		}
+		filas.forEach( function ( fila ) {
 			doc.setFont( \'helvetica\', \'bold\' );
 			doc.setFontSize( 10 );
 			doc.text( fila[ 0 ], 56, y );

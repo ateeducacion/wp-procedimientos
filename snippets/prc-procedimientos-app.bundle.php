@@ -24742,8 +24742,9 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function deliveries_section( array $m ): string {
-		if ( empty( $m['deliveries'] ) ) {
+		if ( empty( $m['deliveries'] ) || ! empty( $m['actions']['withdrawn_open'] ) ) {
 			return '';
 		}
 		$cerrado = true !== $m['can_edit'];

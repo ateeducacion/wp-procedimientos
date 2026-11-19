@@ -15,13 +15,24 @@ use Prc\PublicFront\Shell;
  *
  * La portada que se sustituye es un héroe en mayúsculas, una banda clara con
  * la entradilla y los filtros, y debajo un bloque gris por estado con una
- * rejilla de cuatro tarjetas por fila. La tarjeta es un marco blanco con una
- * banda de color, el título completo sin truncar y, fuera del enlace, la
- * etiqueta del estado. Aquí se calca eso, con dos añadidos que el original no
- * tiene: los días que quedan de plazo y la marca de que el centro de quien
- * mira ya ha solicitado.
+ * rejilla de tarjetas. La tarjeta es el cartel en vertical, tipo cartelera
+ * —o el logo del ámbito si no hay cartel—, el título completo sin truncar y,
+ * fuera del enlace, el ámbito y la etiqueta del estado. Añade lo que el
+ * original no tiene: los días que quedan de plazo y la marca de que el centro
+ * de quien mira ya ha solicitado.
  */
 final class HomeView {
+
+	/**
+	 * Cards in the first row on a desktop screen: five posters per row.
+	 */
+	private const FIRST_ROW = 5;
+
+	/**
+	 * Rendered width of a poster, matching `.prc-rejilla` in prc-portada.css:
+	 * two columns up to 530px, three to five up to 980px, five of about 190px above.
+	 */
+	private const SIZES = '(max-width: 530px) calc(50vw - 28px), (max-width: 980px) calc(33vw - 24px), 190px';
 
 	/**
 	 * The screen, from its model.
@@ -50,8 +61,10 @@ final class HomeView {
 				</div>
 			<?php endif; ?>
 
+			<?php $before = 0; ?>
 			<?php foreach ( (array) $m['groups'] as $state => $grupo ) : ?>
-				<?php self::group( (string) $state, (array) $grupo ); ?>
+				<?php self::group( (string) $state, (array) $grupo, $before ); ?>
+				<?php $before += count( (array) $grupo['rows'] ); ?>
 			<?php endforeach; ?>
 		</div>
 		<?php
@@ -90,11 +103,12 @@ final class HomeView {
 	/**
 	 * One block: the procedures of one state, on their grey band.
 	 *
-	 * @param string               $state State slug.
-	 * @param array<string, mixed> $grupo Its label and rows.
+	 * @param string               $state  State slug.
+	 * @param array<string, mixed> $grupo  Its label and rows.
+	 * @param int                  $before Cards already painted above this block.
 	 * @return void
 	 */
-	private static function group( string $state, array $grupo ): void {
+	private static function group( string $state, array $grupo, int $before ): void {
 		$clase = sanitize_html_class( $state );
 		?>
 		<section class="prc-banda prc-bloque prc-bloque--<?php echo esc_attr( $clase ); ?> prc-grupo-<?php echo esc_attr( $clase ); ?>">
@@ -104,8 +118,8 @@ final class HomeView {
 					<strong class="prc-bloque__rotulo"><?php echo esc_html( (string) $grupo['label'] ); ?></strong>
 				</h2>
 				<ul class="prc-rejilla">
-					<?php foreach ( (array) $grupo['rows'] as $row ) : ?>
-						<?php self::card( (array) $row ); ?>
+					<?php foreach ( array_values( (array) $grupo['rows'] ) as $n => $row ) : ?>
+						<?php self::card( (array) $row, $before + $n ); ?>
 					<?php endforeach; ?>
 				</ul>
 			</div>
@@ -114,24 +128,36 @@ final class HomeView {
 	}
 
 	/**
-	 * One card: the colour band, the whole title and what is known of its term.
+	 * One card: the poster, the whole title, its ámbito and what is known of its term.
 	 *
-	 * La etiqueta de estado va **fuera** del enlace: dentro entraría en el
-	 * nombre accesible del enlace, que es el título del procedimiento. Es la
-	 * misma pastilla que en el resto del aplicativo ({@see Assets::state_class()}).
+	 * The ámbito and the state label go **outside** the link: inside, they
+	 * would join its accessible name, which is the procedure title. For the
+	 * same reason the image has an empty `alt`. The state pill is the one used
+	 * across the app ({@see Assets::state_class()}).
 	 *
-	 * @param array<string, mixed> $row One row of a group.
+	 * @param array<string, mixed> $row      One row of a group.
+	 * @param int                  $position Its place on the page, from 0.
 	 * @return void
 	 */
-	private static function card( array $row ): void {
+	private static function card( array $row, int $position ): void {
+		// The first row is above the fold: no lazy loading, and the first poster first.
+		$loading  = $position < self::FIRST_ROW ? 'eager' : 'lazy';
+		$priority = 0 === $position ? 'high' : 'auto';
 		?>
-		<li class="prc-proc">
+		<li class="prc-proc" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
-				<span class="prc-proc__marco">
-					<span class="prc-proc__banda" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>"></span>
-				</span>
+				<?php if ( '' !== (string) $row['poster'] ) : ?>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="' . esc_attr( self::SIZES ) . '"' : ''; ?> alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
+				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
+				<?php else : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--vacio"></span>
+				<?php endif; ?>
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
+			<?php if ( array() !== (array) $row['areas'] ) : ?>
+				<p class="prc-proc__ambito"><?php echo esc_html( implode( ' · ', array_map( 'strval', (array) $row['areas'] ) ) ); ?></p>
+			<?php endif; ?>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
 				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>

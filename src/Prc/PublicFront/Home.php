@@ -346,6 +346,8 @@ final class Home {
 			'order'               => 'ASC',
 			'no_found_rows'       => true,
 			'ignore_sticky_posts' => true,
+			// Como get_posts(), que era lo de antes: sin los filtros posts_*.
+			'suppress_filters'    => true,
 		);
 		if ( $course > 0 ) {
 			$args['tax_query'] = array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- listar por curso es el requisito.
@@ -359,8 +361,11 @@ final class Home {
 
 		$solicitados = self::applied_by_centre();
 
-		$rows = array();
-		foreach ( get_posts( $args ) as $post ) {
+		$rows  = array();
+		$query = new \WP_Query( $args );
+		// Los carteles de todo el curso en una consulta, no dos por tarjeta.
+		update_post_thumbnail_cache( $query );
+		foreach ( $query->posts as $post ) {
 			$rows[] = self::row( $post, $solicitados );
 		}
 
@@ -440,13 +445,19 @@ final class Home {
 		$quedan = in_array( $state, array( ProcedureMetaKeys::STATE_OPEN, ProcedureMetaKeys::STATE_AMENDMENT ), true )
 			? self::days_until( $fin )
 			: null;
+		$areas  = self::terms( $id );
+		$imagen = (int) get_post_thumbnail_id( $id );
+		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
 			'id'           => $id,
 			'title'        => '' !== $titulo ? $titulo : 'Procedimiento sin título',
 			'url'          => (string) get_permalink( $id ),
 			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
-			'areas'        => self::terms( $id ),
+			'areas'        => $areas,
+			'poster'       => $cartel,
+			'poster_set'   => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
+			'area_logo'    => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
 			'state'        => $state,
 			'state_label'  => ProcedureState::label(
 				$state,
@@ -500,6 +511,51 @@ final class Home {
 			return array();
 		}
 		return wp_list_pluck( $terms, 'name', 'term_id' );
+	}
+
+	/**
+	 * The logo of the first ámbito that has one, looking up the tree.
+	 *
+	 * A sub-ámbito without an image of its own takes its parent's.
+	 * ponytail: per-request memo; a logo changed mid-request shows on the
+	 * next one, which never matters on the front page.
+	 *
+	 * @param int[] $term_ids Ámbito term IDs of the procedure.
+	 * @return string Image URL, or '' when none has one.
+	 */
+	private static function area_logo( array $term_ids ): string {
+		// Muchas tarjetas comparten ámbito: se resuelve una vez por término y
+		// por sitio, que el mismo ID es otro término tras un switch_to_blog().
+		static $cache = array();
+		$blog         = get_current_blog_id();
+		foreach ( $term_ids as $term_id ) {
+			$term_id = (int) $term_id;
+			if ( ! isset( $cache[ $blog ][ $term_id ] ) ) {
+				$cache[ $blog ][ $term_id ] = self::logo_of( $term_id );
+			}
+			if ( '' !== $cache[ $blog ][ $term_id ] ) {
+				return $cache[ $blog ][ $term_id ];
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * The logo of one ámbito, or of the closest ancestor that has one.
+	 *
+	 * @param int $term_id Ámbito term ID.
+	 * @return string Image URL, or ''.
+	 */
+	private static function logo_of( int $term_id ): string {
+		$linea = array_merge( array( $term_id ), get_ancestors( $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
+		foreach ( $linea as $id ) {
+			$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
+			$url    = $imagen > 0 ? wp_get_attachment_image_url( $imagen, 'medium_large' ) : false;
+			if ( is_string( $url ) && '' !== $url ) {
+				return $url;
+			}
+		}
+		return '';
 	}
 
 	/**

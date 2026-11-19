@@ -132,6 +132,19 @@ class Test_Signed_Receipt extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Un flujo que se infla sin fin no se descomprime entero: lo que se lee
+	 * no pasa del máximo, y sin la huella dentro no es este justificante.
+	 */
+	public function test_a_compression_bomb_is_not_inflated_whole() {
+		$huella = SignedReceipt::fingerprint( $this->datos() );
+		$bomba  = gzcompress( str_repeat( "\0", 20000000 ) );
+		$pdf    = $this->resign( "%PDF-1.3\n4 0 obj\n<< /Length " . strlen( $bomba ) . " >>\nstream\n" . $bomba . "\nendstream\nendobj\n" );
+		$antes  = memory_get_usage();
+		$this->assertSame( 'not_this', SignedReceipt::refuse( $pdf, '57', $huella, 100000 ) );
+		$this->assertLessThan( 5000000, memory_get_usage() - $antes );
+	}
+
+	/**
 	 * Añadir una revisión de firma a unos bytes cualquiera.
 	 *
 	 * @param string $pdf Unsigned PDF.

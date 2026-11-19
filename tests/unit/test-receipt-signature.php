@@ -501,6 +501,17 @@ class Test_Receipt_Signature extends WP_UnitTestCase {
 
 		$this->assertArrayHasKey( 'signature', ApplicationExport::groups( $e['procedure'] )['review'] );
 		$this->assertStringContainsString( '"Pendiente de firma"', ApplicationExport::csv( $e['procedure'], array( 'code', 'signature' ) ) );
+		// Con «Todas las columnas» y la casilla marcada, también sale.
+		$this->assertContains(
+			'signature',
+			ApplicationExport::sanitize_choice(
+				$e['procedure'],
+				array(
+					'all'     => '1',
+					'columns' => array( 'code', 'signature' ),
+				)
+			)['columns']
+		);
 
 		$this->olvidar();
 		$this->assertStringContainsString( 'Firmado el ', $this->pantalla( $e['head'], $e['procedure'], array( ApplicationProgress::ARG_RECEIPT => '1' ) ) );

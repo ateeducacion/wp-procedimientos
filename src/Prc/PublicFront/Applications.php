@@ -58,7 +58,7 @@ final class Applications {
 	 * internal note of whoever reviews (PLAN-0003, PR 9). Like those of the
 	 * catalogue ({@see CentreColumns}), they only go out when chosen.
 	 */
-	public const EXTRA_COLUMNS = array( 'internal_note' );
+	public const EXTRA_COLUMNS = array( 'internal_note', 'signature' );
 
 
 	// ─── leer ──────────────────────────────────────────────────────────────

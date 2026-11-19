@@ -50,8 +50,9 @@ const SCREENS = {
  * `{ID}` es el procedimiento de demostración que se enseña: se pregunta al
  * sitio una vez y vale para el taller, la ficha y la solicitud. `{DRAFT}` es
  * un borrador sin solicitudes —el único que se puede borrar—, y se pregunta
- * igual. `open` dice qué `summary` se pulsa antes de capturar, y `media`, si
- * se emula otro medio (`print`).
+ * igual. `open` dice qué `summary` se pulsa antes de capturar; `media`, si
+ * se emula otro medio (`print`), y `expect`, qué tiene que haber en la página
+ * para que la captura valga.
  */
 const SCENES = [
 	// ── Lo público: los dos tamaños ───────────────────────────────────────
@@ -168,10 +169,11 @@ const SCENES = [
 	{
 		chapter: 'Quien solicita',
 		title: 'Justificante impreso',
-		note: 'El justificante de presentación como sale en papel (emulación de impresión): escudo y rótulo de quien despliega si los configura, los datos en una tabla con la fecha y la hora, y lo presentado; sin cabecera, menú, pie ni botones. Sin solicitud del centro, sale el formulario.',
+		note: 'El justificante de presentación como sale en papel (emulación de impresión): escudo y rótulo de quien despliega si los configura, los datos en una tabla con la fecha y la hora, y lo presentado; sin cabecera, menú, pie ni botones.',
 		who: 'direccion',
 		go: '/solicitud/?procedimiento={ID}&justificante=1',
 		media: 'print',
+		expect: '.prc-justificante',
 		screens: [ 'desktop' ],
 	},
 	{
@@ -361,6 +363,11 @@ async function capture( browser, scene, screen, ids, n ) {
 			if ( '' !== tapado ) {
 				throw new Error( tapado );
 			}
+		}
+		// Escena que solo vale si la página trae lo que enseña: sin solicitud
+		// del centro, el justificante sería el formulario y no se notaría.
+		if ( scene.expect && 0 === ( await page.locator( scene.expect ).count() ) ) {
+			throw new Error( `no aparece «${ scene.expect }»` );
 		}
 		// Escena con un `details` abierto, como el menú «⋮» del taller.
 		if ( scene.open ) {

@@ -364,9 +364,11 @@
 /* --- el justificante -----------------------------------------------------
    Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
    solo sirve en pantalla. El botón «Imprimir justificante» es un atajo del
-   guion; sin él, se imprime igual desde el menú del navegador. */
+   guion; sin él, se imprime igual desde el menú del navegador. La cabecera
+   con el escudo y el rótulo de quien despliega solo sale en papel: en
+   pantalla ya los enseña el armazón. */
 .prc-justificante__cab {
-  display: flex;
+  display: none;
   gap: 16px;
   align-items: center;
   padding-bottom: 12px;
@@ -374,7 +376,7 @@
   border-bottom: 1px solid var(--prc-c-borde-campo);
 }
 
-.prc-justificante__escudo { max-height: 64px; width: auto; }
+.prc-justificante__escudo { max-height: 64px; max-width: 100%; min-width: 0; width: auto; }
 .prc-justificante__org { font-weight: var(--prc-p-fuerte); }
 
 .prc-justificante__tabla { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
@@ -390,18 +392,27 @@
 .prc-justificante__tabla th { width: 30%; font-weight: var(--prc-p-fuerte); }
 
 @media print {
-  /* El marco del aplicativo y, si lo pinta el tema, el del tema: todo lo que
-     no contiene el justificante. */
-  body:has(.prc-justificante) > :not(:has(.prc-justificante)),
-  body:has(.prc-justificante) .prc-top,
-  body:has(.prc-justificante) .prc-tabs,
-  body:has(.prc-justificante) .prc-pie,
-  body:has(.prc-justificante) .prc-subpie,
-  body:has(.prc-justificante) #wpadminbar,
-  body:has(.prc-justificante) :is(header, footer, nav):not(.prc-justificante *),
+  /* Fuera todo lo que no es el justificante, ni lo contiene, ni está dentro:
+     el marco del aplicativo, el del tema —se llame como se llame— y la barra
+     de administración. */
+  body:has(.prc-justificante) :not(:has(.prc-justificante), .prc-justificante, .prc-justificante *) { display: none !important; }
+
+  /* En su propia regla: un navegador sin `:has()` descarta la de arriba
+     entera, y esta tiene que seguir valiendo. */
   .prc-justificante .prc-no-imprimir { display: none !important; }
 
+  /* La hoja rompe la columna del tema en pantalla; en papel, la página es
+     la columna. */
+  body.prc-app .prc-hoja:has(.prc-justificante) {
+    position: static;
+    left: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+
   .prc-justificante { color: #000; }
+  .prc-justificante__cab { display: flex; }
   .prc-justificante__tabla { break-inside: avoid; }
   .prc-justificante__tabla th,
   .prc-justificante__tabla td { border-color: #000; }

@@ -162,6 +162,7 @@ por `PublicFront/ProcedureView` (ADR-0022). Metas, todas registradas con
 | `prc_observer_files` | boolean | Quien consulta descarga los documentos de su zona (ADR-0043) |
 | `prc_observer_export` | boolean | Quien consulta exporta a CSV lo que ve (ADR-0043) |
 | `prc_observer_notify` | boolean | El aviso de personas se copia a quienes consultan la zona del centro (ADR-0043) |
+| `prc_signature_required` | boolean | Pide la firma electrónica del justificante; sin firmar, la solicitud se presenta igual y queda «pendiente de firma». Se copia al duplicar (ADR-0049) |
 
 **`prc_application` — Solicitud.** `public => false`, `show_ui => true` (solo
 para diagnóstico en el escritorio), `post_parent` = el procedimiento,
@@ -184,6 +185,7 @@ en `Meta/ApplicationMetaKeys`:
 | `prc_late_until` | string `Y-m-d` | Prórroga de esa solicitud: hasta ese día, incluido, el centro la edita entera aunque el plazo general esté cerrado; nunca en histórico. La concede quien revisa (ADR-0044) |
 | `prc_internal_note` | string | Nota interna de quien revisa: no la ve quien solicita ni quien consulta, ni va en ningún correo; en la exportación, solo si se elige su columna (ADR-0044) |
 | `prc_created_by` | integer | Cuenta que revisa y presentó la solicitud en nombre del centro; vacía cuando la presentó el centro (ADR-0044) |
+| `prc_signed_receipt` | `{id, name, mime, size, sha256, stored, signed_at, signed_by, via}` | El justificante firmado, en el almacén privado de `ApplicationFiles` (ADR-0028); `via` es `autofirma` o `upload`. Se escribe una vez; lo descargan el centro y quien revisa (ADR-0049) |
 
 **Una solicitud por centro y procedimiento** (ADR-0018): antes de crear,
 `PublicFront/Applications::find( $procedure_id, $centre_code )`; si existe, se
@@ -381,6 +383,7 @@ PublicFront/ProcedureEditor.php + View/ProcedureEditorView.php + View/PanelParts
 PublicFront/Applications.php        crear/editar/buscar solicitudes, revisión, CSV
 PublicFront/ApplicationFiles.php    documentos privados: política, almacén, descarga autorizada (ADR-0028)
 PublicFront/LinkCopies.php          copia privada del PDF de cada enlace y su descarga (ADR-0048)
+PublicFront/ReceiptSignature.php + View/ReceiptSignatureView.php + Domain/SignedReceipt.php   firma del justificante (ADR-0049)
 PublicFront/ApplyForm.php + View/ApplyFormView.php
 PublicFront/MyCentre.php + View/MyCentreView.php
 Admin/ProcedureAdmin.php            columnas, filtro por ámbito, acotado del listado
@@ -493,6 +496,7 @@ carga, bundle, índices de ADR y planes. `make lint`, `make phpmd`,
 | El estado histórico cierra la edición | ADR-0023 | Propuesta |
 | Las solicitudes y documentos de hoy no se migran en la fase 1 | ADR-0024 | Propuesta |
 | La consulta de solo lectura se acota por zona y la decide el procedimiento | ADR-0043 | Propuesta |
+| El procedimiento puede pedir la firma electrónica del justificante, con AutoFirma o subiéndolo firmado | ADR-0049 | Propuesta |
 
 ## Pendientes y trabajo futuro
 

@@ -11,6 +11,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 
 /**
  * La solicitud se termina y se demuestra.
@@ -90,6 +91,7 @@ final class ApplicationProgress {
 			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'coordination'   => $id > 0 ? self::coordination( $id ) : '',
 			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige pintar en solo lectura lo que la pantalla ya enseña.
@@ -97,6 +99,23 @@ final class ApplicationProgress {
 		);
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
+	}
+
+	/**
+	 * The coordination of an application for its receipt, each person with their DNI or NIE.
+	 *
+	 * Si el procedimiento recoge la coordinación en la lista de personas, la
+	 * de la lista —el formulario ya no la pide y lo que quede en la meta es
+	 * de antes—; si no, la del formulario.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return string '' without coordination.
+	 */
+	public static function coordination( int $application_id ): string {
+		$en_lista = Applications::spec( (int) wp_get_post_parent_id( $application_id ) )['coordinators_in_list'];
+		return ApplicationMetaRegistration::receipt_coordinators(
+			$en_lista ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
 	}
 
 	/**

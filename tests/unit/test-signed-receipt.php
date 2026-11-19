@@ -26,10 +26,11 @@ class Test_Signed_Receipt extends WP_UnitTestCase {
 	 */
 	private function datos(): array {
 		return array(
-			'number'    => '57',
-			'procedure' => 'Red de prueba',
-			'centre'    => 'Centro de prueba (C0001)',
-			'submitted' => '10-11-2026 a las 12:34',
+			'number'       => '57',
+			'procedure'    => 'Red de prueba',
+			'centre'       => 'Centro de prueba (C0001)',
+			'submitted'    => '10-11-2026 a las 12:34',
+			'coordination' => 'Ana Pérez (DNI o NIE 12345678Z)',
 		);
 	}
 
@@ -46,10 +47,10 @@ class Test_Signed_Receipt extends WP_UnitTestCase {
 	}
 
 	/**
-	 * La huella es SHA-256 de los cuatro datos, siempre la misma, y cambia
-	 * si cambia cualquiera.
+	 * La huella es SHA-256 de los cinco datos, siempre la misma, y cambia
+	 * si cambia cualquiera: también el DNI o NIE de coordinación.
 	 */
-	public function test_the_fingerprint_is_the_sha256_of_the_four_fields() {
+	public function test_the_fingerprint_is_the_sha256_of_the_five_fields() {
 		$huella = SignedReceipt::fingerprint( $this->datos() );
 		$this->assertMatchesRegularExpression( '/^[a-f0-9]{64}$/', $huella );
 		$this->assertSame( $huella, SignedReceipt::fingerprint( array_reverse( $this->datos(), true ) ) );

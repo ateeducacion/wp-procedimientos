@@ -4696,7 +4696,7 @@ final class SignedReceipt {
 
 
 
-	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted' );
+	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted', 'coordination' );
 
 
 
@@ -9907,6 +9907,27 @@ final class ApplicationMetaRegistration {
 
 	public static function full_names( array $coordinators ): string {
 		return implode( ', ', array_filter( array_map( array( self::class, 'full_name' ), $coordinators ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function receipt_coordinators( array $people ): string {
+		$out = array();
+		foreach ( $people as $persona ) {
+			$nombre = self::full_name( (array) $persona );
+			$dni    = (string) ( $persona['dni'] ?? '' );
+			if ( '' !== $nombre ) {
+				$out[] = '' !== $dni ? $nombre . ' (DNI o NIE ' . $dni . ')' : $nombre;
+			}
+		}
+		return implode( '; ', $out );
 	}
 
 
@@ -19965,7 +19986,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora, quién la presentó, la coordinación con su DNI o NIE y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -20033,7 +20054,7 @@ final class HelpContent {
 				'html'  => '<p>Algunos procedimientos —proyectos europeos y similares— piden el justificante <strong>firmado electrónicamente</strong>. Su solicitud ya cuenta como presentada; hasta que lo firme, dirá <strong>«Pendiente de firma»</strong>. En la sección <strong>«Firma electrónica del justificante»</strong>, al final de la solicitud, tiene dos caminos:</p>'
 					. '<ul><li><strong>«Firmar justificante con AutoFirma»</strong>: necesita <strong>AutoFirma</strong> instalada en su equipo. Se abre AutoFirma, elija su certificado y espere: el justificante firmado se guarda solo. No cierre la página mientras tanto.</li>'
 					. '<li><strong>«Descargar justificante en PDF»</strong>: fírmelo con la aplicación que use habitualmente, sin cambiar nada más, y súbalo con <strong>«Subir el justificante firmado»</strong>.</li></ul>'
-					. '<p>Se comprueba que el PDF es el justificante de su solicitud y que lleva una sola firma. Si después de descargarlo cambian los datos de la solicitud, descárguelo de nuevo. Una vez firmado, verá <strong>«Firmado el …»</strong> y podrá descargarlo.</p>',
+					. '<p>Se comprueba que el PDF es el justificante de su solicitud y que lleva una sola firma. Si después de descargarlo cambian los datos de la solicitud —también la coordinación o su DNI o NIE, que el PDF lleva—, descárguelo de nuevo. Una vez firmado, verá <strong>«Firmado el …»</strong> y podrá descargarlo.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'sección «Firma electrónica del justificante» con los dos botones y la subida',
@@ -22723,12 +22744,14 @@ final class WorkspaceView {
 
 
 
+
+
 	private static function row( array $row ): void {
 		$estado = (string) $row['state'];
 		$aviso  = (string) $row['warning'];
 		$meta   = implode( ' · ', array_merge( array( 'N.º ' . (string) $row['id'] ), array_map( 'strval', (array) $row['areas'] ) ) );
 		?>
-		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>">
+		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>" style="--prc-banda: <?php echo esc_attr( (string) $row['color'] ); ?>">
 			<th scope="row" class="prc-celda-titulo" data-rotulo="Título">
 				<?php if ( '' !== (string) $row['url'] ) : ?>
 					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento"><?php echo esc_html( (string) $row['title'] ); ?></a>
@@ -25702,7 +25725,7 @@ final class ProcedureEditorView {
 						</label>
 					<?php endforeach; ?>
 				</div>
-				<p class="prc-campo__ayuda">Es la franja de color sobre el cartel en la tarjeta de la portada.</p>
+				<p class="prc-campo__ayuda">Es la franja de color sobre el cartel en la tarjeta de la portada y junto al título en «Mis procedimientos».</p>
 			</fieldset>
 		</div>
 		<?php
@@ -29693,6 +29716,7 @@ final class ApplicationProgressView {
 			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
 			'Fecha y hora de presentación' => (string) $p['submitted'],
 			'Presentada por'               => $quien,
+			'Coordinación'                 => (string) ( $p['coordination'] ?? '' ),
 			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
@@ -31951,6 +31975,7 @@ use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 
 
 
@@ -32031,6 +32056,7 @@ final class ApplicationProgress {
 			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'coordination'   => $id > 0 ? self::coordination( $id ) : '',
 			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 
@@ -32038,6 +32064,23 @@ final class ApplicationProgress {
 		);
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function coordination( int $application_id ): string {
+		$en_lista = Applications::spec( (int) wp_get_post_parent_id( $application_id ) )['coordinators_in_list'];
+		return ApplicationMetaRegistration::receipt_coordinators(
+			$en_lista ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
 	}
 
 
@@ -32443,10 +32486,12 @@ final class ReceiptSignature {
 			$centro = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_NAME, true ) . ' (' . (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ) . ')';
 		}
 		$datos                = array(
-			'number'    => (string) $application_id,
-			'procedure' => (string) get_post_field( 'post_title', $procedure_id ),
-			'centre'    => $centro,
-			'submitted' => ApplicationProgress::when( $cuando ),
+			'number'       => (string) $application_id,
+			'procedure'    => (string) get_post_field( 'post_title', $procedure_id ),
+			'centre'       => $centro,
+			'submitted'    => ApplicationProgress::when( $cuando ),
+
+			'coordination' => ApplicationProgress::coordination( $application_id ),
 		);
 		$datos['fingerprint'] = SignedReceipt::fingerprint( $datos );
 		$datos['created']     = SignedReceipt::pdf_date( $cuando );
@@ -40040,6 +40085,9 @@ body.prc-app .prc-btn-borrar {
   white-space: normal;
 }
 
+/* El color del procedimiento (`prc_header_color`), en una franja fina como
+   la de la portada. */
+.prc-tabla--taller tbody .prc-celda-titulo { border-left: 5px solid var(--prc-banda, #c9c9c9); }
 .prc-celda-titulo a { color: var(--prc-c-azul-tabla); font-weight: 600; }
 .prc-celda-titulo__meta { display: block; margin-top: 2px; font-size: .875rem; color: var(--prc-c-medio); font-weight: 400; }
 .prc-celda-estado .prc-state { white-space: normal; }
@@ -40078,7 +40126,7 @@ body.prc-app .prc-btn-borrar {
    cada celda se rotula sola. La primera celda es un `th`, y `prc-app.css`
    solo trata los `td`. */
 @media (max-width: 720px) {
-  .prc-tabla--taller tbody th { display: block; padding: 6px 0; border: 0; text-align: left; }
+  .prc-tabla--taller tbody th { display: block; padding: 6px 0 6px 8px; border: 0; text-align: left; }
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
 }
 
@@ -41036,12 +41084,18 @@ body.prc-app .prc-btn-borrar {
 		doc.text( \'Justificante de presentación\', 56, 72 );
 
 		var y = 110;
-		[
+		// En el orden de la huella; la coordinación, con su DNI o NIE, solo
+		// si la hay.
+		var filas = [
 			[ \'N.º de solicitud\', r.number ],
 			[ \'Procedimiento\', r.procedure ],
 			[ \'Centro\', r.centre ],
 			[ \'Fecha y hora de presentación\', r.submitted ]
-		].forEach( function ( fila ) {
+		];
+		if ( r.coordination ) {
+			filas.push( [ \'Coordinación\', r.coordination ] );
+		}
+		filas.forEach( function ( fila ) {
 			doc.setFont( \'helvetica\', \'bold\' );
 			doc.setFontSize( 10 );
 			doc.text( fila[ 0 ], 56, y );

@@ -253,3 +253,47 @@ Tras la revisión del código de [#113](https://github.com/ateeducacion/wp-proce
   «vuelva a intentarlo».
 - La columna «Firma del justificante» es de las que solo salen si se marcan,
   también con «Todas las columnas», como la nota interna.
+
+## Adenda — 2026-11-19: el DNI o NIE de coordinación entra en el justificante
+
+Decidido después de la adenda anterior (#114): el justificante lleva la
+coordinación con su DNI o NIE, junto a quien presenta y solo si lo hay.
+
+- **En el justificante impreso**, una fila «Coordinación» con cada persona
+  coordinadora como «Nombre Apellidos (DNI o NIE …)»; sin DNI, solo el
+  nombre, y sin coordinación, sin fila
+  (`ApplicationMetaRegistration::receipt_coordinators()`).
+- **En el PDF y en la huella.** `SignedReceipt::FIELDS` pasa de cuatro datos
+  a cinco: `number`, `procedure`, `centre`, `submitted` y `coordination`, en
+  ese orden, y jsPDF escribe la fila «Coordinación» solo si no está vacía.
+  Encaja en el diseño de la huella sin tocarlo: es otro dato de lo que se
+  presentó, se calcula igual al pintar y al recibir, y si cambia —otra
+  persona, otro DNI— el PDF ya descargado deja de valer y hay que
+  descargarlo de nuevo, como con el título o el nombre del centro.
+- **Contra:** las huellas calculadas con cuatro datos no coinciden con las de
+  cinco. Un PDF descargado antes de este cambio y sin subir se rechaza con
+  «sus datos han cambiado»; lo ya guardado como firmado no se vuelve a
+  comprobar y sigue firmado. Como #113 aún no ha salido a producción, no
+  hay justificantes firmados que migrar.
+- **El DNI sigue sin salir de donde ya salía**: lo ven quien presenta y quien
+  revisa, que ya lo veían en «Lo que presentó». No va en un correo —el acuse
+  solo enlaza el justificante—, ni en la consulta por zona, ni en su CSV
+  (`ObserverScope::ALLOWED_COLUMNS` no cambia; ADR-0043).
+
+## Adenda — 2026-11-19: tras la revisión de #115
+
+- **La coordinación sale de donde se recoge.** Si el procedimiento la
+  recoge en la lista de personas (`coordinators_in_list`), el formulario ya
+  no la pide y lo que quede en `prc_coordinator` es de antes: el
+  justificante y la huella leen la lista. Si no, la meta. Lo decide
+  `ApplicationProgress::coordination()`, que usan los dos.
+- **Matiz a «el DNI sigue sin salir de donde ya salía».** Con
+  `prc_autofirma_servlets` configurado para firmar desde el móvil, el PDF
+  que se firma pasa por el servidor intermedio que elige la instalación, y
+  ahora lleva el DNI o NIE de coordinación. Antes no llevaba ningún dato
+  personal. Quien configure los servlets tiene que contar con ello.
+- **Firmado no quiere decir al día.** Lo guardado como firmado no se vuelve
+  a comprobar: si después se cambia la coordinación o su DNI dentro del
+  plazo, el justificante impreso y el PDF firmado dicen cosas distintas y
+  la solicitud sigue «Firmada». Ya pasaba con las respuestas, que el PDF no
+  lleva; el PDF firmado prueba lo que había al firmar.

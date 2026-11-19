@@ -222,6 +222,18 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . Workspace::VAR_STATE . '"', $html );
 		$this->assertStringContainsString( 'Nuevo procedimiento', $html );
 		$this->assertStringContainsString( 'prc-tabla', $html );
+		$this->assertStringContainsString( 'style="--prc-banda: ' . ProcedureMetaKeys::header_hex( '' ) . '"', $html, 'sin elegir, el color neutro' );
+
+		// El color del procedimiento, en la franja de su fila, como en la portada.
+		update_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, 'teja' );
+		$html = WorkspaceView::html( Workspace::model() );
+		$this->assertMatchesRegularExpression( '/<tr data-estado="[^"]*" data-procedimiento="' . $id . '" style="--prc-banda: #a34118">/', $html );
+
+		// Y escapado: el color sale del modelo, no se fía de él.
+		$m                     = Workspace::model();
+		$m['rows'][0]['color'] = '#fff" onclick="alert(1)';
+		$html                  = WorkspaceView::html( $m );
+		$this->assertStringNotContainsString( '" onclick="', $html );
 	}
 
 	/**

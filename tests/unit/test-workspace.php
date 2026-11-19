@@ -605,7 +605,8 @@ class Test_Workspace extends WP_UnitTestCase {
 		// El recuento del curso que se está mirando.
 		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento en <strong>2026-2027</strong>:', $seguido );
 
-		// Seis columnas: lo que se mira y, al final, los iconos. Sin color,
+		// Seis columnas: lo que se mira y, al final, los iconos. Sin columna
+		// de color (va en una franja junto al título),
 		// sin la fecha de creación y sin el estado repetido en un icono.
 		preg_match_all( '#<th scope="col"[^>]*>([^<]+)</th>#', $html, $cabeceras );
 		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes', 'Acciones' ), array_map( 'trim', $cabeceras[1] ) );

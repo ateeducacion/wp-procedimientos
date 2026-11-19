@@ -238,6 +238,7 @@ final class ApplicationProgressView {
 			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
 			'Fecha y hora de presentación' => (string) $p['submitted'],
 			'Presentada por'               => $quien,
+			'Coordinación'                 => (string) ( $p['coordination'] ?? '' ),
 			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),

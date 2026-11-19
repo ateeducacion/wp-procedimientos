@@ -50,7 +50,8 @@ const SCREENS = {
  * `{ID}` es el procedimiento de demostración que se enseña: se pregunta al
  * sitio una vez y vale para el taller, la ficha y la solicitud. `{DRAFT}` es
  * un borrador sin solicitudes —el único que se puede borrar—, y se pregunta
- * igual. `open` dice qué `summary` se pulsa antes de capturar; `media`, si
+ * igual. `{RECEIPT}` es la solicitud de una de las de «Mi centro» de
+ * `direccion`, la que tiene justificante. `open` dice qué `summary` se pulsa antes de capturar; `media`, si
  * se emula otro medio (`print`), y `expect`, qué tiene que haber en la página
  * para que la captura valga.
  */
@@ -171,7 +172,7 @@ const SCENES = [
 		title: 'Justificante impreso',
 		note: 'El justificante de presentación como sale en papel (emulación de impresión): escudo y rótulo de quien despliega si los configura, los datos en una tabla con la fecha y la hora, y lo presentado; sin cabecera, menú, pie ni botones.',
 		who: 'direccion',
-		go: '/solicitud/?procedimiento={ID}&justificante=1',
+		go: '{RECEIPT}',
 		media: 'print',
 		expect: '.prc-justificante',
 		screens: [ 'desktop' ],
@@ -261,6 +262,33 @@ async function procedureId( page ) {
 }
 
 /**
+ * The path of the receipt of an application of `direccion`'s centre.
+ *
+ * El procedimiento abierto de demostración no tiene por qué tener solicitud
+ * de ese centro: se toma la primera de «Mi centro», que sí la tiene.
+ *
+ * @param {import('playwright').Browser} browser The browser.
+ * @return {Promise<string>}
+ */
+async function receiptPath( browser ) {
+	const context = await browser.newContext( SCREENS.desktop );
+	const page = await context.newPage();
+	try {
+		await logIn( page, 'direccion' );
+		await page.goto( `${ BASE }/mi-centro/`, { waitUntil: 'domcontentloaded' } );
+		const href = await page.getAttribute( 'a.prc-ver-solicitud', 'href' );
+		if ( ! href ) {
+			throw new Error( 'No encuentro ninguna solicitud en «Mi centro» de direccion: ¿está provisionado el entorno?' );
+		}
+		const url = new URL( href, BASE );
+		url.searchParams.set( 'justificante', '1' );
+		return url.pathname + url.search;
+	} finally {
+		await context.close();
+	}
+}
+
+/**
  * The ID of a draft without applications: the one whose workshop offers «Borrar».
  *
  * Se recorren los borradores de «Gestión de procedimientos» y se abre su
@@ -328,7 +356,10 @@ async function capture( browser, scene, screen, ids, n ) {
 		if ( scene.media ) {
 			await page.emulateMedia( { media: scene.media } );
 		}
-		const target = scene.go.replace( '{ID}', String( ids.id ) ).replace( '{DRAFT}', String( ids.draft ) );
+		const target = scene.go
+			.replace( '{ID}', String( ids.id ) )
+			.replace( '{DRAFT}', String( ids.draft ) )
+			.replace( '{RECEIPT}', ids.receipt );
 		const response = await page.goto( `${ BASE }${ target }`, { waitUntil: 'networkidle' } );
 		if ( response && response.status() >= 400 ) {
 			throw new Error( `la página respondió ${ response.status() }` );
@@ -481,6 +512,7 @@ try {
 		ids.draft = await draftId( page );
 	}
 	await context.close();
+	ids.receipt = shots.some( ( { scene } ) => scene.go.includes( '{RECEIPT}' ) ) ? await receiptPath( browser ) : '';
 
 	for ( const [ i, { scene, screen } ] of shots.entries() ) {
 		const shot = await capture( browser, scene, screen, ids, i + 1 );

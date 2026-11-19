@@ -229,6 +229,13 @@ final class ProcedureMetaKeys {
 
 	public const OBSERVER_NOTIFY = 'prc_observer_notify';
 
+
+
+
+
+
+	public const SIGNATURE_REQUIRED = 'prc_signature_required';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -294,6 +301,7 @@ final class ProcedureMetaKeys {
 			self::OBSERVER_FILES,
 			self::OBSERVER_EXPORT,
 			self::OBSERVER_NOTIFY,
+			self::SIGNATURE_REQUIRED,
 		);
 	}
 
@@ -576,6 +584,14 @@ final class ApplicationMetaKeys {
 
 	public const ADOPTED_AT = 'prc_adopted_at';
 
+
+
+
+
+
+
+	public const SIGNED_RECEIPT = 'prc_signed_receipt';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -609,6 +625,7 @@ final class ApplicationMetaKeys {
 			self::INTERNAL_NOTE,
 			self::CREATED_BY,
 			self::ADOPTED_AT,
+			self::SIGNED_RECEIPT,
 		);
 	}
 
@@ -3656,6 +3673,8 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
 
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => self::COPY,
+
 			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
 			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,
 			ProcedureMetaKeys::PEOPLE_SPEC          => self::TRANSFORM,
@@ -4263,6 +4282,9 @@ final class ApplicationFilter {
 	public const ARG_INCOMPLETE = 'incompletas';
 
 
+	public const ARG_UNSIGNED = 'sin_firmar';
+
+
 	public const ARG_SEARCH = 'buscar';
 
 
@@ -4284,6 +4306,7 @@ final class ApplicationFilter {
 		'island'     => self::ARG_ISLAND,
 		'zone'       => self::ARG_ZONE,
 		'incomplete' => self::ARG_INCOMPLETE,
+		'unsigned'   => self::ARG_UNSIGNED,
 		'search'     => self::ARG_SEARCH,
 		'page'       => self::ARG_PAGE,
 	);
@@ -4348,6 +4371,7 @@ final class ApplicationFilter {
 			'island'     => self::text( $raw, self::ARG_ISLAND, 100 ),
 			'zone'       => self::text( $raw, self::ARG_ZONE, 32 ),
 			'incomplete' => '1' === self::text( $raw, self::ARG_INCOMPLETE, 1 ),
+			'unsigned'   => '1' === self::text( $raw, self::ARG_UNSIGNED, 1 ),
 			'search'     => self::text( $raw, self::ARG_SEARCH, self::MAX_SEARCH ),
 			'page'       => ctype_digit( $pagina ) && (int) $pagina > 0 ? (int) $pagina : 1,
 		);
@@ -4380,7 +4404,7 @@ final class ApplicationFilter {
 
 	public static function active( array $filter ): bool {
 		return '' !== $filter['review'] || '' !== $filter['island'] || '' !== $filter['zone']
-			|| true === $filter['incomplete'] || '' !== $filter['search'];
+			|| true === $filter['incomplete'] || true === ( $filter['unsigned'] ?? false ) || '' !== $filter['search'];
 	}
 
 
@@ -4401,7 +4425,7 @@ final class ApplicationFilter {
 		$out = array();
 		foreach ( self::ARGS as $clave => $arg ) {
 			$valor = $f[ $clave ] ?? '';
-			if ( 'incomplete' === $clave ) {
+			if ( 'incomplete' === $clave || 'unsigned' === $clave ) {
 				$valor = true === $valor ? '1' : '';
 			} elseif ( 'page' === $clave ) {
 				$valor = (int) $valor > 1 ? (string) (int) $valor : '';
@@ -4636,6 +4660,186 @@ final class ApplicationCompleteness {
 
 	public static function may_be_incomplete( array $spec, array $questions, string $today ): bool {
 		return true === PeopleSpec::sanitize( $spec )['enabled'] || array() !== self::overdue( $questions, $today );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\Domain;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\Domain\SignedReceipt', false ) ) {
+final class SignedReceipt {
+
+
+
+
+
+
+	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted' );
+
+
+
+
+
+
+
+	public static function fingerprint( array $fields ): string {
+		$lineas = array();
+		foreach ( self::FIELDS as $clave ) {
+			$lineas[] = str_replace( array( "\r", "\n" ), ' ', (string) ( $fields[ $clave ] ?? '' ) );
+		}
+		return hash( 'sha256', implode( "\n", $lineas ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function pdf_date( int $timestamp ): string {
+		return 'D:' . gmdate( 'YmdHis', $timestamp ) . "+00'00'";
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function refuse( string $pdf, string $number, string $fingerprint, int $max ): string {
+		$largo = strlen( $pdf );
+		if ( $largo > $max ) {
+			return 'too_big';
+		}
+		if ( 0 !== strpos( $pdf, '%PDF' ) ) {
+			return 'not_pdf';
+		}
+		$texto  = self::text( $pdf );
+		$rangos = (int) preg_match_all( '~/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]~', $pdf, $m, PREG_SET_ORDER );
+		if ( ! preg_match( '~/(?:Type|FT)\s*/Sig\b~', $texto ) || 0 === $rangos ) {
+			return 'not_signed';
+		}
+		if ( $rangos > 1 ) {
+			return 'several';
+		}
+		if ( ! self::covers( $pdf, array_map( 'intval', array_slice( $m[0], 1 ) ) ) ) {
+			return 'not_covered';
+		}
+		return self::names( $texto, $number, $fingerprint ) ? '' : 'not_this';
+	}
+
+
+
+
+
+
+
+
+	private static function covers( string $pdf, array $range ): bool {
+		list( $inicio, $hueco, $sigue, $resto ) = $range;
+		return 0 === $inicio && $hueco < $sigue && strlen( $pdf ) === $sigue + $resto
+			&& '<' === substr( $pdf, $hueco, 1 ) && '>' === substr( $pdf, $sigue - 1, 1 )
+			&& ctype_xdigit( substr( $pdf, $hueco + 1, $sigue - $hueco - 2 ) );
+	}
+
+
+
+
+
+
+
+
+
+	private static function names( string $texto, string $number, string $fingerprint ): bool {
+		return '' !== $number && '' !== $fingerprint
+			&& preg_match( '~Solicitud: ' . preg_quote( $number, '~' ) . '(?!\d)~', $texto )
+			&& false !== strpos( $texto, 'Huella SHA-256: ' . $fingerprint );
+	}
+
+
+
+
+
+
+
+	public static function why( string $code ): string {
+		$textos = array(
+			'too_big'     => 'El justificante firmado pesa demasiado.',
+			'not_pdf'     => 'Lo que ha subido no es un PDF.',
+			'not_signed'  => 'El PDF no lleva firma electrónica. Fírmelo con AutoFirma u otra aplicación de firma y vuelva a subirlo.',
+			'several'     => 'El PDF lleva más de una firma. Suba el justificante firmado una sola vez.',
+			'not_covered' => 'El PDF se modificó después de firmarlo. Vuelva a firmar el justificante y súbalo sin cambios.',
+			'not_this'    => 'Ese PDF no es el justificante de esta solicitud, o sus datos han cambiado. Descargue de nuevo el justificante, fírmelo y súbalo.',
+		);
+		return $textos[ $code ] ?? '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function text( string $pdf ): string {
+		$texto = $pdf;
+		if ( ! function_exists( 'gzuncompress' ) || ! preg_match_all( '~(?<!end)stream\r?\n~', $pdf, $marcas, PREG_OFFSET_CAPTURE ) ) {
+			return $texto;
+		}
+		foreach ( $marcas[0] as $marca ) {
+			$ini = (int) $marca[1] + strlen( (string) $marca[0] );
+			$fin = strpos( $pdf, 'endstream', $ini );
+			if ( false === $fin ) {
+				continue;
+			}
+			$crudo = substr( $pdf, $ini, $fin - $ini );
+
+			foreach ( array( $crudo, rtrim( $crudo, "\r\n" ) ) as $intento ) {
+				$claro = @gzuncompress( $intento );
+				if ( is_string( $claro ) ) {
+					$texto .= "\n" . $claro;
+					break;
+				}
+			}
+		}
+		return $texto;
 	}
 }
 
@@ -9092,6 +9296,10 @@ final class ProcedureMetaRegistration {
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 				'auth'     => array( self::class, 'auth_observe' ),
 			),
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
 		);
 	}
 
@@ -9433,6 +9641,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationLog;
+use Prc\PublicFront\ReceiptSignature;
 
 
 
@@ -9520,6 +9729,10 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::ADOPTED_AT         => array(
 				'type'     => 'integer',
 				'sanitize' => 'absint',
+			),
+			ApplicationMetaKeys::SIGNED_RECEIPT     => array(
+				'type'     => 'array',
+				'sanitize' => array( ReceiptSignature::class, 'sanitize' ),
 			),
 		);
 	}
@@ -13588,6 +13801,9 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 			'internal_note'     => (string) $meta[ ApplicationMetaKeys::INTERNAL_NOTE ],
+
+			'signature'         => ReceiptSignature::label( (int) $application->ID ),
+			'signature_state'   => ReceiptSignature::state( (int) $application->ID ),
 		);
 		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 
@@ -15626,6 +15842,7 @@ use Prc\Meta\ApplicationMetaKeys;
 
 
 
+
 if ( ! class_exists( 'Prc\PublicFront\ApplicationHistory', false ) ) {
 final class ApplicationHistory {
 
@@ -15638,6 +15855,7 @@ final class ApplicationHistory {
 	public const EXTENDED      = 'extended';
 	public const CREATED_FOR   = 'created_for_centre';
 	public const INTERNAL_NOTE = 'internal_note';
+	public const SIGNED        = 'receipt_signed';
 
 
 
@@ -15654,6 +15872,7 @@ final class ApplicationHistory {
 		add_action( 'prc_application_extended', array( self::class, 'on_extended' ), 5, 4 );
 		add_action( 'prc_application_created_for', array( self::class, 'on_created_for' ), 5, 3 );
 		add_action( 'prc_internal_note_changed', array( self::class, 'on_internal_note' ), 5, 2 );
+		add_action( 'prc_receipt_signed', array( self::class, 'on_signed' ), 5, 3 );
 	}
 
 
@@ -15844,6 +16063,18 @@ final class ApplicationHistory {
 
 
 
+	public static function on_signed( $application_id, $user_id = 0, $via = '' ): void {
+		ApplicationLog::add( (int) $application_id, self::SIGNED, array( 'via' => (string) $via ), (int) $user_id );
+	}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -15883,6 +16114,7 @@ final class ApplicationHistory {
 			self::UPDATED           => 'Solicitud modificada',
 			self::RESTORED          => 'Solicitud restaurada desde «Retiradas»',
 			self::INTERNAL_NOTE     => 'Nota interna cambiada',
+			self::SIGNED            => 'Justificante firmado',
 			ApplicationLog::TRIMMED => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $data['dropped'] ?? 0 ) ),
 		);
 		$evento = (string) $entrada['event'];
@@ -16443,6 +16675,8 @@ final class PeopleExport {
 	public static function all_columns( int $procedure_id, bool $centre = false ): array {
 		$preguntas = Applications::questions( $procedure_id );
 		$columns   = QuestionGrid::expand( Applications::columns( $preguntas, $centre ), $preguntas );
+
+		$columns += $centre ? ReceiptSignature::columns( $procedure_id ) : array();
 		if ( ! People::enabled( $procedure_id ) ) {
 			return $columns;
 		}
@@ -16638,7 +16872,7 @@ final class ApplicationExport {
 		'applicant'    => array( 'applicant', 'email', 'position' ),
 		'coordination' => array( 'coordinator', 'coordinator_dni', 'coordinator_email' ),
 		'people'       => array( 'person_name', 'person_surname', 'person_dni', 'person_email', 'person_phone', 'person_role', 'person_group' ),
-		'review'       => array( 'state', 'note', 'score', 'internal_note' ),
+		'review'       => array( 'state', 'note', 'score', 'internal_note', 'signature' ),
 	);
 
 
@@ -17376,6 +17610,8 @@ final class ApplicationQuery {
 		ApplicationMetaKeys::APPLICANT_TYPE,
 		ApplicationMetaKeys::COORDINATOR,
 		ApplicationMetaKeys::CREATED_BY,
+
+		ApplicationMetaKeys::SIGNED_RECEIPT,
 	);
 
 
@@ -17395,9 +17631,13 @@ final class ApplicationQuery {
 		$filter   = ApplicationFilter::against( $filter, $opciones );
 
 		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
-		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
-		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
-		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+
+		$firma              = $incomplete && ReceiptSignature::required( $procedure_id );
+		$filter['unsigned'] = $firma && true === $filter['unsigned'];
+		$sin_firmar         = $firma ? self::unsigned( $census['stored'] ) : array();
+		$motivos            = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
+		$ids                = self::narrow( $census, $filter, $catalogo, $motivos ?? array(), $sin_firmar );
+		$ventana            = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
 		$filter['page'] = $ventana['page'];
 		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );
@@ -17410,6 +17650,8 @@ final class ApplicationQuery {
 			'counts'            => self::counts( $census['stored'] ),
 			'incomplete'        => count( $motivos ?? array() ),
 			'may_be_incomplete' => null !== $motivos,
+			'unsigned'          => count( $sin_firmar ),
+			'may_be_unsigned'   => $firma,
 			'options'           => $opciones,
 			'posts'             => self::page( $pagina ),
 			'reasons'           => array_intersect_key( $motivos ?? array(), array_flip( $pagina ) ),
@@ -17530,6 +17772,22 @@ final class ApplicationQuery {
 		foreach ( $posts as $id => $post ) {
 			$creada_por = (int) ( $stored[ $id ][ ApplicationMetaKeys::CREATED_BY ] ?? 0 );
 			if ( $creada_por > 0 && (int) $post->post_author === $creada_por ) {
+				$out[ $id ] = true;
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+	private static function unsigned( array $stored ): array {
+		$out = array();
+		foreach ( $stored as $id => $meta ) {
+			if ( array() === ReceiptSignature::sanitize( $meta[ ApplicationMetaKeys::SIGNED_RECEIPT ] ?? '' ) ) {
 				$out[ $id ] = true;
 			}
 		}
@@ -17663,7 +17921,8 @@ final class ApplicationQuery {
 
 
 
-	private static function narrow( array $census, array $filter, array $catalog, array $incomplete ): array {
+
+	private static function narrow( array $census, array $filter, array $catalog, array $incomplete, array $unsigned = array() ): array {
 		if ( '' !== $filter['search'] ) {
 
 			cache_users( array_unique( array_map( 'intval', wp_list_pluck( $census['posts'], 'post_author' ) ) ) );
@@ -17675,6 +17934,7 @@ final class ApplicationQuery {
 				|| ( '' !== $filter['island'] && $centro['island'] !== $filter['island'] )
 				|| ( '' !== $filter['zone'] && $centro['zone'] !== $filter['zone'] )
 				|| ( true === $filter['incomplete'] && ! isset( $incomplete[ $id ] ) )
+				|| ( true === $filter['unsigned'] && ! isset( $unsigned[ $id ] ) )
 				|| ! ApplicationFilter::matches( (string) $filter['search'], self::searchable( $census['posts'][ $id ], $meta ) ) ) {
 				continue;
 			}
@@ -18079,6 +18339,10 @@ final class ApplicationsPanel {
 			'incomplete' => array(
 				'possible' => (bool) $res['may_be_incomplete'],
 				'count'    => (int) $res['incomplete'],
+			),
+			'unsigned'   => array(
+				'possible' => (bool) $res['may_be_unsigned'],
+				'count'    => (int) $res['unsigned'],
 			),
 			'options'    => $res['options'],
 			'zone_label' => CentreColumns::zone_label(),
@@ -19751,6 +20015,21 @@ final class HelpContent {
 				),
 			),
 			array(
+				'id'    => 'firmar-el-justificante',
+				'level' => 2,
+				'title' => 'Firme el justificante si el procedimiento lo pide',
+				'html'  => '<p>Algunos procedimientos —proyectos europeos y similares— piden el justificante <strong>firmado electrónicamente</strong>. Su solicitud ya cuenta como presentada; hasta que lo firme, dirá <strong>«Pendiente de firma»</strong>. En la sección <strong>«Firma electrónica del justificante»</strong>, al final de la solicitud, tiene dos caminos:</p>'
+					. '<ul><li><strong>«Firmar justificante con AutoFirma»</strong>: necesita <strong>AutoFirma</strong> instalada en su equipo. Se abre AutoFirma, elija su certificado y espere: el justificante firmado se guarda solo. No cierre la página mientras tanto.</li>'
+					. '<li><strong>«Descargar justificante en PDF»</strong>: fírmelo con la aplicación que use habitualmente, sin cambiar nada más, y súbalo con <strong>«Subir el justificante firmado»</strong>.</li></ul>'
+					. '<p>Se comprueba que el PDF es el justificante de su solicitud y que lleva una sola firma. Si después de descargarlo cambian los datos de la solicitud, descárguelo de nuevo. Una vez firmado, verá <strong>«Firmado el …»</strong> y podrá descargarlo.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'sección «Firma electrónica del justificante» con los dos botones y la subida',
+						'image'   => '',
+					),
+				),
+			),
+			array(
 				'id'    => 'retirar-la-solicitud',
 				'level' => 2,
 				'title' => 'Retire la solicitud si ya no quiere participar',
@@ -19809,7 +20088,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19888,6 +20167,7 @@ final class HelpContent {
 				'title' => 'Avanzado',
 				'html'  => '<p>Lo que rara vez se toca, en secciones que se guardan cada una con su botón:</p>'
 					. '<ul><li><strong>Qué centros pueden solicitar</strong>, solo en los procedimientos para centros: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado. Pulse <strong>«Guardar qué centros pueden solicitar»</strong>. Se cierra con el resto de «Datos» cuando el estado del procedimiento ya no deja cambiarlo.</li>'
+					. '<li><strong>Firma electrónica</strong>: marque <strong>«Pedir la firma electrónica del justificante (AutoFirma)»</strong> si el procedimiento exige la solicitud firmada. Quien presenta firma el justificante en PDF con AutoFirma, o lo firma con otra aplicación y lo sube. Sin firmar, la solicitud se presenta igual y queda <strong>«Pendiente de firma»</strong>; en «Solicitudes» lo verá en cada fila, con el filtro <strong>«Solo las pendientes de firma»</strong> y la descarga del firmado. Se comprueba que es el justificante de esa solicitud y que lleva una firma, pero no la validez del certificado.</li>'
 					. '<li><strong>Acceso de consulta</strong>: solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</li>'
 					. '<li><strong>Código</strong>: estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</li></ul>',
 				'shots' => array(
@@ -23864,6 +24144,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 
 
@@ -24017,6 +24298,12 @@ final class ApplicationsPanelView {
 					<?php echo esc_html( sprintf( 'Solo las incompletas (%d)', (int) $t['incomplete']['count'] ) ); ?>
 				</label>
 			<?php endif; ?>
+			<?php if ( ! empty( $t['unsigned']['possible'] ) ) : ?>
+				<label class="prc-casilla prc-filtros__casilla">
+					<input type="checkbox" name="<?php echo esc_attr( ApplicationFilter::ARG_UNSIGNED ); ?>" value="1" <?php checked( true === $f['unsigned'] ); ?> />
+					<?php echo esc_html( sprintf( 'Solo las pendientes de firma (%d)', (int) $t['unsigned']['count'] ) ); ?>
+				</label>
+			<?php endif; ?>
 			<div class="prc-filtros__acciones">
 				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Filtrar</button>
 				<?php if ( '' !== (string) $t['reset_url'] ) : ?>
@@ -24156,6 +24443,7 @@ final class ApplicationsPanelView {
 							<td class="prc-celda" data-rotulo="Revisión">
 								<?php echo ProcedureEditorView::badge( (string) $fila['state_key'], (string) $fila['state'] );?>
 								<?php echo self::reasons( (array) ( $fila['reasons'] ?? array() ) );?>
+								<?php echo self::signature( $fila );?>
 							</td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila );?></td>
 						</tr>
@@ -24182,6 +24470,28 @@ final class ApplicationsPanelView {
 			$out .= '<li>' . esc_html( (string) $motivo ) . '</li>';
 		}
 		return $out . '</ul></div>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function signature( array $fila, bool $full = false ): string {
+		$estado = (string) ( $fila['signature_state'] ?? '' );
+		if ( '' === $estado ) {
+			return '';
+		}
+		if ( ReceiptSignature::STATE_SIGNED !== $estado ) {
+			return '<span class="prc-firma-estado prc-firma-estado--pendiente">Pendiente de firma</span>';
+		}
+		return '<span class="prc-firma-estado prc-firma-estado--firmado">' . esc_html( $full ? (string) $fila['signature'] : 'Firmado' ) . '</span> '
+			. '<a class="prc-descarga" href="' . esc_url( ReceiptSignature::url( (int) $fila['id'] ) ) . '" download>Descargar el firmado</a>';
 	}
 
 
@@ -24303,6 +24613,10 @@ final class ApplicationsPanelView {
 					?>
 					<dd><?php echo $respuesta;?></dd>
 				<?php endforeach; ?>
+				<?php if ( '' !== (string) ( $fila['signature'] ?? '' ) ) : ?>
+					<dt>Firma del justificante</dt>
+					<dd><?php echo self::signature( $fila, true );?></dd>
+				<?php endif; ?>
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) );?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
@@ -24349,9 +24663,11 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
+
 
 
 
@@ -24371,9 +24687,10 @@ final class AdvancedPanelView {
 
 	public static function html( array $m ): string {
 		$secciones = array(
-			'centres' => array( self::class, 'centres_section' ),
-			'observe' => array( self::class, 'observe_section' ),
-			'code'    => array( self::class, 'code_section' ),
+			'centres'   => array( self::class, 'centres_section' ),
+			'signature' => array( self::class, 'signature_section' ),
+			'observe'   => array( self::class, 'observe_section' ),
+			'code'      => array( self::class, 'code_section' ),
 		);
 		$out       = '';
 		foreach ( (array) $m['advanced'] as $seccion ) {
@@ -24410,6 +24727,44 @@ final class AdvancedPanelView {
 				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
 					<?php echo self::centre_fields( $m, (array) $m['values'] );?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' );?>
+				</fieldset>
+			</form>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function signature_section( array $m ): string {
+		$op = AdvancedPanel::OP_SIGNATURE;
+		ob_start();
+		?>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
+			<h2 class="prc-seccion__titulo" id="prc-avanzado-firma-titulo">Firma electrónica</h2>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<fieldset class="prc-seccion-campos"<?php disabled( empty( $m['can_edit'] ) ); ?>>
+					<div class="prc-seccion__cuerpo">
+						<div class="prc-campo prc-campo--completo">
+							<div class="prc-opcion">
+								<input type="checkbox" id="prc-signature-required" name="<?php echo esc_attr( ProcedureMetaKeys::SIGNATURE_REQUIRED ); ?>" value="1" aria-describedby="prc-signature-required-ayuda"
+									<?php checked( '1' === (string) ( $m['values'][ ProcedureMetaKeys::SIGNATURE_REQUIRED ] ?? '' ) ); ?> />
+								<label for="prc-signature-required">Pedir la firma electrónica del justificante (AutoFirma)</label>
+							</div>
+							<p class="prc-campo__ayuda" id="prc-signature-required-ayuda">Para proyectos europeos y otros procedimientos que exigen la solicitud firmada. Quien presenta la solicitud firma su justificante en PDF con AutoFirma, o lo descarga, lo firma con otra aplicación y lo sube. Sin firmar, la solicitud se presenta igual y queda «Pendiente de firma». Se comprueba que el PDF es el justificante de esa solicitud y que lleva una firma, pero no la validez del certificado.</p>
+						</div>
+					</div>
+					<?php echo PanelParts::submit( 'Guardar la firma electrónica' );?>
 				</fieldset>
 			</form>
 		</section>
@@ -26248,6 +26603,7 @@ final class ProcedureEditor {
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
 		self::OP_CENTRES,
+		AdvancedPanel::OP_SIGNATURE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -26292,6 +26648,7 @@ final class ProcedureEditor {
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'centros'      => 'Guardado qué centros pueden solicitar.',
+		'firma'        => 'Firma electrónica guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -26499,13 +26856,11 @@ final class ProcedureEditor {
 			return;
 		}
 
-
-
-
 		$sueltas = array(
-			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
-			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
-			self::OP_OBSERVE        => array( self::class, 'save_observe' ),
+			self::OP_DELIVERY_DATES     => array( self::class, 'save_delivery_dates' ),
+			self::OP_PEOPLE_SPEC        => array( self::class, 'save_people_spec' ),
+			self::OP_OBSERVE            => array( self::class, 'save_observe' ),
+			AdvancedPanel::OP_SIGNATURE => array( AdvancedPanel::class, 'save_signature' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -27806,6 +28161,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::CUSTOM_CSS           => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS ),
 			ProcedureMetaKeys::CUSTOM_JS            => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS ),
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => ReceiptSignature::required( $procedure_id ) ? '1' : '',
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),
@@ -28078,6 +28434,12 @@ if ( ! class_exists( 'Prc\PublicFront\AdvancedPanel', false ) ) {
 final class AdvancedPanel {
 
 
+	public const OP_SIGNATURE = 'signature';
+
+
+	public const SECTION_SIGNATURE = 'prc-avanzado-firma';
+
+
 
 
 
@@ -28092,9 +28454,10 @@ final class AdvancedPanel {
 		return array_keys(
 			array_filter(
 				array(
-					'centres' => self::for_schools( $procedure_id ),
-					'observe' => ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ),
-					'code'    => true,
+					'centres'   => self::for_schools( $procedure_id ),
+					'signature' => true,
+					'observe'   => ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ),
+					'code'      => true,
 				)
 			)
 		);
@@ -28138,6 +28501,22 @@ final class AdvancedPanel {
 		update_post_meta( $procedure_id, ProcedureMetaKeys::ALLOWED_CENTRES, wp_slash( $acotados['data']['allowed_centres'] ) );
 		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'centros' ) ) );
 		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function save_signature( int $procedure_id ): void {
+
+		update_post_meta( $procedure_id, ProcedureMetaKeys::SIGNATURE_REQUIRED, ! empty( $_POST[ ProcedureMetaKeys::SIGNATURE_REQUIRED ] ) );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'firma' ) ) . '#' . self::SECTION_SIGNATURE );
 	}
 
 
@@ -29073,6 +29452,7 @@ namespace Prc\PublicFront\View;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 
 
@@ -29190,6 +29570,9 @@ final class ApplicationProgressView {
 				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
 				<?php if ( array() !== (array) ( $m['progress'] ?? array() ) ) : ?>
 					<?php echo self::status( (array) $m['progress'] );?>
+					<?php if ( '' !== (string) ( $m['signature']['label'] ?? '' ) ) : ?>
+						<span class="prc-solicitud-estado__firma"><a href="<?php echo esc_url( '#' . ReceiptSignature::ANCHOR ); ?>"><?php echo esc_html( (string) $m['signature']['label'] ); ?></a></span>
+					<?php endif; ?>
 				<?php else : ?>
 					<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
 				<?php endif; ?>
@@ -29240,6 +29623,7 @@ final class ApplicationProgressView {
 		if ( ! empty( $p['show_complete'] ) ) {
 			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
 		}
+
 		$enlaces = array();
 		if ( ! empty( $p['people_missing'] ) ) {
 			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de participantes</a>';
@@ -29301,6 +29685,7 @@ final class ApplicationProgressView {
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
 			'Estado'                       => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'Firma electrónica'            => (string) ( $m['signature']['label'] ?? '' ),
 		);
 
 		ob_start();
@@ -29435,6 +29820,85 @@ final class PrivacyNotice {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\ReceiptSignature;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\ReceiptSignatureView', false ) ) {
+final class ReceiptSignatureView {
+
+
+
+
+
+
+
+	public static function section( array $s ): string {
+		if ( empty( $s['show'] ) ) {
+			return '';
+		}
+		$datos = empty( $s['can'] ) ? '' : (string) wp_json_encode(
+			array(
+				'receipt'  => (array) $s['data'],
+				'servlets' => (array) $s['servlets'],
+			)
+		);
+		ob_start();
+		?>
+		<section class="prc-seccion prc-firma" id="<?php echo esc_attr( ReceiptSignature::ANCHOR ); ?>" aria-labelledby="prc-firma-titulo"<?php echo '' !== $datos ? ' data-prc-firma="' . esc_attr( $datos ) . '"' : ''; ?>>
+			<h2 class="prc-seccion__titulo" id="prc-firma-titulo">Firma electrónica del justificante</h2>
+			<?php echo Shell::notice( 'error', (string) ( $s['rejected'] ?? '' ) );?>
+			<p class="prc-firma__estado-actual"><strong><?php echo esc_html( (string) $s['label'] ); ?></strong>
+				<?php if ( ! empty( $s['signed'] ) ) : ?>
+					· <a class="prc-descarga" href="<?php echo esc_url( (string) $s['download_url'] ); ?>" download>Descargar el justificante firmado</a>
+				<?php endif; ?>
+			</p>
+			<?php if ( ! empty( $s['can'] ) ) : ?>
+				<p class="prc-intro">Este procedimiento pide el justificante firmado electrónicamente. Su solicitud ya está presentada: firmarlo no cambia nada más. Puede firmarlo con AutoFirma desde esta pantalla, o descargarlo en PDF, firmarlo con otra aplicación y subirlo.</p>
+				<p class="prc-firma__botones" data-prc-firma-botones hidden>
+					<button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-firmar hidden>Firmar justificante con AutoFirma</button>
+					<button type="button" class="<?php echo esc_attr( Assets::button_class() ); ?>" data-prc-firma-pdf>Descargar justificante en PDF</button>
+				</p>
+				<p class="prc-firma__aviso" role="status" aria-live="polite" data-prc-firma-estado></p>
+				<noscript><p class="prc-campo__ayuda">Para generar el PDF del justificante hace falta JavaScript. Si ya lo tiene firmado, súbalo aquí abajo.</p></noscript>
+				<form class="prc-form prc-firma__subida" method="post" enctype="multipart/form-data" action="<?php echo esc_url( (string) $s['action'] ); ?>" data-prc-firma-form>
+					<?php wp_nonce_field( (string) $s['nonce_action'], ReceiptSignature::NONCE_FIELD, false ); ?>
+					<input type="hidden" name="<?php echo esc_attr( ReceiptSignature::FIELD_OP ); ?>" value="<?php echo esc_attr( ReceiptSignature::OP_SIGN ); ?>" />
+					<input type="hidden" name="<?php echo esc_attr( ReceiptSignature::FIELD_APPLICATION ); ?>" value="<?php echo esc_attr( (string) (int) $s['application'] ); ?>" />
+					<input type="hidden" name="<?php echo esc_attr( ReceiptSignature::FIELD_SIGNED ); ?>" value="" data-prc-firma-resultado />
+					<div class="prc-campo">
+						<label class="prc-campo__etiqueta" for="prc-firma-fichero">Justificante firmado (PDF)</label>
+						<input class="prc-control" type="file" id="prc-firma-fichero" name="<?php echo esc_attr( ReceiptSignature::FIELD_FILE ); ?>" accept="application/pdf,.pdf" aria-describedby="prc-firma-fichero-ayuda" />
+						<p class="prc-campo__ayuda" id="prc-firma-fichero-ayuda"><?php echo esc_html( 'El justificante de esta solicitud, firmado una sola vez y sin cambios después de firmar. Hasta ' . size_format( (int) $s['max_bytes'] ) . '.' ); ?></p>
+					</div>
+					<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Subir el justificante firmado</button>
+				</form>
+			<?php endif; ?>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\DateRange;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Meta\ApplicationMetaKeys;
@@ -29526,6 +29990,8 @@ final class ApplyFormView {
 			self::deliveries( $m );
 			echo '</div>';
 		}
+
+		echo ReceiptSignatureView::section( (array) ( $m['signature'] ?? array() ) );
 
 
 		echo self::privacy( PrivacyNotice::after_sections( $m ) );
@@ -30274,6 +30740,7 @@ final class ApplyForm {
 		'guardada'   => 'Solicitud guardada.',
 		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
 		'retirada'   => 'Solicitud retirada: ya no cuenta para este procedimiento. Mientras el plazo siga abierto, puede volver a presentar una nueva.',
+		'firmada'    => 'Justificante firmado guardado. Quien revisa la solicitud ya lo ve firmado.',
 	);
 
 
@@ -30833,6 +31300,8 @@ final class ApplyForm {
 		$m['people'] = PeopleForm::model( $m );
 
 		$m['withdraw'] = WithdrawForm::model( $m );
+
+		$m['signature'] = ReceiptSignature::model( $m );
 
 		$m['progress'] = ApplicationProgress::model( $m );
 		return ApplyFormView::html( $m );
@@ -31725,6 +32194,578 @@ final class ApplicationProgress {
 
 	public static function when( int $timestamp ): string {
 		return $timestamp > 0 ? (string) wp_date( 'd-m-Y', $timestamp ) . ' a las ' . (string) wp_date( 'H:i', $timestamp ) : '';
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\SignedReceipt;
+use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PostType\ApplicationPostType;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\ReceiptSignature', false ) ) {
+final class ReceiptSignature {
+
+
+	public const FIELD_OP = 'prc_sign_op';
+
+	public const OP_SIGN = 'sign';
+
+
+	public const FIELD_APPLICATION = 'prc_sign_application';
+
+
+	public const FIELD_FILE = 'prc_signed_pdf';
+
+
+	public const FIELD_SIGNED = 'prc_signed_b64';
+
+
+	public const NONCE_FIELD = '_prc_sign_nonce';
+
+
+	public const ANCHOR = 'prc-firma';
+
+
+	public const NOTICE = 'firmada';
+
+
+	public const ARG_DOWNLOAD = 'prc_firmado';
+
+	public const VIA_AUTOFIRMA = 'autofirma';
+	public const VIA_UPLOAD    = 'upload';
+
+	public const STATE_SIGNED  = 'signed';
+	public const STATE_PENDING = 'pending';
+
+	public const HANDLE_JSPDF      = 'prc-jspdf';
+	public const HANDLE_AUTOSCRIPT = 'prc-autoscript';
+
+
+
+
+
+
+	private static $rejected = '';
+
+
+
+
+
+
+	public static function register(): void {
+		add_action( 'init', array( self::class, 'handle' ), 20 );
+		add_action( 'init', array( self::class, 'serve' ), 20 );
+		add_action( 'before_delete_post', array( self::class, 'on_delete' ), 10, 2 );
+		add_filter( 'script_loader_tag', array( self::class, 'sri' ), 10, 3 );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function vendors(): array {
+		return array(
+			self::HANDLE_JSPDF      => array(
+				'url' => 'https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js',
+				'ver' => '4.2.1',
+				'sri' => 'sha384-qovJwSBbRDPP5cEjCp8S0UP66wrvnjaa60XMOGzTNanrThcrGfXfnZkvgY8N1KT3',
+			),
+			self::HANDLE_AUTOSCRIPT => array(
+				'url' => 'https://cdn.jsdelivr.net/npm/@erseco/autofirma-client@1.9.3/vendor/autoscript.js',
+				'ver' => '1.9.3',
+				'sri' => 'sha384-F2mPlftZeXB0HJb+lwQbpi4OXcxuJmrQ5KCvank97CWgaVFZv4mEc2ZsmdAM+uGd',
+			),
+		);
+	}
+
+
+
+
+
+
+
+
+
+	public static function sri( $tag, $handle, $src ) {
+		$vendors = self::vendors();
+		if ( ! isset( $vendors[ $handle ] ) || 0 !== strpos( (string) $src, 'https://cdn.jsdelivr.net/' ) ) {
+			return $tag;
+		}
+		return str_replace( ' src=', ' integrity="' . $vendors[ $handle ]['sri'] . '" crossorigin="anonymous" src=', (string) $tag );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function servlets(): array {
+
+
+
+
+
+		$servlets = (array) apply_filters(
+			'prc_autofirma_servlets',
+			array(
+				'storage'  => '',
+				'retrieve' => '',
+			)
+		);
+		$out      = array();
+		foreach ( array( 'storage', 'retrieve' ) as $clave ) {
+			$out[ $clave ] = esc_url_raw( (string) ( $servlets[ $clave ] ?? '' ), array( 'https' ) );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+	public static function required( int $procedure_id ): bool {
+		return $procedure_id > 0 && (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::SIGNATURE_REQUIRED, true );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_sign( int $user_id, int $application_id ): bool {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		return self::required( $procedure_id )
+			&& 'publish' === get_post_status( $procedure_id )
+			&& ! ProcedureAccess::is_archived( $procedure_id )
+			&& ProcedureAccess::can_view_application( $user_id, $application_id, ProcedureAccess::VIEW_OWN )
+			&& ! ApplicationOperations::pending_for_school( $application_id )
+			&& array() === self::signed( $application_id );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function can_download( int $user_id, int $application_id ): bool {
+		return ApplicationPostType::POST_TYPE === get_post_type( $application_id )
+			&& ( ProcedureAccess::can_view_application( $user_id, $application_id, ProcedureAccess::VIEW_OWN )
+				|| ProcedureAccess::can_review( $user_id, $application_id ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function data( int $application_id ): array {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		$cuando       = ApplicationProgress::submitted_at( $application_id );
+		if ( ApplicationMetaKeys::TYPE_TEACHER === get_post_meta( $application_id, ApplicationMetaKeys::APPLICANT_TYPE, true ) ) {
+			$autor  = get_userdata( (int) get_post_field( 'post_author', $application_id ) );
+			$centro = false !== $autor ? (string) $autor->display_name : '';
+		} else {
+			$centro = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_NAME, true ) . ' (' . (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ) . ')';
+		}
+		$datos                = array(
+			'number'    => (string) $application_id,
+			'procedure' => (string) get_post_field( 'post_title', $procedure_id ),
+			'centre'    => $centro,
+			'submitted' => ApplicationProgress::when( $cuando ),
+		);
+		$datos['fingerprint'] = SignedReceipt::fingerprint( $datos );
+		$datos['created']     = SignedReceipt::pdf_date( $cuando );
+		$datos['file_id']     = substr( $datos['fingerprint'], 0, 32 );
+		$datos['filename']    = 'justificante-solicitud-' . $application_id . '.pdf';
+		return $datos;
+	}
+
+
+
+
+
+
+
+
+
+	public static function signed( int $application_id ): array {
+		return $application_id > 0 ? self::sanitize( get_post_meta( $application_id, ApplicationMetaKeys::SIGNED_RECEIPT, true ) ) : array();
+	}
+
+
+
+
+
+
+
+	public static function sanitize( $value ): array {
+		if ( ! is_array( $value ) || ! preg_match( '/^[a-f0-9]{32}$/', (string) ( $value['id'] ?? '' ) )
+			|| ! preg_match( ApplicationFiles::STORED_SHAPE, (string) ( $value['stored'] ?? '' ) ) ) {
+			return array();
+		}
+		return array(
+			'id'        => (string) $value['id'],
+			'name'      => sanitize_file_name( (string) ( $value['name'] ?? '' ) ),
+			'mime'      => 'application/pdf',
+			'size'      => absint( $value['size'] ?? 0 ),
+			'sha256'    => preg_match( '/^[a-f0-9]{64}$/', (string) ( $value['sha256'] ?? '' ) ) ? (string) $value['sha256'] : '',
+			'stored'    => (string) $value['stored'],
+			'signed_at' => absint( $value['signed_at'] ?? 0 ),
+			'signed_by' => absint( $value['signed_by'] ?? 0 ),
+			'via'       => self::VIA_AUTOFIRMA === ( $value['via'] ?? '' ) ? self::VIA_AUTOFIRMA : self::VIA_UPLOAD,
+		);
+	}
+
+
+
+
+
+
+
+	public static function state( int $application_id ): string {
+		if ( ! self::required( (int) wp_get_post_parent_id( $application_id ) ) ) {
+			return '';
+		}
+		return array() === self::signed( $application_id ) ? self::STATE_PENDING : self::STATE_SIGNED;
+	}
+
+
+
+
+
+
+
+	public static function label( int $application_id ): string {
+		$estado = self::state( $application_id );
+		if ( self::STATE_SIGNED !== $estado ) {
+			return self::STATE_PENDING === $estado ? 'Pendiente de firma' : '';
+		}
+		$firma = self::signed( $application_id );
+		$quien = get_userdata( (int) $firma['signed_by'] );
+		return 'Firmado el ' . ApplicationProgress::when( (int) $firma['signed_at'] ) . ( false !== $quien ? ' por ' . $quien->display_name : '' );
+	}
+
+
+
+
+
+
+
+	public static function columns( int $procedure_id ): array {
+		return self::required( $procedure_id ) ? array( 'signature' => 'Firma del justificante' ) : array();
+	}
+
+
+
+
+
+
+
+	public static function url( int $application_id ): string {
+		return add_query_arg( self::ARG_DOWNLOAD, $application_id, home_url( '/' ) );
+	}
+
+
+
+
+
+
+
+
+
+	public static function nonce_action( int $application_id ): string {
+		return 'prc_sign_' . $application_id;
+	}
+
+
+
+
+
+
+
+
+
+	public static function model( array $m ): array {
+		$id = (int) ( $m['application']['id'] ?? 0 );
+		if ( $id <= 0 || ! self::required( (int) wp_get_post_parent_id( $id ) ) || ApplicationOperations::pending_for_school( $id ) ) {
+			return array( 'show' => false );
+		}
+		$puede = self::can_sign( get_current_user_id(), $id );
+		if ( $puede ) {
+			foreach ( self::vendors() as $handle => $vendor ) {
+				wp_enqueue_script( $handle, $vendor['url'], array(), $vendor['ver'], true );
+			}
+		}
+		return array(
+			'show'         => true,
+			'can'          => $puede,
+			'label'        => self::label( $id ),
+			'signed'       => array() !== self::signed( $id ),
+			'download_url' => self::url( $id ),
+			'data'         => $puede ? self::data( $id ) : array(),
+			'servlets'     => self::servlets(),
+			'rejected'     => self::$rejected,
+			'application'  => $id,
+			'action'       => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ) . '#' . self::ANCHOR,
+			'nonce_action' => self::nonce_action( $id ),
+			'max_bytes'    => ApplicationFiles::max_bytes(),
+		);
+	}
+
+
+
+
+
+
+
+
+	public static function handle(): void {
+		if ( self::OP_SIGN !== sanitize_key( self::posted( self::FIELD_OP ) ) || ! is_user_logged_in() ) {
+			return;
+		}
+		$id      = absint( self::posted( self::FIELD_APPLICATION ) );
+		$user_id = get_current_user_id();
+		$error   = self::refusal( $id, $user_id, sanitize_text_field( self::posted( self::NONCE_FIELD ) ) );
+		$bytes   = '';
+		$via     = self::VIA_UPLOAD;
+		if ( '' === $error ) {
+			list( $bytes, $via, $error ) = self::received();
+		}
+		if ( '' === $error ) {
+			$datos = self::data( $id );
+			$error = SignedReceipt::why( SignedReceipt::refuse( $bytes, $datos['number'], $datos['fingerprint'], ApplicationFiles::max_bytes() ) );
+		}
+		if ( '' === $error && ! self::store( $id, $bytes, $user_id, $via ) ) {
+			$error = 'No se ha podido guardar el justificante firmado. Vuelva a intentarlo.';
+		}
+		if ( '' !== $error ) {
+			self::$rejected = $error;
+			return;
+		}
+
+
+
+
+
+
+
+
+		do_action( 'prc_receipt_signed', $id, $user_id, $via );
+		$procedure_id = (int) wp_get_post_parent_id( $id );
+		Shell::leave( ApplyForm::url_for_code( $procedure_id, (string) get_post_meta( $id, ApplicationMetaKeys::CENTRE_CODE, true ), array( ApplyForm::ARG_NOTICE => self::NOTICE ) ) . '#' . self::ANCHOR );
+	}
+
+
+
+
+
+
+
+	private static function posted( string $field ): string {
+
+		return isset( $_POST[ $field ] ) && is_string( $_POST[ $field ] ) ? trim( wp_unslash( $_POST[ $field ] ) ) : '';
+	}
+
+
+
+
+
+
+
+
+
+	private static function refusal( int $application_id, int $user_id, string $nonce ): string {
+		if ( false === wp_verify_nonce( $nonce, self::nonce_action( $application_id ) ) ) {
+			return 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a intentarlo.';
+		}
+		if ( self::can_sign( $user_id, $application_id ) ) {
+			return '';
+		}
+		return array() === self::signed( $application_id ) ? 'No puede firmar el justificante de esta solicitud.' : 'El justificante de esta solicitud ya está firmado.';
+	}
+
+
+
+
+
+
+
+
+	private static function received(): array {
+		$b64 = self::posted( self::FIELD_SIGNED );
+		if ( '' === $b64 ) {
+			return self::uploaded();
+		}
+		if ( strlen( $b64 ) > (int) ceil( ApplicationFiles::max_bytes() * 4 / 3 ) + 4 ) {
+			return array( '', self::VIA_AUTOFIRMA, SignedReceipt::why( 'too_big' ) );
+		}
+
+		$bytes = base64_decode( strtr( $b64, '-_', '+/' ), true );
+		return is_string( $bytes ) ? array( $bytes, self::VIA_AUTOFIRMA, '' ) : array( '', self::VIA_AUTOFIRMA, SignedReceipt::why( 'not_pdf' ) );
+	}
+
+
+
+
+
+
+	private static function uploaded(): array {
+
+		$campo = isset( $_FILES[ self::FIELD_FILE ] ) && is_array( $_FILES[ self::FIELD_FILE ] ) ? $_FILES[ self::FIELD_FILE ] : array();
+		$error = (int) ( $campo['error'] ?? UPLOAD_ERR_NO_FILE );
+		$tmp   = is_string( $campo['tmp_name'] ?? null ) ? $campo['tmp_name'] : '';
+		if ( UPLOAD_ERR_INI_SIZE === $error || UPLOAD_ERR_FORM_SIZE === $error || (int) ( $campo['size'] ?? 0 ) > ApplicationFiles::max_bytes() ) {
+			return array( '', self::VIA_UPLOAD, SignedReceipt::why( 'too_big' ) );
+		}
+		if ( UPLOAD_ERR_OK !== $error || '' === $tmp || ! is_readable( $tmp ) ) {
+			return array( '', self::VIA_UPLOAD, 'Elija el justificante firmado, en PDF, antes de subirlo.' );
+		}
+
+		$bytes = file_get_contents( $tmp );
+		return array( is_string( $bytes ) ? $bytes : '', self::VIA_UPLOAD, '' );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function store( int $application_id, string $bytes, int $user_id, string $via ): bool {
+		$stored = ApplicationFiles::put( $bytes, 'pdf' );
+		if ( '' === $stored ) {
+			return false;
+		}
+		$firma = array(
+			'id'        => bin2hex( random_bytes( 16 ) ),
+			'name'      => 'justificante-solicitud-' . $application_id . '-firmado.pdf',
+			'mime'      => 'application/pdf',
+			'size'      => strlen( $bytes ),
+			'sha256'    => hash( 'sha256', $bytes ),
+			'stored'    => $stored,
+			'signed_at' => time(),
+			'signed_by' => $user_id,
+			'via'       => $via,
+		);
+		if ( ! add_post_meta( $application_id, ApplicationMetaKeys::SIGNED_RECEIPT, $firma, true ) ) {
+			ApplicationFiles::erase( $firma );
+			return false;
+		}
+		return true;
+	}
+
+
+
+
+
+
+
+
+	public static function serve(): void {
+
+		$id = isset( $_GET[ self::ARG_DOWNLOAD ] ) && is_string( $_GET[ self::ARG_DOWNLOAD ] ) ? absint( wp_unslash( $_GET[ self::ARG_DOWNLOAD ] ) ) : 0;
+		if ( $id <= 0 ) {
+			return;
+		}
+		if ( ! self::can_download( get_current_user_id(), $id ) ) {
+			ApplicationFiles::deny();
+			return;
+		}
+		$firma = self::signed( $id );
+		$bytes = array() === $firma ? null : ApplicationFiles::read( $firma );
+		if ( null === $bytes ) {
+			ApplicationFiles::deny( 404, 'Ese documento ya no está.' );
+			return;
+		}
+		foreach ( ApplicationFiles::headers( $firma, strlen( $bytes ) ) as $linea ) {
+			Shell::send_header( $linea );
+		}
+		echo $bytes;
+		Shell::leave();
+	}
+
+
+
+
+
+
+
+
+	public static function on_delete( int $post_id, $post = null ): void {
+		$tipo  = $post instanceof \WP_Post ? (string) $post->post_type : (string) get_post_type( $post_id );
+		$firma = ApplicationPostType::POST_TYPE === $tipo ? self::signed( $post_id ) : array();
+		if ( array() !== $firma ) {
+			ApplicationFiles::erase( $firma );
+		}
 	}
 }
 
@@ -35501,6 +36542,7 @@ use Prc\PublicFront\Observe;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\WithdrawForm;
 use Prc\PublicFront\Workspace;
@@ -35557,6 +36599,8 @@ final class App {
 		ApplicationOperations::class,
 		ApplicationHistory::class,
 		WithdrawForm::class,
+
+		ReceiptSignature::class,
 		MyCentre::class,
 
 		Observe::class,
@@ -36092,6 +37136,10 @@ html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
 .prc-incompleta { margin: 4px 0 0; font-size: var(--prc-t-menudo); color: var(--prc-c-tabla); }
 .prc-incompleta__titulo { font-weight: 700; }
 .prc-incompleta__motivos { margin: 0; padding-left: 1.1em; }
+
+/* La firma del justificante en la tabla y en la revisión (ADR-0049). */
+.prc-firma-estado { display: block; margin: 4px 0 0; font-size: var(--prc-t-menudo); font-weight: 700; color: var(--prc-c-tabla); }
+.prc-firma-estado--firmado { display: inline; }
 
 .prc-paginacion__lista { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
 .prc-paginacion__enlace,
@@ -38380,6 +39428,12 @@ body.prc-app .prc-btn-borrar {
   .prc-justificante__tabla th,
   .prc-justificante__tabla td { border-color: #000; }
 }
+
+/* La firma del justificante en la pantalla de la solicitud (ADR-0049). */
+.prc-firma__botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.prc-firma__botones[hidden] { display: none; }
+.prc-firma__aviso:empty { display: none; }
+.prc-firma__subida { margin-top: 16px; }
 ',
   'css/prc-mi-centro.css' => '/* «Solicitudes de mi centro» (y «Mis solicitudes» del profesorado).
    ==========================================================================
@@ -39880,6 +40934,152 @@ body.prc-app .prc-btn-borrar {
 		Array.prototype.forEach.call( document.querySelectorAll( \'.prc-cuenta[data-fin]\' ), cuenta );
 		Array.prototype.forEach.call( document.querySelectorAll( \'.prc-tabs-ficha\' ), pestanas );
 	} );
+}() );
+',
+  'js/prc-firma.js' => '/*
+ * La firma electrónica del justificante (ADR-0049).
+ *
+ * El aplicativo no firma: firma quien presenta, con su certificado. Esto solo
+ * genera el PDF del justificante con jsPDF, a partir de los datos que pinta el
+ * servidor en `data-prc-firma`, y o bien lo descarga para firmarlo fuera, o
+ * bien se lo pasa a AutoFirma con AutoScript y manda lo firmado por el mismo
+ * formulario de la subida a mano.
+ *
+ * Sin jsPDF no hay PDF y los botones se quedan escondidos; sin AutoScript, o
+ * en un móvil sin servidor intermedio, se queda solo la descarga. La subida a
+ * mano es un formulario normal y no depende de esto.
+ */
+( function () {
+	\'use strict\';
+
+	/*
+	 * El PDF tiene que salir igual cada vez: la fecha de creación y el
+	 * identificador del fichero los da el servidor, y nada depende de la hora
+	 * ni de la zona de quien lo genera. El texto va sin comprimir: el servidor
+	 * busca en él el número y la huella.
+	 */
+	function generar( r ) {
+		var doc = new window.jspdf.jsPDF( { unit: \'pt\', format: \'a4\', compress: false } );
+		doc.setCreationDate( r.created );
+		doc.setFileId( r.file_id );
+		doc.setDocumentProperties( { title: \'Justificante de presentación\', subject: \'Solicitud \' + r.number } );
+
+		doc.setFont( \'helvetica\', \'bold\' );
+		doc.setFontSize( 16 );
+		doc.text( \'Justificante de presentación\', 56, 72 );
+
+		var y = 110;
+		[
+			[ \'N.º de solicitud\', r.number ],
+			[ \'Procedimiento\', r.procedure ],
+			[ \'Centro\', r.centre ],
+			[ \'Fecha y hora de presentación\', r.submitted ]
+		].forEach( function ( fila ) {
+			doc.setFont( \'helvetica\', \'bold\' );
+			doc.setFontSize( 10 );
+			doc.text( fila[ 0 ], 56, y );
+			doc.setFont( \'helvetica\', \'normal\' );
+			var lineas = doc.splitTextToSize( String( fila[ 1 ] || \'\' ), 330 );
+			doc.text( lineas, 220, y );
+			y += 16 * Math.max( 1, lineas.length ) + 6;
+		} );
+
+		// Lo que comprueba el servidor, en una línea cada cosa y en ASCII.
+		doc.setFont( \'courier\', \'normal\' );
+		doc.setFontSize( 8 );
+		doc.text( \'Solicitud: \' + r.number, 56, y + 20 );
+		doc.text( \'Huella SHA-256: \' + r.fingerprint, 56, y + 32 );
+		return doc;
+	}
+
+	/*
+	 * La firma visible, abajo en la primera página, que el texto no pisa.
+	 * `alwaysCreateRevision`: AutoFirma añade una revisión en vez de
+	 * reescribir el fichero, y el texto queda como lo escribió jsPDF.
+	 */
+	var PARAMETROS = [
+		\'signaturePage=1\',
+		\'signaturePositionOnPageLowerLeftX=56\',
+		\'signaturePositionOnPageLowerLeftY=40\',
+		\'signaturePositionOnPageUpperRightX=320\',
+		\'signaturePositionOnPageUpperRightY=100\',
+		\'layer2Text=Firmado por $$SUBJECTCN$$ el $$SIGNDATE=dd/MM/yyyy$$\',
+		\'alwaysCreateRevision=true\'
+	].join( \'\\n\' );
+
+	function firmar( b64, servlets ) {
+		return new Promise( function ( resolver, rechazar ) {
+			var api = window.AutoScript;
+			if ( servlets && servlets.storage && servlets.retrieve && api.setServlets ) {
+				api.setServlets( servlets.storage, servlets.retrieve );
+			}
+			if ( api.cargarAppAfirma ) {
+				api.cargarAppAfirma();
+			}
+			api.sign( b64, \'SHA256withRSA\', \'PAdES\', PARAMETROS, resolver, function ( tipo, mensaje ) {
+				rechazar( new Error( mensaje || tipo || \'\' ) );
+			} );
+		} );
+	}
+
+	function preparar( seccion ) {
+		var conf;
+		try {
+			conf = JSON.parse( seccion.getAttribute( \'data-prc-firma\' ) );
+		} catch ( e ) {
+			return;
+		}
+		if ( ! conf || ! conf.receipt || ! window.jspdf || ! window.jspdf.jsPDF ) {
+			return;
+		}
+		var r = conf.receipt;
+		var servlets = conf.servlets || {};
+		var botones = seccion.querySelector( \'[data-prc-firma-botones]\' );
+		var pdf = seccion.querySelector( \'[data-prc-firma-pdf]\' );
+		var boton = seccion.querySelector( \'[data-prc-firmar]\' );
+		var estado = seccion.querySelector( \'[data-prc-firma-estado]\' );
+		var form = seccion.querySelector( \'[data-prc-firma-form]\' );
+		var resultado = seccion.querySelector( \'[data-prc-firma-resultado]\' );
+
+		botones.hidden = false;
+		pdf.addEventListener( \'click\', function () {
+			generar( r ).save( r.filename );
+		} );
+
+		// En el móvil no hay WebSocket con AutoFirma: sin servidor intermedio
+		// el botón solo llevaría a un error.
+		var conServlets = servlets.storage && servlets.retrieve;
+		var api = window.AutoScript;
+		if ( ! api || \'function\' !== typeof api.sign || ( ! conServlets && /Android|iPhone|iPad/i.test( navigator.userAgent ) ) ) {
+			return;
+		}
+		boton.hidden = false;
+		boton.addEventListener( \'click\', function () {
+			boton.disabled = true;
+			estado.textContent = \'AutoFirma se está abriendo. Elija su certificado en la ventana que aparece y no cierre esta página.\';
+			firmar( btoa( generar( r ).output() ), servlets )
+				.then( function ( firmado ) {
+					estado.textContent = \'Guardando el justificante firmado…\';
+					resultado.value = firmado;
+					form.submit();
+				} )
+				.catch( function ( error ) {
+					estado.textContent = \'No se pudo firmar\' + ( error.message ? \': \' + error.message : \'\' ) + \'. Compruebe que AutoFirma está instalada y vuelva a intentarlo, o descargue el justificante, fírmelo con otra aplicación y súbalo.\';
+					boton.disabled = false;
+				} );
+		} );
+	}
+
+	function iniciar() {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-firma]\' ), preparar );
+	}
+
+	// Las librerías se encolan detrás de este guion: se espera a que estén.
+	if ( \'loading\' === document.readyState ) {
+		document.addEventListener( \'DOMContentLoaded\', iniciar );
+	} else {
+		iniciar();
+	}
 }() );
 ',
 ) );

@@ -254,6 +254,32 @@ Tras la revisión del código de [#113](https://github.com/ateeducacion/wp-proce
 - La columna «Firma del justificante» es de las que solo salen si se marcan,
   también con «Todas las columnas», como la nota interna.
 
+## Adenda — 2026-11-19: el DNI o NIE de coordinación entra en el justificante
+
+Decidido después de la adenda anterior (#114): el justificante lleva la
+coordinación con su DNI o NIE, junto a quien presenta y solo si lo hay.
+
+- **En el justificante impreso**, una fila «Coordinación» con cada persona
+  coordinadora como «Nombre Apellidos (DNI o NIE …)»; sin DNI, solo el
+  nombre, y sin coordinación, sin fila
+  (`ApplicationMetaRegistration::receipt_coordinators()`).
+- **En el PDF y en la huella.** `SignedReceipt::FIELDS` pasa de cuatro datos
+  a cinco: `number`, `procedure`, `centre`, `submitted` y `coordination`, en
+  ese orden, y jsPDF escribe la fila «Coordinación» solo si no está vacía.
+  Encaja en el diseño de la huella sin tocarlo: es otro dato de lo que se
+  presentó, se calcula igual al pintar y al recibir, y si cambia —otra
+  persona, otro DNI— el PDF ya descargado deja de valer y hay que
+  descargarlo de nuevo, como con el título o el nombre del centro.
+- **Contra:** las huellas calculadas con cuatro datos no coinciden con las de
+  cinco. Un PDF descargado antes de este cambio y sin subir se rechaza con
+  «sus datos han cambiado»; lo ya guardado como firmado no se vuelve a
+  comprobar y sigue firmado. Como #113 aún no ha salido a producción, no
+  hay justificantes firmados que migrar.
+- **El DNI sigue sin salir de donde ya salía**: lo ven quien presenta y quien
+  revisa, que ya lo veían en «Lo que presentó». No va en un correo —el acuse
+  solo enlaza el justificante—, ni en la consulta por zona, ni en su CSV
+  (`ObserverScope::ALLOWED_COLUMNS` no cambia; ADR-0043).
+
 ## Adenda — 2026-11-23
 
 - **El trabajo de descomprimir también tiene tope.** El tope de 2026-11-19

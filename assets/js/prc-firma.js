@@ -31,12 +31,16 @@
 		doc.text( 'Justificante de presentación', 56, 72 );
 
 		var y = 110;
+		// La coordinación, con su DNI o NIE, solo si la hay (va en la huella).
 		[
 			[ 'N.º de solicitud', r.number ],
 			[ 'Procedimiento', r.procedure ],
 			[ 'Centro', r.centre ],
+			[ 'Coordinación', r.coordination ],
 			[ 'Fecha y hora de presentación', r.submitted ]
-		].forEach( function ( fila ) {
+		].filter( function ( fila ) {
+			return '' !== String( fila[ 1 ] || '' );
+		} ).forEach( function ( fila ) {
 			doc.setFont( 'helvetica', 'bold' );
 			doc.setFontSize( 10 );
 			doc.text( fila[ 0 ], 56, y );

@@ -10,6 +10,7 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\SignedReceipt;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 
@@ -180,7 +181,7 @@ final class ReceiptSignature {
 	 * coincide.
 	 *
 	 * @param int $application_id Application ID.
-	 * @return array{number:string, procedure:string, centre:string, submitted:string, fingerprint:string, created:string, file_id:string, filename:string}
+	 * @return array{number:string, procedure:string, centre:string, submitted:string, coordination:string, fingerprint:string, created:string, file_id:string, filename:string}
 	 */
 	public static function data( int $application_id ): array {
 		$procedure_id = (int) wp_get_post_parent_id( $application_id );
@@ -192,10 +193,12 @@ final class ReceiptSignature {
 			$centro = (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_NAME, true ) . ' (' . (string) get_post_meta( $application_id, ApplicationMetaKeys::CENTRE_CODE, true ) . ')';
 		}
 		$datos                = array(
-			'number'    => (string) $application_id,
-			'procedure' => (string) get_post_field( 'post_title', $procedure_id ),
-			'centre'    => $centro,
-			'submitted' => ApplicationProgress::when( $cuando ),
+			'number'       => (string) $application_id,
+			'procedure'    => (string) get_post_field( 'post_title', $procedure_id ),
+			'centre'       => $centro,
+			'submitted'    => ApplicationProgress::when( $cuando ),
+			// El DNI o NIE de coordinación va en el justificante y en su huella.
+			'coordination' => ApplicationMetaRegistration::receipt_coordinators( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) ),
 		);
 		$datos['fingerprint'] = SignedReceipt::fingerprint( $datos );
 		$datos['created']     = SignedReceipt::pdf_date( $cuando );

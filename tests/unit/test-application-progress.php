@@ -336,6 +336,37 @@ class Test_Application_Progress extends WP_UnitTestCase {
 	}
 
 	/**
+	 * The coordination goes on the receipt with its DNI or NIE, only when known.
+	 */
+	public function test_the_receipt_carries_the_coordinator_id_only_when_present() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+		$recibo = function () use ( $procedimiento ): string {
+			return $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		};
+
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array() );
+		$this->assertStringNotContainsString( '<th scope="row">Coordinación</th>', $recibo(), 'sin coordinación, sin fila' );
+
+		$ana = array(
+			'name'    => 'Ana',
+			'surname' => 'Pérez',
+			'dni'     => '12345678-z',
+			'email'   => 'ana@example.org',
+		);
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $ana ) );
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez (DNI o NIE 12345678Z)</td>', $recibo() );
+
+		$ana['dni'] = '';
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $ana ) );
+		$html = $recibo();
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez</td>', $html, 'sin DNI, solo el nombre' );
+		$this->assertStringNotContainsString( 'DNI o NIE', $html );
+	}
+
+	/**
 	 * Without an author there is no «Presentada por» row, not a lone «(cargo)».
 	 */
 	public function test_the_receipt_skips_who_submitted_when_nobody_is_known() {

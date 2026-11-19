@@ -306,6 +306,24 @@ class Test_Receipt_Signature extends WP_UnitTestCase {
 		$this->assertSame( (string) $e['application'], $datos['number'] );
 		$this->assertSame( 'Red de prueba', $datos['procedure'] );
 		$this->assertSame( 'CEIP Uno (C0001)', $datos['centre'] );
+		$this->assertSame( '', $datos['coordination'], 'sin coordinación, vacío' );
+
+		// La coordinación, con su DNI o NIE, entra en el PDF y en su huella.
+		update_post_meta(
+			$e['application'],
+			ApplicationMetaKeys::COORDINATOR,
+			array(
+				array(
+					'name'    => 'Ana',
+					'surname' => 'Pérez',
+					'dni'     => '12345678Z',
+					'email'   => 'ana@example.org',
+				),
+			)
+		);
+		$con = ReceiptSignature::data( $e['application'] );
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', $con['coordination'] );
+		$this->assertNotSame( $datos['fingerprint'], $con['fingerprint'], 'cambiar la coordinación cambia la huella' );
 		$this->assertTrue( wp_script_is( ReceiptSignature::HANDLE_JSPDF, 'enqueued' ) );
 		$this->assertTrue( wp_script_is( ReceiptSignature::HANDLE_AUTOSCRIPT, 'enqueued' ) );
 

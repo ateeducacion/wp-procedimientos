@@ -441,8 +441,8 @@ final class Mailer {
 
 				self::send( self::EVENT_DELIVERY_RECEIVED, array( self::email_of( (int) $user_id ) ), $ctx );
 
-				// Los contactos no abren la pantalla del centro: van al taller, a sus entregas.
-				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_DELIVERIES );
+				// Los contactos no abren la pantalla del centro: van al taller, a sus solicitudes.
+				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
 				self::send( self::EVENT_DELIVERY_RECEIVED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);

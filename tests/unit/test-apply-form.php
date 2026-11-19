@@ -11,6 +11,7 @@ use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\Shell;
@@ -887,6 +888,45 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 		$this->assertStringContainsString( '<div class="prc-aviso-legal"><p>Aviso del despliegue.</p>', $html );
 		$this->assertStringNotContainsString( '<script>alert(1)</script>', $html, 'y llega filtrado' );
+	}
+
+	/**
+	 * El aviso de protección de datos se escribe en los ajustes: sale al final
+	 * de la solicitud, saneado, y el filtro del armazón sigue mandando encima.
+	 */
+	public function test_the_data_protection_notice_comes_from_the_settings() {
+		$procedimiento = $this->procedimiento();
+		$this->acting_as( $this->school_head( 'C0001' ) );
+
+		// Se guarda sin el saneado del registro: lo que protege aquí es el
+		// saneado al pintar, dentro de un formulario.
+		remove_all_filters( 'sanitize_option_' . PrivacyNotice::OPTION );
+		update_option( PrivacyNotice::OPTION, '<p>Texto de <strong>los ajustes</strong>.</p><script>alert(2)</script><form action="https://example.org/"><button>Otro</button></form><p>Sin cerrar' );
+
+		$this->assertSame( '', ProcedureChrome::chrome()['privacy_notice'], 'el armazón no lee la opción en cada pantalla' );
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '<div class="prc-aviso-legal"><p>Texto de <strong>los ajustes</strong>.</p>', $html );
+		$this->assertStringNotContainsString( 'alert(2)', $html, 'y llega filtrado' );
+		$this->assertStringNotContainsString( 'action="https://example.org/"', $html, 'sin formularios dentro del formulario' );
+		$this->assertStringNotContainsString( '<button>Otro', $html );
+		$this->assertStringContainsString( '<p>Sin cerrar</p></div>', $html, 'las etiquetas se cierran' );
+		$aviso = (int) strpos( $html, 'prc-aviso-legal' );
+		$cola  = substr( $html, $aviso, (int) strpos( $html, '</form>', $aviso ) - $aviso );
+		$this->assertGreaterThan( (int) strpos( $html, 'prc-leyenda-obligatorio' ), $aviso );
+		$this->assertStringNotContainsString( 'prc-seccion', $cola, 'al final: detrás solo queda el botón de enviar' );
+		$this->assertStringContainsString( 'type="submit"', $cola );
+		$this->assertSame( 1, substr_count( $html, 'prc-aviso-legal' ), 'una sola vez' );
+
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ): array {
+				$chrome['privacy_notice'] = '<p>Del filtro.</p>';
+				return $chrome;
+			}
+		);
+		$html = $this->pintar( $procedimiento );
+		$this->assertStringContainsString( '<p>Del filtro.</p>', $html, 'el filtro manda encima' );
+		$this->assertStringNotContainsString( 'los ajustes', $html );
 	}
 
 	/**

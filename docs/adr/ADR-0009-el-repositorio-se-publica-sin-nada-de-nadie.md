@@ -223,3 +223,29 @@ comprobación completa.
   esté en la lista. Cada vez que se encuentre algo nuevo, se añade una regla.
 - El mu-plugin de desarrollo rellena el armazón y el catálogo para que el
   wp-env se vea completo. Nunca se despliega, y sus valores son inventados.
+
+## Adenda — 2026-11-18
+
+El aviso de protección de datos de la solicitud (#89) pasa a ser **también un
+ajuste**: la opción `prc_privacy_notice`, que se escribe en la pantalla de
+Ajustes con la capacidad `prc_manage_app`. Lo cambia administración cuando
+cambia el tratamiento o la resolución que lo ampara, y eso no debería obligar
+a tocar el fragmento de configuración. La regla de esta ADR no cambia: la
+opción está **vacía por defecto** y el repositorio sigue sin traer una línea
+de texto legal; el texto vive en la base de datos de cada instalación, no en
+lo que se versiona.
+
+La clave `privacy_notice` del filtro `prc_chrome` **sigue mandando**: si la
+trae, se pinta la del filtro, y Ajustes avisa de que lo que se escriba allí se
+ignora (`PublicFront/PrivacyNotice::text()`, `Admin/Settings::render()`).
+La opción se lee solo en la pantalla de solicitud, no en cada
+`ProcedureChrome::chrome()`, que corre en todas.
+
+Como el texto va dentro del formulario de la solicitud, se sanea al guardar y
+al pintar (`PrivacyNotice::sanitize()`): la lista de etiquetas de una
+entrada **sin** `form`, `button`, `input`, `select`, `option`, `textarea`,
+`label` ni `fieldset`, el contenido de `script` y `style` quitado entero y las
+etiquetas abiertas, cerradas.
+
+Contra: el texto puede estar en dos sitios, y quien mire solo uno puede no
+entender por qué no ve lo que escribió; para eso está el aviso de Ajustes.

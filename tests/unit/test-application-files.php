@@ -13,6 +13,7 @@ use Prc\Meta\ProcedureMetaKeys;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\View\ApplyFormView;
@@ -1662,6 +1663,25 @@ class Test_Application_Files extends WP_UnitTestCase {
 		$html = ApplyFormView::html( $model );
 		$this->assertStringContainsString( 'Entregar documento', $html );
 		$this->assertStringContainsString( 'memoria.pdf', $html );
+	}
+
+	/**
+	 * Con la solicitud cerrada y una entrega abierta, la pantalla sigue
+	 * recogiendo datos: el aviso de protección de datos sale igual, al final.
+	 */
+	public function test_the_privacy_notice_follows_an_open_delivery() {
+		$data = $this->delivery_fixture();
+		update_option( PrivacyNotice::OPTION, '<p>Aviso de los ajustes.</p>' );
+		$this->acting_as( $data['head'] );
+		$_GET[ ApplyForm::ARG_PROCEDURE ] = (string) $data['procedure'];
+		$model                            = ApplyForm::model();
+		$this->assertFalse( $model['can_submit'] );
+		$html = ApplyFormView::html( $model );
+		$this->assertSame( 1, substr_count( $html, 'prc-aviso-legal' ) );
+		$this->assertGreaterThan( (int) strpos( $html, 'Entregar documento' ), (int) strpos( $html, 'prc-aviso-legal' ), 'después de la entrega' );
+
+		$model['deliveries'][0]['can_submit'] = false;
+		$this->assertStringNotContainsString( 'prc-aviso-legal', ApplyFormView::html( $model ), 'sin nada que recoger, no' );
 	}
 
 	/** Owning a centre cannot grant access to another centre's application. */

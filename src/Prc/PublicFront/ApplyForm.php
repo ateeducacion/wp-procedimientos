@@ -432,6 +432,8 @@ final class ApplyForm {
 			'values'          => array(),
 			// Los campos del envío rechazado que fallan, con lo que los nombra.
 			'invalid'         => self::$invalid,
+			// El aviso de protección de datos, tal como lo escribieron.
+			'privacy'         => PrivacyNotice::text(),
 		);
 
 		if ( ! is_user_logged_in() ) {

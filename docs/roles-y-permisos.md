@@ -153,7 +153,7 @@ y van en las secciones siguientes.
 | `prc_manage_procedures` | | ✓ | ✓ | Crear, editar, publicar y archivar procedimientos **de sus ámbitos**; la página `gestion-de-procedimientos`; los paneles Datos, Campos adicionales, Participantes, Enlaces y Publicación del taller; el botón «Gestionar» |
 | `prc_review_applications` | | ✓ | ✓ | El panel Solicitudes del taller: ver, admitir, excluir, pedir subsanar con nota y exportar el CSV de esos procedimientos |
 | `prc_manage_all_areas` | | | ✓ | Saltarse el acotado por ámbito, y ver los procedimientos que se han quedado sin ámbito |
-| `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico |
+| `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico; configurar en el taller el **«Acceso de consulta»** por zona (`ProcedureAccess::can_configure_observe()`) |
 | `prc_view_applications` | | | | Solo la tiene `prc_observer`: la página `consulta-de-solicitudes` y **leer** las solicitudes de los centros **de sus zonas** en los procedimientos que admiten consulta. Nunca editar, revisar, borrar ni exportar el fichero de usuarios |
 
 Y `read`, que llevan los dos roles del snippet.
@@ -314,7 +314,7 @@ campo `zone` de cada centro (ADR-0042).
 | Zonas de la persona | meta de usuario, clave por `prc_zone_meta_key`; se lee como lista o como texto con comas, y **guardar el perfil la reescribe como lista** —cuidado si el filtro apunta a una meta que escribe otro sistema— |
 | Centros de esas zonas | `ProcedureAccess::observer_codes()`, del catálogo de hoy |
 | Si el procedimiento admite consulta | `prc_observable`, y que esté publicado (`ObserverScope::is_observable()`) |
-| Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en el panel «Acceso de consulta» del taller |
+| Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en el panel «Acceso de consulta» del taller, que solo ve y guarda administración (`ProcedureAccess::can_configure_observe()`) |
 | Quién escribe el campo de la ficha | solo `prc_manage_app` o `edit_users` |
 | Quién decide | `ProcedureAccess::can_observe()` y `can_observe_application()` |
 

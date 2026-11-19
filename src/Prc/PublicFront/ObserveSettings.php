@@ -16,11 +16,11 @@ use Prc\Meta\ProcedureMetaKeys;
  *
  * Va aparte de {@see ProcedureEditor} para que no pase del umbral de PHPMD.
  * No comprueba ni el nonce ni quién pregunta: eso lo hace
- * {@see ProcedureEditor::handle()} con `ProcedureAccess::can_edit()` antes de
- * llamar a {@see handle()}. Tampoco pinta: es de {@see View\ObserveView::settings()}.
+ * {@see ProcedureEditor::handle()} con `ProcedureAccess::can_edit()` y
+ * `can_configure_observe()` —solo administración— antes de llamar a {@see handle()}. Tampoco pinta: es de {@see View\ObserveView::settings()}.
  *
  * Todo apagado por defecto: un procedimiento no se enseña a nadie de fuera de
- * su ámbito hasta que quien lo gestiona lo decide.
+ * su ámbito hasta que administración lo decide.
  */
 final class ObserveSettings {
 
@@ -65,23 +65,39 @@ final class ObserveSettings {
 	}
 
 	/**
+	 * Whether the consultation is on, and whether its chosen columns are all gone.
+	 *
+	 * Lo que ve, sin poder cambiarlo, quien gestiona su ámbito sin
+	 * administrar el aplicativo (#82).
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return array{observable:bool, gone:bool}
+	 */
+	public static function status( int $procedure_id ): array {
+		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
+		return array(
+			'observable' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true ),
+			// Se eligieron columnas y ya no existe ninguna: la consulta no
+			// enseña nada, y el panel sin marcar no puede decir lo contrario.
+			'gone'       => is_array( $elegidas ) && array() !== $elegidas && array() === self::columns( $procedure_id ),
+		);
+	}
+
+	/**
 	 * What the panel paints.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array{observable:bool, columns:string[], gone:bool, groups:array<string, array<string, string>>, group_labels:array<string, string>, files:bool, export:bool, notify:bool, url:string}
 	 */
 	public static function model( int $procedure_id ): array {
-		$leer     = static function ( string $clave ) use ( $procedure_id ): bool {
+		$leer   = static function ( string $clave ) use ( $procedure_id ): bool {
 			return (bool) get_post_meta( $procedure_id, $clave, true );
 		};
-		$columnas = array_keys( self::columns( $procedure_id ) );
-		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
+		$status = self::status( $procedure_id );
 		return array(
-			'observable'   => $leer( ProcedureMetaKeys::OBSERVABLE ),
-			'columns'      => $columnas,
-			// Se eligieron columnas y ya no existe ninguna: la consulta no
-			// enseña nada, y el panel sin marcar no puede decir lo contrario.
-			'gone'         => array() === $columnas && is_array( $elegidas ) && array() !== $elegidas,
+			'observable'   => $status['observable'],
+			'columns'      => array_keys( self::columns( $procedure_id ) ),
+			'gone'         => $status['gone'],
 			'groups'       => self::offered( $procedure_id ),
 			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
 			'files'        => $leer( ProcedureMetaKeys::OBSERVER_FILES ),
@@ -95,7 +111,7 @@ final class ObserveSettings {
 	 * Save the panel and go back to it.
 	 *
 	 * Lo llama {@see ProcedureEditor::handle()} después de comprobar el nonce,
-	 * el bloqueo y `ProcedureAccess::can_edit()`.
+	 * el bloqueo, `ProcedureAccess::can_edit()` y `can_configure_observe()`.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return void

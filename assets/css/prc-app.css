@@ -578,7 +578,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
 }
 
 /* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
-   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+   entre uno y otro: Preparar, Gestionar y Avanzado. */
 .prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
 .prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
 .prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }

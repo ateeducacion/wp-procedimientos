@@ -293,10 +293,6 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 			ProcedureMetaKeys::COORDINATOR_COUNT,
 			ProcedureMetaKeys::COMMITMENTS,
 			ProcedureMetaKeys::CUSTOM_CSS,
-			ProcedureMetaKeys::OBSERVABLE,
-			ProcedureMetaKeys::OBSERVER_FILES,
-			ProcedureMetaKeys::OBSERVER_EXPORT,
-			ProcedureMetaKeys::OBSERVER_NOTIFY,
 		) as $clave ) {
 			$this->assertSame( get_post_meta( $id, $clave, true ), get_post_meta( $copia, $clave, true ), 'se copia ' . $clave );
 		}
@@ -311,6 +307,11 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 			ProcedureMetaKeys::APPLICATIONS_CLOSED,
 			ProcedureMetaKeys::ARCHIVED,
 			ProcedureMetaKeys::CUSTOM_JS,
+			ProcedureMetaKeys::OBSERVABLE,
+			ProcedureMetaKeys::OBSERVER_FILES,
+			ProcedureMetaKeys::OBSERVER_EXPORT,
+			ProcedureMetaKeys::OBSERVER_NOTIFY,
+			ProcedureMetaKeys::OBSERVER_COLUMNS,
 		) as $clave ) {
 			$this->assertFalse( metadata_exists( 'post', $copia, $clave ), 'no se copia ' . $clave );
 		}
@@ -325,9 +326,6 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertSame( '', $preguntas[1]['opens_at'] );
 		$this->assertSame( '', $preguntas[1]['closes_at'] );
 		$this->assertSame( array( 'r1', 'r2' ), array_column( $preguntas[2]['rows'], 'key' ) );
-
-		// La consulta apunta a las preguntas nuevas.
-		$this->assertSame( array( 'centre', 'q2', 'q3:r2', 'q1' ), get_post_meta( $copia, ProcedureMetaKeys::OBSERVER_COLUMNS, true ) );
 
 		// Las personas, sin su ventana.
 		$spec = get_post_meta( $copia, ProcedureMetaKeys::PEOPLE_SPEC, true );
@@ -609,6 +607,13 @@ class Test_Duplicate_Procedure extends WP_UnitTestCase {
 		$this->assertEqualsCanonicalizing( array( $una, $otra ), ProcedureAccess::post_areas( $copia ) );
 		$this->assertSame( 'console.log(1);', get_post_meta( $copia, ProcedureMetaKeys::CUSTOM_JS, true ) );
 		$this->assertSame( '', $this->query_arg( (string) $url, ProcedureDuplicate::ARG_NO_JS ) );
+
+		// La consulta se copia: es administración quien la configura (#82),
+		// y apunta a las preguntas nuevas.
+		foreach ( array( ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) as $key ) {
+			$this->assertSame( get_post_meta( $id, $key, true ), get_post_meta( $copia, $key, true ), 'se copia ' . $key );
+		}
+		$this->assertSame( array( 'centre', 'q2', 'q3:r2', 'q1' ), get_post_meta( $copia, ProcedureMetaKeys::OBSERVER_COLUMNS, true ) );
 	}
 
 	// ─── el envío ──────────────────────────────────────────────────────────

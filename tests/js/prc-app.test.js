@@ -211,6 +211,39 @@ describe( 'fields for school procedures', () => {
 		expect( fields.hidden ).toBe( false );
 		expect( Array.from( fields.querySelectorAll( 'input' ) ).every( ( input ) => ! input.disabled ) ).toBe( true );
 	} );
+
+	it( 'enables the coordinator count only with «several», and never for teachers', async () => {
+		document.body.innerHTML = `
+			<select id="prc-audience"><option value="schools">Centros</option><option value="teachers">Profesorado</option></select>
+			<fieldset data-prc-schools-only>
+				<input type="radio" name="prc_coordinator_kind" value="none" />
+				<input type="radio" name="prc_coordinator_kind" value="one" checked />
+				<input type="radio" name="prc_coordinator_kind" value="several" />
+				<select id="prc-coordinator-count"><option>2</option></select>
+			</fieldset>`;
+		await load();
+		const count = document.getElementById( 'prc-coordinator-count' );
+		const several = document.querySelector( '[value="several"]' );
+		const audience = document.getElementById( 'prc-audience' );
+		expect( count.disabled ).toBe( true );
+
+		several.checked = true;
+		several.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( count.disabled ).toBe( false );
+
+		audience.value = 'teachers';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( count.disabled ).toBe( true );
+
+		audience.value = 'schools';
+		audience.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( count.disabled ).toBe( false );
+
+		const none = document.querySelector( '[value="none"]' );
+		none.checked = true;
+		none.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		expect( count.disabled ).toBe( true );
+	} );
 } );
 
 describe( 'edit lock over the WordPress Heartbeat', () => {

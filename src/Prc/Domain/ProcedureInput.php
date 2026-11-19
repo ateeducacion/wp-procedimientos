@@ -130,6 +130,11 @@ final class ProcedureInput {
 			$errors[] = 'centre_kinds';
 		}
 		$errors = array_values( array_unique( $errors ) );
+		// La coordinación es cosa de centros: al profesorado el taller ni la
+		// enseña, así que lo que quedara guardado de antes se borra.
+		if ( ProcedureMetaKeys::AUDIENCE_SCHOOLS !== $audience ) {
+			$coordinator_count = 0;
+		}
 
 		return array(
 			'ok'     => array() === $errors,

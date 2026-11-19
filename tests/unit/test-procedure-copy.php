@@ -272,7 +272,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 			ProcedureMetaKeys::ARCHIVED         => true,
 			ProcedureMetaKeys::CONTACT_EMAILS   => array( 'ambito@example.org' ),
 			ProcedureMetaKeys::HEADER_COLOR     => 'verde',
-			ProcedureMetaKeys::NOTIFY           => array( 'review_changed' ),
+			'prc_notify'                        => array( 'review_changed' ),
 			ProcedureMetaKeys::CUSTOM_CSS       => '.prc { color: red; }',
 			ProcedureMetaKeys::CUSTOM_JS        => 'console.log(1);',
 			ProcedureMetaKeys::OBSERVABLE       => true,
@@ -294,7 +294,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		}
 		$this->assertSame( array( 'ambito@example.org' ), $meta[ ProcedureMetaKeys::CONTACT_EMAILS ] );
 		$this->assertSame( 'verde', $meta[ ProcedureMetaKeys::HEADER_COLOR ] );
-		$this->assertSame( array( 'review_changed' ), $meta[ ProcedureMetaKeys::NOTIFY ] );
+		$this->assertArrayNotHasKey( 'prc_notify', $meta, 'los avisos ya no se apagan por procedimiento (#81)' );
 		$this->assertSame( '.prc { color: red; }', $meta[ ProcedureMetaKeys::CUSTOM_CSS ] );
 		$this->assertTrue( $meta[ ProcedureMetaKeys::OBSERVABLE ] );
 		$this->assertSame( array( 'centre', 'q1' ), $meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] );

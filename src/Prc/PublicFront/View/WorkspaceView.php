@@ -317,7 +317,9 @@ final class WorkspaceView {
 	 * One row of the table.
 	 *
 	 * El número y los ámbitos van bajo el título, en pequeño: el número es lo
-	 * que se copia de un correo y lo que encuentra el buscador.
+	 * que se copia de un correo y lo que encuentra el buscador. El color del
+	 * procedimiento, como en la portada: una franja fina, aquí a la izquierda
+	 * del título.
 	 *
 	 * @param array<string, mixed> $row One row of the model.
 	 * @return void
@@ -327,7 +329,7 @@ final class WorkspaceView {
 		$aviso  = (string) $row['warning'];
 		$meta   = implode( ' · ', array_merge( array( 'N.º ' . (string) $row['id'] ), array_map( 'strval', (array) $row['areas'] ) ) );
 		?>
-		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>">
+		<tr data-estado="<?php echo esc_attr( $estado ); ?>" data-procedimiento="<?php echo esc_attr( (string) $row['id'] ); ?>" style="--prc-banda: <?php echo esc_attr( (string) $row['color'] ); ?>">
 			<th scope="row" class="prc-celda-titulo" data-rotulo="Título">
 				<?php if ( '' !== (string) $row['url'] ) : ?>
 					<a href="<?php echo esc_url( (string) $row['url'] ); ?>" title="Abrir el taller de este procedimiento"><?php echo esc_html( (string) $row['title'] ); ?></a>

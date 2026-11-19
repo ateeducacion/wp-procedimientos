@@ -5,7 +5,7 @@ status: Propuesta
 date: 2026-11-19
 related:
   issues: [112]
-  prs: []
+  prs: [113]
   sdds: [SDD-0001]
   adrs: [ADR-0006, ADR-0009, ADR-0028, ADR-0041, ADR-0044]
 supersedes: []
@@ -233,3 +233,23 @@ procedimientos que piden la firma.
 - La prueba con AutoFirma de verdad no cabe en la integración continua: los
   tests usan un PDF firmado sintético (una revisión con su `/ByteRange`) y un
   AutoScript simulado.
+
+## Adenda — 2026-11-19
+
+Tras la revisión del código de [#113](https://github.com/ateeducacion/wp-procedimientos/pull/113):
+
+- **Los flujos se descomprimen con tope.** Antes de inflar nada se miran en
+  los bytes el `/ByteRange` y que cubra el fichero; lo descomprimido, todo
+  junto, no pasa del tamaño máximo de un documento. Un PDF con un flujo que
+  se infla sin fin no tumba la petición: se lee hasta el tope y, sin la
+  huella dentro, se rechaza.
+- **La subida a mano pasa por `ApplicationFiles::refuse()`**, la misma
+  política que el resto del almacén privado: errores de subida, tamaño y
+  tipo por contenido con `wp_check_filetype_and_ext()`.
+- **`add_post_meta( …, true )` no es atómico**: mira y luego inserta, como
+  `Meta/MetaSwap` cuando no hay meta. Dos envíos en el mismo instante aún
+  pueden dejar dos filas; se lee la primera y sobra un fichero que nadie
+  sirve. El que pierde cuando ya hay firma dice «ya está firmado», no
+  «vuelva a intentarlo».
+- La columna «Firma del justificante» es de las que solo salen si se marcan,
+  también con «Todas las columnas», como la nota interna.

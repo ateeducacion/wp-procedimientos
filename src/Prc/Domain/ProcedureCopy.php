@@ -59,6 +59,8 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::RESOLUTION_URL       => self::NEVER,
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::NEVER,
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::NEVER,
+			// Las copias de esos enlaces, tampoco: son ficheros del original (ADR-0048).
+			ProcedureMetaKeys::LINK_COPIES          => self::NEVER,
 			// Las marcas de cierre son del original: el duplicado nace abierto.
 			ProcedureMetaKeys::ARCHIVED             => self::NEVER,
 			ProcedureMetaKeys::APPLICATIONS_CLOSED  => self::NEVER,

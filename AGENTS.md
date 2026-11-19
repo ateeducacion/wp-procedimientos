@@ -49,7 +49,7 @@ Hace falta saberlo para no reinventar los errores de la casa:
 | La solicitud de un centro es una entrada de otro formulario con la clave «convocatoria · centro» escrita en un campo de texto | CPT `prc_application` con `post_parent` = el procedimiento, **una por centro** (`Applications::find()` antes de crear) |
 | El centro de la persona es una meta de usuario que escribe un fragmento al iniciar sesión | `Access/CentreScope` lee la meta cuya clave devuelve `prc_centre_code_meta_key`; sin código válido, fail-closed |
 | Las opciones que pide la convocatoria: cuatro pares título/indicaciones, un subformulario y, si no basta, un formulario clonado | Núcleo fijo (`Domain/ApplicationInput`) más hasta cuarenta preguntas en `prc_questions` (`Domain/ProcedureQuestions`) |
-| La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una |
+| La resolución y los listados son PDF subidos al gestor de formularios | Tres metas con una URL cada una, y una copia privada del PDF para quien gestiona (ADR-0048) |
 | El catálogo de centros es un formulario más | El filtro `prc_centres`; en local lo contesta el mu-plugin con centros inventados |
 | A qué centros se dirige una convocatoria lo dice su texto, y la titularidad del catálogo no se mira | `prc_ownership`, `prc_centre_types`, `prc_islands` y `prc_allowed_centres`, que decide `ProcedureAccess`; la titularidad se deriva del tipo (ADR-0042) |
 | Darse de baja, borrar una inscripción por error, inscribir a un centro que no llegó o «déjenle unos días más» se piden por correo y se hacen a mano en el gestor de formularios, sin rastro | Retirar (papelera), restaurar, la prórroga `prc_late_until` y presentar en nombre de un centro, con su historial en `prc_log` (`Access/ApplicationActions`, ADR-0044) |
@@ -129,6 +129,7 @@ src/Prc/
 ├── PublicFront/CentreColumns.php           Isla, municipio, tipo, titularidad y zona del catálogo para la tabla y el CSV
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
+├── PublicFront/LinkCopies.php              Copia privada del PDF de cada enlace de «Enlaces» y su descarga (ADR-0048)
 ├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
 ├── PublicFront/ApplicationOperations.php   Lo que escriben retirar, restaurar, la prórroga, la nota interna y en nombre de un centro
 ├── PublicFront/ApplicationHistory.php      Qué se anota en el historial, escuchando las acciones, y cómo se lee (ADR-0044)

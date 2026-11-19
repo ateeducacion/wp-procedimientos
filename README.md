@@ -71,7 +71,8 @@ el procedimiento es un tipo de contenido y la solicitud otro que cuelga de él,
 deriva de las fechas** y no puede contradecirse; los permisos los decide un
 único guardián acotado por ámbito (quien convoca) y por centro (quien
 solicita); las opciones son un núcleo fijo más preguntas configurables por
-procedimiento; y la resolución y los listados son **enlaces**, no copias.
+procedimiento; y la resolución y los listados son **enlaces**, con una copia
+privada del PDF para quien gestiona por si el enlace muere.
 
 Lo que **no** se lleva, y con una ADR que lo justifica: las solicitudes y los
 documentos ya presentados **no se migran en la fase 1**

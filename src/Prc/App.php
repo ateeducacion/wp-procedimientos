@@ -23,6 +23,7 @@ use Prc\PublicFront\ApplicationHistory;
 use Prc\PublicFront\ApplicationOperations;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\LinkCopies;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\DraftNotice;
@@ -78,6 +79,7 @@ final class App {
 		// la limpieza al borrarla. **No son adjuntos de WordPress** y no tocan
 		// la biblioteca de medios (ADR-0028).
 		ApplicationFiles::class,
+		LinkCopies::class,
 		// La exportación a medida: olvida las elecciones guardadas de un
 		// procedimiento borrado para siempre (ADR-0039).
 		ApplicationExport::class,

@@ -175,3 +175,10 @@ mantiene.
 - La documentación que aporta el centro —proyecto, memoria, aceptación
   firmada— no es de esta ADR. Es la fase 2, con almacén privado y decisión
   propia.
+
+## Adenda — 2026-11-18
+
+En público siguen siendo enlaces, pero el aplicativo guarda además una
+**copia privada** del PDF de cada uno al guardarlos, para cuando la dirección
+oficial muera. Solo la descarga quien abre el procedimiento en su taller. Lo
+decide la [ADR-0048](ADR-0048-copia-privada-del-pdf-de-la-resolucion-y-los-listados.md).

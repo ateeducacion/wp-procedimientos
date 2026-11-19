@@ -218,7 +218,6 @@ final class ProcedureEditor {
 		'preguntas'    => 'Campos adicionales guardados.',
 		'ordenadas'    => 'Orden de los campos guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
-		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
@@ -1088,20 +1087,27 @@ final class ProcedureEditor {
 	 * @return void
 	 */
 	private static function save_links( int $procedure_id ): void {
-		$claves = array( ProcedureMetaKeys::RESOLUTION_URL, ProcedureMetaKeys::PROVISIONAL_LIST_URL, ProcedureMetaKeys::FINAL_LIST_URL );
-		$urls   = array();
-		foreach ( $claves as $clave ) {
-			$url = self::field( $clave );
+		$urls = array();
+		foreach ( array_keys( LinkCopies::links() ) as $clave ) {
+			// Sin sanitize_text_field(): se comería los «%20» de la dirección.
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- nonce en handle(); se valida con is_url() y se limpia con esc_url_raw() abajo.
+			$url = trim( wp_unslash( (string) ( $_POST[ $clave ] ?? '' ) ) );
 			if ( '' !== $url && ! ProcedureInput::is_url( $url ) ) {
 				self::$rejected = ProcedureInput::why( array( substr( $clave, 4 ) ) );
 				return;
 			}
-			$urls[ $clave ] = $url;
+			$urls[ $clave ] = esc_url_raw( $url );
 		}
 		foreach ( $urls as $clave => $url ) {
 			update_post_meta( $procedure_id, $clave, $url );
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, array( self::ARG_NOTICE => 'enlaces' ) ) );
+		// La copia del PDF no frena el guardado: si falla, el enlace queda y se avisa (ADR-0048).
+		$aviso  = array( self::ARG_NOTICE => 'enlaces' );
+		$fallos = LinkCopies::sync( $procedure_id, $urls );
+		if ( array() !== $fallos ) {
+			$aviso[ LinkCopies::ARG_FAILED ] = $fallos;
+		}
+		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, $aviso ) );
 	}
 
 	/**
@@ -1509,6 +1515,7 @@ final class ProcedureEditor {
 			'help_questions_url'      => Help::url( HelpContent::GUIDE_MANAGE, 'taller-preguntas' ),
 			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
+			'link_copies'             => array(),
 			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
@@ -1652,6 +1659,7 @@ final class ProcedureEditor {
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
 		$m['view_url']       = ProcedureView::link( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
+		$m['link_copies']    = self::PANEL_LINKS === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
@@ -1695,6 +1703,10 @@ final class ProcedureEditor {
 				'tipo'  => 'ok',
 				'texto' => ApplicationActionsPanel::NOTICES[ $hecho ],
 			);
+		}
+		if ( 'enlaces' === $hecho ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se lee qué copias fallaron para el aviso.
+			return LinkCopies::notice( $_GET );
 		}
 		if ( ApplicationsPanel::NOTICE_BULK === $hecho ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo se leen dos cifras para el aviso.

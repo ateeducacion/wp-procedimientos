@@ -36154,6 +36154,9 @@ body.prc-app.prc-chrome .wp-block-post-title {
 }
 
 body.prc-app {
+  /* Alto de ventana como mínimo: sin él, en una pantalla corta el pie y el
+     sub-pie no tienen sitio donde bajar y se quedan a media altura. */
+  min-height: calc(100vh - var(--wp-admin--admin-bar--height, 0px));
   font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
   background: var(--prc-c-fondo);

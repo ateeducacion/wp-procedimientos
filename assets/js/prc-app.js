@@ -556,6 +556,26 @@
 		marcar( { target: button } );
 	} );
 
+	/*
+	 * «Imprimir justificante» (`data-prc-print`): sale escondido y solo lo
+	 * enseña el guion, que abre el diálogo de imprimir del navegador. Sin
+	 * guion, el justificante se imprime igual desde el menú del navegador.
+	 */
+	document.addEventListener( 'DOMContentLoaded', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-print]' ), function ( button ) {
+			var escondido = button.closest( '[hidden]' );
+			if ( escondido ) {
+				escondido.hidden = false;
+			}
+		} );
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		if ( e.target.closest && e.target.closest( '[data-prc-print]' ) ) {
+			window.print();
+		}
+	} );
+
 	/* --- 8. Un solo envío ------------------------------------------------ */
 
 	/*

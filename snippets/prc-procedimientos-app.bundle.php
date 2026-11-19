@@ -12020,6 +12020,8 @@ final class Shell {
 
 			'descarga' => '<path fill="currentColor" d="M11 4h2v8.6l3.3-3.3 1.4 1.4L12 16.4l-5.7-5.7 1.4-1.4 3.3 3.3V4ZM4 18h16v2H4v-2Z"/>',
 
+			'imprimir' => '<path fill="currentColor" d="M7 3h10v4h2a3 3 0 0 1 3 3v6h-4v5H6v-5H2v-6a3 3 0 0 1 3-3h2V3Zm2 4h6V5H9v2Zm-1 8v4h8v-4H8Zm10-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>',
+
 			'ayuda'    => '<path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-1-4h2v2h-2v-2Zm1-10a4 4 0 0 0-4 4h2a2 2 0 1 1 4 0c0 2-3 1.8-3 5h2c0-2.3 3-2.5 3-5a4 4 0 0 0-4-4Z"/>',
 		);
 		if ( ! isset( $caminos[ $nombre ] ) ) {
@@ -19687,7 +19689,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, pulse <strong>«Imprimir justificante»</strong> (o «Imprimir» en el menú del navegador) y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -20590,6 +20592,7 @@ final class ProcedureChrome {
 			'org'            => '',
 			'credit'         => '',
 			'footer_links'   => array(),
+
 
 
 			'brand_logo'     => '',
@@ -29026,39 +29029,58 @@ final class ApplicationProgressView {
 
 
 
+
+
+
 	public static function receipt( array $m ): string {
 		$p       = (array) $m['progress'];
 		$s       = (array) $m['application'];
 		$centro  = (array) $m['centre'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
+		$chrome  = ProcedureChrome::chrome();
+		$logo    = (string) $chrome['brand_logo'];
+		$rotulo  = (string) $chrome['org'];
 		$datos   = array(
-			'N.º de solicitud'        => (string) (int) $p['application'],
-			'Procedimiento'           => (string) $m['title'],
-			'Centro'                  => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
-			'Presentada'              => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
-			'Registrada en su nombre' => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
-			'Última modificación'     => (string) $p['modified'],
-			'Estado de revisión'      => (string) ( $s['state_label'] ?? '' ),
-			'Estado'                  => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'N.º de solicitud'             => (string) (int) $p['application'],
+			'Procedimiento'                => (string) $m['title'],
+			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Fecha y hora de presentación' => (string) $p['submitted'],
+			'Presentada por'               => trim( $quien ),
+			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
+			'Última modificación'          => (string) $p['modified'],
+			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
+			'Estado'                       => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
 		);
 
 		ob_start();
 		?>
 		<div class="prc-justificante">
 			<p class="prc-sub prc-no-imprimir"><a href="<?php echo esc_url( (string) $p['apply_url'] ); ?>">&larr; Volver a la solicitud</a></p>
-			<h1 class="prc-h1">Justificante de presentación</h1>
-			<dl class="prc-respuestas prc-justificante__datos">
-				<?php foreach ( $datos as $rotulo => $valor ) : ?>
-					<?php if ( '' !== $valor ) : ?>
-						<dt><?php echo esc_html( $rotulo ); ?></dt>
-						<dd><?php echo esc_html( $valor ); ?></dd>
+			<?php if ( '' !== $logo || '' !== $rotulo ) : ?>
+				<div class="prc-justificante__cab">
+					<?php if ( '' !== $logo ) : ?>
+						<img src="<?php echo esc_url( $logo ); ?>" alt="<?php echo esc_attr( (string) $chrome['brand_alt'] ); ?>" class="prc-justificante__escudo" />
 					<?php endif; ?>
-				<?php endforeach; ?>
-			</dl>
+					<?php if ( '' !== $rotulo ) : ?>
+						<span class="prc-justificante__org"><?php echo esc_html( $rotulo ); ?></span>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+			<h1 class="prc-h1">Justificante de presentación</h1>
+			<table class="prc-justificante__tabla">
+				<tbody>
+					<?php foreach ( $datos as $etiqueta => $valor ) : ?>
+						<?php if ( '' !== $valor ) : ?>
+							<tr><th scope="row"><?php echo esc_html( $etiqueta ); ?></th><td><?php echo esc_html( $valor ); ?></td></tr>
+						<?php endif; ?>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
 			<?php echo ApplyFormView::summary( $m );?>
 			<?php echo PeopleView::review( (array) ( $m['people'] ?? array() ) );?>
-			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
+			<p class="prc-no-imprimir" hidden><button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-print><?php echo Shell::icon( 'imprimir' );?> Imprimir justificante</button></p>
+			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, pulse «Imprimir justificante» o use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
 		</div>
 		<?php
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -38071,17 +38093,48 @@ body.prc-app .prc-btn-borrar {
 
 /* --- el justificante -----------------------------------------------------
    Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
-   solo sirve en pantalla. Sin JavaScript. */
-.prc-justificante__datos { margin-bottom: 20px; }
+   solo sirve en pantalla. El botón «Imprimir justificante» es un atajo del
+   guion; sin él, se imprime igual desde el menú del navegador. */
+.prc-justificante__cab {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--prc-c-borde-campo);
+}
+
+.prc-justificante__escudo { max-height: 64px; width: auto; }
+.prc-justificante__org { font-weight: var(--prc-p-fuerte); }
+
+.prc-justificante__tabla { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+
+.prc-justificante__tabla th,
+.prc-justificante__tabla td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--prc-c-borde-campo);
+}
+
+.prc-justificante__tabla th { width: 30%; font-weight: var(--prc-p-fuerte); }
 
 @media print {
+  /* El marco del aplicativo y, si lo pinta el tema, el del tema: todo lo que
+     no contiene el justificante. */
+  body:has(.prc-justificante) > :not(:has(.prc-justificante)),
   body:has(.prc-justificante) .prc-top,
   body:has(.prc-justificante) .prc-tabs,
   body:has(.prc-justificante) .prc-pie,
+  body:has(.prc-justificante) .prc-subpie,
   body:has(.prc-justificante) #wpadminbar,
+  body:has(.prc-justificante) :is(header, footer, nav):not(.prc-justificante *),
   .prc-justificante .prc-no-imprimir { display: none !important; }
 
   .prc-justificante { color: #000; }
+  .prc-justificante__tabla { break-inside: avoid; }
+  .prc-justificante__tabla th,
+  .prc-justificante__tabla td { border-color: #000; }
 }
 ',
   'css/prc-mi-centro.css' => '/* «Solicitudes de mi centro» (y «Mis solicitudes» del profesorado).
@@ -39257,6 +39310,26 @@ body.prc-app .prc-btn-borrar {
 		} );
 		// Cuenta como un cambio del formulario, para el aviso de cambios sin guardar.
 		marcar( { target: button } );
+	} );
+
+	/*
+	 * «Imprimir justificante» (`data-prc-print`): sale escondido y solo lo
+	 * enseña el guion, que abre el diálogo de imprimir del navegador. Sin
+	 * guion, el justificante se imprime igual desde el menú del navegador.
+	 */
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-print]\' ), function ( button ) {
+			var escondido = button.closest( \'[hidden]\' );
+			if ( escondido ) {
+				escondido.hidden = false;
+			}
+		} );
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		if ( e.target.closest && e.target.closest( \'[data-prc-print]\' ) ) {
+			window.print();
+		}
 	} );
 
 	/* --- 8. Un solo envío ------------------------------------------------ */

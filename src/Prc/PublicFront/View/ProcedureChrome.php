@@ -63,7 +63,8 @@ final class ProcedureChrome {
 			'credit'         => '',
 			'footer_links'   => array(),
 			// Logo de quien despliega, para las páginas que no llevan el marco
-			// del armazón (el aviso de borrador, ADR-0047): URL y texto alternativo.
+			// del armazón (el aviso de borrador, ADR-0047) y para la cabecera
+			// del justificante impreso: URL y texto alternativo.
 			'brand_logo'     => '',
 			'brand_alt'      => '',
 			// Aviso de protección de datos de la pantalla de solicitud: el órgano

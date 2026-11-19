@@ -8,6 +8,7 @@
 namespace Prc\PublicFront\View;
 
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ReceiptSignature;
@@ -238,6 +239,7 @@ final class ApplicationProgressView {
 			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
 			'Fecha y hora de presentación' => (string) $p['submitted'],
 			'Presentada por'               => $quien,
+			'Coordinación'                 => ApplicationMetaRegistration::receipt_coordinators( $s['coordinator'] ?? array() ),
 			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),

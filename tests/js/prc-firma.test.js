@@ -11,6 +11,7 @@ const RECEIPT = {
 	procedure: 'Red de prueba',
 	centre: 'CEIP Uno (C0001)',
 	submitted: '10-11-2026 a las 12:34',
+	coordination: 'Ana Perez (DNI o NIE 12345678Z)',
 	fingerprint: 'a'.repeat( 64 ),
 	created: "D:20261110113400+00'00'",
 	file_id: 'b'.repeat( 32 ),
@@ -77,6 +78,32 @@ describe( 'receipt PDF', () => {
 		expect( uno ).toContain( '(Huella SHA-256: ' + RECEIPT.fingerprint + ') Tj' );
 		expect( uno ).toContain( "/CreationDate (D:20261110113400+00'00')" );
 		expect( uno ).toContain( '/ID [ <' + RECEIPT.file_id.toUpperCase() + '>' );
+	} );
+
+	it( 'carries the coordination with its ID only when there is one', async () => {
+		const docs = [];
+		window.jspdf = {
+			jsPDF: function ( options ) {
+				const doc = new jsPDF( options );
+				doc.save = vi.fn();
+				docs.push( doc );
+				return doc;
+			},
+		};
+		await load( section() );
+		$( '[data-prc-firma-pdf]' ).click();
+		expect( docs[ 0 ].output() ).toContain( '(Ana Perez \\(DNI o NIE 12345678Z\\)) Tj' );
+
+		const original = RECEIPT.coordination;
+		RECEIPT.coordination = '';
+		try {
+			await load( section() );
+			$( '[data-prc-firma-pdf]' ).click();
+		} finally {
+			RECEIPT.coordination = original;
+		}
+		expect( docs[ 1 ].output() ).not.toContain( 'DNI o NIE' );
+		expect( docs[ 1 ].output() ).not.toContain( 'Coordinaci' );
 	} );
 
 	it( 'leaves the buttons hidden without jsPDF', async () => {

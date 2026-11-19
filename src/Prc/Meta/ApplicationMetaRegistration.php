@@ -274,15 +274,16 @@ final class ApplicationMetaRegistration {
 	 * El DNI o NIE solo si lo hay. Lo pinta el justificante, que ve quien
 	 * presenta y quien revisa; nunca un correo ni la consulta.
 	 *
-	 * @param mixed $value Stored coordinator meta.
+	 * @param array<int, array<string, mixed>> $people Sanitised coordinators, or rows of the people list.
 	 * @return string '' without any named coordinator.
 	 */
-	public static function receipt_coordinators( $value ): string {
+	public static function receipt_coordinators( array $people ): string {
 		$out = array();
-		foreach ( self::sanitize_coordinator( $value ) as $persona ) {
-			$nombre = self::full_name( $persona );
+		foreach ( $people as $persona ) {
+			$nombre = self::full_name( (array) $persona );
+			$dni    = (string) ( $persona['dni'] ?? '' );
 			if ( '' !== $nombre ) {
-				$out[] = '' !== $persona['dni'] ? $nombre . ' (DNI o NIE ' . $persona['dni'] . ')' : $nombre;
+				$out[] = '' !== $dni ? $nombre . ' (DNI o NIE ' . $dni . ')' : $nombre;
 			}
 		}
 		return implode( '; ', $out );

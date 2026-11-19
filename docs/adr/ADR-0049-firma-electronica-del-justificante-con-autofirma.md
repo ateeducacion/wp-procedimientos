@@ -280,6 +280,24 @@ coordinación con su DNI o NIE, junto a quien presenta y solo si lo hay.
   solo enlaza el justificante—, ni en la consulta por zona, ni en su CSV
   (`ObserverScope::ALLOWED_COLUMNS` no cambia; ADR-0043).
 
+## Adenda — 2026-11-19: tras la revisión de #115
+
+- **La coordinación sale de donde se recoge.** Si el procedimiento la
+  recoge en la lista de personas (`coordinators_in_list`), el formulario ya
+  no la pide y lo que quede en `prc_coordinator` es de antes: el
+  justificante y la huella leen la lista. Si no, la meta. Lo decide
+  `ApplicationProgress::coordination()`, que usan los dos.
+- **Matiz a «el DNI sigue sin salir de donde ya salía».** Con
+  `prc_autofirma_servlets` configurado para firmar desde el móvil, el PDF
+  que se firma pasa por el servidor intermedio que elige la instalación, y
+  ahora lleva el DNI o NIE de coordinación. Antes no llevaba ningún dato
+  personal. Quien configure los servlets tiene que contar con ello.
+- **Firmado no quiere decir al día.** Lo guardado como firmado no se vuelve
+  a comprobar: si después se cambia la coordinación o su DNI dentro del
+  plazo, el justificante impreso y el PDF firmado dicen cosas distintas y
+  la solicitud sigue «Firmada». Ya pasaba con las respuestas, que el PDF no
+  lleva; el PDF firmado prueba lo que había al firmar.
+
 ## Adenda — 2026-11-23
 
 - **El trabajo de descomprimir también tiene tope.** El tope de 2026-11-19

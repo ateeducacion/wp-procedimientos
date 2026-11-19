@@ -16,6 +16,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\ReceiptSignature;
 
 /**
  * La solicitud se termina y se demuestra.
@@ -364,6 +365,37 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$html = $recibo();
 		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez</td>', $html, 'sin DNI, solo el nombre' );
 		$this->assertStringNotContainsString( 'DNI o NIE', $html );
+	}
+
+	/**
+	 * When the people list takes over the coordination, the receipt and its
+	 * fingerprint read the list, not what an older form left in the meta.
+	 */
+	public function test_the_receipt_reads_the_coordination_from_the_list_when_it_holds_it() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, 1 );
+		$this->assertTrue( Applications::spec( $procedimiento )['coordinators_in_list'] );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		update_post_meta(
+			$solicitud,
+			ApplicationMetaKeys::COORDINATOR,
+			array(
+				array(
+					'name'    => 'Persona',
+					'surname' => 'De Antes',
+					'dni'     => '00000000T',
+					'email'   => 'antes@example.org',
+				),
+			)
+		);
+		People::add( $solicitud, $director, $this->persona( '12345678Z' ) );
+
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ApplicationProgress::coordination( $solicitud ) );
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ReceiptSignature::data( $solicitud )['coordination'] );
+		$this->acting_as( $director );
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez (DNI o NIE 12345678Z)</td>', $html );
 	}
 
 	/**

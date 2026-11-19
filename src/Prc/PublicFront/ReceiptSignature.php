@@ -297,11 +297,13 @@ final class ReceiptSignature {
 	 * @return string
 	 */
 	public static function label( int $application_id ): string {
-		$estado = self::state( $application_id );
-		if ( self::STATE_SIGNED !== $estado ) {
-			return self::STATE_PENDING === $estado ? 'Pendiente de firma' : '';
+		if ( ! self::required( (int) wp_get_post_parent_id( $application_id ) ) ) {
+			return '';
 		}
 		$firma = self::signed( $application_id );
+		if ( array() === $firma ) {
+			return 'Pendiente de firma';
+		}
 		$quien = get_userdata( (int) $firma['signed_by'] );
 		return 'Firmado el ' . ApplicationProgress::when( (int) $firma['signed_at'] ) . ( false !== $quien ? ' por ' . $quien->display_name : '' );
 	}
@@ -352,7 +354,9 @@ final class ReceiptSignature {
 			return array( 'show' => false );
 		}
 		$puede = self::can_sign( get_current_user_id(), $id );
-		if ( $puede ) {
+		// El justificante para imprimir no pinta la sección: nada que cargar.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo decide si se cargan las librerías.
+		if ( $puede && ! isset( $_GET[ ApplicationProgress::ARG_RECEIPT ] ) ) {
 			foreach ( self::vendors() as $handle => $vendor ) {
 				wp_enqueue_script( $handle, $vendor['url'], array(), $vendor['ver'], true );
 			}
@@ -396,8 +400,8 @@ final class ReceiptSignature {
 			$datos = self::data( $id );
 			$error = SignedReceipt::why( SignedReceipt::refuse( $bytes, $datos['number'], $datos['fingerprint'], ApplicationFiles::max_bytes() ) );
 		}
-		if ( '' === $error && ! self::store( $id, $bytes, $user_id, $via ) ) {
-			$error = 'No se ha podido guardar el justificante firmado. Vuelva a intentarlo.';
+		if ( '' === $error ) {
+			$error = self::store( $id, $bytes, $user_id, $via );
 		}
 		if ( '' !== $error ) {
 			self::$rejected = $error;
@@ -471,37 +475,45 @@ final class ReceiptSignature {
 	 * @return array{0:string, 1:string, 2:string} Bytes, way, and why not ('' when fine).
 	 */
 	private static function uploaded(): array {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() comprobó el nonce; se leen solo tmp_name, size y error, como enteros o la ruta que puso PHP.
-		$campo = isset( $_FILES[ self::FIELD_FILE ] ) && is_array( $_FILES[ self::FIELD_FILE ] ) ? $_FILES[ self::FIELD_FILE ] : array();
-		$error = (int) ( $campo['error'] ?? UPLOAD_ERR_NO_FILE );
-		$tmp   = is_string( $campo['tmp_name'] ?? null ) ? $campo['tmp_name'] : '';
-		if ( UPLOAD_ERR_INI_SIZE === $error || UPLOAD_ERR_FORM_SIZE === $error || (int) ( $campo['size'] ?? 0 ) > ApplicationFiles::max_bytes() ) {
-			return array( '', self::VIA_UPLOAD, SignedReceipt::why( 'too_big' ) );
-		}
-		if ( UPLOAD_ERR_OK !== $error || '' === $tmp || ! is_readable( $tmp ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() comprobó el nonce; se sanea campo a campo justo debajo.
+		$campo   = isset( $_FILES[ self::FIELD_FILE ] ) && is_array( $_FILES[ self::FIELD_FILE ] ) ? $_FILES[ self::FIELD_FILE ] : array();
+		$fichero = array(
+			'name'     => basename( sanitize_text_field( is_scalar( $campo['name'] ?? null ) ? (string) $campo['name'] : '' ) ),
+			'tmp_name' => is_string( $campo['tmp_name'] ?? null ) ? $campo['tmp_name'] : '',
+			'size'     => (int) ( $campo['size'] ?? 0 ),
+			'error'    => (int) ( $campo['error'] ?? UPLOAD_ERR_NO_FILE ),
+		);
+		if ( UPLOAD_ERR_NO_FILE === $fichero['error'] ) {
 			return array( '', self::VIA_UPLOAD, 'Elija el justificante firmado, en PDF, antes de subirlo.' );
 		}
+		// La misma política que el resto del almacén privado (ADR-0028): tamaño, errores y tipo por contenido.
+		$porque = ApplicationFiles::refuse( $fichero );
+		if ( '' !== $porque ) {
+			return array( '', self::VIA_UPLOAD, 'file_too_big' === $porque ? SignedReceipt::why( 'too_big' ) : ApplicationFiles::why( array( $porque ) ) );
+		}
 		// `is_uploaded_file()` no hace falta: `tmp_name` lo pone PHP con el cuerpo de la petición (ver ApplicationFiles::from_request()).
-		$bytes = file_get_contents( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- el temporal de la subida, local.
+		$bytes = file_get_contents( $fichero['tmp_name'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- el temporal de la subida, local.
 		return array( is_string( $bytes ) ? $bytes : '', self::VIA_UPLOAD, '' );
 	}
 
 	/**
 	 * Put the signed PDF in the private store and point the application at it.
 	 *
-	 * `add_post_meta( …, true )`: si dos envíos llegan a la vez, el segundo
-	 * no pisa al primero, y su fichero se borra.
+	 * `add_post_meta( …, true )`, como {@see \Prc\Meta\MetaSwap} sin meta
+	 * guardada: si otro envío la escribió antes, este no la pisa y su fichero
+	 * se borra. Mira y luego inserta, así que dos envíos en el mismo instante
+	 * aún pueden dejar dos filas; se lee la primera y sobra un fichero.
 	 *
 	 * @param int    $application_id Application ID.
 	 * @param string $bytes          Signed PDF.
 	 * @param int    $user_id        Who signed it.
 	 * @param string $via            How it came.
-	 * @return bool
+	 * @return string Why it was not stored; '' when it was.
 	 */
-	private static function store( int $application_id, string $bytes, int $user_id, string $via ): bool {
+	private static function store( int $application_id, string $bytes, int $user_id, string $via ): string {
 		$stored = ApplicationFiles::put( $bytes, 'pdf' );
 		if ( '' === $stored ) {
-			return false;
+			return 'No se ha podido guardar el justificante firmado. Vuelva a intentarlo.';
 		}
 		$firma = array(
 			'id'        => bin2hex( random_bytes( 16 ) ),
@@ -516,9 +528,9 @@ final class ReceiptSignature {
 		);
 		if ( ! add_post_meta( $application_id, ApplicationMetaKeys::SIGNED_RECEIPT, $firma, true ) ) {
 			ApplicationFiles::erase( $firma );
-			return false;
+			return 'El justificante de esta solicitud ya está firmado.';
 		}
-		return true;
+		return '';
 	}
 
 	// ─── la descarga y el borrado ──────────────────────────────────────────

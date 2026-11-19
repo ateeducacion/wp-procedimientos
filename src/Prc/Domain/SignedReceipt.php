@@ -80,9 +80,9 @@ final class SignedReceipt {
 		if ( 0 !== strpos( $pdf, '%PDF' ) ) {
 			return 'not_pdf';
 		}
-		$texto  = self::text( $pdf );
+		// Lo barato, en los bytes, antes de descomprimir nada.
 		$rangos = (int) preg_match_all( '~/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]~', $pdf, $m, PREG_SET_ORDER );
-		if ( ! preg_match( '~/(?:Type|FT)\s*/Sig\b~', $texto ) || 0 === $rangos ) {
+		if ( 0 === $rangos ) {
 			return 'not_signed';
 		}
 		if ( $rangos > 1 ) {
@@ -90,6 +90,10 @@ final class SignedReceipt {
 		}
 		if ( ! self::covers( $pdf, array_map( 'intval', array_slice( $m[0], 1 ) ) ) ) {
 			return 'not_covered';
+		}
+		$texto = self::text( $pdf, $max );
+		if ( ! preg_match( '~/(?:Type|FT)\s*/Sig\b~', $texto ) ) {
+			return 'not_signed';
 		}
 		return self::names( $texto, $number, $fingerprint ) ? '' : 'not_this';
 	}
@@ -147,10 +151,14 @@ final class SignedReceipt {
 	 * no lo toca; otro firmador puede reescribir el fichero y comprimirlo.
 	 * Un flujo que no se deja descomprimir simplemente no aporta.
 	 *
+	 * Todo lo descomprimido junto no pasa de `$max`: un flujo que se infla
+	 * sin fin (una bomba de compresión) se corta ahí y no se lee.
+	 *
 	 * @param string $pdf PDF bytes.
+	 * @param int    $max Most inflated bytes read, all streams together.
 	 * @return string
 	 */
-	private static function text( string $pdf ): string {
+	private static function text( string $pdf, int $max ): string {
 		$texto = $pdf;
 		if ( ! function_exists( 'gzuncompress' ) || ! preg_match_all( '~(?<!end)stream\r?\n~', $pdf, $marcas, PREG_OFFSET_CAPTURE ) ) {
 			return $texto;
@@ -164,7 +172,11 @@ final class SignedReceipt {
 			$crudo = substr( $pdf, $ini, $fin - $ini );
 			// El salto antes de `endstream` puede ser del flujo o del formato: se prueba con y sin él.
 			foreach ( array( $crudo, rtrim( $crudo, "\r\n" ) ) as $intento ) {
-				$claro = @gzuncompress( $intento ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- un flujo que no es Flate no es un error, es un flujo que no aporta.
+				$queda = $max - ( strlen( $texto ) - strlen( $pdf ) );
+				if ( $queda <= 0 ) {
+					return $texto;
+				}
+				$claro = @gzuncompress( $intento, $queda ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- un flujo que no es Flate no es un error, es un flujo que no aporta.
 				if ( is_string( $claro ) ) {
 					$texto .= "\n" . $claro;
 					break;

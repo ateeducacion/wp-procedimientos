@@ -33842,16 +33842,10 @@ final class Settings {
 				'page'      => self::PAGE,
 			);
 
-
-
-			if ( isset( $_POST['prc_manifest_url'] ) ) {
-				$url = esc_url_raw( trim( sanitize_text_field( wp_unslash( $_POST['prc_manifest_url'] ) ) ) );
-				if ( '' !== $url && ! CentreCatalogueSync::is_valid_https_url( $url ) ) {
-					$redirect_args['error'] = rawurlencode( 'La dirección del manifest tiene que empezar por https://. No se ha guardado.' );
-					self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
-					return;
-				}
-				update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, $url, false );
+			$url_error = self::save_manifest_url();
+			if ( '' !== $url_error ) {
+				$redirect_args['error'] = rawurlencode( $url_error );
+				self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 			}
 
 			try {
@@ -33871,6 +33865,29 @@ final class Settings {
 
 			self::leave( add_query_arg( $redirect_args, admin_url( 'edit.php' ) ) );
 		}
+	}
+
+
+
+
+
+
+
+
+	private static function save_manifest_url(): string {
+
+		if ( ! isset( $_POST['prc_manifest_url'] ) ) {
+			return '';
+		}
+
+
+		$url = esc_url_raw( trim( sanitize_text_field( wp_unslash( $_POST['prc_manifest_url'] ) ) ) );
+
+		if ( '' !== $url && ! CentreCatalogueSync::is_valid_https_url( $url ) ) {
+			return 'La dirección del manifest tiene que empezar por https://. No se ha guardado.';
+		}
+		update_option( CentreCatalogueSync::OPTION_MANIFEST_URL, $url, false );
+		return '';
 	}
 
 

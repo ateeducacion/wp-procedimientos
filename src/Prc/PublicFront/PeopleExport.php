@@ -73,6 +73,8 @@ final class PeopleExport {
 	public static function all_columns( int $procedure_id, bool $centre = false ): array {
 		$preguntas = Applications::questions( $procedure_id );
 		$columns   = QuestionGrid::expand( Applications::columns( $preguntas, $centre ), $preguntas );
+		// La firma del justificante, solo donde se pide y entre las que se eligen (ADR-0049).
+		$columns += $centre ? ReceiptSignature::columns( $procedure_id ) : array();
 		if ( ! People::enabled( $procedure_id ) ) {
 			return $columns;
 		}

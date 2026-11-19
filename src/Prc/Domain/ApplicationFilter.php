@@ -33,6 +33,9 @@ final class ApplicationFilter {
 	/** Query arg of «solo las incompletas»: `1`. */
 	public const ARG_INCOMPLETE = 'incompletas';
 
+	/** Query arg of «solo las pendientes de firma»: `1` (ADR-0049). */
+	public const ARG_UNSIGNED = 'sin_firmar';
+
 	/** Query arg of the free-text search. */
 	public const ARG_SEARCH = 'buscar';
 
@@ -55,6 +58,7 @@ final class ApplicationFilter {
 		'island'     => self::ARG_ISLAND,
 		'zone'       => self::ARG_ZONE,
 		'incomplete' => self::ARG_INCOMPLETE,
+		'unsigned'   => self::ARG_UNSIGNED,
 		'search'     => self::ARG_SEARCH,
 		'page'       => self::ARG_PAGE,
 	);
@@ -109,7 +113,7 @@ final class ApplicationFilter {
 	 * dice `1` o una página que no es un entero positivo se ignoran.
 	 *
 	 * @param array<string, mixed> $raw Query arg => value.
-	 * @return array{review:string, island:string, zone:string, incomplete:bool, search:string, page:int}
+	 * @return array{review:string, island:string, zone:string, incomplete:bool, unsigned:bool, search:string, page:int}
 	 */
 	public static function sanitize( array $raw ): array {
 		$estado = self::text( $raw, self::ARG_REVIEW, 32 );
@@ -119,6 +123,7 @@ final class ApplicationFilter {
 			'island'     => self::text( $raw, self::ARG_ISLAND, 100 ),
 			'zone'       => self::text( $raw, self::ARG_ZONE, 32 ),
 			'incomplete' => '1' === self::text( $raw, self::ARG_INCOMPLETE, 1 ),
+			'unsigned'   => '1' === self::text( $raw, self::ARG_UNSIGNED, 1 ),
 			'search'     => self::text( $raw, self::ARG_SEARCH, self::MAX_SEARCH ),
 			'page'       => ctype_digit( $pagina ) && (int) $pagina > 0 ? (int) $pagina : 1,
 		);
@@ -151,7 +156,7 @@ final class ApplicationFilter {
 	 */
 	public static function active( array $filter ): bool {
 		return '' !== $filter['review'] || '' !== $filter['island'] || '' !== $filter['zone']
-			|| true === $filter['incomplete'] || '' !== $filter['search'];
+			|| true === $filter['incomplete'] || true === ( $filter['unsigned'] ?? false ) || '' !== $filter['search'];
 	}
 
 	/**
@@ -172,7 +177,7 @@ final class ApplicationFilter {
 		$out = array();
 		foreach ( self::ARGS as $clave => $arg ) {
 			$valor = $f[ $clave ] ?? '';
-			if ( 'incomplete' === $clave ) {
+			if ( 'incomplete' === $clave || 'unsigned' === $clave ) {
 				$valor = true === $valor ? '1' : '';
 			} elseif ( 'page' === $clave ) {
 				$valor = (int) $valor > 1 ? (string) (int) $valor : '';

@@ -13,6 +13,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionGrid;
 use Prc\PostType\ApplicationPostType;
 use Prc\PublicFront\ApplicationLog;
+use Prc\PublicFront\ReceiptSignature;
 
 /**
  * Lo mismo que {@see ProcedureMetaRegistration}, para la solicitud.
@@ -99,6 +100,10 @@ final class ApplicationMetaRegistration {
 			ApplicationMetaKeys::ADOPTED_AT         => array(
 				'type'     => 'integer',
 				'sanitize' => 'absint',
+			),
+			ApplicationMetaKeys::SIGNED_RECEIPT     => array(
+				'type'     => 'array',
+				'sanitize' => array( ReceiptSignature::class, 'sanitize' ),
 			),
 		);
 	}

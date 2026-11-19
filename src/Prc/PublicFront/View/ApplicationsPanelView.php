@@ -15,6 +15,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationsPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 
 /**
@@ -167,6 +168,12 @@ final class ApplicationsPanelView {
 					<?php echo esc_html( sprintf( 'Solo las incompletas (%d)', (int) $t['incomplete']['count'] ) ); ?>
 				</label>
 			<?php endif; ?>
+			<?php if ( ! empty( $t['unsigned']['possible'] ) ) : ?>
+				<label class="prc-casilla prc-filtros__casilla">
+					<input type="checkbox" name="<?php echo esc_attr( ApplicationFilter::ARG_UNSIGNED ); ?>" value="1" <?php checked( true === $f['unsigned'] ); ?> />
+					<?php echo esc_html( sprintf( 'Solo las pendientes de firma (%d)', (int) $t['unsigned']['count'] ) ); ?>
+				</label>
+			<?php endif; ?>
 			<div class="prc-filtros__acciones">
 				<button class="<?php echo esc_attr( Assets::button_class() ); ?>" type="submit">Filtrar</button>
 				<?php if ( '' !== (string) $t['reset_url'] ) : ?>
@@ -306,6 +313,7 @@ final class ApplicationsPanelView {
 							<td class="prc-celda" data-rotulo="Revisión">
 								<?php echo ProcedureEditorView::badge( (string) $fila['state_key'], (string) $fila['state'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 								<?php echo self::reasons( (array) ( $fila['reasons'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+								<?php echo self::signature( $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 							</td>
 							<td class="prc-celda" data-rotulo="Acciones"><?php echo self::review_form( $m, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></td>
 						</tr>
@@ -332,6 +340,28 @@ final class ApplicationsPanelView {
 			$out .= '<li>' . esc_html( (string) $motivo ) . '</li>';
 		}
 		return $out . '</ul></div>';
+	}
+
+	/**
+	 * «Pendiente de firma» or «Firmado», with its download when signed (ADR-0049).
+	 *
+	 * El enlace se compone al pintar, como el de los documentos: no viaja en
+	 * la fila ni acaba en el CSV, y no autoriza nada por sí solo.
+	 *
+	 * @param array<string, mixed> $fila Row.
+	 * @param bool                 $full Whether to say when and who, as in the review.
+	 * @return string Empty where the procedure does not ask for the signature.
+	 */
+	private static function signature( array $fila, bool $full = false ): string {
+		$estado = (string) ( $fila['signature_state'] ?? '' );
+		if ( '' === $estado ) {
+			return '';
+		}
+		if ( ReceiptSignature::STATE_SIGNED !== $estado ) {
+			return '<span class="prc-firma-estado prc-firma-estado--pendiente">Pendiente de firma</span>';
+		}
+		return '<span class="prc-firma-estado prc-firma-estado--firmado">' . esc_html( $full ? (string) $fila['signature'] : 'Firmado' ) . '</span> '
+			. '<a class="prc-descarga" href="' . esc_url( ReceiptSignature::url( (int) $fila['id'] ) ) . '" download>Descargar el firmado</a>';
 	}
 
 	/**
@@ -453,6 +483,10 @@ final class ApplicationsPanelView {
 					?>
 					<dd><?php echo $respuesta; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado justo arriba. ?></dd>
 				<?php endforeach; ?>
+				<?php if ( '' !== (string) ( $fila['signature'] ?? '' ) ) : ?>
+					<dt>Firma del justificante</dt>
+					<dd><?php echo self::signature( $fila, true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?></dd>
+				<?php endif; ?>
 			</dl>
 			<?php echo PeopleView::review( (array) ( $m['people'][ $id ] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller prc-revision__form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">

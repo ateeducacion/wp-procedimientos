@@ -23,24 +23,31 @@ use Prc\Meta\ProcedureMetaKeys;
  */
 final class AdvancedPanel {
 
+	/** Operation of «Firma electrónica» (ADR-0049). */
+	public const OP_SIGNATURE = 'signature';
+
+	/** Anchor of «Firma electrónica». */
+	public const SECTION_SIGNATURE = 'prc-avanzado-firma';
+
 	/**
 	 * The sections of «Avanzado» this person sees, in order.
 	 *
 	 * Qué centros pueden solicitar, solo en un procedimiento para centros;
-	 * «Acceso de consulta», solo para administración
+	 * «Firma electrónica», siempre (ADR-0049); «Acceso de consulta», solo para administración
 	 * (`ProcedureAccess::can_configure_observe()`); «Código», siempre: quien
 	 * no lo edita lo lee.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return string[] Among `centres`, `observe` and `code`.
+	 * @return string[] Among `centres`, `signature`, `observe` and `code`.
 	 */
 	public static function sections( int $procedure_id ): array {
 		return array_keys(
 			array_filter(
 				array(
-					'centres' => self::for_schools( $procedure_id ),
-					'observe' => ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ),
-					'code'    => true,
+					'centres'   => self::for_schools( $procedure_id ),
+					'signature' => true,
+					'observe'   => ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ),
+					'code'      => true,
 				)
 			)
 		);
@@ -84,6 +91,22 @@ final class AdvancedPanel {
 		update_post_meta( $procedure_id, ProcedureMetaKeys::ALLOWED_CENTRES, wp_slash( $acotados['data']['allowed_centres'] ) );
 		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'centros' ) ) );
 		return '';
+	}
+
+	/**
+	 * Save «Firma electrónica»: whether the procedure asks for the signed receipt.
+	 *
+	 * En cualquier estado mientras el procedimiento se pueda editar: lo llama
+	 * {@see ProcedureEditor::handle()} después de comprobar el nonce, el
+	 * bloqueo y `ProcedureAccess::can_edit()`.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return void
+	 */
+	public static function save_signature( int $procedure_id ): void {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- handle() comprobó el nonce de esta operación.
+		update_post_meta( $procedure_id, ProcedureMetaKeys::SIGNATURE_REQUIRED, ! empty( $_POST[ ProcedureMetaKeys::SIGNATURE_REQUIRED ] ) );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'firma' ) ) . '#' . self::SECTION_SIGNATURE );
 	}
 
 	/**

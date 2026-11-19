@@ -52,6 +52,8 @@ final class ApplicationQuery {
 		ApplicationMetaKeys::APPLICANT_TYPE,
 		ApplicationMetaKeys::COORDINATOR,
 		ApplicationMetaKeys::CREATED_BY,
+		// Si está firmado el justificante (ADR-0049): un descriptor corto.
+		ApplicationMetaKeys::SIGNED_RECEIPT,
 	);
 
 	/**
@@ -61,7 +63,7 @@ final class ApplicationQuery {
 	 * @param array<string, mixed> $filter       What {@see ApplicationFilter::sanitize()} returned.
 	 * @param array<string, mixed> $scope        `codes`: only applications of these centre codes; absent, no narrowing.
 	 * @param bool                 $incomplete   Whether to work out which may be incomplete; the consultation neither shows nor filters them.
-	 * @return array{filter:array, active:bool, ids:int[], all:int, total:int, counts:array<string,int>, incomplete:int, may_be_incomplete:bool, options:array{islands:array<string,string>, zones:array<string,string>}, posts:\WP_Post[], reasons:array<int,string[]>, stored:array<int,array<string,mixed>>, page:int, pages:int, offset:int, from:int, to:int}
+	 * @return array{filter:array, active:bool, ids:int[], all:int, total:int, counts:array<string,int>, incomplete:int, may_be_incomplete:bool, unsigned:int, may_be_unsigned:bool, options:array{islands:array<string,string>, zones:array<string,string>}, posts:\WP_Post[], reasons:array<int,string[]>, stored:array<int,array<string,mixed>>, page:int, pages:int, offset:int, from:int, to:int}
 	 */
 	public static function run( int $procedure_id, array $filter, array $scope = array(), bool $incomplete = true ): array {
 		$census = self::census( $procedure_id, $scope, $incomplete );
@@ -71,9 +73,13 @@ final class ApplicationQuery {
 		$filter   = ApplicationFilter::against( $filter, $opciones );
 		// Donde ninguna puede estar incompleta, «incompletas» no es un filtro.
 		$filter['incomplete'] = $census['check'] && true === $filter['incomplete'];
-		$motivos              = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
-		$ids                  = self::narrow( $census, $filter, $catalogo, $motivos ?? array() );
-		$ventana              = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
+		// «Pendientes de firma», solo en el taller y donde se pide la firma.
+		$firma              = $incomplete && ReceiptSignature::required( $procedure_id );
+		$filter['unsigned'] = $firma && true === $filter['unsigned'];
+		$sin_firmar         = $firma ? self::unsigned( $census['stored'] ) : array();
+		$motivos            = $census['check'] ? self::reasons( $procedure_id, $census['stored'], $census['pending'] ) : null;
+		$ids                = self::narrow( $census, $filter, $catalogo, $motivos ?? array(), $sin_firmar );
+		$ventana            = ApplicationFilter::window( count( $ids ), (int) $filter['page'] );
 
 		$filter['page'] = $ventana['page'];
 		$pagina         = array_slice( $ids, $ventana['offset'], ApplicationFilter::PER_PAGE );
@@ -86,6 +92,8 @@ final class ApplicationQuery {
 			'counts'            => self::counts( $census['stored'] ),
 			'incomplete'        => count( $motivos ?? array() ),
 			'may_be_incomplete' => null !== $motivos,
+			'unsigned'          => count( $sin_firmar ),
+			'may_be_unsigned'   => $firma,
 			'options'           => $opciones,
 			'posts'             => self::page( $pagina ),
 			'reasons'           => array_intersect_key( $motivos ?? array(), array_flip( $pagina ) ),
@@ -206,6 +214,22 @@ final class ApplicationQuery {
 		foreach ( $posts as $id => $post ) {
 			$creada_por = (int) ( $stored[ $id ][ ApplicationMetaKeys::CREATED_BY ] ?? 0 );
 			if ( $creada_por > 0 && (int) $post->post_author === $creada_por ) {
+				$out[ $id ] = true;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The applications whose receipt is still to be signed.
+	 *
+	 * @param array<int, array<string, mixed>> $stored Census metas.
+	 * @return array<int, bool> Application ID => true.
+	 */
+	private static function unsigned( array $stored ): array {
+		$out = array();
+		foreach ( $stored as $id => $meta ) {
+			if ( array() === ReceiptSignature::sanitize( $meta[ ApplicationMetaKeys::SIGNED_RECEIPT ] ?? '' ) ) {
 				$out[ $id ] = true;
 			}
 		}
@@ -337,9 +361,10 @@ final class ApplicationQuery {
 	 * @param array<string, mixed>                $filter     Checked filter.
 	 * @param array<string, array<string, mixed>> $catalog    Catalogue by code.
 	 * @param array<int, string[]>                $incomplete Reasons of the incomplete ones.
+	 * @param array<int, bool>                    $unsigned   The ones still to be signed.
 	 * @return int[]
 	 */
-	private static function narrow( array $census, array $filter, array $catalog, array $incomplete ): array {
+	private static function narrow( array $census, array $filter, array $catalog, array $incomplete, array $unsigned = array() ): array {
 		if ( '' !== $filter['search'] ) {
 			// El nombre de cada docente: todas las cuentas en una consulta, no una por fila.
 			cache_users( array_unique( array_map( 'intval', wp_list_pluck( $census['posts'], 'post_author' ) ) ) );
@@ -351,6 +376,7 @@ final class ApplicationQuery {
 				|| ( '' !== $filter['island'] && $centro['island'] !== $filter['island'] )
 				|| ( '' !== $filter['zone'] && $centro['zone'] !== $filter['zone'] )
 				|| ( true === $filter['incomplete'] && ! isset( $incomplete[ $id ] ) )
+				|| ( true === $filter['unsigned'] && ! isset( $unsigned[ $id ] ) )
 				|| ! ApplicationFilter::matches( (string) $filter['search'], self::searchable( $census['posts'][ $id ], $meta ) ) ) {
 				continue;
 			}

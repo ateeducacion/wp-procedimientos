@@ -91,6 +91,7 @@ final class ApplyForm {
 		'guardada'   => 'Solicitud guardada.',
 		'entregado'  => 'Documento entregado. La solicitud y su revisión se conservan.',
 		'retirada'   => 'Solicitud retirada: ya no cuenta para este procedimiento. Mientras el plazo siga abierto, puede volver a presentar una nueva.',
+		'firmada'    => 'Justificante firmado guardado. Quien revisa la solicitud ya lo ve firmado.',
 	);
 
 	/**
@@ -650,6 +651,8 @@ final class ApplyForm {
 		$m['people'] = PeopleForm::model( $m );
 		// Retirar y la prórroga, también aparte (PLAN-0003, PR 9).
 		$m['withdraw'] = WithdrawForm::model( $m );
+		// La firma del justificante, si el procedimiento la pide (ADR-0049).
+		$m['signature'] = ReceiptSignature::model( $m );
 		// Los pasos, lo que falta y el justificante: después de las personas.
 		$m['progress'] = ApplicationProgress::model( $m );
 		return ApplyFormView::html( $m );

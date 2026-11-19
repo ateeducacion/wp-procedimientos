@@ -35,6 +35,7 @@ use Prc\PublicFront\Observe;
 use Prc\PublicFront\PeopleForm;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\ProcedureView;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\WithdrawForm;
 use Prc\PublicFront\Workspace;
@@ -90,6 +91,8 @@ final class App {
 		ApplicationOperations::class,
 		ApplicationHistory::class,
 		WithdrawForm::class,
+		// La firma del justificante: el envío, la descarga y su SRI (ADR-0049).
+		ReceiptSignature::class,
 		MyCentre::class,
 		// La consulta de solo lectura por zona (ADR-0043).
 		Observe::class,

@@ -16,7 +16,8 @@ use Prc\Meta\ApplicationMetaKeys;
  *
  * **Escucha las acciones que ya emiten las operaciones** —presentar,
  * modificar, revisar, entregar, las personas, retirar, restaurar, la
- * prórroga, presentar en nombre de un centro y la nota interna— y anota cada
+ * prórroga, presentar en nombre de un centro, la nota interna y la firma del
+ * justificante— y anota cada
  * una con {@see ApplicationLog::add()}: ninguna pantalla escribe en el
  * historial por su cuenta, así que cada actuación queda **una vez**.
  *
@@ -35,6 +36,7 @@ final class ApplicationHistory {
 	public const EXTENDED      = 'extended';
 	public const CREATED_FOR   = 'created_for_centre';
 	public const INTERNAL_NOTE = 'internal_note';
+	public const SIGNED        = 'receipt_signed';
 
 	/**
 	 * Hook registration.
@@ -51,6 +53,7 @@ final class ApplicationHistory {
 		add_action( 'prc_application_extended', array( self::class, 'on_extended' ), 5, 4 );
 		add_action( 'prc_application_created_for', array( self::class, 'on_created_for' ), 5, 3 );
 		add_action( 'prc_internal_note_changed', array( self::class, 'on_internal_note' ), 5, 2 );
+		add_action( 'prc_receipt_signed', array( self::class, 'on_signed' ), 5, 3 );
 	}
 
 	// ─── lo que se anota ───────────────────────────────────────────────────
@@ -233,6 +236,18 @@ final class ApplicationHistory {
 		ApplicationLog::add( (int) $application_id, self::INTERNAL_NOTE, array(), (int) $user_id );
 	}
 
+	/**
+	 * The receipt signed (ADR-0049): by which way, never the file.
+	 *
+	 * @param int    $application_id Application ID.
+	 * @param int    $user_id        Who signed it.
+	 * @param string $via            `autofirma` or `upload`.
+	 * @return void
+	 */
+	public static function on_signed( $application_id, $user_id = 0, $via = '' ): void {
+		ApplicationLog::add( (int) $application_id, self::SIGNED, array( 'via' => (string) $via ), (int) $user_id );
+	}
+
 	// ─── cómo se lee ───────────────────────────────────────────────────────
 
 	/**
@@ -280,6 +295,7 @@ final class ApplicationHistory {
 			self::UPDATED           => 'Solicitud modificada',
 			self::RESTORED          => 'Solicitud restaurada desde «Retiradas»',
 			self::INTERNAL_NOTE     => 'Nota interna cambiada',
+			self::SIGNED            => 'Justificante firmado',
 			ApplicationLog::TRIMMED => sprintf( 'Se han descartado las %d entradas más antiguas del historial.', (int) ( $data['dropped'] ?? 0 ) ),
 		);
 		$evento = (string) $entrada['event'];

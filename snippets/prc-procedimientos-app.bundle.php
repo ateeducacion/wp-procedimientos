@@ -4748,9 +4748,9 @@ final class SignedReceipt {
 		if ( 0 !== strpos( $pdf, '%PDF' ) ) {
 			return 'not_pdf';
 		}
-		$texto  = self::text( $pdf );
+
 		$rangos = (int) preg_match_all( '~/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]~', $pdf, $m, PREG_SET_ORDER );
-		if ( ! preg_match( '~/(?:Type|FT)\s*/Sig\b~', $texto ) || 0 === $rangos ) {
+		if ( 0 === $rangos ) {
 			return 'not_signed';
 		}
 		if ( $rangos > 1 ) {
@@ -4758,6 +4758,10 @@ final class SignedReceipt {
 		}
 		if ( ! self::covers( $pdf, array_map( 'intval', array_slice( $m[0], 1 ) ) ) ) {
 			return 'not_covered';
+		}
+		$texto = self::text( $pdf, $max );
+		if ( ! preg_match( '~/(?:Type|FT)\s*/Sig\b~', $texto ) ) {
+			return 'not_signed';
 		}
 		return self::names( $texto, $number, $fingerprint ) ? '' : 'not_this';
 	}
@@ -4818,7 +4822,11 @@ final class SignedReceipt {
 
 
 
-	private static function text( string $pdf ): string {
+
+
+
+
+	private static function text( string $pdf, int $max ): string {
 		$texto = $pdf;
 		if ( ! function_exists( 'gzuncompress' ) || ! preg_match_all( '~(?<!end)stream\r?\n~', $pdf, $marcas, PREG_OFFSET_CAPTURE ) ) {
 			return $texto;
@@ -4832,7 +4840,11 @@ final class SignedReceipt {
 			$crudo = substr( $pdf, $ini, $fin - $ini );
 
 			foreach ( array( $crudo, rtrim( $crudo, "\r\n" ) ) as $intento ) {
-				$claro = @gzuncompress( $intento );
+				$queda = $max - ( strlen( $texto ) - strlen( $pdf ) );
+				if ( $queda <= 0 ) {
+					return $texto;
+				}
+				$claro = @gzuncompress( $intento, $queda );
 				if ( is_string( $claro ) ) {
 					$texto .= "\n" . $claro;
 					break;
@@ -13090,7 +13102,7 @@ final class Applications {
 
 
 
-	public const EXTRA_COLUMNS = array( 'internal_note' );
+	public const EXTRA_COLUMNS = array( 'internal_note', 'signature' );
 
 
 
@@ -32499,11 +32511,13 @@ final class ReceiptSignature {
 
 
 	public static function label( int $application_id ): string {
-		$estado = self::state( $application_id );
-		if ( self::STATE_SIGNED !== $estado ) {
-			return self::STATE_PENDING === $estado ? 'Pendiente de firma' : '';
+		if ( ! self::required( (int) wp_get_post_parent_id( $application_id ) ) ) {
+			return '';
 		}
 		$firma = self::signed( $application_id );
+		if ( array() === $firma ) {
+			return 'Pendiente de firma';
+		}
 		$quien = get_userdata( (int) $firma['signed_by'] );
 		return 'Firmado el ' . ApplicationProgress::when( (int) $firma['signed_at'] ) . ( false !== $quien ? ' por ' . $quien->display_name : '' );
 	}
@@ -32554,7 +32568,9 @@ final class ReceiptSignature {
 			return array( 'show' => false );
 		}
 		$puede = self::can_sign( get_current_user_id(), $id );
-		if ( $puede ) {
+
+
+		if ( $puede && ! isset( $_GET[ ApplicationProgress::ARG_RECEIPT ] ) ) {
 			foreach ( self::vendors() as $handle => $vendor ) {
 				wp_enqueue_script( $handle, $vendor['url'], array(), $vendor['ver'], true );
 			}
@@ -32598,8 +32614,8 @@ final class ReceiptSignature {
 			$datos = self::data( $id );
 			$error = SignedReceipt::why( SignedReceipt::refuse( $bytes, $datos['number'], $datos['fingerprint'], ApplicationFiles::max_bytes() ) );
 		}
-		if ( '' === $error && ! self::store( $id, $bytes, $user_id, $via ) ) {
-			$error = 'No se ha podido guardar el justificante firmado. Vuelva a intentarlo.';
+		if ( '' === $error ) {
+			$error = self::store( $id, $bytes, $user_id, $via );
 		}
 		if ( '' !== $error ) {
 			self::$rejected = $error;
@@ -32674,17 +32690,23 @@ final class ReceiptSignature {
 
 	private static function uploaded(): array {
 
-		$campo = isset( $_FILES[ self::FIELD_FILE ] ) && is_array( $_FILES[ self::FIELD_FILE ] ) ? $_FILES[ self::FIELD_FILE ] : array();
-		$error = (int) ( $campo['error'] ?? UPLOAD_ERR_NO_FILE );
-		$tmp   = is_string( $campo['tmp_name'] ?? null ) ? $campo['tmp_name'] : '';
-		if ( UPLOAD_ERR_INI_SIZE === $error || UPLOAD_ERR_FORM_SIZE === $error || (int) ( $campo['size'] ?? 0 ) > ApplicationFiles::max_bytes() ) {
-			return array( '', self::VIA_UPLOAD, SignedReceipt::why( 'too_big' ) );
-		}
-		if ( UPLOAD_ERR_OK !== $error || '' === $tmp || ! is_readable( $tmp ) ) {
+		$campo   = isset( $_FILES[ self::FIELD_FILE ] ) && is_array( $_FILES[ self::FIELD_FILE ] ) ? $_FILES[ self::FIELD_FILE ] : array();
+		$fichero = array(
+			'name'     => basename( sanitize_text_field( is_scalar( $campo['name'] ?? null ) ? (string) $campo['name'] : '' ) ),
+			'tmp_name' => is_string( $campo['tmp_name'] ?? null ) ? $campo['tmp_name'] : '',
+			'size'     => (int) ( $campo['size'] ?? 0 ),
+			'error'    => (int) ( $campo['error'] ?? UPLOAD_ERR_NO_FILE ),
+		);
+		if ( UPLOAD_ERR_NO_FILE === $fichero['error'] ) {
 			return array( '', self::VIA_UPLOAD, 'Elija el justificante firmado, en PDF, antes de subirlo.' );
 		}
 
-		$bytes = file_get_contents( $tmp );
+		$porque = ApplicationFiles::refuse( $fichero );
+		if ( '' !== $porque ) {
+			return array( '', self::VIA_UPLOAD, 'file_too_big' === $porque ? SignedReceipt::why( 'too_big' ) : ApplicationFiles::why( array( $porque ) ) );
+		}
+
+		$bytes = file_get_contents( $fichero['tmp_name'] );
 		return array( is_string( $bytes ) ? $bytes : '', self::VIA_UPLOAD, '' );
 	}
 
@@ -32700,10 +32722,12 @@ final class ReceiptSignature {
 
 
 
-	private static function store( int $application_id, string $bytes, int $user_id, string $via ): bool {
+
+
+	private static function store( int $application_id, string $bytes, int $user_id, string $via ): string {
 		$stored = ApplicationFiles::put( $bytes, 'pdf' );
 		if ( '' === $stored ) {
-			return false;
+			return 'No se ha podido guardar el justificante firmado. Vuelva a intentarlo.';
 		}
 		$firma = array(
 			'id'        => bin2hex( random_bytes( 16 ) ),
@@ -32718,9 +32742,9 @@ final class ReceiptSignature {
 		);
 		if ( ! add_post_meta( $application_id, ApplicationMetaKeys::SIGNED_RECEIPT, $firma, true ) ) {
 			ApplicationFiles::erase( $firma );
-			return false;
+			return 'El justificante de esta solicitud ya está firmado.';
 		}
-		return true;
+		return '';
 	}
 
 
@@ -39430,7 +39454,8 @@ body.prc-app .prc-btn-borrar {
 
 /* La firma del justificante en la pantalla de la solicitud (ADR-0049). */
 .prc-firma__botones { display: flex; flex-wrap: wrap; gap: 8px; }
-.prc-firma__botones[hidden] { display: none; }
+.prc-firma__botones[hidden],
+.prc-firma__botones [hidden] { display: none; }
 .prc-firma__aviso:empty { display: none; }
 .prc-firma__subida { margin-top: 16px; }
 ',

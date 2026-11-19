@@ -178,7 +178,7 @@ final class ApplicationProgressView {
 		}
 		$enlaces = array();
 		if ( ! empty( $p['people_missing'] ) ) {
-			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de personas</a>';
+			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de participantes</a>';
 		}
 		if ( '' !== (string) ( $p['receipt_url'] ?? '' ) ) {
 			$enlaces[] = '<a href="' . esc_url( (string) $p['receipt_url'] ) . '">Ver e imprimir el justificante</a>';

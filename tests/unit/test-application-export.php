@@ -1055,7 +1055,7 @@ class Test_Application_Export extends WP_UnitTestCase {
 		foreach ( ApplicationExport::group_labels( $procedimiento ) as $rotulo ) {
 			$this->assertStringContainsString( '<legend>' . esc_html( $rotulo ) . '</legend>', $html );
 		}
-		$this->assertStringNotContainsString( 'Personas de la solicitud', $html, 'sin lista, el diálogo no la ofrece' );
+		$this->assertStringNotContainsString( 'Participantes de la solicitud', $html, 'sin lista, el diálogo no la ofrece' );
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_EXPORT_ALL . '"', $html );
 		$this->assertMatchesRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="code"[^>]*checked/', $html );
 		$this->assertDoesNotMatchRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_EXPORT_COLUMNS, '/' ) . '\[\]" value="q3"[^>]*checked/', $html );

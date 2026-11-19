@@ -378,7 +378,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		$this->assertSame( array( true, true, false, false ), array_column( $lista, 'blocks' ), 'la resolución avisa y no bloquea' );
 		$this->assertSame( 'Falta el curso: elíjalo en «Datos».', $lista[0]['text'] );
 		$this->assertStringContainsString( 'nadie podría solicitar', $lista[1]['text'] );
-		$this->assertSame( 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.', $lista[2]['text'] );
+		$this->assertSame( 'Sin campos adicionales: la solicitud pedirá solo los datos de siempre.', $lista[2]['text'] );
 		$this->assertStringContainsString( 'Sin enlace a la resolución', $lista[3]['text'] );
 		$this->assertStringContainsString( 'puede publicar igual', $lista[3]['text'] );
 
@@ -410,7 +410,7 @@ class Test_Procedure_Copy extends WP_UnitTestCase {
 		$this->assertSame( array( 'course', 'window', 'questions', 'delivery', 'resolution' ), array_column( $lista, 'key' ) );
 		$this->assertSame( 'Curso elegido.', $lista[0]['text'] );
 		$this->assertSame( 'Plazo de solicitud: del 01-04-2026 al 15-04-2026.', $lista[1]['text'] );
-		$this->assertSame( 'Preguntas propias: 2.', $lista[2]['text'] );
+		$this->assertSame( 'Campos adicionales: 2.', $lista[2]['text'] );
 		$this->assertFalse( $lista[3]['ok'] );
 		$this->assertTrue( $lista[3]['blocks'] );
 		$this->assertStringContainsString( '«Memoria final»', $lista[3]['text'] );

@@ -769,6 +769,9 @@ final class Applications {
 			'state'             => (string) ( ApplicationMetaKeys::review_states()[ $estado ] ?? '' ),
 			'note'              => (string) $meta[ ApplicationMetaKeys::REVIEW_NOTE ],
 			'internal_note'     => (string) $meta[ ApplicationMetaKeys::INTERNAL_NOTE ],
+			// «Pendiente de firma» o «Firmado el …», donde se pide (ADR-0049).
+			'signature'         => ReceiptSignature::label( (int) $application->ID ),
+			'signature_state'   => ReceiptSignature::state( (int) $application->ID ),
 		);
 		$fila += CentreColumns::cells( (string) $meta[ ApplicationMetaKeys::CENTRE_CODE ], $catalogue );
 		// Una pregunta borrada deja de pintarse y su respuesta se queda en la

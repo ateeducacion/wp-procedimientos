@@ -321,6 +321,39 @@ trait Prc_Fixtures {
 	}
 
 	/**
+	 * Un PDF firmado sintético: una página con esas líneas y una revisión
+	 * incremental con su diccionario de firma, como la que añade AutoFirma.
+	 *
+	 * La firma no es de verdad —`/Contents` son ceros—, pero el `/ByteRange`
+	 * sí: cubre el fichero entero salvo el hueco de `/Contents`. Lo que vaya
+	 * en `$tail` se añade después de firmar, fuera de lo cubierto.
+	 *
+	 * @param string[] $lines Text lines of the page.
+	 * @param string   $tail  Bytes appended after signing.
+	 * @param int      $sigs  How many signature revisions.
+	 * @return string PDF bytes.
+	 */
+	protected function signed_pdf( array $lines, string $tail = '', int $sigs = 1 ): string {
+		$texto = '';
+		foreach ( $lines as $i => $linea ) {
+			$texto .= 'BT /F1 10 Tf 40 ' . ( 800 - 14 * $i ) . ' Td (' . $linea . ") Tj ET\n";
+		}
+		$pdf = "%PDF-1.3\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n"
+			. "3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length " . strlen( $texto ) . " >>\nstream\n" . $texto . "endstream\nendobj\n"
+			. "xref\n0 5\ntrailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
+		for ( $n = 0; $n < $sigs; $n++ ) {
+			$hueco = '<' . str_repeat( '0', 64 ) . '>';
+			$falso = '/ByteRange [0 0000000000 0000000000 0000000000]';
+			$pdf  .= ( 5 + $n ) . " 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached " . $falso . ' /Contents ' . $hueco . " >>\nendobj\n"
+				. "trailer\n<< /Size " . ( 6 + $n ) . " /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
+			$desde = strrpos( $pdf, $hueco );
+			$hasta = $desde + strlen( $hueco );
+			$pdf   = substr_replace( $pdf, sprintf( '/ByteRange [0 %010d %010d %010d]', $desde, $hasta, strlen( $pdf ) - $hasta ), (int) strrpos( $pdf, $falso ), strlen( $falso ) );
+		}
+		return $pdf . $tail;
+	}
+
+	/**
 	 * Que un test no herede la petición del anterior.
 	 */
 	public function tear_down() {

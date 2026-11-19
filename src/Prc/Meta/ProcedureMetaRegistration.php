@@ -179,6 +179,10 @@ final class ProcedureMetaRegistration {
 				'sanitize' => array( self::class, 'sanitize_bool' ),
 				'auth'     => array( self::class, 'auth_observe' ),
 			),
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => array(
+				'type'     => 'boolean',
+				'sanitize' => array( self::class, 'sanitize_bool' ),
+			),
 		);
 	}
 

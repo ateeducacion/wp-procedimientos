@@ -10,6 +10,7 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\PublicFront\Shell;
@@ -18,7 +19,8 @@ use Prc\PublicFront\Shell;
  * Solo pinta: no lee la petición, no consulta, no decide.
  *
  * Lo que rara vez se toca, en secciones con su ancla y su formulario: qué
- * centros pueden solicitar, «Acceso de consulta» y «Código» (#80). Cada una
+ * centros pueden solicitar, «Firma electrónica» (ADR-0049), «Acceso de
+ * consulta» y «Código» (#80). Cada una
  * guarda por su cuenta, con su operación de siempre.
  */
 final class AdvancedPanelView {
@@ -31,9 +33,10 @@ final class AdvancedPanelView {
 	 */
 	public static function html( array $m ): string {
 		$secciones = array(
-			'centres' => array( self::class, 'centres_section' ),
-			'observe' => array( self::class, 'observe_section' ),
-			'code'    => array( self::class, 'code_section' ),
+			'centres'   => array( self::class, 'centres_section' ),
+			'signature' => array( self::class, 'signature_section' ),
+			'observe'   => array( self::class, 'observe_section' ),
+			'code'      => array( self::class, 'code_section' ),
 		);
 		$out       = '';
 		foreach ( (array) $m['advanced'] as $seccion ) {
@@ -70,6 +73,44 @@ final class AdvancedPanelView {
 				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
 					<?php echo self::centre_fields( $m, (array) $m['values'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				</fieldset>
+			</form>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * «Firma electrónica»: whether the procedure asks for the signed receipt (ADR-0049).
+	 *
+	 * La guarda quien edita el procedimiento, en cualquier estado; quien no,
+	 * la lee apagada.
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function signature_section( array $m ): string {
+		$op = AdvancedPanel::OP_SIGNATURE;
+		ob_start();
+		?>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
+			<h2 class="prc-seccion__titulo" id="prc-avanzado-firma-titulo">Firma electrónica</h2>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<fieldset class="prc-seccion-campos"<?php disabled( empty( $m['can_edit'] ) ); ?>>
+					<div class="prc-seccion__cuerpo">
+						<div class="prc-campo prc-campo--completo">
+							<div class="prc-opcion">
+								<input type="checkbox" id="prc-signature-required" name="<?php echo esc_attr( ProcedureMetaKeys::SIGNATURE_REQUIRED ); ?>" value="1" aria-describedby="prc-signature-required-ayuda"
+									<?php checked( '1' === (string) ( $m['values'][ ProcedureMetaKeys::SIGNATURE_REQUIRED ] ?? '' ) ); ?> />
+								<label for="prc-signature-required">Pedir la firma electrónica del justificante (AutoFirma)</label>
+							</div>
+							<p class="prc-campo__ayuda" id="prc-signature-required-ayuda">Para proyectos europeos y otros procedimientos que exigen la solicitud firmada. Quien presenta la solicitud firma su justificante en PDF con AutoFirma, o lo descarga, lo firma con otra aplicación y lo sube. Sin firmar, la solicitud se presenta igual y queda «Pendiente de firma». Se comprueba que el PDF es el justificante de esa solicitud y que lleva una firma, pero no la validez del certificado.</p>
+						</div>
+					</div>
+					<?php echo PanelParts::submit( 'Guardar la firma electrónica' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</fieldset>
 			</form>
 		</section>

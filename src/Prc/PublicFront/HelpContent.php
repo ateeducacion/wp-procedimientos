@@ -267,6 +267,21 @@ final class HelpContent {
 				),
 			),
 			array(
+				'id'    => 'firmar-el-justificante',
+				'level' => 2,
+				'title' => 'Firme el justificante si el procedimiento lo pide',
+				'html'  => '<p>Algunos procedimientos —proyectos europeos y similares— piden el justificante <strong>firmado electrónicamente</strong>. Su solicitud ya cuenta como presentada; hasta que lo firme, dirá <strong>«Pendiente de firma»</strong>. En la sección <strong>«Firma electrónica del justificante»</strong>, al final de la solicitud, tiene dos caminos:</p>'
+					. '<ul><li><strong>«Firmar justificante con AutoFirma»</strong>: necesita <strong>AutoFirma</strong> instalada en su equipo. Se abre AutoFirma, elija su certificado y espere: el justificante firmado se guarda solo. No cierre la página mientras tanto.</li>'
+					. '<li><strong>«Descargar justificante en PDF»</strong>: fírmelo con la aplicación que use habitualmente, sin cambiar nada más, y súbalo con <strong>«Subir el justificante firmado»</strong>.</li></ul>'
+					. '<p>Se comprueba que el PDF es el justificante de su solicitud y que lleva una sola firma. Si después de descargarlo cambian los datos de la solicitud, descárguelo de nuevo. Una vez firmado, verá <strong>«Firmado el …»</strong> y podrá descargarlo.</p>',
+				'shots' => array(
+					array(
+						'caption' => 'sección «Firma electrónica del justificante» con los dos botones y la subida',
+						'image'   => '',
+					),
+				),
+			),
+			array(
 				'id'    => 'retirar-la-solicitud',
 				'level' => 2,
 				'title' => 'Retire la solicitud si ya no quiere participar',
@@ -325,7 +340,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -404,6 +419,7 @@ final class HelpContent {
 				'title' => 'Avanzado',
 				'html'  => '<p>Lo que rara vez se toca, en secciones que se guardan cada una con su botón:</p>'
 					. '<ul><li><strong>Qué centros pueden solicitar</strong>, solo en los procedimientos para centros: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado. Pulse <strong>«Guardar qué centros pueden solicitar»</strong>. Se cierra con el resto de «Datos» cuando el estado del procedimiento ya no deja cambiarlo.</li>'
+					. '<li><strong>Firma electrónica</strong>: marque <strong>«Pedir la firma electrónica del justificante (AutoFirma)»</strong> si el procedimiento exige la solicitud firmada. Quien presenta firma el justificante en PDF con AutoFirma, o lo firma con otra aplicación y lo sube. Sin firmar, la solicitud se presenta igual y queda <strong>«Pendiente de firma»</strong>; en «Solicitudes» lo verá en cada fila, con el filtro <strong>«Solo las pendientes de firma»</strong> y la descarga del firmado. Se comprueba que es el justificante de esa solicitud y que lleva una firma, pero no la validez del certificado.</li>'
 					. '<li><strong>Acceso de consulta</strong>: solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</li>'
 					. '<li><strong>Código</strong>: estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</li></ul>',
 				'shots' => array(

@@ -456,6 +456,10 @@ html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
 .prc-incompleta__titulo { font-weight: 700; }
 .prc-incompleta__motivos { margin: 0; padding-left: 1.1em; }
 
+/* La firma del justificante en la tabla y en la revisión (ADR-0049). */
+.prc-firma-estado { display: block; margin: 4px 0 0; font-size: var(--prc-t-menudo); font-weight: 700; color: var(--prc-c-tabla); }
+.prc-firma-estado--firmado { display: inline; }
+
 .prc-paginacion__lista { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
 .prc-paginacion__enlace,
 .prc-paginacion__actual,

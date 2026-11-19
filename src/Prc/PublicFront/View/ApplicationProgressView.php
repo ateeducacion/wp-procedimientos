@@ -10,6 +10,7 @@ namespace Prc\PublicFront\View;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\Shell;
 
 /**
@@ -126,6 +127,9 @@ final class ApplicationProgressView {
 				<span class="prc-solicitud-estado__estado">Su solicitud: <?php echo esc_html( $rotulo ); ?></span>
 				<?php if ( array() !== (array) ( $m['progress'] ?? array() ) ) : ?>
 					<?php echo self::status( (array) $m['progress'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+					<?php if ( '' !== (string) ( $m['signature']['label'] ?? '' ) ) : ?>
+						<span class="prc-solicitud-estado__firma"><a href="<?php echo esc_url( '#' . ReceiptSignature::ANCHOR ); ?>"><?php echo esc_html( (string) $m['signature']['label'] ); ?></a></span>
+					<?php endif; ?>
 				<?php else : ?>
 					<span class="prc-solicitud-estado__fecha"><?php echo esc_html( 'Presentada el ' . (string) $s['date'] . '.' ); ?></span>
 				<?php endif; ?>
@@ -176,6 +180,7 @@ final class ApplicationProgressView {
 		if ( ! empty( $p['show_complete'] ) ) {
 			$out .= '<span class="prc-solicitud-estado__completa">' . esc_html( self::completeness( $p ) ) . '</span>';
 		}
+
 		$enlaces = array();
 		if ( ! empty( $p['people_missing'] ) ) {
 			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de participantes</a>';
@@ -237,6 +242,7 @@ final class ApplicationProgressView {
 			'Última modificación'          => (string) $p['modified'],
 			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
 			'Estado'                       => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'Firma electrónica'            => (string) ( $m['signature']['label'] ?? '' ),
 		);
 
 		ob_start();

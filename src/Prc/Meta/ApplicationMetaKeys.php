@@ -109,6 +109,14 @@ final class ApplicationMetaKeys {
 	 */
 	public const ADOPTED_AT = 'prc_adopted_at';
 
+	/**
+	 * El justificante firmado (ADR-0049): el descriptor de su fichero en el
+	 * almacén privado (ADR-0028), cuándo, quién y por qué camino. Sin ella,
+	 * en un procedimiento que pide la firma, la solicitud está «pendiente de
+	 * firma».
+	 */
+	public const SIGNED_RECEIPT = 'prc_signed_receipt';
+
 	public const POSITION_HEAD            = 'head';
 	public const POSITION_DEPUTY_HEAD     = 'deputy_head';
 	public const POSITION_HEAD_OF_STUDIES = 'head_of_studies';
@@ -142,6 +150,7 @@ final class ApplicationMetaKeys {
 			self::INTERNAL_NOTE,
 			self::CREATED_BY,
 			self::ADOPTED_AT,
+			self::SIGNED_RECEIPT,
 		);
 	}
 

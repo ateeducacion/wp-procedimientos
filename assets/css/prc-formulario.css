@@ -415,3 +415,9 @@
   .prc-justificante__tabla th,
   .prc-justificante__tabla td { border-color: #000; }
 }
+
+/* La firma del justificante en la pantalla de la solicitud (ADR-0049). */
+.prc-firma__botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.prc-firma__botones[hidden] { display: none; }
+.prc-firma__aviso:empty { display: none; }
+.prc-firma__subida { margin-top: 16px; }

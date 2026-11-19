@@ -203,6 +203,7 @@ final class ProcedureEditor {
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
 		self::OP_CENTRES,
+		AdvancedPanel::OP_SIGNATURE,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -247,6 +248,7 @@ final class ProcedureEditor {
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'centros'      => 'Guardado qué centros pueden solicitar.',
+		'firma'        => 'Firma electrónica guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -453,14 +455,12 @@ final class ProcedureEditor {
 			Shell::leave( self::url( $procedure_id, self::PANEL_ADVANCED, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
-		// Lo que se guarda en cualquier estado mientras el procedimiento se
-		// pueda editar: el cierre de las entregas, la lista de
-		// personas, que tiene su propia ventana (ADR-0041), y la consulta por
-		// zona (ADR-0043).
+		// En cualquier estado mientras se pueda editar: entregas, personas (ADR-0041), consulta (ADR-0043) y firma (ADR-0049).
 		$sueltas = array(
-			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
-			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
-			self::OP_OBSERVE        => array( self::class, 'save_observe' ),
+			self::OP_DELIVERY_DATES     => array( self::class, 'save_delivery_dates' ),
+			self::OP_PEOPLE_SPEC        => array( self::class, 'save_people_spec' ),
+			self::OP_OBSERVE            => array( self::class, 'save_observe' ),
+			AdvancedPanel::OP_SIGNATURE => array( AdvancedPanel::class, 'save_signature' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -1761,6 +1761,7 @@ final class ProcedureEditor {
 			ProcedureMetaKeys::COMMITMENTS          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
 			ProcedureMetaKeys::CUSTOM_CSS           => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_CSS ),
 			ProcedureMetaKeys::CUSTOM_JS            => self::meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS ),
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => ReceiptSignature::required( $procedure_id ) ? '1' : '',
 			ProcedureMetaKeys::RESOLUTION_URL       => self::meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => self::meta( $procedure_id, ProcedureMetaKeys::PROVISIONAL_LIST_URL ),
 			ProcedureMetaKeys::FINAL_LIST_URL       => self::meta( $procedure_id, ProcedureMetaKeys::FINAL_LIST_URL ),

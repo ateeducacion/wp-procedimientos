@@ -97,6 +97,8 @@ final class ApplyFormView {
 			self::deliveries( $m );
 			echo '</div>';
 		}
+		// La firma del justificante, si el procedimiento la pide (ADR-0049).
+		echo ReceiptSignatureView::section( (array) ( $m['signature'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		// Con el formulario cerrado, la lista de personas o una entrega siguen
 		// recogiendo datos: el aviso va detrás de ellas.
 		echo self::privacy( PrivacyNotice::after_sections( $m ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy().

@@ -201,6 +201,13 @@ final class ProcedureMetaKeys {
 	 */
 	public const OBSERVER_NOTIFY = 'prc_observer_notify';
 
+	/**
+	 * Si el procedimiento pide la firma electrónica del justificante
+	 * (ADR-0049). Sin firmar, la solicitud se presenta igual y queda
+	 * «pendiente de firma».
+	 */
+	public const SIGNATURE_REQUIRED = 'prc_signature_required';
+
 	public const STATE_DRAFT     = 'draft';
 	public const STATE_ARCHIVED  = 'archived';
 	public const STATE_RESOLVED  = 'resolved';
@@ -266,6 +273,7 @@ final class ProcedureMetaKeys {
 			self::OBSERVER_FILES,
 			self::OBSERVER_EXPORT,
 			self::OBSERVER_NOTIFY,
+			self::SIGNATURE_REQUIRED,
 		);
 	}
 

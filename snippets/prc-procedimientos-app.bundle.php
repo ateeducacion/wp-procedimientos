@@ -24399,15 +24399,15 @@ final class AdvancedPanelView {
 		?>
 		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
+			<?php if ( '' !== $motivo ) : ?>
+				<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
+			<?php endif; ?>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' );?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
-					<?php if ( '' !== $motivo ) : ?>
-						<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
-					<?php endif; ?>
 					<?php echo self::centre_fields( $m, (array) $m['values'] );?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' );?>
 				</fieldset>
@@ -25127,7 +25127,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Marque al menos una. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué.</p>
-					<?php echo self::centre_warning( $m, 'ownership' );?>
+					<?php echo self::centre_warning( $m, 'ownership' ) . self::centre_warning( $m, 'catalogue' );?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -26370,9 +26370,6 @@ final class ProcedureEditor {
 			self::PANEL_ADVANCED     => 'Avanzado',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 		);
-		if ( array() === AdvancedPanel::sections( $procedure_id ) ) {
-			unset( $rotulos[ self::PANEL_ADVANCED ] );
-		}
 		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
@@ -28150,16 +28147,20 @@ final class AdvancedPanel {
 
 
 
+
 	public static function redirect_old_panel(): void {
 
 		$pedido = sanitize_key( wp_unslash( (string) ( $_GET[ ProcedureEditor::ARG_PANEL ] ?? '' ) ) );
-		if ( ! isset( ProcedureEditor::OLD_PANELS[ $pedido ] ) || 'editor' !== Shell::current_section() ) {
+
+		if ( ! empty( $_POST ) || ! isset( ProcedureEditor::OLD_PANELS[ $pedido ] ) || 'editor' !== Shell::current_section() ) {
 			return;
 		}
 		list( $panel, $seccion ) = ProcedureEditor::OLD_PANELS[ $pedido ];
 
 		$args = array_map( 'sanitize_text_field', array_filter( wp_unslash( $_GET ), 'is_string' ) );
 		unset( $args[ ProcedureEditor::ARG_PANEL ] );
+
+		$args = array_map( 'rawurlencode', $args );
 		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . '#' . $seccion );
 	}
 

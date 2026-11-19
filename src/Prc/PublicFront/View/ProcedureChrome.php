@@ -99,6 +99,33 @@ final class ProcedureChrome {
 	}
 
 	/**
+	 * The footer links of the chrome that can actually be painted.
+	 *
+	 * Un enlace sin rótulo, sin dirección o con una dirección que `esc_url()`
+	 * tira —un `javascript:`, por ejemplo— no sale en ningún sitio: ni en el
+	 * menú de la ayuda, ni en el pie, ni en el sub-pie.
+	 *
+	 * @return array<int, array{label: string, url: string}>
+	 */
+	public static function footer_links(): array {
+		$enlaces = array();
+		foreach ( (array) self::chrome()['footer_links'] as $enlace ) {
+			if ( ! is_array( $enlace ) ) {
+				continue;
+			}
+			$label = trim( (string) ( $enlace['label'] ?? '' ) );
+			$url   = trim( (string) ( $enlace['url'] ?? '' ) );
+			if ( '' !== $label && '' !== $url && '' !== esc_url( $url ) ) {
+				$enlaces[] = array(
+					'label' => $label,
+					'url'   => $url,
+				);
+			}
+		}
+		return $enlaces;
+	}
+
+	/**
 	 * The whole ficha, from its model.
 	 *
 	 * La cabecera es de dos columnas —57,8 % de título, resolución y promotor;

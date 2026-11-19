@@ -9,6 +9,7 @@ use Prc\Access\ProcedureAccess;
 use Prc\App;
 use Prc\PublicFront\ExitSignal;
 use Prc\PublicFront\Shell;
+use Prc\PublicFront\View\ProcedureChrome;
 
 /**
  * El armazón que comparten todas las pantallas.
@@ -239,34 +240,127 @@ class Test_Shell extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Con el filtro en «no», el armazón se aparta y solo queda la pantalla.
+	 * With the chrome off, only the screen and the help sub-footer remain; with
+	 * no help page and nothing configured, only the screen.
 	 */
 	public function test_the_chrome_can_be_switched_off() {
 		$this->acting_as( $this->administrator() );
 		add_filter( 'prc_show_chrome', '__return_false' );
 
+		$html = Shell::render( 'Procedimientos', 'Algo', '<p>cuerpo</p>' );
+		$this->assertStringStartsWith( '<div class="prc-hoja"><p>cuerpo</p></div>', $html, 'la pantalla va primero' );
+		$this->assertStringContainsString( '<div class="prc-subpie">', $html, 'y debajo, el sub-pie' );
+		$this->assertStringNotContainsString( 'prc-top', $html, 'la cabecera sigue siendo del tema' );
+		$this->assertStringNotContainsString( 'class="prc-pie"', $html, 'y el pie también' );
+
+		add_filter(
+			'prc_page_slug',
+			static function ( string $slug, string $seccion ): string {
+				return 'help' === $seccion ? 'una-pagina-que-no-existe' : $slug;
+			},
+			10,
+			2
+		);
 		$this->assertSame( '<div class="prc-hoja"><p>cuerpo</p></div>', Shell::render( 'Procedimientos', 'Algo', '<p>cuerpo</p>' ) );
 	}
 
 	/**
-	 * Cuando el pie lo pinta el tema, el crédito y la ayuda salen en un sub-pie
-	 * debajo de la pantalla, encima del pie del tema; sin crédito configurado
-	 * no se pinta nada (ADR-0009).
+	 * Only the application's own pages are marked, and `prc-chrome` only when
+	 * the application paints the header and footer: otherwise the theme's stay.
 	 */
-	public function test_the_subfooter_shows_the_credit_and_the_help_when_the_theme_paints_the_footer() {
+	public function test_body_class_marks_the_chrome_only_when_it_is_painted() {
+		$this->acting_as( $this->administrator() );
+		$this->go_to( (string) get_permalink( get_page_by_path( Shell::SLUGS['home'] ) ) );
+
+		$clases = Shell::body_class( array() );
+		$this->assertContains( 'prc-app', $clases );
+		$this->assertContains( 'prc-chrome', $clases );
+
+		add_filter( 'prc_show_chrome', '__return_false' );
+		$clases = Shell::body_class( array() );
+		$this->assertContains( 'prc-app', $clases );
+		$this->assertNotContains( 'prc-chrome', $clases, 'sin armazón, la cabecera y el pie del tema se quedan' );
+	}
+
+	/**
+	 * When the theme paints the footer, «Ayuda» always goes in a sub-footer
+	 * under the screen (ADR-0045); the credit and the footer links, only when
+	 * configured (ADR-0009).
+	 */
+	public function test_the_subfooter_always_offers_the_help() {
 		$this->acting_as( $this->administrator() );
 		add_filter( 'prc_show_chrome', '__return_false' );
+		$ayuda = Shell::url( 'help' );
+		$this->assertNotSame( '', $ayuda, 'la página de la ayuda existe' );
+
+		$html = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		$this->assertStringContainsString( 'href="' . esc_url( $ayuda ) . '"', $html, 'sin configurar nada, la ayuda' );
+		$this->assertStringContainsString( '> Ayuda</a>', $html );
+		$this->assertStringNotContainsString( 'prc-subpie-credito', $html, 'sin crédito no hay hueco vacío' );
+	}
+
+	/**
+	 * Credit alone, links alone, and both: each is painted only when present.
+	 */
+	public function test_the_subfooter_paints_the_credit_and_the_links_it_is_given() {
+		$this->acting_as( $this->administrator() );
+		add_filter( 'prc_show_chrome', '__return_false' );
+		$puesto = array( 'credit' => 'Equipo de ejemplo' );
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ) use ( &$puesto ): array {
+				return array_merge( $chrome, $puesto );
+			}
+		);
+
+		$html = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		$this->assertStringContainsString( '<span class="prc-subpie-credito">Equipo de ejemplo</span>', $html, 'solo crédito' );
+		$this->assertStringNotContainsString( 'rel="noopener"', $html, 'y ningún enlace del despliegue' );
+
+		$puesto = array(
+			'footer_links' => array(
+				array(
+					'label' => 'Incidencias',
+					'url'   => 'https://example.org/incidencias',
+				),
+			),
+		);
+		$html   = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		$this->assertStringNotContainsString( 'prc-subpie-credito', $html, 'solo enlaces' );
+		$this->assertStringContainsString( 'href="https://example.org/incidencias" rel="noopener">Incidencias</a>', $html );
+		$this->assertStringContainsString( '> Ayuda</a>', $html );
+	}
+
+	/**
+	 * The credit and the links are escaped, and a link without label, without
+	 * URL or with a URL `esc_url()` throws away is not painted anywhere.
+	 */
+	public function test_footer_links_drop_what_is_incomplete_and_escape_the_rest() {
+		$this->acting_as( $this->administrator() );
 		add_filter(
 			'prc_chrome',
 			static function ( array $chrome ): array {
 				return array_merge(
 					$chrome,
 					array(
-						'credit'       => 'Equipo de ejemplo',
+						'credit'       => '<b>Equipo</b>',
 						'footer_links' => array(
+							array( 'label' => 'Solo rótulo' ),
 							array(
-								'label' => 'Incidencias',
-								'url'   => 'https://example.org/incidencias',
+								'label' => '',
+								'url'   => 'https://example.org/sin-rotulo',
+							),
+							array(
+								'label' => 'Sin dirección',
+								'url'   => '',
+							),
+							array(
+								'label' => 'Malicioso',
+								'url'   => 'javascript:alert(1)',
+							),
+							array(
+								'label' => '<i>Incidencias</i>',
+								'url'   => 'https://example.org/a?b="c"',
 							),
 						),
 					)
@@ -274,45 +368,31 @@ class Test_Shell extends WP_UnitTestCase {
 			}
 		);
 
-		$html = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
-
-		$this->assertStringStartsWith( '<div class="prc-hoja"><p>cuerpo</p></div>', $html, 'la pantalla va primero' );
-		$this->assertStringContainsString( 'prc-subpie', $html );
-		$this->assertStringContainsString( 'Equipo de ejemplo', $html );
-		$this->assertStringContainsString( esc_url( Shell::url( 'help' ) ), $html, 'enlaza a la ayuda' );
-		$this->assertStringContainsString( 'example.org/incidencias', $html );
-		$this->assertStringNotContainsString( 'prc-top', $html, 'la cabecera sigue siendo del tema' );
-		$this->assertStringNotContainsString( 'class="prc-pie"', $html, 'y el pie también' );
-	}
-
-	/**
-	 * Sin crédito, basta con que haya enlaces configurados; un enlace a medias
-	 * no cuenta y no pinta la franja.
-	 */
-	public function test_the_subfooter_needs_a_credit_or_a_whole_link() {
-		$this->acting_as( $this->administrator() );
-		add_filter( 'prc_show_chrome', '__return_false' );
-		$links = array( array( 'label' => 'Solo rótulo' ) );
-		add_filter(
-			'prc_chrome',
-			static function ( array $chrome ) use ( &$links ): array {
-				$chrome['footer_links'] = $links;
-				return $chrome;
-			}
-		);
-
-		$this->assertStringNotContainsString( 'prc-subpie', Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' ) );
-
-		$links = array(
+		$this->assertSame(
 			array(
-				'label' => 'Incidencias',
-				'url'   => 'https://example.org/incidencias',
+				array(
+					'label' => '<i>Incidencias</i>',
+					'url'   => 'https://example.org/a?b="c"',
+				),
 			),
+			ProcedureChrome::footer_links()
 		);
-		$html  = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
-		$this->assertStringContainsString( 'prc-subpie', $html );
-		$this->assertStringContainsString( 'example.org/incidencias', $html );
-		$this->assertStringContainsString( '> Ayuda</a>', $html );
+
+		$con = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		add_filter( 'prc_show_chrome', '__return_false' );
+		$sin = Shell::render( 'Procedimientos', '', '<p>cuerpo</p>' );
+		foreach ( array( $con, $sin ) as $html ) {
+			$this->assertStringNotContainsString( 'javascript:', $html );
+			$this->assertStringNotContainsString( 'Malicioso', $html );
+			$this->assertStringNotContainsString( 'sin-rotulo', $html );
+			$this->assertStringNotContainsString( 'Sin dirección', $html );
+			$this->assertStringNotContainsString( 'Solo rótulo', $html );
+			$this->assertStringNotContainsString( '<i>Incidencias</i>', $html );
+			$this->assertStringContainsString( '&lt;i&gt;Incidencias&lt;/i&gt;', $html );
+			$this->assertStringNotContainsString( 'b="c"', $html );
+			$this->assertStringNotContainsString( '<b>Equipo</b>', $html );
+			$this->assertStringContainsString( '&lt;b&gt;Equipo&lt;/b&gt;', $html );
+		}
 	}
 
 	/**

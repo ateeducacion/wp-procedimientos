@@ -198,9 +198,15 @@ administración sin tocar código. Los motivos y el saneado, en la adenda del
 «Ayuda» está siempre en el menú, pero con `prc_show_chrome` en «no» el menú no
 sale, y con él se iban el enlace a la ayuda y el `credit` del pie. Ahora
 `Shell::render()` añade en ese caso una franja debajo de la pantalla —encima
-del pie del tema— con el crédito, «Ayuda» y los `footer_links`
-(`Shell::subfooter()`). Solo se pinta si `prc_chrome` trae un `credit` o
-`footer_links`: sin configurar, quien apaga el armazón sigue recibiendo solo la
-pantalla, como antes (ADR-0009). A diferencia del pie, no se esconde en el
-móvil: allí es el único camino a la ayuda. Contra: una instalación que apague
-el armazón y no configure nada se queda sin enlace a la ayuda.
+del pie del tema— con «Ayuda» (`Shell::subfooter()`). «Ayuda» sale siempre,
+como en el menú; el `credit` y los `footer_links` de `prc_chrome`, solo si
+están configurados (ADR-0009). Un enlace sin rótulo, sin dirección o con una
+dirección que `esc_url()` descarta no sale ni aquí, ni en el menú, ni en el pie
+(`ProcedureChrome::footer_links()`). A diferencia del pie, no se esconde en el
+móvil: allí es el único camino a la ayuda.
+
+Con el armazón apagado, la cabecera y el pie del tema tienen que verse: la
+hoja de estilos solo los esconde cuando el `body` lleva `prc-chrome`, que
+`Shell::body_class()` pone únicamente si el armazón está encendido. Contra: un
+despliegue que ya apagaba el armazón y tenía `footer_links` los ve ahora en el
+sub-pie, aunque su tema ya los pinte en su pie.

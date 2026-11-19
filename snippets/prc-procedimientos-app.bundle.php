@@ -11168,11 +11168,36 @@ final class Shell {
 
 
 
+
+
+
+
 	public static function body_class( array $classes ): array {
 		if ( self::is_app_page() ) {
 			$classes[] = 'prc-app';
+			if ( self::shows_chrome() ) {
+				$classes[] = 'prc-chrome';
+			}
 		}
 		return $classes;
+	}
+
+
+
+
+
+
+	private static function shows_chrome(): bool {
+
+
+
+
+
+
+
+
+
+		return (bool) apply_filters( 'prc_show_chrome', true );
 	}
 
 
@@ -11461,13 +11486,8 @@ final class Shell {
 
 
 	public static function render( string $title, string $subtitle, string $body, bool $hero = false ): string {
-
-
-
-
-
-		if ( ! apply_filters( 'prc_show_chrome', true ) ) {
-			return '<div class="prc-hoja">' . $body . '</div>';
+		if ( ! self::shows_chrome() ) {
+			return '<div class="prc-hoja">' . $body . '</div>' . self::subfooter();
 		}
 
 		ob_start();
@@ -11661,10 +11681,8 @@ final class Shell {
 		$guia   = self::url( 'help' );
 		$dentro = 'help' === $activa;
 		$ayuda  = self::entry( 'Ayuda', $guia, $dentro );
-		foreach ( (array) ProcedureChrome::chrome()['footer_links'] as $enlace ) {
-			if ( isset( $enlace['label'], $enlace['url'] ) ) {
-				$ayuda['items'][] = self::entry( (string) $enlace['label'], (string) $enlace['url'] );
-			}
+		foreach ( ProcedureChrome::footer_links() as $enlace ) {
+			$ayuda['items'][] = self::entry( $enlace['label'], $enlace['url'] );
 		}
 		if ( array() !== $ayuda['items'] && '' !== $guia ) {
 			array_unshift( $ayuda['items'], self::entry( 'Guías y preguntas frecuentes', $guia, $dentro ) );
@@ -11740,10 +11758,49 @@ final class Shell {
 				<?php endif; ?>
 			</span>
 			<span class="prc-pie-enlaces">
-				<?php foreach ( (array) $chrome['footer_links'] as $enlace ) : ?>
-					<?php if ( isset( $enlace['label'], $enlace['url'] ) ) : ?>
-						<a href="<?php echo esc_url( (string) $enlace['url'] ); ?>" rel="noopener"><?php echo esc_html( (string) $enlace['label'] ); ?></a>
-					<?php endif; ?>
+				<?php foreach ( ProcedureChrome::footer_links() as $enlace ) : ?>
+					<a href="<?php echo esc_url( $enlace['url'] ); ?>" rel="noopener"><?php echo esc_html( $enlace['label'] ); ?></a>
+				<?php endforeach; ?>
+			</span>
+		</div></div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+	private static function subfooter(): string {
+
+
+
+
+
+		$credit = (string) ProcedureChrome::chrome()['credit'];
+		$links  = ProcedureChrome::footer_links();
+		$help   = self::url( 'help' );
+		if ( '' === $help && '' === $credit && array() === $links ) {
+			return '';
+		}
+		$current = 'help' === self::current_section() ? ' aria-current="page"' : '';
+
+		ob_start();
+		?>
+		<div class="prc-subpie"><div>
+			<?php if ( '' !== $credit ) : ?>
+				<span class="prc-subpie-credito"><?php echo esc_html( $credit ); ?></span>
+			<?php endif; ?>
+			<span class="prc-subpie-enlaces">
+				<?php if ( '' !== $help ) : ?>
+					<a href="<?php echo esc_url( $help ); ?>"<?php echo $current;?>><?php echo self::icon( 'ayuda' );?> Ayuda</a>
+				<?php endif; ?>
+				<?php foreach ( $links as $link ) : ?>
+					<a href="<?php echo esc_url( $link['url'] ); ?>" rel="noopener"><?php echo esc_html( $link['label'] ); ?></a>
 				<?php endforeach; ?>
 			</span>
 		</div></div>
@@ -20567,6 +20624,33 @@ final class ProcedureChrome {
 		$puesto = apply_filters( self::HOOK, $defecto );
 
 		return is_array( $puesto ) ? array_merge( $defecto, $puesto ) : $defecto;
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function footer_links(): array {
+		$enlaces = array();
+		foreach ( (array) self::chrome()['footer_links'] as $enlace ) {
+			if ( ! is_array( $enlace ) ) {
+				continue;
+			}
+			$label = trim( (string) ( $enlace['label'] ?? '' ) );
+			$url   = trim( (string) ( $enlace['url'] ?? '' ) );
+			if ( '' !== $label && '' !== $url && '' !== esc_url( $url ) ) {
+				$enlaces[] = array(
+					'label' => $label,
+					'url'   => $url,
+				);
+			}
+		}
+		return $enlaces;
 	}
 
 
@@ -36087,30 +36171,35 @@ html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
 
 /* La cabecera y el pie los pintamos nosotros, así que los del tema sobran, y
    también el título de la entrada: lo repite nuestro `h1`. Solo en nuestras
-   páginas (`body.prc-app`, que pone Shell) y por selector, no por
-   `!important`: si un tema no trae estos elementos, no pasa nada.
+   páginas y con el armazón encendido (`body.prc-app.prc-chrome`, que pone
+   Shell): con `prc_show_chrome` en «no», la cabecera, el título y el pie son
+   los del tema y se quedan. Por selector, no por `!important`: si un tema no
+   trae estos elementos, no pasa nada.
 
    Algunos temas los llaman `#main-header` y `#main-footer`, y con su maquetador
    son plantillas propias (`.et-l--header`, `.et-l--footer`). Los temas de
    bloques los sacan en `wp-block-template-part`, que NO cuelga de `body`, así
    que aquí no vale el combinador `>`. */
-body.prc-app #main-header,
-body.prc-app #top-header,
-body.prc-app .et-l--header,
-body.prc-app .et-l--footer,
-body.prc-app #main-footer,
-body.prc-app .site-header,
-body.prc-app .site-footer,
-body.prc-app header.wp-block-template-part,
-body.prc-app footer.wp-block-template-part,
-body.prc-app .et_pb_title_container,
-body.prc-app .entry-title,
-body.prc-app .page-title,
-body.prc-app .wp-block-post-title {
+body.prc-app.prc-chrome #main-header,
+body.prc-app.prc-chrome #top-header,
+body.prc-app.prc-chrome .et-l--header,
+body.prc-app.prc-chrome .et-l--footer,
+body.prc-app.prc-chrome #main-footer,
+body.prc-app.prc-chrome .site-header,
+body.prc-app.prc-chrome .site-footer,
+body.prc-app.prc-chrome header.wp-block-template-part,
+body.prc-app.prc-chrome footer.wp-block-template-part,
+body.prc-app.prc-chrome .et_pb_title_container,
+body.prc-app.prc-chrome .entry-title,
+body.prc-app.prc-chrome .page-title,
+body.prc-app.prc-chrome .wp-block-post-title {
   display: none;
 }
 
 body.prc-app {
+  /* Alto de ventana como mínimo: sin él, en una pantalla corta el pie y el
+     sub-pie no tienen sitio donde bajar y se quedan a media altura. */
+  min-height: calc(100vh - var(--wp-admin--admin-bar--height, 0px));
   font: var(--prc-p-base) var(--prc-t-base)/var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
   background: var(--prc-c-fondo);
@@ -36142,6 +36231,7 @@ body.prc-app #main-content .container::before { display: none; }
 body.prc-app .prc-top,
 body.prc-app .prc-tabs,
 body.prc-app .prc-hoja,
+body.prc-app .prc-subpie,
 body.prc-app .prc-pie {
   position: relative;
   left: 50%;
@@ -36153,7 +36243,10 @@ body.prc-app .prc-pie {
 /* El pie, abajo del todo: `sticky` con `top: 100vh` lo deja pegado al borde
    inferior mientras sobre sitio, y baja con la página cuando el contenido es
    largo. Con `sticky`, `left` ya no desplaza —marca el umbral de pegado—, así
-   que el ancho completo lo dan los márgenes negativos de siempre. */
+   que el ancho completo lo dan los márgenes negativos de siempre. El sub-pie,
+   igual: en la página servida sola es lo último y se pega abajo; dentro del
+   tema no tiene sitio donde bajar y se queda debajo de la pantalla. */
+body.prc-app .prc-subpie,
 body.prc-app .prc-pie {
   position: sticky;
   top: 100vh;
@@ -36165,15 +36258,15 @@ body.prc-app .prc-pie {
 }
 
 /* Sin la cabecera del tema, su hueco superior sobra. */
-body.prc-app .wp-site-blocks,
-body.prc-app .wp-site-blocks > main,
-body.prc-app main.wp-block-group,
-body.prc-app .site-main,
-body.prc-app #content,
-body.prc-app #main-content,
-body.prc-app .wp-site-blocks > *,
-body.prc-app .entry-content,
-body.prc-app .wp-block-post-content {
+body.prc-app.prc-chrome .wp-site-blocks,
+body.prc-app.prc-chrome .wp-site-blocks > main,
+body.prc-app.prc-chrome main.wp-block-group,
+body.prc-app.prc-chrome .site-main,
+body.prc-app.prc-chrome #content,
+body.prc-app.prc-chrome #main-content,
+body.prc-app.prc-chrome .wp-site-blocks > *,
+body.prc-app.prc-chrome .entry-content,
+body.prc-app.prc-chrome .wp-block-post-content {
   padding-top: 0;
   padding-bottom: 0;
   margin-top: 0;
@@ -36217,6 +36310,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
    que la fila medida. */
 .prc-top-fila,
 .prc-tabs-fila,
+.prc-subpie > div,
 .prc-pie div {
   width: var(--prc-fila-ancho);
   max-width: var(--prc-fila-max);
@@ -36564,6 +36658,24 @@ body.prc-app .prc-mas > .prc-mas__boton { box-sizing: border-box; display: inlin
 .prc-pie-enlaces { display: flex; gap: 18px; flex-wrap: wrap; }
 .prc-pie a { color: #fff; text-decoration: underline; }
 .prc-pie a:hover { color: #fff; text-decoration: none; }
+
+/* El sub-pie: ayuda y crédito cuando el pie lo pinta el tema. De ancho
+   completo como la hoja, encima del pie del tema y sin fondo propio. */
+.prc-subpie { margin-top: 32px; }
+
+.prc-subpie > div {
+  border-top: 1px solid var(--prc-linea);
+  padding: 12px 0;
+  display: flex;
+  gap: 8px 24px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.prc-subpie-enlaces { display: flex; gap: 18px; flex-wrap: wrap; }
+.prc-subpie-enlaces a { display: inline-flex; gap: 6px; align-items: center; }
 
 /* --- el cartel de la ficha ------------------------------------------------ */
 
@@ -37012,6 +37124,7 @@ body.prc-app .prc-btn-borrar {
 @media (max-width: 640px) {
   .prc-top-fila,
   .prc-tabs-fila,
+  .prc-subpie > div,
   .prc-pie div { width: auto; margin-inline: 16px; }
   .prc-top-fila { padding: 11px 0; gap: 10px; flex-wrap: nowrap; }
   .prc-marca { display: none; }

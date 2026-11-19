@@ -59,15 +59,15 @@ final class AdvancedPanelView {
 		?>
 		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
+			<?php if ( '' !== $motivo ) : ?>
+				<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
+			<?php endif; ?>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
-					<?php if ( '' !== $motivo ) : ?>
-						<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
-					<?php endif; ?>
 					<?php echo self::centre_fields( $m, (array) $m['values'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</fieldset>

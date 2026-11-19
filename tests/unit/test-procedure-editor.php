@@ -727,7 +727,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( array(), (array) get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'cerrado, no se guarda' );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
-		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_CENTRES . '".*?<fieldset class="prc-seccion-campos" disabled>\s*<p class="prc-seccion__bloqueo">Cerrado por el estado del procedimiento\.<\/p>/s', $html, 'pintado apagado, y por qué' );
+		$this->assertMatchesRegularExpression( '/Qué centros pueden solicitar<\/h2>\s*<p class="prc-seccion__bloqueo">Cerrado por el estado del procedimiento\.<\/p>.*?<fieldset class="prc-seccion-campos" disabled>/s', $html, 'pintado apagado, y por qué, bajo el título' );
 
 		$this->olvidar_rechazo();
 		$ajeno = $this->procedure( $this->administrator(), array( $this->area( 'Otro ámbito' ) ) );
@@ -791,6 +791,16 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), 'el resto de la dirección se queda' );
 			$this->assertStringEndsWith( '#' . $nuevo[1], (string) $url, $viejo );
 		}
+
+		// Un «&» dentro de un valor no cuela otro parámetro.
+		$this->go_to( ProcedureEditor::url( $procedimiento, 'codigo', array( 'x' => rawurlencode( 'a&aviso=publicado' ) ) ) );
+		$url = (string) $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) );
+		$this->assertSame( '', $this->query_arg( $url, ProcedureEditor::ARG_NOTICE ), $url );
+
+		// Un envío rechazado desde una pestaña vieja se repinta, no se redirige.
+		$_POST = array( ProcedureEditor::FIELD_DO => ProcedureEditor::OP_CUSTOM_CODE );
+		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ) );
+		$_POST = array();
 		$this->go_to( ProcedureEditor::url( $procedimiento, ProcedureEditor::PANEL_LINKS ) );
 		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ), 'una pestaña que existe no se toca' );
 	}
@@ -928,7 +938,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 		$this->acting_as( $uid );
-		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
+		$datos = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringContainsString( 'ningún tipo de centro marcado como privado', $datos );
+		$this->assertStringContainsString( 'El catálogo de centros está vacío', $datos, 'también junto a «Dirigido a»: la titularidad no se puede comprobar' );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'El catálogo de centros está vacío', $html );
 		$this->assertStringContainsString( 'ningún centro puede solicitar hasta que se cargue', $html );

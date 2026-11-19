@@ -89,21 +89,25 @@ final class AdvancedPanel {
 	/**
 	 * Send a tab that no longer exists to the one that holds it now.
 	 *
-	 * El resto de la dirección se queda —el procedimiento, el aviso— y se
-	 * añade el ancla de la sección.
+	 * El resto de la dirección se queda —el procedimiento, el aviso—, vuelto a
+	 * codificar, y se añade el ancla de la sección. Un envío no se redirige:
+	 * si se rechazó, la misma petición repinta lo tecleado y el motivo.
 	 *
 	 * @return void
 	 */
 	public static function redirect_old_panel(): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo lee a qué pestaña se va.
 		$pedido = sanitize_key( wp_unslash( (string) ( $_GET[ ProcedureEditor::ARG_PANEL ] ?? '' ) ) );
-		if ( ! isset( ProcedureEditor::OLD_PANELS[ $pedido ] ) || 'editor' !== Shell::current_section() ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo mira si hay un envío.
+		if ( ! empty( $_POST ) || ! isset( ProcedureEditor::OLD_PANELS[ $pedido ] ) || 'editor' !== Shell::current_section() ) {
 			return;
 		}
 		list( $panel, $seccion ) = ProcedureEditor::OLD_PANELS[ $pedido ];
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- se reenvía la misma lectura a otra dirección.
 		$args = array_map( 'sanitize_text_field', array_filter( wp_unslash( $_GET ), 'is_string' ) );
 		unset( $args[ ProcedureEditor::ARG_PANEL ] );
+		// add_query_arg() no codifica: un «&» dentro de un valor no puede colar otro parámetro.
+		$args = array_map( 'rawurlencode', $args );
 		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . '#' . $seccion );
 	}
 

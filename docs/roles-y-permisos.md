@@ -314,7 +314,7 @@ campo `zone` de cada centro (ADR-0042).
 | Zonas de la persona | meta de usuario, clave por `prc_zone_meta_key`; se lee como lista o como texto con comas, y **guardar el perfil la reescribe como lista** —cuidado si el filtro apunta a una meta que escribe otro sistema— |
 | Centros de esas zonas | `ProcedureAccess::observer_codes()`, del catálogo de hoy |
 | Si el procedimiento admite consulta | `prc_observable`, y que esté publicado (`ObserverScope::is_observable()`) |
-| Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en el panel «Acceso de consulta» del taller, que solo ve y guarda administración (`ProcedureAccess::can_configure_observe()`) |
+| Qué enseña | `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`, en la sección «Acceso de consulta» de la pestaña «Avanzado» del taller, que solo ve y guarda administración (`ProcedureAccess::can_configure_observe()`) |
 | Quién escribe el campo de la ficha | solo `prc_manage_app` o `edit_users` |
 | Quién decide | `ProcedureAccess::can_observe()` y `can_observe_application()` |
 

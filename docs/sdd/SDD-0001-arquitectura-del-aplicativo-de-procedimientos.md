@@ -690,3 +690,20 @@ programada o privada, no recibe el 404 del tema sino un aviso propio,
 sesión y sin permiso, el nombre de la cuenta y «Entrar con otra cuenta». No
 dice el título ni nada del procedimiento, y lo de la papelera sigue dando el
 404 ([ADR-0047](../adr/ADR-0047-un-procedimiento-en-borrador-avisa-en-vez-de-dar-404.md)).
+
+## Adenda — 2026-11-19
+
+### Las pestañas del taller, sin grupos y con «Avanzado»
+
+Donde arriba se lee el panel «Entregas», o «Acceso de consulta» como panel
+del taller, léase: las pestañas son Datos, Campos adicionales,
+Participantes, Enlaces, Publicación, Avanzado y Solicitudes, sin grupos.
+«Plazos de entregas documentales» es una sección al final de «Solicitudes»;
+qué centros pueden solicitar, «Acceso de consulta» y «Código» son
+secciones de «Avanzado», cada una con su formulario y su operación
+(`centres`, `observe`, `custom_code`): qué secciones ve cada cual y
+guardar los centros, en `PublicFront/AdvancedPanel`; pintarlas, en
+`PublicFront/View/AdvancedPanelView`. Los `?panel=` de antes redirigen a su
+sitio nuevo (ADR-0042, adenda del 2026-11-19).
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

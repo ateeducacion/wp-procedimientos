@@ -50,7 +50,8 @@ const SCREENS = {
  * `{ID}` es el procedimiento de demostración que se enseña: se pregunta al
  * sitio una vez y vale para el taller, la ficha y la solicitud. `{DRAFT}` es
  * un borrador sin solicitudes —el único que se puede borrar—, y se pregunta
- * igual. `open` dice qué `summary` se pulsa antes de capturar.
+ * igual. `open` dice qué `summary` se pulsa antes de capturar, y `media`, si
+ * se emula otro medio (`print`).
  */
 const SCENES = [
 	// ── Lo público: los dos tamaños ───────────────────────────────────────
@@ -163,6 +164,15 @@ const SCENES = [
 		who: 'direccion',
 		go: '/solicitud/?procedimiento={ID}',
 		screens: [ 'desktop', 'mobile' ],
+	},
+	{
+		chapter: 'Quien solicita',
+		title: 'Justificante impreso',
+		note: 'El justificante de presentación como sale en papel (emulación de impresión): escudo y rótulo de quien despliega si los configura, los datos en una tabla con la fecha y la hora, y lo presentado; sin cabecera, menú, pie ni botones. Sin solicitud del centro, sale el formulario.',
+		who: 'direccion',
+		go: '/solicitud/?procedimiento={ID}&justificante=1',
+		media: 'print',
+		screens: [ 'desktop' ],
 	},
 	{
 		chapter: 'Quien solicita',
@@ -312,6 +322,10 @@ async function capture( browser, scene, screen, ids, n ) {
 
 	try {
 		await logIn( page, scene.who );
+		// `media: 'print'`: la escena como sale en papel.
+		if ( scene.media ) {
+			await page.emulateMedia( { media: scene.media } );
+		}
 		const target = scene.go.replace( '{ID}', String( ids.id ) ).replace( '{DRAFT}', String( ids.draft ) );
 		const response = await page.goto( `${ BASE }${ target }`, { waitUntil: 'networkidle' } );
 		if ( response && response.status() >= 400 ) {

@@ -207,9 +207,12 @@ final class ApplicationProgressView {
 	/**
 	 * The printable receipt: number, when and who, completeness and what was submitted.
 	 *
-	 * Solo lectura y sin un guion: se imprime, o se guarda en PDF, con el
-	 * menú del navegador. La hoja de estilo de impresión quita la cabecera,
-	 * el menú, el pie y lo que lleva `prc-no-imprimir`.
+	 * Solo lectura. Se imprime, o se guarda en PDF, con el botón «Imprimir
+	 * justificante» —que solo enseña el guion— o, sin él, con el menú del
+	 * navegador. La hoja de estilo de impresión quita la cabecera, el menú, el
+	 * pie y lo que lleva `prc-no-imprimir`. El escudo y el rótulo son de quien
+	 * despliega (`prc_chrome`): sin configurar, el justificante no lleva
+	 * cabecera (ADR-0009).
 	 *
 	 * @param array<string, mixed> $m Model of the application screen, with `progress` and `people`.
 	 * @return string
@@ -220,33 +223,49 @@ final class ApplicationProgressView {
 		$centro  = (array) $m['centre'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
 		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
+		$chrome  = ProcedureChrome::chrome();
+		$logo    = (string) $chrome['brand_logo'];
+		$rotulo  = (string) $chrome['org'];
 		$datos   = array(
-			'N.º de solicitud'        => (string) (int) $p['application'],
-			'Procedimiento'           => (string) $m['title'],
-			'Centro'                  => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
-			'Presentada'              => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
-			'Registrada en su nombre' => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
-			'Última modificación'     => (string) $p['modified'],
-			'Estado de revisión'      => (string) ( $s['state_label'] ?? '' ),
-			'Estado'                  => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'N.º de solicitud'             => (string) (int) $p['application'],
+			'Procedimiento'                => (string) $m['title'],
+			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Fecha y hora de presentación' => (string) $p['submitted'],
+			'Presentada por'               => trim( $quien ),
+			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
+			'Última modificación'          => (string) $p['modified'],
+			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
+			'Estado'                       => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
 		);
 
 		ob_start();
 		?>
 		<div class="prc-justificante">
 			<p class="prc-sub prc-no-imprimir"><a href="<?php echo esc_url( (string) $p['apply_url'] ); ?>">&larr; Volver a la solicitud</a></p>
-			<h1 class="prc-h1">Justificante de presentación</h1>
-			<dl class="prc-respuestas prc-justificante__datos">
-				<?php foreach ( $datos as $rotulo => $valor ) : ?>
-					<?php if ( '' !== $valor ) : ?>
-						<dt><?php echo esc_html( $rotulo ); ?></dt>
-						<dd><?php echo esc_html( $valor ); ?></dd>
+			<?php if ( '' !== $logo || '' !== $rotulo ) : ?>
+				<div class="prc-justificante__cab">
+					<?php if ( '' !== $logo ) : ?>
+						<img src="<?php echo esc_url( $logo ); ?>" alt="<?php echo esc_attr( (string) $chrome['brand_alt'] ); ?>" class="prc-justificante__escudo" />
 					<?php endif; ?>
-				<?php endforeach; ?>
-			</dl>
+					<?php if ( '' !== $rotulo ) : ?>
+						<span class="prc-justificante__org"><?php echo esc_html( $rotulo ); ?></span>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+			<h1 class="prc-h1">Justificante de presentación</h1>
+			<table class="prc-justificante__tabla">
+				<tbody>
+					<?php foreach ( $datos as $etiqueta => $valor ) : ?>
+						<?php if ( '' !== $valor ) : ?>
+							<tr><th scope="row"><?php echo esc_html( $etiqueta ); ?></th><td><?php echo esc_html( $valor ); ?></td></tr>
+						<?php endif; ?>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
 			<?php echo ApplyFormView::summary( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo PeopleView::review( (array) ( $m['people'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
+			<p class="prc-no-imprimir" hidden><button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-print><?php echo Shell::icon( 'imprimir' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- SVG fijo. ?> Imprimir justificante</button></p>
+			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, pulse «Imprimir justificante» o use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
 		</div>
 		<?php
 		return Shell::render( '', '', (string) ob_get_clean() );

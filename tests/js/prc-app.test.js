@@ -1159,3 +1159,15 @@ describe( 'the help in a dialog', () => {
 		expect( dialogo.showModal ).not.toHaveBeenCalled();
 	} );
 } );
+
+describe( 'the print button of the receipt', () => {
+	it( 'shows only with JavaScript and opens the print dialog', async () => {
+		document.body.innerHTML = '<p hidden><button type="button" data-prc-print>Imprimir justificante</button></p>';
+		window.print = vi.fn();
+		await load();
+		const button = document.querySelector( '[data-prc-print]' );
+		expect( button.parentElement.hidden ).toBe( false );
+		button.click();
+		expect( window.print ).toHaveBeenCalledTimes( 1 );
+	} );
+} );

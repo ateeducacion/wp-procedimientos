@@ -277,14 +277,46 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
 		$this->assertStringContainsString( 'class="prc-justificante"', $html );
 		$this->assertStringContainsString( 'Justificante de presentación', $html );
-		$this->assertStringContainsString( '<dd>' . $solicitud . '</dd>', $html );
+		$this->assertStringContainsString( '<table class="prc-justificante__tabla">', $html, 'los datos, en una tabla' );
+		$this->assertStringContainsString( '<th scope="row">N.º de solicitud</th><td>' . $solicitud . '</td>', $html );
+		$this->assertStringContainsString( '<th scope="row">Fecha y hora de presentación</th><td>' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . '</td>', $html );
 		$this->assertStringContainsString( 'Red de prueba', $html );
 		$this->assertStringContainsString( 'Centro de prueba Norte (C0001)', $html );
-		$this->assertStringContainsString( 'El ' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . ', por ' . get_userdata( $director )->display_name, $html );
+		$this->assertStringContainsString( '<th scope="row">Presentada por</th><td>' . get_userdata( $director )->display_name . ' (', $html );
 		$this->assertStringContainsString( 'Incompleta: falta 1 persona', $html );
 		$this->assertStringContainsString( 'Ana Pérez', $html, 'con la lista de personas' );
 		$this->assertStringContainsString( 'Guardar como PDF', $html );
+		$this->assertMatchesRegularExpression( '/<p class="prc-no-imprimir" hidden><button type="button"[^>]* data-prc-print>.*Imprimir justificante<\/button>/s', $html, 'el botón, escondido hasta que el guion lo enseña' );
 		$this->assertStringNotContainsString( '<form', $html, 'solo lectura' );
+		$this->assertStringNotContainsString( 'prc-justificante__cab', $html, 'sin marca configurada, sin cabecera' );
+	}
+
+	/**
+	 * La cabecera del justificante lleva el escudo y el rótulo de quien
+	 * despliega, si `prc_chrome` los trae (ADR-0009).
+	 */
+	public function test_the_receipt_header_has_the_brand_of_whoever_deploys() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+		$marca = static function ( array $chrome ): array {
+				return array_merge(
+					$chrome,
+					array(
+						'brand_logo' => 'https://example.org/escudo.png',
+						'brand_alt'  => 'Escudo de ejemplo',
+						'org'        => 'Organismo de ejemplo',
+					)
+				);
+		};
+		add_filter( 'prc_chrome', $marca );
+
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		remove_filter( 'prc_chrome', $marca );
+		$this->assertStringContainsString( '<div class="prc-justificante__cab">', $html );
+		$this->assertStringContainsString( '<img src="https://example.org/escudo.png" alt="Escudo de ejemplo"', $html );
+		$this->assertMatchesRegularExpression( '/prc-justificante__org">Organismo de ejemplo</', $html );
 	}
 
 	/**
@@ -462,8 +494,8 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
 		$this->assertStringContainsString( 'Justificante de presentación', $html );
-		$this->assertDoesNotMatchRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( $registrada, '/' ) . '/', $html, 'presentada no es el día en que se registró' );
-		$this->assertMatchesRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( (string) wp_date( 'd-m-Y' ), '/' ) . '/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<th scope="row">Fecha y hora de presentación<\/th><td>' . preg_quote( $registrada, '/' ) . '/', $html, 'presentada no es el día en que se registró' );
+		$this->assertMatchesRegularExpression( '/<th scope="row">Fecha y hora de presentación<\/th><td>' . preg_quote( (string) wp_date( 'd-m-Y' ), '/' ) . '/', $html );
 		$this->assertStringContainsString( 'El ' . $registrada . ', por quien gestiona el procedimiento.', $html );
 
 		$acuse = array_values(

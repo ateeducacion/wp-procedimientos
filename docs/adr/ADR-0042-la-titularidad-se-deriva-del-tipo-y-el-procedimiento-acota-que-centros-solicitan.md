@@ -301,8 +301,8 @@ cambian; cambia dónde se pinta y con qué formulario se guarda.
   Solicitudes. «Avanzado» reúne en secciones, cada una con su ancla y su
   formulario, lo que rara vez se toca: qué centros pueden solicitar (solo
   en un procedimiento para centros), «Acceso de consulta» (solo
-  administración, ADR-0043) y «Código». Sale si quien mira ve alguna
-  sección (`AdvancedPanel::sections()`).
+  administración, ADR-0043) y «Código», que lee quien abre el taller, así
+  que la pestaña sale siempre (`AdvancedPanel::sections()`).
 - **Su propio formulario y su propia operación**, `centres`. Guarda las tres
   metas con la audiencia guardada y con la regla del grupo de «Datos»: con
   el grupo cerrado por el estado, el envío se rechaza y la sección se pinta
@@ -310,8 +310,9 @@ cambian; cambia dónde se pinta y con qué formulario se guarda.
   reescribe lo guardado: ya no viaja con su formulario.
 - **Sin plegar.** En «Avanzado», «Limitar a ciertos centros (avanzado)» ya
   no se pliega en un `details`: la pestaña entera es lo avanzado. El aviso
-  del catálogo vacío sale arriba de la sección; el de la titularidad sin
-  tipos privados se queda en «Datos», junto a «Dirigido a».
+  del catálogo vacío sale arriba de la sección y también en «Datos», junto a
+  «Dirigido a», con el de la titularidad sin tipos privados: dice que la
+  titularidad elegida allí no se puede comprobar.
 - **«Entregas» deja de ser pestaña.** «Plazos de entregas documentales» es
   una sección al final de «Solicitudes», solo con entregas de plazo propio.
 - **Los enlaces de antes no rompen.** `?panel=entregas`, `?panel=consulta` y

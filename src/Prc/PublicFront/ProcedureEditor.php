@@ -311,7 +311,7 @@ final class ProcedureEditor {
 	 *
 	 * En el orden en que se trabaja y sin grupos (#80): lo que se prepara
 	 * antes de publicar, «Avanzado» —lo que rara vez se toca— y, al final, las
-	 * solicitudes. «Avanzado» sale si quien mira ve alguna de sus secciones.
+	 * solicitudes. «Avanzado» sale siempre: «Código» lo lee quien abre el taller.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array<string, array{label:string, url:string, count:?int}>
@@ -326,9 +326,6 @@ final class ProcedureEditor {
 			self::PANEL_ADVANCED     => 'Avanzado',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 		);
-		if ( array() === AdvancedPanel::sections( $procedure_id ) ) {
-			unset( $rotulos[ self::PANEL_ADVANCED ] );
-		}
 		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),

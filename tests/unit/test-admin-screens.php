@@ -226,6 +226,7 @@ class Test_Admin_Screens extends WP_UnitTestCase {
 		Settings::render();
 		$html = (string) ob_get_clean();
 		$this->assertStringContainsString( 'Correo', $html );
+		$this->assertStringNotContainsString( '«Avisos»', $html, 'el taller ya no tiene pestaña «Avisos» (#81)' );
 		foreach ( Mailer::options() as $opcion ) {
 			$this->assertStringContainsString( 'name="' . $opcion . '"', $html );
 		}

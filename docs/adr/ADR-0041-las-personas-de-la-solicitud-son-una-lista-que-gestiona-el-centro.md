@@ -345,3 +345,9 @@ caracteres, y **nunca** en un correo.
   guardando.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-23
+
+El aviso de la lista de participantes ya no se apaga en el panel «Avisos»:
+ese panel no existe. Lo deja sin efecto la ADR-0038, adenda del 2026-11-18
+(#81).

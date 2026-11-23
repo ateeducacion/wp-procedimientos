@@ -12,6 +12,7 @@ use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\Notifications\Mailer;
+use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
@@ -483,22 +484,20 @@ class Test_Mailer extends WP_UnitTestCase {
 		}
 	}
 
-	// ─── lo que lo apaga ───────────────────────────────────────────────────
+	// ─── no se apaga por procedimiento ─────────────────────────────────────
 
 	/**
-	 * Un evento apagado en el procedimiento no sale; los demás, sí.
+	 * Un `prc_notify` que quedó guardado de antes no apaga nada: los correos son fijos (#81).
 	 */
-	public function test_an_event_switched_off_in_the_procedure_is_not_sent() {
-		$procedimiento = $this->procedimiento( array( ProcedureMetaKeys::NOTIFY => array( Mailer::EVENT_APPLICATION_SUBMITTED ) ) );
+	public function test_a_stored_prc_notify_switches_nothing_off() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta( $procedimiento, 'prc_notify', array( Mailer::EVENT_APPLICATION_SUBMITTED, Mailer::EVENT_APPLICATION_RECEIVED ) );
 
 		Applications::save( $procedimiento, $this->direccion(), $this->nucleo() );
 
-		$this->assertCount( 0, $this->con_asunto( 'Solicitud presentada' ) );
+		$this->assertCount( 1, $this->con_asunto( 'Solicitud presentada' ) );
 		$this->assertCount( 2, $this->con_asunto( 'Nueva solicitud' ) );
-		$this->assertFalse(
-			Mailer::mail( Mailer::EVENT_APPLICATION_SUBMITTED, 'x@example.org', 'A', 'B', array( 'procedure_id' => $procedimiento ) ),
-			'la salida única también lo mira'
-		);
+		$this->assertFalse( registered_meta_key_exists( 'post', 'prc_notify', ProcedurePostType::POST_TYPE ), 'la meta ya no se registra' );
 	}
 
 	/**
@@ -923,28 +922,6 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertSame( 3, $wp_filter['prc_delivery_saved']->callbacks[10][ Mailer::class . '::on_delivery_saved' ]['accepted_args'] );
 		$this->assertSame( 10, has_action( 'prc_application_reviewed', array( Mailer::class, 'on_application_reviewed' ) ) );
 		$this->assertSame( 10, has_action( 'prc_delivery_saved', array( Mailer::class, 'on_delivery_saved' ) ) );
-	}
-
-	/**
-	 * Los eventos que se apagan por procedimiento son eventos del correo.
-	 */
-	public function test_the_switchable_events_are_mail_events() {
-		$this->assertNotEmpty( ProcedureMetaKeys::notify_events() );
-		foreach ( array_keys( ProcedureMetaKeys::notify_events() ) as $evento ) {
-			$this->assertContains( $evento, Mailer::events() );
-		}
-		$this->assertArrayNotHasKey( Mailer::EVENT_PROCEDURE_CREATED, ProcedureMetaKeys::notify_events(), 'el alta sale antes de que el procedimiento pueda apagar nada' );
-	}
-
-	/**
-	 * La meta guarda solo eventos conocidos, sin repetir.
-	 */
-	public function test_the_notify_meta_keeps_known_events() {
-		$procedimiento = $this->procedimiento();
-		update_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, array( Mailer::EVENT_REVIEW_CHANGED, 'inventado', Mailer::EVENT_REVIEW_CHANGED ) );
-		$this->assertSame( array( Mailer::EVENT_REVIEW_CHANGED ), get_post_meta( $procedimiento, ProcedureMetaKeys::NOTIFY, true ) );
-		$this->assertTrue( Mailer::enabled( $procedimiento, Mailer::EVENT_APPLICATION_SUBMITTED ) );
-		$this->assertFalse( Mailer::enabled( $procedimiento, Mailer::EVENT_REVIEW_CHANGED ) );
 	}
 
 	/**

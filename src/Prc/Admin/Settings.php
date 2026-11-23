@@ -378,8 +378,9 @@ final class Settings {
 
 			<h2>Correo</h2>
 			<p style="max-width:46rem">
-				Vacíos, los correos salen con el remitente de WordPress y sin copia. Cada
-				procedimiento decide, en su pestaña «Avisos», cuáles de sus correos se envían.
+				Vacíos, los correos salen con el remitente de WordPress y sin copia. Los correos
+				no se apagan por procedimiento: para descartar o copiar uno concreto está el
+				filtro <code>prc_mail</code>.
 			</p>
 			<form method="post" action="options.php">
 				<?php settings_fields( self::MAIL_GROUP ); ?>

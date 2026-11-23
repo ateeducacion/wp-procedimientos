@@ -103,7 +103,6 @@ final class ProcedureEditorView {
 			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
 			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
-			ProcedureEditor::PANEL_NOTICES => self::notices_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
 			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
@@ -1422,44 +1421,6 @@ final class ProcedureEditorView {
 			. '<button class="' . esc_attr( Assets::button_class( 'danger' ) ) . '" type="submit">Devolver a borrador</button>'
 			. ' <span class="prc-consecuencia">Deja de verse en la portada y nadie puede solicitar.</span>'
 			. '</form>';
-	}
-
-	/**
-	 * The «Avisos» panel: one checkbox per mail this procedure may send.
-	 *
-	 * Marcada es encendida. Lo que no se marque no sale para este
-	 * procedimiento; el correo del alta no está porque ya salió (ADR-0038).
-	 *
-	 * @param array<string, mixed> $m Model.
-	 * @return string
-	 */
-	private static function notices_panel( array $m ): string {
-		$op       = ProcedureEditor::OP_NOTIFY;
-		$apagados = (array) ( $m['values'][ ProcedureMetaKeys::NOTIFY ] ?? array() );
-		ob_start();
-		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-			<fieldset class="prc-seccion-campos">
-				<legend class="prc-seccion__titulo">Avisos por correo</legend>
-				<p class="prc-intro">Los correos que manda el aplicativo para este procedimiento. Desmarque los que no quiera enviar; el resto sale solo, en texto plano y desde el remitente que configure administración.</p>
-				<div class="prc-opciones prc-opciones--vertical">
-					<?php foreach ( (array) $m['notify_events'] as $evento => $rotulo ) : ?>
-						<div class="prc-opcion">
-							<input type="checkbox" id="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"
-								name="<?php echo esc_attr( ProcedureEditor::FIELD_NOTIFY ); ?>[]" value="<?php echo esc_attr( (string) $evento ); ?>"
-								<?php checked( ! in_array( (string) $evento, $apagados, true ) ); ?> />
-							<label for="prc-notify-<?php echo esc_attr( (string) $evento ); ?>"><?php echo esc_html( (string) $rotulo ); ?></label>
-						</div>
-					<?php endforeach; ?>
-				</div>
-			</fieldset>
-			<?php echo PanelParts::submit( 'Guardar los avisos' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-		</form>
-		<?php
-		return (string) ob_get_clean();
 	}
 
 	/**

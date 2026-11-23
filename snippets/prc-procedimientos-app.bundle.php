@@ -11901,6 +11901,8 @@ final class Shell {
 			'lista'    => '<path fill="currentColor" d="M4 5h2v2H4V5Zm4 0h12v2H8V5Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Zm-4 6h2v2H4v-2Zm4 0h12v2H8v-2Z"/>',
 
 			'descarga' => '<path fill="currentColor" d="M11 4h2v8.6l3.3-3.3 1.4 1.4L12 16.4l-5.7-5.7 1.4-1.4 3.3 3.3V4ZM4 18h16v2H4v-2Z"/>',
+
+			'ayuda'    => '<path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-1-4h2v2h-2v-2Zm1-10a4 4 0 0 0-4 4h2a2 2 0 1 1 4 0c0 2-3 1.8-3 5h2c0-2.3 3-2.5 3-5a4 4 0 0 0-4-4Z"/>',
 		);
 		if ( ! isset( $caminos[ $nombre ] ) ) {
 			return '';
@@ -12271,6 +12273,7 @@ final class EditLock {
 namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\Help;
 use Prc\PublicFront\Shell;
 
 
@@ -12319,12 +12322,16 @@ final class PanelParts {
 
 
 
+
+
 	public static function help_link( string $url, string $lead = '¿Dudas?', string $label = 'Consulte la ayuda' ): string {
 		if ( '' === $url ) {
 			return '';
 		}
+		$dialogo = Help::ask( $url );
+		$abre    = '' === $dialogo ? '' : ' data-prc-help="' . esc_attr( $dialogo ) . '" aria-haspopup="dialog" aria-controls="' . esc_attr( $dialogo ) . '"';
 		return '<p class="prc-ayuda-enlace">' . ( '' !== $lead ? esc_html( $lead ) . ' ' : '' )
-			. '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></p>';
+			. '<a href="' . esc_url( $url ) . '"' . $abre . '>' . Shell::icon( 'ayuda' ) . esc_html( $label ) . '</a></p>';
 	}
 
 
@@ -19597,6 +19604,7 @@ final class HelpContent {
 
 namespace Prc\PublicFront\View;
 
+use Prc\PublicFront\Assets;
 use Prc\PublicFront\HelpContent;
 use Prc\PublicFront\Shell;
 
@@ -19674,6 +19682,27 @@ final class HelpView {
 		}
 		$html .= ( $abierta ? '</ul>' : '' ) . '</li>';
 		return '<nav class="prc-ayuda__indice" aria-label="Índice de la guía"><h3 class="prc-ayuda__indice-titulo">En esta guía</h3><ol>' . $html . '</ol></nav>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function dialog( string $id, array $apartado, string $url ): string {
+		return '<dialog class="prc-dialogo prc-ayuda-dialogo" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $apartado['id'] . '-titulo' ) . '">'
+			. self::section( $apartado )
+
+			. '<form method="dialog" class="prc-acciones"><a href="' . esc_url( $url ) . '">Ver toda la ayuda</a>'
+			. '<button type="submit" class="' . esc_attr( Assets::button_class() ) . '">Cerrar</button></form>'
+			. '</dialog>';
 	}
 
 
@@ -19776,8 +19805,71 @@ final class Help {
 
 
 
+	private static array $asked = array();
+
+
+
+
+
+
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
+		add_action( 'wp_footer', array( self::class, 'print_dialogs' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function ask( string $url ): string {
+		$partes = wp_parse_url( $url );
+		$ancla  = (string) ( $partes['fragment'] ?? '' );
+		wp_parse_str( (string) ( $partes['query'] ?? '' ), $query );
+		$guia = self::known( sanitize_key( (string) ( $query[ self::ARG_GUIDE ] ?? '' ) ) );
+		if ( '' === $ancla || ! in_array( $ancla, array_column( HelpContent::raw( $guia ), 'id' ), true ) ) {
+			return '';
+		}
+		$id                 = 'prc-ayuda-' . $guia . '-' . $ancla;
+		self::$asked[ $id ] = array(
+			'guide'  => $guia,
+			'anchor' => $ancla,
+			'url'    => $url,
+		);
+		return $id;
+	}
+
+
+
+
+
+
+	public static function dialogs(): string {
+		$html = '';
+		foreach ( self::$asked as $id => $pedido ) {
+			foreach ( HelpContent::sections( $pedido['guide'] ) as $apartado ) {
+				if ( $apartado['id'] === $pedido['anchor'] ) {
+					$html .= HelpView::dialog( $id, $apartado, $pedido['url'] );
+				}
+			}
+		}
+		self::$asked = array();
+		return $html;
+	}
+
+
+
+
+
+
+	public static function print_dialogs(): void {
+		echo self::dialogs();
 	}
 
 
@@ -36448,6 +36540,24 @@ body.prc-app .prc-btn-borrar {
   font-size: var(--prc-t-menudo);
   line-height: var(--prc-i-menudo);
 }
+
+/* El interrogante delante del texto, y su diálogo con solo un apartado (#86). */
+.prc-ayuda-enlace svg { width: 1.15em; height: 1.15em; margin-right: 4px; vertical-align: -.2em; }
+.prc-ayuda-dialogo .prc-ayuda__apartado { margin: 0; }
+.prc-ayuda-dialogo .prc-ayuda__apartado-titulo:focus { outline: none; }
+/* La letra de la ayuda, no la del resto de diálogos (`.prc-dialogo p`). */
+.prc-ayuda-dialogo .prc-ayuda__apartado p { margin: 0 0 12px; font: inherit; }
+/* «Cerrar» siempre a la vista, aunque el apartado sea largo: pegado al borde
+   inferior, que es el del relleno de `.prc-dialogo`. */
+.prc-ayuda-dialogo .prc-acciones {
+  position: sticky;
+  bottom: -24px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 -24px;
+  padding: 12px 0 24px;
+  background: var(--prc-sup);
+}
 ',
   'css/prc-ficha.css' => '/* La ficha de un procedimiento: **solo lo que aparece en esta pantalla**.
 
@@ -38313,6 +38423,44 @@ body.prc-app .prc-btn-borrar {
 			}, 0 );
 		}
 	} );
+
+	/* --- 6 bis. La ayuda en un diálogo --------------------------------- */
+
+	/*
+	 * `data-prc-help` en un enlace «¿Dudas?»: apunta al `<dialog>` que el
+	 * servidor pintó en el pie con solo ese apartado (#86). Se abre con
+	 * `showModal()` —foco en el título del apartado— y se cierra sin guion
+	 * propio: con Escape o con el «Cerrar» de su `<form method="dialog">`. Al
+	 * cerrarse, el foco vuelve al enlace. Sin guion, sin `showModal()` o con una tecla
+	 * que pide otra pestaña, el enlace lleva a la ayuda entera como siempre.
+	 * Va antes del aviso de cambios sin guardar (sección 10): abrir la ayuda
+	 * no sale de la página, y ese aviso no mira un clic ya atendido.
+	 */
+	document.addEventListener( \'click\', function ( e ) {
+		var enlace = e.target.closest ? e.target.closest( \'a[data-prc-help]\' ) : null;
+		var dialogo = enlace ? document.getElementById( enlace.getAttribute( \'data-prc-help\' ) ) : null;
+		if ( dialogo && dialogo.showModal && ! e.defaultPrevented && 0 === e.button &&
+			! e.ctrlKey && ! e.metaKey && ! e.shiftKey && ! e.altKey ) {
+			e.preventDefault();
+			dialogo.prcVuelta = enlace;
+			dialogo.showModal();
+			// El título, no el primer enlace: se lee desde arriba. `tabindex`
+			// en el `<dialog>` no está permitido; en el título, sí.
+			var titulo = dialogo.querySelector( \'h3, h4\' );
+			if ( titulo ) {
+				titulo.tabIndex = -1;
+				titulo.focus();
+			}
+		}
+	} );
+
+	// `close` no sube: se escucha en captura. Vale también para Escape.
+	document.addEventListener( \'close\', function ( e ) {
+		if ( e.target.prcVuelta ) {
+			e.target.prcVuelta.focus();
+			e.target.prcVuelta = null;
+		}
+	}, true );
 
 	/* --- 7. Revisar en bloque: marcar las de esta página ---------------- */
 

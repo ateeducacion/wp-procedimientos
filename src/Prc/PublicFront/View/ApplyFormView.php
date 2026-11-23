@@ -15,6 +15,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Shell;
 
 /**
@@ -30,9 +31,9 @@ use Prc\PublicFront\Shell;
  * de los campos técnicos de la convocatoria, secciones con su rótulo en
  * mayúsculas —las pone el CSS: el texto va en caja normal— y su filete, retícula de doce columnas y campos bloqueados que se
  * distinguen por el color y no por un fondo gris. Lo que no se calca es el
- * texto del aviso de protección de datos: ese es de quien despliega
- * ({@see ProcedureChrome::chrome()}, clave `privacy_notice`) y sin configurar
- * no se pinta (ADR-0009).
+ * texto del aviso de protección de datos: ese es de quien despliega —lo
+ * escribe administración en los ajustes o lo trae el filtro del armazón, y
+ * llega en `$m['privacy']`— y sin configurar no se pinta (ADR-0009).
  */
 final class ApplyFormView {
 
@@ -96,6 +97,9 @@ final class ApplyFormView {
 			self::deliveries( $m );
 			echo '</div>';
 		}
+		// Con el formulario cerrado, la lista de personas o una entrega siguen
+		// recogiendo datos: el aviso va detrás de ellas.
+		echo self::privacy( PrivacyNotice::after_sections( $m ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy().
 		// Retirar la solicitud, al final: es lo último que se busca.
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -265,17 +269,20 @@ final class ApplyFormView {
 	 *
 	 * **Aquí no hay ni una línea de texto legal**: el órgano responsable, el
 	 * tratamiento, el enlace a la resolución y el contacto de protección de
-	 * datos son del despliegue y llegan por el filtro del armazón (ADR-0009).
-	 * Sin configurar, no se pinta nada.
+	 * datos son del despliegue: los escribe administración en los ajustes o
+	 * llegan por el filtro del armazón (ADR-0009). Va al final, justo antes de
+	 * enviar, y se vuelve a sanear aquí: puede ir dentro de un formulario. Sin
+	 * configurar, no se pinta nada.
 	 *
+	 * @param string $notice The notice as written, from the model.
 	 * @return string
 	 */
-	private static function privacy(): string {
-		$texto = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
-		if ( '' === $texto ) {
+	private static function privacy( string $notice ): string {
+		$text = PrivacyNotice::sanitize( $notice );
+		if ( '' === $text ) {
 			return '';
 		}
-		return '<div class="prc-aviso-legal">' . wp_kses_post( $texto ) . '</div>';
+		return '<div class="prc-aviso-legal">' . $text . '</div>';
 	}
 
 	/**
@@ -339,8 +346,6 @@ final class ApplyFormView {
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
-
-			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
 			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio" aria-hidden="true">*</span> Campo obligatorio</p>
 
@@ -408,6 +413,8 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+
+			<?php echo self::privacy( (string) ( $m['privacy'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- saneado en privacy(). ?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>

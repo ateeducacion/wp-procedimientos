@@ -158,6 +158,7 @@ src/Prc/
 ├── PublicFront/ProcedureDelete.php         Borrar un borrador desde el taller: la palabra BORRAR y la papelera
 ├── PublicFront/View/MeasuredQuestionView.php Pinta las preguntas de número, fecha y rejilla
 ├── PublicFront/View/PeopleView.php         Pinta la lista de personas: la del centro, la de la revisión y el panel del taller
+├── PublicFront/PrivacyNotice.php           El aviso de protección de datos: ajuste o filtro, y su saneado
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/WithdrawForm.php            Retirar la propia solicitud desde su pantalla (ADR-0044)

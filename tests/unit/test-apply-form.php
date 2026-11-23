@@ -9,6 +9,7 @@ use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\Assets;
@@ -557,6 +558,39 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'placeholder="Escriba aquí"', $html, 'la caja de respuesta libre' );
 		$this->assertStringContainsString( '<button class="' . Assets::button_class( 'final' ) . '" type="submit">', $html, 'el botón de siempre, en su variante final' );
 		$this->assertStringNotContainsString( 'prc-boton-enviar', $html );
+	}
+
+	/**
+	 * Lo obligatorio se ve: leyenda, asterisco en la casilla de compromisos y
+	 * en el sí/no, y el campo de archivo dice qué formatos y cuánto admite.
+	 */
+	public function test_required_marks_and_file_formats_are_visible() {
+		$procedimiento = $this->procedimiento(
+			array(
+				ProcedureMetaKeys::COMMITMENTS => 'El centro se compromete a sostener la red.',
+				ProcedureMetaKeys::QUESTIONS   => array(
+					array(
+						'label'    => 'Tiene huerto',
+						'type'     => ProcedureQuestions::TYPE_YESNO,
+						'required' => true,
+					),
+					array(
+						'label'    => 'Proyecto',
+						'type'     => ProcedureQuestions::TYPE_FILE,
+						'required' => true,
+					),
+				),
+			)
+		);
+		$this->acting_as( $this->school_head( 'C0001' ) );
+
+		$html = $this->pintar( $procedimiento );
+
+		$this->assertStringContainsString( 'class="prc-leyenda-obligatorio"', $html, 'la leyenda del asterisco' );
+		$this->assertMatchesRegularExpression( '#<label for="prc-accept">(?:(?!</label>).)*prc-campo__obligatorio#s', $html, 'la casilla de compromisos lleva asterisco' );
+		$this->assertMatchesRegularExpression( '#<label for="prc-q-q1">(?:(?!</label>).)*prc-campo__obligatorio#s', $html, 'y el sí/no obligatorio' );
+		$this->assertStringContainsString( 'accept=".pdf,.jpg,.jpeg,.jpe,.png,.docx,.odt"', $html, 'accept con las extensiones' );
+		$this->assertStringContainsString( 'Formatos admitidos: PDF, JPG, PNG, DOCX, ODT · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ), $html );
 	}
 
 	/** A procedure requesting two coordinators shows two independently labelled rows. */

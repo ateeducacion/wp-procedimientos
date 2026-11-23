@@ -208,16 +208,20 @@
   font-size: 18px;
   font-weight: 200;
   line-height: 1.3;
-  color: var(--prc-c-medio);
+  color: var(--prc-c-fuerte);
   background: var(--prc-c-fondo);
-  border: 1px solid var(--prc-c-borde-campo);
+  /* Lo que se rellena tiene que verse: borde de 3:1 sobre blanco (WCAG
+     1.4.11), y no el #ccc del original, que se perdía en la página (#87). */
+  border: 1px solid var(--prc-c-borde-editable, #8a8a8a);
   border-radius: var(--prc-radio-caja);
   outline: none;
   box-shadow: none;
 }
 
 .prc-form.prc-form--solicitud textarea.prc-control { line-height: var(--prc-i-base); }
-.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-bloq-texto, #a1a1a1); font-style: normal; opacity: 1; }
+/* El ejemplo de un campo, con su propio token: claro para no pasar por una
+   respuesta ya escrita, y aun así de 4,5:1 sobre blanco (#767676). */
+.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-placeholder, #767676); font-style: normal; opacity: 1; }
 
 /* Al enfocar, el original solo cambia el borde. Con el teclado eso es poco
    —un borde de 1px que pasa de gris a turquesa—, así que ahí va además el
@@ -232,18 +236,24 @@
 
 .prc-form.prc-form--solicitud .prc-control:focus-visible { outline: 2px solid var(--prc-c-foco); outline-offset: 1px; }
 
-/* Bloqueado: **solo el color**. Mismo alto, mismo borde, mismo radio y el
-   fondo sigue blanco; lo que se aclara es el texto y el borde. Sin candado y
-   sin fondo gris, que es como está medido.
-
-   `#a1a1a1` sobre blanco da 2,5:1: quien despliegue lo sube redefiniendo
-   `--prc-c-bloq-texto` sin tocar esta hoja. */
+/* Bloqueado: lo que viene dado —centro, código, nombre, correo— no se
+   rellena, y tiene que notarse a la primera: fondo gris, borde claro y sin
+   cursor de texto (#87). El texto se queda en 4,9:1 sobre el gris.
+   Quien despliegue lo cambia redefiniendo `--prc-c-bloq-*` sin tocar esta hoja. */
 .prc-form.prc-form--solicitud .prc-control--bloqueado,
 .prc-form.prc-form--solicitud .prc-control[readonly],
 .prc-form.prc-form--solicitud .prc-control[disabled] {
-  color: var(--prc-c-bloq-texto, #a1a1a1);
-  background: var(--prc-c-fondo);
-  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+  color: var(--prc-c-bloq-texto, #666);
+  cursor: not-allowed;
+  background: var(--prc-c-bloq-fondo, #ececec);
+  border-color: var(--prc-c-bloq-borde, #e0e0e0);
+}
+
+/* La leyenda del asterisco, encima del primer campo. */
+.prc-form--solicitud .prc-leyenda-obligatorio {
+  margin: 0 0 10px;
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
 }
 
 /* --- bloque de texto fijo entre campos ---------------------------------- */

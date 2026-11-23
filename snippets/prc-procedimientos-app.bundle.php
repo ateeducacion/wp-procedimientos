@@ -27623,7 +27623,7 @@ final class MeasuredQuestionView {
 		$etiqueta = $grupo ? 'p' : 'label';
 		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
 			. esc_html( $rotulo )
-			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. ( $obligatorio ? ' ' . ApplyFormView::REQUIRED_MARK : '' )
 			. '</' . $etiqueta . '>';
 	}
 }
@@ -27874,7 +27874,7 @@ final class PeopleView {
 			<?php echo self::hidden( $p, $op, $fila );?>
 			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $obliga, $auto ) ) : ?>
 				<div class="prc-campo prc-campo--cuarto">
-					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $base . $campo ); ?>"><?php echo esc_html( $rotulo ); ?><?php echo $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : ''; ?></label>
+					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $base . $campo ); ?>"><?php echo esc_html( $rotulo ); ?><?php echo $obliga ? ' ' . ApplyFormView::REQUIRED_MARK : '';?></label>
 					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $base . $campo ); ?>"
 						name="<?php echo esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ); ?>" autocomplete="<?php echo esc_attr( $auto ); ?>"
 						value="<?php echo esc_attr( (string) ( $valores[ $campo ] ?? '' ) ); ?>"<?php echo $obliga ? ' required' : ''; ?> />
@@ -27906,7 +27906,7 @@ final class PeopleView {
 
 	private static function select( string $id, string $campo, string $rotulo, array $opciones, string $elegida, bool $obliga ): string {
 		$out = '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $rotulo )
-			. ( $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' ) . '</label>'
+			. ( $obliga ? ' ' . ApplyFormView::REQUIRED_MARK : '' ) . '</label>'
 			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ) . '"' . ( $obliga ? ' required' : '' ) . '>'
 			. ( $obliga ? '<option value="">— Elija —</option>' : '' );
 		foreach ( $opciones as $clave => $texto ) {
@@ -28402,6 +28402,13 @@ final class ApplyFormView {
 
 
 
+	public const REQUIRED_MARK = '<span class="prc-campo__obligatorio" aria-hidden="true">*</span>';
+
+
+
+
+
+
 
 	public static function html( array $m ): string {
 		if ( '' !== (string) $m['aviso'] ) {
@@ -28684,6 +28691,8 @@ final class ApplyFormView {
 
 			<?php echo self::privacy();?>
 
+			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio" aria-hidden="true">*</span> Campo obligatorio</p>
+
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
 					<h2 class="prc-seccion__titulo">Datos del centro educativo</h2>
@@ -28726,6 +28735,7 @@ final class ApplyFormView {
 									<label for="prc-accept">
 										<input type="checkbox" class="<?php echo esc_attr( trim( FieldErrorView::css( $falla, 'accept' ) ) ); ?>" id="prc-accept" name="<?php echo esc_attr( ApplyForm::FIELD_ACCEPT ); ?>" value="1" required <?php checked( (bool) $v['accept'] ); ?><?php echo FieldErrorView::attrs( $falla, 'accept' );?> />
 										<?php echo esc_html( $docente ? 'Acepto estos compromisos' : 'El centro acepta estos compromisos' ); ?>
+										<?php echo self::REQUIRED_MARK;?>
 									</label>
 								</div>
 							</div>
@@ -28801,7 +28811,7 @@ final class ApplyFormView {
 
 		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
 			. esc_html( $rotulo )
-			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. ( $obligatorio ? ' ' . self::REQUIRED_MARK : '' )
 			. '</' . $etiqueta . '>';
 	}
 
@@ -28873,16 +28883,17 @@ final class ApplyFormView {
 			<?php if ( ProcedureQuestions::TYPE_TEXT === $tipo ) : ?>
 				<label class="prc-campo__etiqueta prc-campo__etiqueta--enunciado" for="<?php echo esc_attr( $id ); ?>">
 					<strong><?php echo esc_html( (string) $p['label'] ); ?></strong>
-					<?php if ( $obliga ) : ?>
-						<span class="prc-campo__obligatorio" aria-hidden="true">*</span>
-					<?php endif; ?>
+					<?php echo $obliga ? self::REQUIRED_MARK : '';?>
 				</label>
 				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="<?php echo esc_attr( $clase ); ?>" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
 					<?php echo $pie;?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
 			<?php elseif ( ProcedureQuestions::TYPE_FILE === $tipo ) : ?>
-				<?php echo self::label( $id, (string) $p['label'], $obliga );?>
+				<?php
+				echo self::label( $id, (string) $p['label'], $obliga );
+				$extensiones = array_keys( ApplicationFiles::mimes() );
+				?>
 				<?php if ( array() !== $subido ) : ?>
 					<p class="prc-campo__adjunto">
 						Ya adjuntó
@@ -28891,12 +28902,15 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( implode( ',', array_values( ApplicationFiles::mimes() ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( '.' . str_replace( '|', ',.', implode( ',.', $extensiones ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie;?> />
 				<div class="prc-campo__ayuda">
-					Un solo documento, de hasta <?php echo esc_html( size_format( ApplicationFiles::max_bytes() ) ); ?>.
-					Se admiten PDF, JPG, PNG, DOCX y ODT.
+					<?php
+
+					$formatos = array_map( static fn( $ext ) => strtoupper( strtok( (string) $ext, '|' ) ), $extensiones );
+					echo esc_html( 'Un solo documento. Formatos admitidos: ' . implode( ', ', $formatos ) . ' · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ) );
+					?>
 				</div>
 			<?php elseif ( ProcedureQuestions::TYPE_YESNO === $tipo ) : ?>
 				<div class="prc-opciones prc-opciones--vertical">
@@ -28906,6 +28920,7 @@ final class ApplyFormView {
 								<?php checked( (bool) $valor ); ?> <?php echo $obliga ? 'required' : ''; ?>
 								<?php echo $pie;?> />
 							<?php echo esc_html( (string) $p['label'] ); ?>
+							<?php echo $obliga ? self::REQUIRED_MARK : '';?>
 						</label>
 					</div>
 				</div>
@@ -29500,7 +29515,6 @@ final class ApplyForm {
 			),
 			'application'     => array(),
 			'max_file_size'   => ApplicationFiles::max_bytes(),
-			'file_mimes'      => ApplicationFiles::mimes(),
 			'deliveries'      => array(),
 			'can_submit'      => false,
 			'why'             => '',
@@ -37045,16 +37059,20 @@ body.prc-app .prc-btn-borrar {
   font-size: 18px;
   font-weight: 200;
   line-height: 1.3;
-  color: var(--prc-c-medio);
+  color: var(--prc-c-fuerte);
   background: var(--prc-c-fondo);
-  border: 1px solid var(--prc-c-borde-campo);
+  /* Lo que se rellena tiene que verse: borde de 3:1 sobre blanco (WCAG
+     1.4.11), y no el #ccc del original, que se perdía en la página (#87). */
+  border: 1px solid var(--prc-c-borde-editable, #8a8a8a);
   border-radius: var(--prc-radio-caja);
   outline: none;
   box-shadow: none;
 }
 
 .prc-form.prc-form--solicitud textarea.prc-control { line-height: var(--prc-i-base); }
-.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-bloq-texto, #a1a1a1); font-style: normal; opacity: 1; }
+/* El ejemplo de un campo, con su propio token: claro para no pasar por una
+   respuesta ya escrita, y aun así de 4,5:1 sobre blanco (#767676). */
+.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-placeholder, #767676); font-style: normal; opacity: 1; }
 
 /* Al enfocar, el original solo cambia el borde. Con el teclado eso es poco
    —un borde de 1px que pasa de gris a turquesa—, así que ahí va además el
@@ -37069,18 +37087,24 @@ body.prc-app .prc-btn-borrar {
 
 .prc-form.prc-form--solicitud .prc-control:focus-visible { outline: 2px solid var(--prc-c-foco); outline-offset: 1px; }
 
-/* Bloqueado: **solo el color**. Mismo alto, mismo borde, mismo radio y el
-   fondo sigue blanco; lo que se aclara es el texto y el borde. Sin candado y
-   sin fondo gris, que es como está medido.
-
-   `#a1a1a1` sobre blanco da 2,5:1: quien despliegue lo sube redefiniendo
-   `--prc-c-bloq-texto` sin tocar esta hoja. */
+/* Bloqueado: lo que viene dado —centro, código, nombre, correo— no se
+   rellena, y tiene que notarse a la primera: fondo gris, borde claro y sin
+   cursor de texto (#87). El texto se queda en 4,9:1 sobre el gris.
+   Quien despliegue lo cambia redefiniendo `--prc-c-bloq-*` sin tocar esta hoja. */
 .prc-form.prc-form--solicitud .prc-control--bloqueado,
 .prc-form.prc-form--solicitud .prc-control[readonly],
 .prc-form.prc-form--solicitud .prc-control[disabled] {
-  color: var(--prc-c-bloq-texto, #a1a1a1);
-  background: var(--prc-c-fondo);
-  border-color: var(--prc-c-bloq-borde, #e5e5e5);
+  color: var(--prc-c-bloq-texto, #666);
+  cursor: not-allowed;
+  background: var(--prc-c-bloq-fondo, #ececec);
+  border-color: var(--prc-c-bloq-borde, #e0e0e0);
+}
+
+/* La leyenda del asterisco, encima del primer campo. */
+.prc-form--solicitud .prc-leyenda-obligatorio {
+  margin: 0 0 10px;
+  font: 400 .875rem / var(--prc-i-base) var(--prc-fuente);
+  color: var(--prc-c-medio);
 }
 
 /* --- bloque de texto fijo entre campos ---------------------------------- */

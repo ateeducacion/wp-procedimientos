@@ -701,7 +701,8 @@ final class ApplyFormView {
 		if ( array() === $s ) {
 			return '';
 		}
-		$coord     = ApplicationMetaRegistration::sanitize_coordinator( $s['coordinator'] );
+		// Con la coordinación en la lista, lo que quede en la meta es de antes.
+		$coord     = empty( $m['spec']['coordinators_in_list'] ) ? ApplicationMetaRegistration::sanitize_coordinator( $s['coordinator'] ) : array();
 		$preguntas = (array) ( $m['spec']['questions'] ?? array() );
 
 		ob_start();

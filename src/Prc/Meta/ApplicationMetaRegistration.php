@@ -269,6 +269,27 @@ final class ApplicationMetaRegistration {
 	}
 
 	/**
+	 * Every coordinator with a name, as «Name Surname (DNI o NIE X)», for the receipt.
+	 *
+	 * El DNI o NIE solo si lo hay. Lo pinta el justificante, que ve quien
+	 * presenta y quien revisa; nunca un correo ni la consulta.
+	 *
+	 * @param array<int, array<string, mixed>> $people Sanitised coordinators, or rows of the people list.
+	 * @return string '' without any named coordinator.
+	 */
+	public static function receipt_coordinators( array $people ): string {
+		$out = array();
+		foreach ( $people as $persona ) {
+			$nombre = self::full_name( (array) $persona );
+			$dni    = (string) ( $persona['dni'] ?? '' );
+			if ( '' !== $nombre ) {
+				$out[] = '' !== $dni ? $nombre . ' (DNI o NIE ' . $dni . ')' : $nombre;
+			}
+		}
+		return implode( '; ', $out );
+	}
+
+	/**
 	 * Private file descriptors keyed by question key, and nothing else.
 	 *
 	 * Lo que entra tiene la forma de un descriptor de

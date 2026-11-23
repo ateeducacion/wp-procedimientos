@@ -11,7 +11,7 @@ namespace Prc\Domain;
  * El justificante que se firma con AutoFirma o se sube firmado (ADR-0049).
  *
  * Puro: ni una llamada a WordPress. El PDF lo genera el navegador con jsPDF a
- * partir de cuatro datos y de su huella, así que el servidor no puede cotejar
+ * partir de cinco datos y de su huella, así que el servidor no puede cotejar
  * «lo que sirvió»: lo que mira de lo que vuelve es que sea un PDF, que lleve
  * **una sola firma que lo cubra entero** y que sea el justificante de esta
  * solicitud —su número y su huella en el texto—.
@@ -28,7 +28,7 @@ final class SignedReceipt {
 	 *
 	 * @var string[]
 	 */
-	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted' );
+	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted', 'coordination' );
 
 	/**
 	 * Most decompression attempts per PDF, failed ones included.
@@ -41,9 +41,9 @@ final class SignedReceipt {
 	public const MAX_INFLATES = 64;
 
 	/**
-	 * The fingerprint of the receipt: SHA-256 of its four fields, one per line.
+	 * The fingerprint of the receipt: SHA-256 of its five fields, one per line.
 	 *
-	 * @param array<string, string> $fields `number`, `procedure`, `centre` and `submitted`.
+	 * @param array<string, string> $fields `number`, `procedure`, `centre`, `submitted` and `coordination`.
 	 * @return string 64 hex characters.
 	 */
 	public static function fingerprint( array $fields ): string {

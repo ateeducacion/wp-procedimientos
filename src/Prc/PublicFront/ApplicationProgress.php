@@ -9,8 +9,10 @@ namespace Prc\PublicFront;
 
 use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
+use Prc\Meta\ApplicationMetaRegistration;
 
 /**
  * La solicitud se termina y se demuestra.
@@ -90,13 +92,54 @@ final class ApplicationProgress {
 			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
+			'coordination'   => '',
 			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige pintar en solo lectura lo que la pantalla ya enseña.
 			'receipt'        => $con_recibo && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
 		);
+		// Solo la pinta el justificante: no se calcula en cada vista.
+		if ( $out['receipt'] ) {
+			$out['coordination'] = self::coordination( $id );
+		}
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
+	}
+
+	/**
+	 * The coordination of an application for its receipt, each person with their DNI or NIE.
+	 *
+	 * Se decide por solicitud, no por cómo está hoy el procedimiento: si su
+	 * lista de personas tiene a alguien con un papel de coordinación, esa;
+	 * si no, la del formulario. Así apagar la lista no cambia en silencio
+	 * los justificantes ya presentados.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return string '' without coordination.
+	 */
+	public static function coordination( int $application_id ): string {
+		$lista = self::coordinators_listed( $application_id );
+		return ApplicationMetaRegistration::receipt_coordinators(
+			array() !== $lista ? $lista : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
+	}
+
+	/**
+	 * The people of an application's list whose role means coordination.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return array<int, array<string, string>>
+	 */
+	public static function coordinators_listed( int $application_id ): array {
+		$spec = People::spec( (int) wp_get_post_parent_id( $application_id ) );
+		return array_values(
+			array_filter(
+				People::of( $application_id ),
+				static function ( array $row ) use ( $spec ): bool {
+					return PeopleSpec::names_coordination( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ) );
+				}
+			)
+		);
 	}
 
 	/**

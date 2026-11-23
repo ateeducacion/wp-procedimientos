@@ -48,6 +48,9 @@ final class ReceiptSignatureView {
 				<?php endif; ?>
 			</p>
 			<?php if ( ! empty( $s['can'] ) ) : ?>
+				<?php if ( ! empty( $s['no_coordination'] ) ) : ?>
+					<?php echo Shell::notice( 'aviso', 'Su lista de participantes todavía no tiene a nadie en la coordinación: si firma ahora, el justificante saldrá sin ella. Le conviene añadirla antes en «Participantes».' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php endif; ?>
 				<p class="prc-intro">Este procedimiento pide el justificante firmado electrónicamente. Su solicitud ya está presentada: firmarlo no cambia nada más. Puede firmarlo con AutoFirma desde esta pantalla, o descargarlo en PDF, firmarlo con otra aplicación y subirlo.</p>
 				<p class="prc-firma__botones" data-prc-firma-botones hidden>
 					<button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-firmar hidden>Firmar justificante con AutoFirma</button>

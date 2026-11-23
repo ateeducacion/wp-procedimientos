@@ -16,6 +16,7 @@ use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\People;
 use Prc\PublicFront\PeopleForm;
+use Prc\PublicFront\ReceiptSignature;
 
 /**
  * La solicitud se termina y se demuestra.
@@ -333,6 +334,101 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$this->assertStringContainsString( '<div class="prc-justificante__cab">', $html, 'solo el escudo' );
 		$this->assertStringContainsString( '<img src="https://example.org/escudo.png" alt="" class="prc-justificante__escudo"', $html, 'sin texto alternativo, decorativo' );
 		$this->assertStringNotContainsString( 'prc-justificante__org', $html );
+	}
+
+	/**
+	 * The coordination goes on the receipt with its DNI or NIE, only when known.
+	 */
+	public function test_the_receipt_carries_the_coordinator_id_only_when_present() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+		$recibo = function () use ( $procedimiento ): string {
+			return $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		};
+
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array() );
+		$this->assertStringNotContainsString( '<th scope="row">Coordinación</th>', $recibo(), 'sin coordinación, sin fila' );
+
+		$ana = array(
+			'name'    => 'Ana',
+			'surname' => 'Pérez',
+			'dni'     => '12345678-z',
+			'email'   => 'ana@example.org',
+		);
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $ana ) );
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez (DNI o NIE 12345678Z)</td>', $recibo() );
+
+		$ana['dni'] = '';
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $ana ) );
+		$html = $recibo();
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez</td>', $html, 'sin DNI, solo el nombre' );
+		$this->assertStringNotContainsString( 'DNI o NIE', $html );
+	}
+
+	/**
+	 * When the people list takes over the coordination, the receipt and its
+	 * fingerprint read the list, not what an older form left in the meta.
+	 */
+	public function test_the_receipt_reads_the_coordination_from_the_list_when_it_holds_it() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, 1 );
+		$this->assertTrue( Applications::spec( $procedimiento )['coordinators_in_list'] );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		update_post_meta(
+			$solicitud,
+			ApplicationMetaKeys::COORDINATOR,
+			array(
+				array(
+					'name'    => 'Persona',
+					'surname' => 'De Antes',
+					'dni'     => '00000000T',
+					'email'   => 'antes@example.org',
+				),
+			)
+		);
+		People::add( $solicitud, $director, $this->persona( '12345678Z' ) );
+
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ApplicationProgress::coordination( $solicitud ) );
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ReceiptSignature::data( $solicitud )['coordination'] );
+		$this->acting_as( $director );
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez (DNI o NIE 12345678Z)</td>', $html );
+		$this->assertStringNotContainsString( '00000000T', $html, 'lo de la meta es de antes: ni en «Lo que presentó»' );
+	}
+
+	/**
+	 * Where the receipt reads the coordination is decided per application:
+	 * switching the list off does not change it, and people of a role that
+	 * does not coordinate are not the coordination.
+	 */
+	public function test_the_receipt_coordination_is_decided_by_the_application() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, 1 );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		$antes     = array(
+			'name'    => 'Persona',
+			'surname' => 'De Antes',
+			'dni'     => '00000000T',
+			'email'   => 'antes@example.org',
+		);
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $antes ) );
+		$this->assertSame( 'Persona De Antes (DNI o NIE 00000000T)', ApplicationProgress::coordination( $solicitud ), 'lista vacía: la del formulario' );
+
+		People::add( $solicitud, $director, $this->persona( '12345678Z' ) );
+		$spec            = People::spec( $procedimiento );
+		$spec['enabled'] = false;
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+		$this->assertFalse( Applications::coordinators_in_list( $procedimiento ) );
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ApplicationProgress::coordination( $solicitud ), 'apagar la lista no cambia el justificante' );
+
+		$spec['enabled']           = true;
+		$spec['roles'][0]['label'] = 'Alumnado';
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+		$this->assertSame( 'Persona De Antes (DNI o NIE 00000000T)', ApplicationProgress::coordination( $solicitud ), 'quien no coordina no es la coordinación' );
 	}
 
 	/**

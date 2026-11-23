@@ -124,8 +124,8 @@ const SCENES = [
 	},
 	{
 		chapter: 'El taller del procedimiento',
-		title: 'Preguntas',
-		note: 'El constructor: hasta veinte preguntas de texto, de una opción, de varias o sí/no, con su clave fija aunque se reordenen.',
+		title: 'Campos adicionales',
+		note: 'El constructor: hasta cuarenta campos adicionales de texto, de una opción, de varias, sí/no, número, fecha, cantidades por fila o archivo, con su clave fija aunque se reordenen.',
 		who: 'gestion',
 		go: '/editar-procedimiento/?procedimiento={ID}&panel=preguntas',
 		screens: [ 'desktop' ],
@@ -159,7 +159,7 @@ const SCENES = [
 	{
 		chapter: 'Quien solicita',
 		title: 'Solicitud',
-		note: 'El formulario del centro: código y nombre de solo lectura, cargo, compromisos, persona coordinadora si se pide y las preguntas del procedimiento. Si ya hay una, se edita esa.',
+		note: 'El formulario del centro: código y nombre de solo lectura, cargo, compromisos, persona coordinadora si se pide y los campos adicionales del procedimiento. Si ya hay una, se edita esa.',
 		who: 'direccion',
 		go: '/solicitud/?procedimiento={ID}',
 		screens: [ 'desktop', 'mobile' ],

@@ -41,7 +41,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
-			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Personas que participan</h2>
+			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Participantes</h2>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
@@ -121,7 +121,7 @@ final class PeopleView {
 		?>
 		<div class="prc-tabla-caja prc-campo--completo">
 			<table class="prc-tabla prc-tabla--densa">
-				<caption class="screen-reader-text">Personas de la solicitud</caption>
+				<caption class="screen-reader-text">Participantes de la solicitud</caption>
 				<thead>
 					<tr>
 						<th class="prc-th" scope="col">Nombre y apellidos</th>
@@ -291,7 +291,7 @@ final class PeopleView {
 	 */
 	private static function remove_form( array $p, array $fila ): string {
 		$nombre   = trim( $fila['name'] . ' ' . $fila['surname'] );
-		$pregunta = sprintf( '¿Dar de baja a %s de la lista de personas? Quedará anotado en el historial de la solicitud.', $nombre );
+		$pregunta = sprintf( '¿Dar de baja a %s de la lista de participantes? Quedará anotado en el historial de la solicitud.', $nombre );
 		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
 			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
 			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
@@ -316,7 +316,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<div class="prc-personas-revision">
-			<p><strong>Personas</strong>
+			<p><strong>Participantes</strong>
 				<?php echo esc_html( sprintf( '(%d)', count( $filas ) ) ); ?>
 				<?php if ( empty( $r['complete'] ) ) : ?>
 					<span class="<?php echo esc_attr( Assets::state_class( 'amend' ) ); ?>"><?php echo esc_html( sprintf( 'Incompleta: pide al menos %d', (int) $r['min'] ) ); ?></span>
@@ -340,8 +340,8 @@ final class PeopleView {
 		$v  = (array) ( $p['values'] ?? array() );
 		$op = ProcedureEditor::OP_PEOPLE_SPEC;
 		if ( ! empty( $p['teachers'] ) ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Personas de la solicitud</h2>'
-				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de personas.</p></section>';
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Participantes de la solicitud</h2>'
+				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de participantes.</p></section>';
 		}
 
 		ob_start();
@@ -351,17 +351,17 @@ final class PeopleView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
-				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
+				<legend class="prc-seccion__titulo">Participantes de la solicitud</legend>
 				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
-				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de participantes', $v, 'enabled' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::role_rows( $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
 					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
 					<p class="prc-campo__ayuda" id="prc-people-groups-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Eje 1». Para quitar uno, deje su línea en blanco.', (int) ( $p['max_groups'] ?? 0 ) ) ); ?></p>
 				</div>
-				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de personas', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de personas', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de participantes', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de participantes', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_OPENS, 'La lista se abre el', $v, 'opens_at' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
@@ -369,7 +369,7 @@ final class PeopleView {
 				<?php echo self::check( PeopleSpecPanel::FIELD_MULTI_ROLE, 'Una persona puede tener varios papeles (sin marcar, la misma persona no entra dos veces en la lista)', $v, 'multi_role' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</fieldset>
-			<?php echo PanelParts::submit( 'Guardar la lista de personas' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo PanelParts::submit( 'Guardar la lista de participantes' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -391,7 +391,7 @@ final class PeopleView {
 		);
 		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
 		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
-			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su nombre en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
 		foreach ( $filas as $i => $fila ) {
 			$id   = 'prc-people-role-' . $i;
 			$out .= '<div class="prc-papel">'

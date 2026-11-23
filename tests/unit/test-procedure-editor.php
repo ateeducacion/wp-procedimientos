@@ -907,7 +907,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) ) );
 		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 		$m = $this->modelo( $id );
-		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Personas»', $m['flash']['texto'] );
+		$this->assertStringContainsString( 'La coordinación ya se da de alta en la lista de la pestaña «Participantes»', $m['flash']['texto'] );
 		$this->olvidar_rechazo();
 
 		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'none' ) ) ) );
@@ -1764,7 +1764,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$html   = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
 		$labels = array(
 			'Datos',
-			'Preguntas',
+			'Campos adicionales',
+			'Participantes',
 			'Entregas',
 			'Enlaces',
 			'Solicitudes',
@@ -1774,6 +1775,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		);
 		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
+		}
+		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Entregas', 'Enlaces', 'Solicitudes', 'Publicación' ) as $pestana ) {
+			$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*>' . preg_quote( $pestana, '#' ) . '\s#', $html, 'falta la pestaña ' . $pestana );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::OPENS_AT . '"', $html );
@@ -1785,7 +1789,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Modalidad', $html );
 		$this->assertStringContainsString( ProcedureEditor::FIELD_Q . 'label[0]', $html );
 		$this->assertStringContainsString( ProcedureEditor::FIELD_Q . 'label[1]', $html, 'la fila en blanco del final' );
-		$this->assertStringContainsString( 'Pregunta nueva', $html );
+		$this->assertStringContainsString( 'Campo nuevo', $html );
+		$this->assertStringContainsString( '>Título</label>', $html, 'cada campo lleva título, no rótulo' );
+		$this->assertStringContainsString( 'Guardar los campos', $html );
+		// Lo que se lee: el texto y los atributos que se anuncian o se ven.
+		preg_match_all( '#(?:aria-label|title|placeholder|data-prc-confirm)="([^"]*)"#', $html, $atributos );
+		$legible = wp_strip_all_tags( $html ) . ' ' . implode( ' ', $atributos[1] );
+		foreach ( array( 'Pregunta', 'pregunta', 'Rótulo', 'rótulo' ) as $vieja ) {
+			$this->assertStringNotContainsString( $vieja, $legible, 'en el panel ya no se dice ' . $vieja );
+		}
+		$this->assertStringContainsString( 'antes de cerrar la inscripción, mientras este panel siga editable', $html, 'la entrega con plazo propio dice cuándo se configura' );
+		$this->assertStringNotContainsString( 'rótulo', wp_strip_all_tags( ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PEOPLE ) ) ), 'los papeles tienen nombre, no rótulo' );
 		foreach ( ProcedureQuestions::types() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
@@ -1836,6 +1850,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$_GET = array();
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( 'Crear un procedimiento', $html );
+		$this->assertStringContainsString( 'los plazos, los campos adicionales y los', $html, 'el alta nombra las pestañas que hay' );
 		$this->assertStringContainsString( 'Crear el procedimiento', $html );
 
 		// El sistema no marca como histórico un borrador: primero se publica.

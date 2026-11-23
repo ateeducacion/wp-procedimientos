@@ -121,9 +121,9 @@ final class ApplicationExport {
 			'centre'       => 'Centro',
 			'applicant'    => 'Quien presenta',
 			'coordination' => 'Coordinación',
-			'people'       => 'Personas',
+			'people'       => 'Participantes',
 			'review'       => 'Revisión',
-			'questions'    => 'Preguntas',
+			'questions'    => 'Campos adicionales',
 		);
 		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
@@ -264,7 +264,7 @@ final class ApplicationExport {
 		$out = array(
 			self::WHO_COORDINATORS => 'Coordinación',
 			self::WHO_APPLICANT    => 'Quien presenta la solicitud',
-			self::WHO_PEOPLE       => 'Personas de la solicitud',
+			self::WHO_PEOPLE       => 'Participantes de la solicitud',
 		);
 		// El diálogo de un procedimiento sin lista de personas no la ofrece.
 		return PeopleExport::offered( $out, self::WHO_PEOPLE, $procedure_id );

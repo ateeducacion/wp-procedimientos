@@ -150,7 +150,7 @@ y van en las secciones siguientes.
 | Capacidad | `prc_school_head` | `prc_manager` | `administrator` | Qué abre |
 |---|:-:|:-:|:-:|---|
 | `prc_apply` | ✓ | | | Presentar y editar la solicitud **de su centro**; las páginas `solicitud` y `mi-centro`; el botón «Solicitar» / «Mi solicitud» |
-| `prc_manage_procedures` | | ✓ | ✓ | Crear, editar, publicar y archivar procedimientos **de sus ámbitos**; la página `gestion-de-procedimientos`; los paneles Datos, Preguntas, Enlaces y Publicación del taller; el botón «Gestionar» |
+| `prc_manage_procedures` | | ✓ | ✓ | Crear, editar, publicar y archivar procedimientos **de sus ámbitos**; la página `gestion-de-procedimientos`; los paneles Datos, Campos adicionales, Participantes, Enlaces y Publicación del taller; el botón «Gestionar» |
 | `prc_review_applications` | | ✓ | ✓ | El panel Solicitudes del taller: ver, admitir, excluir, pedir subsanar con nota y exportar el CSV de esos procedimientos |
 | `prc_manage_all_areas` | | | ✓ | Saltarse el acotado por ámbito, y ver los procedimientos que se han quedado sin ámbito |
 | `prc_manage_app` | | | ✓ | «Ajustes y diagnóstico»; crear y editar términos de `prc_area` y `prc_course`; los campos «Ámbitos» y «Código de centro» de cualquier ficha de usuario; **desarchivar** un procedimiento histórico |

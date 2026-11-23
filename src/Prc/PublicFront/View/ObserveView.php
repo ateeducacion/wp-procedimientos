@@ -301,7 +301,7 @@ final class ObserveView {
 				<legend class="prc-seccion__titulo">Qué más puede hacer quien consulta</legend>
 				<?php echo self::check( ObserveSettings::FIELD_FILES, 'Pueden descargar los documentos de las solicitudes de su zona', true === $c['files'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<?php echo self::check( ObserveSettings::FIELD_EXPORT, 'Pueden exportar a CSV lo que ven', true === $c['export'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-				<?php echo self::check( ObserveSettings::FIELD_NOTIFY, 'Avisar también a quienes consultan la zona de cada alta, cambio o baja de personas', true === $c['notify'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php echo self::check( ObserveSettings::FIELD_NOTIFY, 'Avisar también a quienes consultan la zona de cada alta, cambio o baja en la lista de participantes', true === $c['notify'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar la consulta' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>

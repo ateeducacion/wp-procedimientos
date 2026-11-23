@@ -379,7 +379,7 @@ class Test_Mailer extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Estado: presentada, pero incompleta: faltan 2 personas.', $cuerpo );
 		$this->assertStringNotContainsString( 'Puede dar de alta, cambiar o sustituir', $cuerpo );
 		$this->assertStringNotContainsString( '#' . PeopleForm::ANCHOR, $cuerpo );
-		$this->assertStringContainsString( 'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $cuerpo );
+		$this->assertStringContainsString( 'La lista de participantes se gestiona cuando la solicitud esté admitida, y todavía no lo está.', $cuerpo );
 	}
 
 	/**

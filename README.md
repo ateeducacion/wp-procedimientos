@@ -149,7 +149,7 @@ Páginas de WordPress con un shortcode cada una, pintadas enteras por código
 | `/procedimientos/` | Público | Listado por curso: abiertos, en subsanación, próximos, cerrados y resueltos; filtro por ámbito |
 | `/procedimiento/<slug>/` | Público | La ficha: descripción, fechas, estado, contacto, enlaces; botón «Solicitar», «Mi solicitud» o «Gestionar» según quién mira, y el motivo cuando quien ha entrado no puede solicitar |
 | `/gestion-de-procedimientos/` | `prc_manager` | «Gestión de procedimientos»: los del ámbito por curso, con estado y número de solicitudes |
-| `/editar-procedimiento/` | `prc_manager` | El taller: paneles **Datos**, **Preguntas**, **Enlaces**, **Solicitudes** y **Publicación** |
+| `/editar-procedimiento/` | `prc_manager` | El taller: paneles **Datos**, **Campos adicionales**, **Participantes**, **Entregas**, **Enlaces**, **Solicitudes** y **Publicación** |
 | `/solicitud/` | `prc_school_head` | El formulario de solicitud del centro, o la solicitud presentada con su estado y la nota de revisión |
 | `/mi-centro/` | `prc_school_head` | «Solicitudes de mi centro» (para el profesorado, «Mis solicitudes») |
 
@@ -311,7 +311,7 @@ empiece a medir, y lo que hace se comprueba en `test-load-order.php`—.
 
 ## Entregas con plazo propio
 
-En «Preguntas», una pregunta de tipo «Archivo» puede marcarse como entrega con
+En «Campos adicionales», un campo de tipo «Archivo» puede marcarse como entrega con
 plazo propio, con apertura y cierre inclusivos. Se configura antes de cerrar la
 inscripción, mientras ese panel siga editable. El centro presenta primero su
 solicitud y después entrega cada documento desde «Solicitudes de mi centro», incluso si el

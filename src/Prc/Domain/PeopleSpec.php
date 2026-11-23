@@ -394,12 +394,18 @@ final class PeopleSpec {
 		if ( true !== $spec['enabled'] || (int) $spec['min'] < max( 1, $wanted ) || array() === (array) $spec['roles'] ) {
 			return false;
 		}
-		foreach ( (array) $spec['roles'] as $role ) {
-			if ( false === strpos( strtolower( (string) $role['label'] ), 'coordina' ) ) {
-				return false;
-			}
-		}
-		return true;
+		$papeles = array_column( (array) $spec['roles'], 'label' );
+		return count( $papeles ) === count( array_filter( $papeles, array( self::class, 'names_coordination' ) ) );
+	}
+
+	/**
+	 * Whether a role label means coordination: it says «coordina».
+	 *
+	 * @param string $label Role label.
+	 * @return bool
+	 */
+	public static function names_coordination( string $label ): bool {
+		return false !== strpos( strtolower( $label ), 'coordina' );
 	}
 
 	/**

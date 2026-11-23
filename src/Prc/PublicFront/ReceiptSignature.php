@@ -327,18 +327,20 @@ final class ReceiptSignature {
 			}
 		}
 		return array(
-			'show'         => true,
-			'can'          => $puede,
-			'label'        => self::label( $id ),
-			'signed'       => array() !== self::signed( $id ),
-			'download_url' => self::url( $id ),
-			'data'         => $puede ? self::data( $id ) : array(),
-			'servlets'     => self::servlets(),
-			'rejected'     => self::$rejected,
-			'application'  => $id,
-			'action'       => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ) . '#' . self::ANCHOR,
-			'nonce_action' => self::nonce_action( $id ),
-			'max_bytes'    => ApplicationFiles::max_bytes(),
+			'show'            => true,
+			'can'             => $puede,
+			'label'           => self::label( $id ),
+			'signed'          => array() !== self::signed( $id ),
+			'download_url'    => self::url( $id ),
+			'data'            => $puede ? self::data( $id ) : array(),
+			'servlets'        => self::servlets(),
+			'rejected'        => self::$rejected,
+			// No se bloquea: se avisa de que el justificante saldría sin coordinación.
+			'no_coordination' => $puede && Applications::coordinators_in_list( (int) wp_get_post_parent_id( $id ) ) && array() === ApplicationProgress::coordinators_listed( $id ),
+			'application'     => $id,
+			'action'          => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ) . '#' . self::ANCHOR,
+			'nonce_action'    => self::nonce_action( $id ),
+			'max_bytes'       => ApplicationFiles::max_bytes(),
 		);
 	}
 

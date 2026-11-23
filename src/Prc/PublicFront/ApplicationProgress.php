@@ -9,6 +9,7 @@ namespace Prc\PublicFront;
 
 use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -108,16 +109,36 @@ final class ApplicationProgress {
 	/**
 	 * The coordination of an application for its receipt, each person with their DNI or NIE.
 	 *
-	 * Si el procedimiento recoge la coordinación en la lista de personas, la
-	 * de la lista —el formulario ya no la pide y lo que quede en la meta es
-	 * de antes—; si no, la del formulario.
+	 * Se decide por solicitud, no por cómo está hoy el procedimiento: si su
+	 * lista de personas tiene a alguien con un papel de coordinación, esa;
+	 * si no, la del formulario. Así apagar la lista no cambia en silencio
+	 * los justificantes ya presentados.
 	 *
 	 * @param int $application_id Application ID.
 	 * @return string '' without coordination.
 	 */
 	public static function coordination( int $application_id ): string {
+		$lista = self::coordinators_listed( $application_id );
 		return ApplicationMetaRegistration::receipt_coordinators(
-			Applications::coordinators_in_list( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+			array() !== $lista ? $lista : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
+	}
+
+	/**
+	 * The people of an application's list whose role means coordination.
+	 *
+	 * @param int $application_id Application ID.
+	 * @return array<int, array<string, string>>
+	 */
+	public static function coordinators_listed( int $application_id ): array {
+		$spec = People::spec( (int) wp_get_post_parent_id( $application_id ) );
+		return array_values(
+			array_filter(
+				People::of( $application_id ),
+				static function ( array $row ) use ( $spec ): bool {
+					return PeopleSpec::names_coordination( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ) );
+				}
+			)
 		);
 	}
 

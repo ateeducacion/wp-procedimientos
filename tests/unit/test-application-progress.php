@@ -400,6 +400,38 @@ class Test_Application_Progress extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Where the receipt reads the coordination is decided per application:
+	 * switching the list off does not change it, and people of a role that
+	 * does not coordinate are not the coordination.
+	 */
+	public function test_the_receipt_coordination_is_decided_by_the_application() {
+		$procedimiento = $this->procedimiento();
+		update_post_meta( $procedimiento, ProcedureMetaKeys::COORDINATOR_COUNT, 1 );
+		$director  = $this->school_head( 'C0001' );
+		$solicitud = $this->application( $procedimiento, $director );
+		$antes     = array(
+			'name'    => 'Persona',
+			'surname' => 'De Antes',
+			'dni'     => '00000000T',
+			'email'   => 'antes@example.org',
+		);
+		update_post_meta( $solicitud, ApplicationMetaKeys::COORDINATOR, array( $antes ) );
+		$this->assertSame( 'Persona De Antes (DNI o NIE 00000000T)', ApplicationProgress::coordination( $solicitud ), 'lista vacía: la del formulario' );
+
+		People::add( $solicitud, $director, $this->persona( '12345678Z' ) );
+		$spec            = People::spec( $procedimiento );
+		$spec['enabled'] = false;
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+		$this->assertFalse( Applications::coordinators_in_list( $procedimiento ) );
+		$this->assertSame( 'Ana Pérez (DNI o NIE 12345678Z)', ApplicationProgress::coordination( $solicitud ), 'apagar la lista no cambia el justificante' );
+
+		$spec['enabled']           = true;
+		$spec['roles'][0]['label'] = 'Alumnado';
+		update_post_meta( $procedimiento, ProcedureMetaKeys::PEOPLE_SPEC, $spec );
+		$this->assertSame( 'Persona De Antes (DNI o NIE 00000000T)', ApplicationProgress::coordination( $solicitud ), 'quien no coordina no es la coordinación' );
+	}
+
+	/**
 	 * Without an author there is no «Presentada por» row, not a lone «(cargo)».
 	 */
 	public function test_the_receipt_skips_who_submitted_when_nobody_is_known() {

@@ -8,6 +8,7 @@
  */
 
 use Prc\Domain\CentreCatalog;
+use Prc\Domain\ProcedureState;
 use Prc\Domain\SignedReceipt;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ProcedureMetaKeys;
@@ -20,6 +21,7 @@ use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplicationQuery;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
+use Prc\PublicFront\People;
 use Prc\PublicFront\ProcedureEditor;
 use Prc\Access\ProcedureAccess;
 use Prc\PublicFront\ReceiptSignature;
@@ -329,6 +331,55 @@ class Test_Receipt_Signature extends WP_UnitTestCase {
 
 		$sin = $this->escenario( false );
 		$this->assertStringNotContainsString( 'id="' . ReceiptSignature::ANCHOR . '"', $this->pantalla( $sin['head'], $sin['procedure'] ) );
+	}
+
+	/**
+	 * Con la coordinación en la lista y la lista sin nadie que coordine, firmar
+	 * no se bloquea: se avisa de que el justificante saldría sin ella.
+	 */
+	public function test_signing_without_the_coordination_in_the_list_warns_but_does_not_block() {
+		$e = $this->escenario();
+		update_post_meta( $e['procedure'], ProcedureMetaKeys::OPENS_AT, ProcedureState::today() );
+		update_post_meta( $e['procedure'], ProcedureMetaKeys::CLOSES_AT, gmdate( 'Y-m-d', strtotime( ProcedureState::today() . ' +5 days' ) ) );
+		update_post_meta( $e['procedure'], ProcedureMetaKeys::COORDINATOR_COUNT, 1 );
+		update_post_meta(
+			$e['procedure'],
+			ProcedureMetaKeys::PEOPLE_SPEC,
+			array(
+				'enabled' => true,
+				'roles'   => array(
+					array(
+						'key'   => 'r1',
+						'label' => 'Coordinación',
+					),
+				),
+				'min'     => 1,
+				'max'     => 2,
+			)
+		);
+		$this->assertTrue( Applications::coordinators_in_list( $e['procedure'] ) );
+		$aviso = 'el justificante saldrá sin ella';
+
+		$html = $this->pantalla( $e['head'], $e['procedure'] );
+		$this->assertStringContainsString( $aviso, $html );
+		$this->assertStringContainsString( 'Firmar justificante con AutoFirma', $html, 'avisa, no bloquea' );
+		$this->assertStringContainsString( 'name="' . ReceiptSignature::FIELD_FILE . '"', $html );
+
+		$hecho = People::add(
+			$e['application'],
+			$e['head'],
+			array(
+				'name'    => 'Ana',
+				'surname' => 'Pérez',
+				'dni'     => '12345678Z',
+				'email'   => 'ana@example.org',
+				'phone'   => '',
+				'role'    => 'r1',
+				'group'   => '',
+			)
+		);
+		$this->assertTrue( $hecho['ok'], $hecho['error'] );
+		$this->assertStringNotContainsString( $aviso, $this->pantalla( $e['head'], $e['procedure'] ) );
 	}
 
 	/**

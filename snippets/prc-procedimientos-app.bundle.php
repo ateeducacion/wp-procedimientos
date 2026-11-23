@@ -36861,6 +36861,9 @@ final class App {
    la ventana, que es donde está el pie: sin este hueco, lo tapa entero
    (WCAG 2.2, 2.4.11). El pie mide unos 62 px; se reservan 80. */
 html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
+/* Un formulario tras otro en el mismo panel —«Enlaces» al final de «Datos»—:
+   aire entre el pie del primero y la banda del segundo. */
+.prc-form--taller + .prc-form--taller { margin-top: 36px; }
 
 .prc-btn.prc-envio {
   display: inline-block;

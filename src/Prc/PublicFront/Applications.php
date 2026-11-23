@@ -300,18 +300,30 @@ final class Applications {
 	}
 
 	/**
+	 * Whether the list of people collects the coordination, so the form does not ask for it.
+	 *
+	 * Con la lista de personas encendida, la coordinación está en un solo
+	 * sitio: la lista, que se cambia con su propia ventana (ADR-0041).
+	 * Siempre que la lista pueda recogerla entera; si no, sigue en el formulario.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return bool
+	 */
+	public static function coordinators_in_list( int $procedure_id ): bool {
+		$pide = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ? 0 : self::coordinator_count( $procedure_id );
+		return $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ), $pide );
+	}
+
+	/**
 	 * What a procedure asks of a school, in the shape ApplicationInput wants.
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array{applicant_type:string, coordinator_count:int, requires_coordinator:bool, coordinators_in_list:bool, commitments:string, questions:array<int, array<string, mixed>>}
 	 */
 	public static function spec( int $procedure_id ): array {
-		$teacher = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
-		$pide    = $teacher ? 0 : self::coordinator_count( $procedure_id );
-		// Con la lista de personas encendida, la coordinación está en un solo
-		// sitio: la lista, que se cambia con su propia ventana (ADR-0041).
-		// Siempre que la lista pueda recogerla entera; si no, sigue en el formulario.
-		$en_lista = $pide > 0 && People::enabled( $procedure_id ) && PeopleSpec::collects_coordination( People::spec( $procedure_id ), $pide );
+		$teacher  = ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true );
+		$pide     = $teacher ? 0 : self::coordinator_count( $procedure_id );
+		$en_lista = self::coordinators_in_list( $procedure_id );
 		return array(
 			'applicant_type'       => $teacher ? ApplicationMetaKeys::TYPE_TEACHER : ApplicationMetaKeys::TYPE_CENTRE,
 			'coordinator_count'    => $en_lista ? 0 : $pide,

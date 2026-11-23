@@ -116,9 +116,8 @@ final class ApplicationProgress {
 	 * @return string '' without coordination.
 	 */
 	public static function coordination( int $application_id ): string {
-		$en_lista = Applications::spec( (int) wp_get_post_parent_id( $application_id ) )['coordinators_in_list'];
 		return ApplicationMetaRegistration::receipt_coordinators(
-			$en_lista ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+			Applications::coordinators_in_list( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
 		);
 	}
 

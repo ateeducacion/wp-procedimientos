@@ -91,12 +91,16 @@ final class ApplicationProgress {
 			'on_behalf'      => $id > 0 && (int) get_post_meta( $id, ApplicationMetaKeys::CREATED_BY, true ) > 0 ? self::when( (int) get_post_timestamp( $id ) ) : '',
 			'modified'       => $id > 0 ? self::when( (int) get_post_timestamp( $id, 'modified' ) ) : '',
 			'author'         => false !== $autor ? (string) $autor->display_name : '',
-			'coordination'   => $id > 0 ? self::coordination( $id ) : '',
+			'coordination'   => '',
 			'receipt_url'    => $con_recibo ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ), array( self::ARG_RECEIPT => '1' ) ) : '',
 			'apply_url'      => $id > 0 ? ApplyForm::url_for_code( (int) $m['procedure_id'], (string) ( $m['centre']['code'] ?? '' ) ) : '',
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo elige pintar en solo lectura lo que la pantalla ya enseña.
 			'receipt'        => $con_recibo && '1' === sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_RECEIPT ] ?? '' ) ) ),
 		);
+		// Solo la pinta el justificante: no se calcula en cada vista.
+		if ( $out['receipt'] ) {
+			$out['coordination'] = self::coordination( $id );
+		}
 		$out['flash'] = self::flash( (array) ( $m['flash'] ?? array() ), $out );
 		return $out;
 	}

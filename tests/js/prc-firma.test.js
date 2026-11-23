@@ -106,6 +106,28 @@ describe( 'receipt PDF', () => {
 		expect( docs[ 1 ].output() ).not.toContain( 'Coordinaci' );
 	} );
 
+	it( 'keeps a long coordination off the signature box, on more pages', async () => {
+		const docs = [];
+		window.jspdf = {
+			jsPDF: function ( options ) {
+				const doc = new jsPDF( options );
+				doc.save = vi.fn();
+				docs.push( doc );
+				return doc;
+			},
+		};
+		const original = RECEIPT.coordination;
+		RECEIPT.coordination = Array.from( { length: 80 }, ( _, i ) => 'Persona ' + i + ' (DNI o NIE 12345678Z)' ).join( '; ' );
+		try {
+			await load( section() );
+			$( '[data-prc-firma-pdf]' ).click();
+		} finally {
+			RECEIPT.coordination = original;
+		}
+		expect( docs[ 0 ].getNumberOfPages() ).toBeGreaterThan( 1 );
+		expect( docs[ 0 ].output() ).toContain( 'Huella SHA-256: ' + RECEIPT.fingerprint );
+	} );
+
 	it( 'leaves the buttons hidden without jsPDF', async () => {
 		await load( section() );
 		expect( $( '[data-prc-firma-botones]' ).hidden ).toBe( true );

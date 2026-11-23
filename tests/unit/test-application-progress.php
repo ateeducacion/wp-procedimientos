@@ -396,6 +396,7 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$this->acting_as( $director );
 		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
 		$this->assertStringContainsString( '<th scope="row">Coordinación</th><td>Ana Pérez (DNI o NIE 12345678Z)</td>', $html );
+		$this->assertStringNotContainsString( '00000000T', $html, 'lo de la meta es de antes: ni en «Lo que presentó»' );
 	}
 
 	/**

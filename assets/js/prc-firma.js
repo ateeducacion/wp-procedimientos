@@ -30,7 +30,14 @@
 		doc.setFontSize( 16 );
 		doc.text( 'Justificante de presentación', 56, 72 );
 
-		var y = 110;
+		// Lo que comprueba el servidor, en una línea cada cosa y en ASCII,
+		// arriba: una coordinación larga no lo saca de la página.
+		doc.setFont( 'courier', 'normal' );
+		doc.setFontSize( 8 );
+		doc.text( 'Solicitud: ' + r.number, 56, 92 );
+		doc.text( 'Huella SHA-256: ' + r.fingerprint, 56, 104 );
+
+		var y = 136;
 		// En el orden de la huella; la coordinación, con su DNI o NIE, solo
 		// si la hay.
 		var filas = [
@@ -43,20 +50,26 @@
 			filas.push( [ 'Coordinación', r.coordination ] );
 		}
 		filas.forEach( function ( fila ) {
+			if ( y > 720 ) {
+				doc.addPage();
+				y = 72;
+			}
 			doc.setFont( 'helvetica', 'bold' );
 			doc.setFontSize( 10 );
 			doc.text( fila[ 0 ], 56, y );
 			doc.setFont( 'helvetica', 'normal' );
-			var lineas = doc.splitTextToSize( String( fila[ 1 ] || '' ), 330 );
-			doc.text( lineas, 220, y );
-			y += 16 * Math.max( 1, lineas.length ) + 6;
+			doc.splitTextToSize( String( fila[ 1 ] || '' ), 330 ).forEach( function ( linea ) {
+				// La firma visible ocupa abajo de 742 a 802 pt desde arriba:
+				// el texto sigue en otra página antes de llegar a ella.
+				if ( y > 720 ) {
+					doc.addPage();
+					y = 72;
+				}
+				doc.text( linea, 220, y );
+				y += 16;
+			} );
+			y += 6;
 		} );
-
-		// Lo que comprueba el servidor, en una línea cada cosa y en ASCII.
-		doc.setFont( 'courier', 'normal' );
-		doc.setFontSize( 8 );
-		doc.text( 'Solicitud: ' + r.number, 56, y + 20 );
-		doc.text( 'Huella SHA-256: ' + r.fingerprint, 56, y + 32 );
 		return doc;
 	}
 

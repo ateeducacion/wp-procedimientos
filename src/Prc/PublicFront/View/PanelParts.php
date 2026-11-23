@@ -8,6 +8,7 @@
 namespace Prc\PublicFront\View;
 
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\Help;
 use Prc\PublicFront\Shell;
 
 /**
@@ -48,7 +49,9 @@ final class PanelParts {
 	 * The discreet «¿Dudas?» line that takes a screen to its section of the help.
 	 *
 	 * Cada pantalla puede decirlo a su manera —«Cómo se solicita», «¿Dudas al
-	 * rellenar?»—, pero la línea es la misma y sale de la misma fuente.
+	 * rellenar?»—, pero la línea es la misma y sale de la misma fuente. Con
+	 * JavaScript abre su apartado en un diálogo ({@see Help::ask()}); sin él,
+	 * lleva a la ayuda entera, en ese apartado.
 	 *
 	 * @param string $url   Help URL with its anchor, from Help::url().
 	 * @param string $lead  Words before the link; empty for none.
@@ -59,8 +62,10 @@ final class PanelParts {
 		if ( '' === $url ) {
 			return '';
 		}
+		$dialogo = Help::ask( $url );
+		$abre    = '' === $dialogo ? '' : ' data-prc-help="' . esc_attr( $dialogo ) . '" aria-haspopup="dialog" aria-controls="' . esc_attr( $dialogo ) . '"';
 		return '<p class="prc-ayuda-enlace">' . ( '' !== $lead ? esc_html( $lead ) . ' ' : '' )
-			. '<a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></p>';
+			. '<a href="' . esc_url( $url ) . '"' . $abre . '>' . Shell::icon( 'ayuda' ) . esc_html( $label ) . '</a></p>';
 	}
 
 	/**

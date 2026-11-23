@@ -15,6 +15,7 @@ use Prc\PublicFront\ProcedureView;
 use Prc\PublicFront\Shell;
 use Prc\PublicFront\View\ApplyFormView;
 use Prc\PublicFront\View\HelpView;
+use Prc\PublicFront\View\PanelParts;
 use Prc\PublicFront\View\ProcedureChrome;
 use Prc\PublicFront\View\ProcedureEditorView;
 
@@ -53,6 +54,7 @@ class Test_Help extends WP_UnitTestCase {
 			}
 		);
 		$_GET = array();
+		Help::dialogs();
 	}
 
 	/**
@@ -309,6 +311,53 @@ class Test_Help extends WP_UnitTestCase {
 		$this->assertStringContainsString( $texto, $html );
 		$this->assertStringContainsString( esc_url( Help::url( $guia, $ancla ) ), $html );
 		$this->assertContains( $ancla, array_column( HelpContent::sections( $guia ), 'id' ) );
+
+		// El enlace abre el diálogo del pie, que trae solo ese apartado.
+		$id = 'prc-ayuda-' . $guia . '-' . $ancla;
+		$this->assertStringContainsString( 'data-prc-help="' . $id . '"', $html, 'el enlace apunta a su diálogo' );
+		$dialogos = Help::dialogs();
+		$this->assertStringContainsString( '<dialog class="prc-dialogo prc-ayuda-dialogo" id="' . $id . '"', $dialogos );
+		$apartado = array_values( wp_list_filter( HelpContent::sections( $guia ), array( 'id' => $ancla ) ) )[0];
+		$this->assertStringContainsString( esc_html( $apartado['title'] ), $dialogos, 'con el título del apartado' );
+		$this->assertStringContainsString( 'Ver toda la ayuda', $dialogos );
+		$this->assertStringContainsString( '<form method="dialog" class="prc-acciones">', $dialogos, '«Cerrar» lo cierra el navegador' );
+		$this->assertSame( 1, substr_count( $dialogos, '<dialog' ), 'solo el apartado pedido' );
+	}
+
+	/**
+	 * Dos enlaces al mismo apartado pintan un solo diálogo, y el pie no lo repite.
+	 */
+	public function test_each_section_dialog_is_painted_once() {
+		Help::dialogs();
+		$url  = Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' );
+		$html = PanelParts::help_link( $url ) . PanelParts::help_link( $url, '', 'Otra vez' );
+
+		$this->assertSame( 2, substr_count( $html, 'data-prc-help="prc-ayuda-solicitar-antes-de-empezar"' ) );
+		$this->assertSame( 1, substr_count( Help::dialogs(), '<dialog' ) );
+		$this->assertSame( '', Help::dialogs(), 'lo pintado sale de la cola' );
+	}
+
+	/**
+	 * Sin apartado conocido, el enlace lleva a la ayuda como siempre y no abre nada.
+	 */
+	public function test_a_link_without_a_known_section_has_no_dialog() {
+		Help::dialogs();
+		$html = PanelParts::help_link( Help::url( HelpContent::GUIDE_APPLY ) ) . PanelParts::help_link( Help::url( HelpContent::GUIDE_APPLY, 'no-existe' ) );
+
+		$this->assertStringNotContainsString( 'data-prc-help', $html );
+		$this->assertSame( '', Help::dialogs() );
+	}
+
+	/**
+	 * El pie de la página imprime los diálogos pedidos.
+	 */
+	public function test_the_dialogs_go_in_the_footer() {
+		Help::dialogs();
+		PanelParts::help_link( Help::url( HelpContent::GUIDE_APPLY, 'antes-de-empezar' ) );
+		$this->assertNotFalse( has_action( 'wp_footer', array( Help::class, 'print_dialogs' ) ) );
+		ob_start();
+		Help::print_dialogs();
+		$this->assertStringContainsString( 'id="prc-ayuda-solicitar-antes-de-empezar"', (string) ob_get_clean() );
 	}
 
 	/**

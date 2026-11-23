@@ -165,3 +165,21 @@ Haremos la opción 3:
 
 - El texto de soporte de cada instalación es HTML filtrado, no un campo de los
   ajustes: quien despliega ya configura el resto del marco con `prc_chrome`.
+
+## Adenda — 2026-11-18
+
+Los enlaces «¿Dudas?» sacaban del procedimiento a la ayuda entera, y quien
+llegaba a mitad de una solicitud se perdía (#86). Ahora llevan un interrogante
+(`Shell::icon( 'ayuda' )`) y, con JavaScript, abren **solo su apartado** en un
+`<dialog>` modal sin salir de la página: foco en el título del apartado, Escape,
+el foco vuelve al enlace al cerrarse y, dentro, «Ver toda la ayuda» lleva a la
+guía en ese apartado. `PanelParts::help_link()` pide el apartado con
+`Help::ask()`, que lo deduce de la propia URL (`?guia=` y el ancla), y
+`Help::print_dialogs()` los pinta en `wp_footer`, **una vez por apartado**
+aunque haya varios enlaces y con `HelpView`, el mismo marcado que la pantalla.
+El enlace sigue siendo un `<a href>` a `Help::url()`: sin JavaScript, o sin
+`showModal()`, o con Ctrl/Cmd, lleva a la ayuda como siempre. Abrir el diálogo
+no es salir, así que no dispara el aviso de cambios sin guardar del taller.
+
+Contra: el contenido del apartado viaja en cada página que lo enlaza, aunque
+nadie lo abra; son unos pocos párrafos.

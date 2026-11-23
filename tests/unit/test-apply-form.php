@@ -817,8 +817,9 @@ class Test_Apply_Form extends WP_UnitTestCase {
 
 	/**
 	 * Una solicitud de antes, con su coordinación guardada en el formulario,
-	 * no la pierde al volver a guardarse con la lista encendida, y se sigue
-	 * viendo en lo presentado.
+	 * no la pierde al volver a guardarse con la lista encendida; pero «Lo que
+	 * presentó» ya no la pinta: con la coordinación en la lista, la de la meta
+	 * es de antes.
 	 */
 	public function test_an_old_coordinator_survives_saving_with_the_people_list() {
 		$procedure = $this->procedimiento( array( ProcedureMetaKeys::COORDINATOR_COUNT => 1 ) );
@@ -844,7 +845,7 @@ class Test_Apply_Form extends WP_UnitTestCase {
 		update_post_meta( $procedure, ProcedureMetaKeys::CLOSES_AT, $this->dia( -1 ) );
 		$this->olvidar_rechazo();
 		$this->acting_as( $uid );
-		$this->assertStringContainsString( 'Ana Pérez', $this->pintar( $procedure ), 'y se ve en lo presentado' );
+		$this->assertStringNotContainsString( 'Ana Pérez', $this->pintar( $procedure ), 'y lo presentado no la repite' );
 	}
 
 	/**

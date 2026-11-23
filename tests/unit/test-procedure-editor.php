@@ -2014,7 +2014,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) ) );
 
 		// El fin del plazo pide confirmar un día ya pasado, y el día lo pone el servidor.
-		$this->assertMatchesRegularExpression( '/name="' . ProcedureMetaKeys::CLOSES_AT . '"[^>]*data-prc-confirm-before="' . ProcedureState::today() . '"[^>]*data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado\?/s', $html );
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureMetaKeys::CLOSES_AT . '"[^>]*data-prc-confirm-before="' . ProcedureState::today() . '"[^>]*data-prc-confirm-blank="prc-opens"[^>]*data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado\?/s', $html );
 
 		// Histórico sí se pinta en solo lectura para su ámbito.
 		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true );
@@ -2293,6 +2293,11 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'Plazos de entregas documentales', ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) ) );
 		$this->assertNull( $this->submit( $uid, 'delivery_dates', $procedure, 0, array( 'prc_delivery_closes' => array( 'q1' => $this->dia( '+60 days' ) ) ) ), 'la operación ya no existe' );
 		$this->assertSame( $this->dia( '+30 days' ), get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true )[0]['closes_at'] );
+		$this->assertStringContainsString( 'en «Campos adicionales»', $this->modelo( $procedure )['flash']['texto'], 'una pestaña vieja dice dónde se hace ahora' );
+
+		// El cierre de la entrega pide confirmar un día ya pasado, como el del plazo.
+		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_QUESTIONS ) );
+		$this->assertMatchesRegularExpression( '/name="' . preg_quote( ProcedureEditor::FIELD_Q, '/' ) . 'closes_at\[0\]"[^>]*data-prc-confirm-before="' . ProcedureState::today() . '" data-prc-confirm-text="¿Guardar con un cierre de entrega que ya ha pasado\? La entrega «Memoria final»/', $html );
 	}
 
 	// ─── tipos de pregunta y orden (ADR-0040) ──────────────────────────────

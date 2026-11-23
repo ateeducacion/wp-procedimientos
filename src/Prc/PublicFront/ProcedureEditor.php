@@ -31,8 +31,8 @@ use Prc\Taxonomy\ProcedureTaxonomies;
  *
  * Hoy dar de alta una convocatoria es un formulario de más de cien campos del
  * gestor de formularios, y gestionar sus solicitudes, unas vistas filtradas
- * por parámetros de la URL. Aquí es una pantalla con siete pestañas
- * (`?panel=datos|preguntas|personas|enlaces|publicacion|avanzado|solicitudes`)
+ * por parámetros de la URL. Aquí es una pantalla con seis pestañas
+ * (`?panel=datos|preguntas|personas|publicacion|avanzado|solicitudes`)
  * y cada una enseña lo suyo y nada más.
  *
  * Todo lo que muta va por POST con su nonce propio y con
@@ -390,6 +390,11 @@ final class ProcedureEditor {
 		$procedure_id = absint( wp_unslash( $_POST[ self::FIELD_PROCEDURE ] ?? 0 ) );
 		$row_id       = absint( wp_unslash( $_POST[ self::FIELD_ROW ] ?? 0 ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		// Una pestaña abierta antes de ADR-0050 aún puede enviar la operación vieja.
+		if ( 'delivery_dates' === $op ) {
+			self::$rejected = 'Las fechas de las entregas se cambian ahora en su campo, en «Campos adicionales». No se ha guardado nada.';
+			return;
+		}
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
@@ -609,7 +614,7 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Save the «Datos» panel, in any state until «histórico» (ADR-0050).
+	 * Save the «Datos» panel, in any state until archived (ADR-0050).
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @param int $user_id      Who is asking.

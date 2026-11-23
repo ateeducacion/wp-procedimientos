@@ -69,21 +69,27 @@
 	/*
 	 * La pregunta de este envío: la fija del formulario o, si un campo de
 	 * fecha lleva `data-prc-confirm-before`, la suya cuando se cambió a un
-	 * día anterior a ese —el fin de plazo que, ya pasado, cierra las
-	 * solicitudes al guardar—. «AAAA-MM-DD» se compara bien como texto, y el
-	 * día de hoy lo pone el servidor: el reloj del navegador no manda.
+	 * día anterior a ese —un cierre que, ya pasado, cierra al guardar—. En
+	 * blanco, el cierre es el campo que nombra `data-prc-confirm-blank` (el
+	 * fin del plazo vacío dura el día de inicio). «AAAA-MM-DD» se compara bien
+	 * como texto, y el día de hoy lo pone el servidor: el reloj del navegador
+	 * no manda.
 	 */
 	function preguntaDe( form ) {
 		var fija = form.getAttribute( 'data-prc-confirm' );
 		if ( fija ) {
 			return fija;
 		}
-		var campo = form.querySelector( '[data-prc-confirm-before]' );
-		if ( ! campo || ! campo.value || campo.value === campo.defaultValue ||
-			campo.value >= campo.getAttribute( 'data-prc-confirm-before' ) ) {
-			return '';
+		var campos = form.querySelectorAll( '[data-prc-confirm-before]' );
+		for ( var i = 0; i < campos.length; i++ ) {
+			var campo = campos[ i ];
+			var otro = document.getElementById( campo.getAttribute( 'data-prc-confirm-blank' ) || '' );
+			var dia = campo.value || ( otro ? otro.value : '' );
+			if ( campo.value !== campo.defaultValue && dia && dia < campo.getAttribute( 'data-prc-confirm-before' ) ) {
+				return campo.getAttribute( 'data-prc-confirm-text' ) || '';
+			}
 		}
-		return campo.getAttribute( 'data-prc-confirm-text' ) || '';
+		return '';
 	}
 
 	document.addEventListener( 'submit', function ( e ) {

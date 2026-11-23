@@ -1308,8 +1308,8 @@ final class ProcedureAccess {
 	/**
 	 * Why the user cannot touch this procedure, in words.
 	 *
-	 * Vive aquí y no en cada pantalla para que todas lo cuenten igual. El
-	 * estado no cierra nada: todo se edita hasta histórico (ADR-0050).
+	 * Lives here so every screen words it the same. The state closes
+	 * nothing: everything is edited until archived (ADR-0050).
 	 *
 	 * @param int $user_id User ID.
 	 * @param int $post_id Procedure ID.

@@ -143,3 +143,19 @@ solicitudes presentadas. Quedan las protecciones de `QuestionChanges`.
 - `tests/unit/test-procedure-access.php`, `tests/unit/test-procedure-editor.php`,
   `tests/js/prc-app.test.js`, `tests/browser/confirmacion.js`.
 - Issue [#119](https://github.com/ateeducacion/wp-procedimientos/issues/119).
+
+## Adenda — 2026-11-23: tras la revisión de #120
+
+- **La confirmación también salta al vaciar el fin del plazo** con el día de
+  inicio ya pasado: en blanco, el plazo dura el día de inicio, así que
+  vaciarlo cierra igual (`data-prc-confirm-blank`).
+- **El cierre de una entrega pide la misma confirmación** si se cambia a un
+  día ya pasado: el panel aparte de la ADR-0034 no dejaba acortarlo, y en
+  «Campos adicionales» se puede.
+- **Una pestaña abierta antes del cambio** que aún envíe la operación vieja
+  `delivery_dates` recibe un error que dice dónde se hace ahora, en vez de
+  repintarse sin aviso.
+- Queda abierta, para decidir aparte, la protección de un campo contestado
+  más allá de su tipo —quitarlo, desmarcar «Entrega con plazo propio», quitar
+  opciones elegidas—: hoy `QuestionChanges` solo rechaza el cambio de tipo, y
+  antes el estado lo impedía después del cierre.

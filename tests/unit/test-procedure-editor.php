@@ -1011,9 +1011,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_COORDINATOR_KIND => 'one' ) ) );
 		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
 
-		// Con profesorado no llega ni la opción ni el número: se queda lo que había.
+		// Sin la opción ni el número (los radios apagados) se queda lo que había.
 		$this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso ) );
 		$this->assertSame( 1, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ) );
+
+		// Con profesorado no hay coordinación: la meta pasa a 0.
+		$this->submit( $uid, ProcedureEditor::PANEL_DATA, $id, 0, $this->datos( $area, $curso, array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) ) );
+		$this->assertSame( 0, (int) get_post_meta( $id, ProcedureMetaKeys::COORDINATOR_COUNT, true ), 'profesorado no lleva coordinación' );
 	}
 
 	/**

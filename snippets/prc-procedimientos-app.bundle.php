@@ -3642,10 +3642,6 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
-			ProcedureMetaKeys::OBSERVABLE           => self::COPY,
-			ProcedureMetaKeys::OBSERVER_FILES       => self::COPY,
-			ProcedureMetaKeys::OBSERVER_EXPORT      => self::COPY,
-			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::COPY,
 
 			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
 			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,
@@ -3653,6 +3649,11 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::OBSERVER_COLUMNS     => self::TRANSFORM,
 
 			ProcedureMetaKeys::CUSTOM_JS            => self::TRANSFORM,
+
+			ProcedureMetaKeys::OBSERVABLE           => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_FILES       => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_EXPORT      => self::TRANSFORM,
+			ProcedureMetaKeys::OBSERVER_NOTIFY      => self::TRANSFORM,
 		);
 	}
 
@@ -3689,7 +3690,8 @@ final class ProcedureCopy {
 
 
 
-	public static function meta( array $source, bool $with_js ): array {
+
+	public static function meta( array $source, bool $with_js, bool $with_observe ): array {
 		$meta = array();
 		foreach ( self::policy() as $key => $rule ) {
 			if ( self::COPY === $rule && array_key_exists( $key, $source ) ) {
@@ -3705,8 +3707,8 @@ final class ProcedureCopy {
 		if ( array_key_exists( ProcedureMetaKeys::PEOPLE_SPEC, $source ) ) {
 			$meta[ ProcedureMetaKeys::PEOPLE_SPEC ] = self::people_spec( $source[ ProcedureMetaKeys::PEOPLE_SPEC ] );
 		}
-		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
-			$meta[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $preguntas['map'] );
+		if ( $with_observe ) {
+			$meta = array_merge( $meta, self::observe( $source, $preguntas['map'] ) );
 		}
 
 		$js = $source[ ProcedureMetaKeys::CUSTOM_JS ] ?? '';
@@ -3719,6 +3721,21 @@ final class ProcedureCopy {
 			'meta'    => $meta,
 			'js_left' => ! $with_js && '' !== trim( $js ),
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function observe( array $source, array $map ): array {
+		$out = array_intersect_key( $source, array_flip( array( ProcedureMetaKeys::OBSERVABLE, ProcedureMetaKeys::OBSERVER_FILES, ProcedureMetaKeys::OBSERVER_EXPORT, ProcedureMetaKeys::OBSERVER_NOTIFY ) ) );
+		if ( array_key_exists( ProcedureMetaKeys::OBSERVER_COLUMNS, $source ) ) {
+			$out[ ProcedureMetaKeys::OBSERVER_COLUMNS ] = self::observer_columns( $source[ ProcedureMetaKeys::OBSERVER_COLUMNS ], $map );
+		}
+		return $out;
 	}
 
 
@@ -6885,6 +6902,21 @@ final class ProcedureAccess {
 
 
 
+
+
+
+
+
+	public static function can_configure_observe( int $user_id, int $post_id ): bool {
+		return self::is_manager( $user_id ) && self::can_edit( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
 	public static function can_edit_all_areas( int $user_id = 0 ): bool {
 		if ( $user_id <= 0 ) {
 			$user_id = get_current_user_id();
@@ -8877,6 +8909,8 @@ final class ProcedureMetaRegistration {
 
 
 
+
+
 	public static function schema(): array {
 		return array(
 			ProcedureMetaKeys::OPENS_AT             => array(
@@ -8984,22 +9018,27 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::OBSERVABLE           => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_FILES       => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 		);
 	}
@@ -9084,6 +9123,20 @@ final class ProcedureMetaRegistration {
 	public static function auth_custom_js( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 		return ProcedureAccess::can_edit_custom_js( $user_id, $post_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function auth_observe( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
+		unset( $allowed, $meta_key );
+		return ProcedureAccess::can_configure_observe( $user_id, $post_id );
 	}
 
 
@@ -19168,7 +19221,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Avanzado</strong> (Acceso de consulta, solo para quien administra el aplicativo, y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19245,7 +19298,7 @@ final class HelpContent {
 				'id'    => 'taller-consulta',
 				'level' => 3,
 				'title' => 'Acceso de consulta',
-				'html'  => '<p>Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
+				'html'  => '<p>Solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -25012,6 +25065,14 @@ final class ProcedureEditorView {
 		<section class="prc-seccion-campos">
 			<h2 class="prc-seccion__titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
+			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
+				<div class="prc-aviso prc-aviso-info">
+					<p>La consulta por zona está activa en este procedimiento. La configura quien administra el aplicativo.</p>
+					<?php if ( true === ( $m['observe_status']['gone'] ?? false ) ) : ?>
+						<p>Pero las columnas que se eligieron ya no existen, así que ahora no enseña ninguna. Avise a quien administra el aplicativo.</p>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
@@ -25465,13 +25526,15 @@ final class ProcedureEditor {
 
 
 
+
 	public static function panels( int $procedure_id ): array {
-		$grupos  = array(
-			'Preparar'    => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
-			'Gestionar'   => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Más ajustes' => array( self::PANEL_OBSERVE, self::PANEL_CODE ),
+		$advanced = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
+		$grupos   = array(
+			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
+			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
+			'Avanzado'  => array_merge( $advanced, array( self::PANEL_CODE ) ),
 		);
-		$rotulos = array(
+		$rotulos  = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_LINKS        => 'Enlaces',
@@ -25482,7 +25545,7 @@ final class ProcedureEditor {
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
 			self::PANEL_CODE         => 'Código',
 		);
-		$cuentas = array(
+		$cuentas  = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
 			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
@@ -25620,7 +25683,7 @@ final class ProcedureEditor {
 		$sueltas = array(
 			self::OP_DELIVERY_DATES => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC    => array( self::class, 'save_people_spec' ),
-			self::OP_OBSERVE        => array( ObserveSettings::class, 'handle' ),
+			self::OP_OBSERVE        => array( self::class, 'save_observe' ),
 		);
 		if ( isset( $sueltas[ $op ] ) ) {
 			EditLock::require_available( $procedure_id );
@@ -25692,6 +25755,23 @@ final class ProcedureEditor {
 			return;
 		}
 		self::save_links( $procedure_id );
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function save_observe( int $procedure_id ): void {
+		if ( ! ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ) {
+			self::$rejected = 'El acceso de consulta lo configura quien administra el aplicativo.';
+			return;
+		}
+		ObserveSettings::handle( $procedure_id );
 	}
 
 
@@ -26666,6 +26746,11 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
+
+			'observe_status'          => array(
+				'observable' => false,
+				'gone'       => false,
+			),
 			'actions'                 => array(),
 		);
 	}
@@ -26785,7 +26870,12 @@ final class ProcedureEditor {
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		$m['observe']        = ObserveSettings::model( $procedure_id );
+		if ( self::PANEL_OBSERVE === $m['panel'] ) {
+			$m['observe'] = ObserveSettings::model( $procedure_id );
+		}
+		if ( self::PANEL_CODE === $m['panel'] && ! isset( $paneles[ self::PANEL_OBSERVE ] ) ) {
+			$m['observe_status'] = ObserveSettings::status( $procedure_id );
+		}
 
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
@@ -27211,7 +27301,11 @@ final class ProcedureDuplicate {
 
 
 		wp_set_object_terms( $id, $areas, ProcedureTaxonomies::AREA, false );
-		$copia = ProcedureCopy::meta( self::source( $procedure_id ), ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) );
+		$copia = ProcedureCopy::meta(
+			self::source( $procedure_id ),
+			ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ),
+			ProcedureAccess::can_configure_observe( $user_id, $procedure_id )
+		);
 
 
 		$sin_contactos = array() !== array_diff( ProcedureAccess::post_areas( $procedure_id ), $areas )
@@ -31310,18 +31404,36 @@ final class ObserveSettings {
 
 
 
+
+
+
+
+	public static function status( int $procedure_id, ?array $columns = null ): array {
+		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
+		return array(
+			'observable' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true ),
+
+
+			'gone'       => is_array( $elegidas ) && array() !== $elegidas && array() === ( $columns ?? self::columns( $procedure_id ) ),
+		);
+	}
+
+
+
+
+
+
+
 	public static function model( int $procedure_id ): array {
 		$leer     = static function ( string $clave ) use ( $procedure_id ): bool {
 			return (bool) get_post_meta( $procedure_id, $clave, true );
 		};
-		$columnas = array_keys( self::columns( $procedure_id ) );
-		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
+		$columnas = self::columns( $procedure_id );
+		$status   = self::status( $procedure_id, $columnas );
 		return array(
-			'observable'   => $leer( ProcedureMetaKeys::OBSERVABLE ),
-			'columns'      => $columnas,
-
-
-			'gone'         => array() === $columnas && is_array( $elegidas ) && array() !== $elegidas,
+			'observable'   => $status['observable'],
+			'columns'      => array_keys( $columnas ),
+			'gone'         => $status['gone'],
 			'groups'       => self::offered( $procedure_id ),
 			'group_labels' => ApplicationExport::group_labels( $procedure_id ),
 			'files'        => $leer( ProcedureMetaKeys::OBSERVER_FILES ),
@@ -35500,7 +35612,7 @@ html:has(> body.prc-app) { overflow-x: clip; }
 }
 
 /* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
-   entre uno y otro: Preparar, Gestionar y Más ajustes. */
+   entre uno y otro: Preparar, Gestionar y Avanzado. */
 .prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
 .prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
 .prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }

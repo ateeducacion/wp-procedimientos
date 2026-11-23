@@ -20038,6 +20038,9 @@ final class ProcedureChrome {
 			'brand_alt'      => '',
 
 
+
+
+
 			'privacy_notice' => '',
 
 
@@ -28477,6 +28480,95 @@ final class ApplicationProgressView {
 
 
 
+namespace Prc\PublicFront;
+
+use Prc\PublicFront\View\ProcedureChrome;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\PrivacyNotice', false ) ) {
+final class PrivacyNotice {
+
+
+
+
+	public const OPTION = 'prc_privacy_notice';
+
+
+
+
+
+
+	private const FORBIDDEN = array( 'form', 'button', 'input', 'select', 'option', 'textarea', 'label', 'fieldset' );
+
+
+
+
+
+
+	public static function text(): string {
+		$filtered = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
+		return '' !== $filtered ? $filtered : trim( (string) get_option( self::OPTION, '' ) );
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function sanitize( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+
+		$value   = (string) preg_replace( '#<(script|style)\b[^>]*>.*?(?:</\1\s*>|$)#is', '', $value );
+		$allowed = array_diff_key( wp_kses_allowed_html( 'post' ), array_flip( self::FORBIDDEN ) );
+		return trim( force_balance_tags( wp_kses( $value, $allowed ) ) );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function after_sections( array $m ): string {
+		if ( true === ( $m['can_submit'] ?? false ) ) {
+			return '';
+		}
+		$people = (array) ( $m['people'] ?? array() );
+		$open   = array_filter( array_column( (array) ( $m['deliveries'] ?? array() ), 'can_submit' ) );
+		if ( array() === $open && ( empty( $people['show'] ) || empty( $people['can_edit'] ) ) ) {
+			return '';
+		}
+		return (string) ( $m['privacy'] ?? '' );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\DateRange;
@@ -28487,6 +28579,7 @@ use Prc\PublicFront\ApplicationFiles;
 use Prc\PublicFront\ApplicationProgress;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\Assets;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\PublicFront\Shell;
 
 
@@ -28569,6 +28662,9 @@ final class ApplyFormView {
 			self::deliveries( $m );
 			echo '</div>';
 		}
+
+
+		echo self::privacy( PrivacyNotice::after_sections( $m ) );
 
 		echo ApplicationActionsView::withdraw( (array) ( $m['withdraw'] ?? array() ) );
 		return Shell::render( '', '', (string) ob_get_clean() );
@@ -28743,12 +28839,15 @@ final class ApplyFormView {
 
 
 
-	private static function privacy(): string {
-		$texto = trim( (string) ( ProcedureChrome::chrome()['privacy_notice'] ?? '' ) );
-		if ( '' === $texto ) {
+
+
+
+	private static function privacy( string $notice ): string {
+		$text = PrivacyNotice::sanitize( $notice );
+		if ( '' === $text ) {
 			return '';
 		}
-		return '<div class="prc-aviso-legal">' . wp_kses_post( $texto ) . '</div>';
+		return '<div class="prc-aviso-legal">' . $text . '</div>';
 	}
 
 
@@ -28812,8 +28911,6 @@ final class ApplyFormView {
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_OP ); ?>" value="<?php echo esc_attr( ApplyForm::OP_APPLY ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ApplyForm::FIELD_CENTRE ); ?>" value="<?php echo esc_attr( (string) $centro['code'] ); ?>" />
-
-			<?php echo self::privacy();?>
 
 			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio" aria-hidden="true">*</span> Campo obligatorio</p>
 
@@ -28881,6 +28978,8 @@ final class ApplyFormView {
 			<?php endif; ?>
 
 			<?php echo self::coordination( $m, (array) $v['coordinators'] );?>
+
+			<?php echo self::privacy( (string) ( $m['privacy'] ?? '' ) );?>
 
 			<?php echo ApplicationProgressView::submit( $m, $nueva );?>
 		</form>
@@ -29652,6 +29751,8 @@ final class ApplyForm {
 			'values'          => array(),
 
 			'invalid'         => self::$invalid,
+
+			'privacy'         => PrivacyNotice::text(),
 		);
 
 		if ( ! is_user_logged_in() ) {
@@ -33891,6 +33992,7 @@ use Prc\Notifications\Mailer;
 use Prc\PostType\ApplicationPostType;
 use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\ExitSignal;
+use Prc\PublicFront\PrivacyNotice;
 use Prc\Taxonomy\ProcedureTaxonomies;
 use RuntimeException;
 
@@ -33929,6 +34031,11 @@ final class Settings {
 
 
 
+	public const PRIVACY_GROUP = 'prc_privacy';
+
+
+
+
 
 
 	public static function register(): void {
@@ -33939,6 +34046,7 @@ final class Settings {
 
 		add_filter( 'option_page_capability_' . self::MAIL_GROUP, array( self::class, 'capability' ) );
 		add_filter( 'option_page_capability_' . self::CENTRES_GROUP, array( self::class, 'capability' ) );
+		add_filter( 'option_page_capability_' . self::PRIVACY_GROUP, array( self::class, 'capability' ) );
 	}
 
 
@@ -33973,6 +34081,19 @@ final class Settings {
 				'type'              => 'array',
 				'default'           => array(),
 				'sanitize_callback' => array( self::class, 'sanitize_private_types' ),
+				'show_in_rest'      => false,
+			)
+		);
+
+
+
+		register_setting(
+			self::PRIVACY_GROUP,
+			PrivacyNotice::OPTION,
+			array(
+				'type'              => 'string',
+				'default'           => '',
+				'sanitize_callback' => array( PrivacyNotice::class, 'sanitize' ),
 				'show_in_rest'      => false,
 			)
 		);
@@ -34247,7 +34368,8 @@ final class Settings {
 			<p class="description" style="max-width:46rem">
 				Esta pantalla cuenta lo que el aplicativo tiene montado en este sitio. Si algo
 				sale «sin registrar», es que el snippet correspondiente no está activo. Lo único
-				que guarda es la configuración del correo y qué tipos de centro son privados.
+				que guarda es la configuración del correo, el texto de protección de datos y qué
+				tipos de centro son privados.
 			</p>
 
 			<h2>Correo</h2>
@@ -34292,6 +34414,20 @@ final class Settings {
 					</tbody>
 				</table>
 				<?php submit_button( 'Guardar la configuración del correo' ); ?>
+			</form>
+
+			<h2>Protección de datos</h2>
+			<?php $privacy = trim( (string) get_option( PrivacyNotice::OPTION, '' ) ); ?>
+			<form method="post" action="options.php">
+				<?php settings_fields( self::PRIVACY_GROUP ); ?>
+				<p style="max-width:46rem"><label for="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>">Texto de protección de datos</label></p>
+				<?php if ( PrivacyNotice::text() !== $privacy ) : ?>
+					<div class="notice notice-warning inline" style="max-width:46rem"><p>Este texto lo fija la configuración de la instalación (filtro prc_chrome) y se ignora lo que escriba aquí.</p></div>
+				<?php endif; ?>
+				<?php ?>
+				<textarea class="large-text" rows="6" style="max-width:46rem" id="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>" name="<?php echo esc_attr( PrivacyNotice::OPTION ); ?>" aria-describedby="prc-privacy-ayuda"><?php echo esc_textarea( str_replace( '&amp;', '&', $privacy ) ); ?></textarea>
+				<p class="description" id="prc-privacy-ayuda" style="max-width:46rem">Sale al final de cada solicitud, antes del botón de enviar, igual para todos los procedimientos. Admite enlaces y negritas. En blanco, no se pinta.</p>
+				<?php submit_button( 'Guardar el texto de protección de datos' ); ?>
 			</form>
 
 			<?php if ( isset( $_GET['updated'] ) && 'synced' === $_GET['updated'] && ! empty( $_GET['msg'] ) ) :?>
@@ -37273,10 +37409,15 @@ body.prc-app .prc-btn-borrar {
 .prc-form--solicitud .prc-form__envio .prc-btn-final { margin: 30px 0; }
 
 /* --- aviso de protección de datos ---------------------------------------
-   La plantilla pinta la caja; **el texto es del despliegue** y llega por el
-   filtro del armazón. Aquí no hay ni una línea de texto legal (ADR-0009). */
+   La plantilla pinta la caja; **el texto es del despliegue**: lo escribe
+   administración en los ajustes o llega por el filtro del armazón. Aquí no
+   hay ni una línea de texto legal (ADR-0009). Va al final, justo antes del
+   botón de enviar: aire encima para separarlo de la última sección, el del
+   botón debajo, y el texto alineado con el de los campos (5px de margen y 5px
+   de relleno, como `.prc-campo`). */
 .prc-aviso-legal {
-  margin: 0 0 15px;
+  padding: 0 5px;
+  margin: 30px 5px 0;
   font: var(--prc-p-base) var(--prc-t-base) / var(--prc-i-base) var(--prc-fuente);
   color: var(--prc-c-texto);
 }

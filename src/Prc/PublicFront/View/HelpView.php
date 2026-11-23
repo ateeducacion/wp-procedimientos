@@ -101,8 +101,9 @@ final class HelpView {
 	public static function dialog( string $id, array $apartado, string $url ): string {
 		return '<dialog class="prc-dialogo prc-ayuda-dialogo" id="' . esc_attr( $id ) . '" aria-labelledby="' . esc_attr( $apartado['id'] . '-titulo' ) . '">'
 			. self::section( $apartado )
-			. '<p class="prc-acciones"><a href="' . esc_url( $url ) . '">Ver toda la ayuda</a>'
-			. '<button type="button" class="' . esc_attr( Assets::button_class() ) . '" data-prc-help-close>Cerrar</button></p>'
+			// Se cierra sin guion propio: el `<form method="dialog">` del navegador.
+			. '<form method="dialog" class="prc-acciones"><a href="' . esc_url( $url ) . '">Ver toda la ayuda</a>'
+			. '<button type="submit" class="' . esc_attr( Assets::button_class() ) . '">Cerrar</button></form>'
 			. '</dialog>';
 	}
 

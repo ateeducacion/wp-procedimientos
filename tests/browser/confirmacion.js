@@ -654,8 +654,8 @@ async function abrir( ctx, conSwal ) {
    data-prc-help="prc-ayuda-solicitar-antes-de-empezar" aria-haspopup="dialog">Cómo se solicita</a></p>
 <dialog class="prc-dialogo prc-ayuda-dialogo" id="prc-ayuda-solicitar-antes-de-empezar" aria-labelledby="antes-de-empezar-titulo">
   <section class="prc-ayuda__apartado" id="antes-de-empezar"><h3 id="antes-de-empezar-titulo">Antes de empezar</h3><p>Texto.</p></section>
-  <p class="prc-acciones"><a href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
-  <button id="cerrar" type="button" class="prc-btn" data-prc-help-close>Cerrar</button></p>
+  <form method="dialog" class="prc-acciones"><a href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
+  <button id="cerrar" class="prc-btn">Cerrar</button></form>
 </dialog></body>`;
 		const servir = async ( contexto ) => {
 			const page = await contexto.newPage();

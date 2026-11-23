@@ -462,9 +462,9 @@
 	/*
 	 * `data-prc-help` en un enlace «¿Dudas?»: apunta al `<dialog>` que el
 	 * servidor pintó en el pie con solo ese apartado (#86). Se abre con
-	 * `showModal()` —foco en el título del apartado; Escape del navegador— y,
-	 * al cerrarse,
-	 * el foco vuelve al enlace. Sin guion, sin `showModal()` o con una tecla
+	 * `showModal()` —foco en el título del apartado— y se cierra sin guion
+	 * propio: con Escape o con el «Cerrar» de su `<form method="dialog">`. Al
+	 * cerrarse, el foco vuelve al enlace. Sin guion, sin `showModal()` o con una tecla
 	 * que pide otra pestaña, el enlace lleva a la ayuda entera como siempre.
 	 * Va antes del aviso de cambios sin guardar (sección 10): abrir la ayuda
 	 * no sale de la página, y ese aviso no mira un clic ya atendido.
@@ -484,11 +484,6 @@
 				titulo.tabIndex = -1;
 				titulo.focus();
 			}
-			return;
-		}
-		var cerrar = e.target.closest ? e.target.closest( '[data-prc-help-close]' ) : null;
-		if ( cerrar && cerrar.closest( 'dialog' ) ) {
-			cerrarDialogo( cerrar.closest( 'dialog' ) );
 		}
 	} );
 

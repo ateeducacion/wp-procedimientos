@@ -1094,8 +1094,8 @@ describe( 'the help in a dialog', () => {
 			data-prc-help="prc-ayuda-solicitar-antes-de-empezar">Cómo se solicita</a></p>
 		<dialog id="prc-ayuda-solicitar-antes-de-empezar">
 			<section><h3 id="titulo">Antes de empezar</h3></section>
-			<p><a id="toda" href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
-			<button id="cerrar" type="button" data-prc-help-close>Cerrar</button></p>
+			<form method="dialog"><a id="toda" href="/ayuda/?guia=solicitar#antes-de-empezar">Ver toda la ayuda</a>
+			<button id="cerrar">Cerrar</button></form>
 		</dialog>`;
 
 	function click( id, init = {} ) {
@@ -1124,14 +1124,15 @@ describe( 'the help in a dialog', () => {
 		expect( document.activeElement ).toBe( document.getElementById( 'titulo' ) );
 	} );
 
-	it( 'closes with its button and gives the focus back to the link', async () => {
+	// «Cerrar» es un `<form method="dialog">`: lo cierra el navegador, que jsdom
+	// no imita (lo cubre `make test-browser`). Aquí, que al cerrarse vuelve el foco.
+	it( 'gives the focus back to the link when it closes', async () => {
 		document.body.innerHTML = PAGE;
 		const dialogo = modal();
 		await load();
 		click( 'ayuda' );
-		click( 'cerrar' );
+		dialogo.close();
 
-		expect( dialogo.close ).toHaveBeenCalled();
 		expect( document.activeElement ).toBe( document.getElementById( 'ayuda' ) );
 	} );
 

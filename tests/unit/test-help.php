@@ -320,7 +320,7 @@ class Test_Help extends WP_UnitTestCase {
 		$apartado = array_values( wp_list_filter( HelpContent::sections( $guia ), array( 'id' => $ancla ) ) )[0];
 		$this->assertStringContainsString( esc_html( $apartado['title'] ), $dialogos, 'con el título del apartado' );
 		$this->assertStringContainsString( 'Ver toda la ayuda', $dialogos );
-		$this->assertStringContainsString( 'data-prc-help-close', $dialogos );
+		$this->assertStringContainsString( '<form method="dialog" class="prc-acciones">', $dialogos, '«Cerrar» lo cierra el navegador' );
 		$this->assertSame( 1, substr_count( $dialogos, '<dialog' ), 'solo el apartado pedido' );
 	}
 

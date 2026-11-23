@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043, ADR-0044, ADR-0045]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0037, ADR-0040, ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050]
   sdds: []
 supersedes: []
 superseded_by: []
@@ -711,3 +711,21 @@ guardar los centros, en `PublicFront/AdvancedPanel`; pintarlas, en
 sitio nuevo (ADR-0042, adenda del 2026-11-19).
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-23: todo se edita hasta histórico
+
+La columna «Quien gestiona» de la tabla «Lo que cada estado permite» y la
+tabla de grupos de la adenda del 2026-09-16 quedan sustituidas por la
+[ADR-0050](../adr/ADR-0050-todo-se-edita-hasta-historico.md): en `draft`,
+`upcoming`, `open`, `closed`, `amendment` y `resolved` quien gestiona **edita
+todo** y gestiona las solicitudes; en `archived`, nada, salvo desarchivar
+(administración, ADR-0023). La columna «El centro» no cambia.
+
+Ya no hay grupos (`ProcedureState::editable_fields()`, `can_edit_group()`,
+`why_locked()`): decide `ProcedureAccess::can_edit()`. Lo que protege las
+respuestas presentadas sigue en `Domain/QuestionChanges` —el tipo de un campo
+contestado no cambia—. «Enlaces» es la última sección de «Datos» y «Plazos de
+entregas documentales» desaparece de «Solicitudes»: las fechas de una entrega
+se editan en su campo (sustituye a la adenda del 2026-11-06 sobre la
+ampliación del cierre y a la ADR-0034). Un fin de plazo cambiado a un día ya
+pasado pide confirmación al guardar.

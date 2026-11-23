@@ -8,7 +8,6 @@
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\CentreEligibility;
-use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\Assets;
@@ -48,29 +47,23 @@ final class AdvancedPanelView {
 	/**
 	 * «Qué centros pueden solicitar», with its own form.
 	 *
-	 * Es del grupo de «Datos»: cerrado por el estado, se pinta apagado y dice
-	 * por qué, como cuando iba allí. El aviso del catálogo vacío, a la vista.
+	 * El aviso del catálogo vacío, a la vista.
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function centres_section( array $m ): string {
-		$op     = ProcedureEditor::OP_CENTRES;
-		$apagar = true !== ( ( (array) $m['groups'] )[ ProcedureState::GROUP_DATA ] ?? false );
-		$motivo = $apagar && '' !== ProcedureState::why_locked( (string) $m['state'] ) ? 'Cerrado por el estado del procedimiento.' : '';
+		$op = ProcedureEditor::OP_CENTRES;
 		ob_start();
 		?>
 		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
-			<?php if ( '' !== $motivo ) : ?>
-				<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
-			<?php endif; ?>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
+				<fieldset class="prc-seccion-campos"<?php disabled( empty( $m['can_edit'] ) ); ?>>
 					<?php echo self::centre_fields( $m, (array) $m['values'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				</fieldset>

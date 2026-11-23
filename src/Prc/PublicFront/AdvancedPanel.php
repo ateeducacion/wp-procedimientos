@@ -10,7 +10,6 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
-use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 
 /**
@@ -66,22 +65,17 @@ final class AdvancedPanel {
 	/**
 	 * Save «Qué centros pueden solicitar», a section of «Avanzado».
 	 *
-	 * Las mismas reglas que cuando iba en «Datos»: es de su grupo, así que
-	 * con el grupo cerrado por el estado no se guarda; y la misma validación,
+	 * La misma validación que cuando iba en «Datos»,
 	 * {@see CentreEligibility::input()}, con la audiencia guardada.
 	 *
 	 * Lo llama {@see ProcedureEditor::handle()} después de comprobar el
 	 * nonce, el bloqueo y `ProcedureAccess::can_edit()`.
 	 *
 	 * @param int                  $procedure_id Procedure post ID.
-	 * @param int                  $user_id      Who is asking.
 	 * @param array<string, mixed> $raw          What the form sent, as ProcedureEditor reads it.
 	 * @return string Why it was refused; it does not return when it saves.
 	 */
-	public static function save_centres( int $procedure_id, int $user_id, array $raw ): string {
-		if ( ! ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA ) ) {
-			return ProcedureAccess::why_not_editable( $user_id, $procedure_id, ProcedureState::GROUP_DATA );
-		}
+	public static function save_centres( int $procedure_id, array $raw ): string {
 		$acotados = CentreEligibility::input( $raw, self::for_schools( $procedure_id ) );
 		if ( array() !== $acotados['errors'] ) {
 			return ProcedureInput::why( $acotados['errors'] );
@@ -131,7 +125,7 @@ final class AdvancedPanel {
 		unset( $args[ ProcedureEditor::ARG_PANEL ] );
 		// add_query_arg() no codifica: un «&» dentro de un valor no puede colar otro parámetro.
 		$args = array_map( 'rawurlencode', $args );
-		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . '#' . $seccion );
+		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . ( '' !== $seccion ? '#' . $seccion : '' ) );
 	}
 
 	/** Enqueue WordPress CodeMirror before the page head, only on «Avanzado». */

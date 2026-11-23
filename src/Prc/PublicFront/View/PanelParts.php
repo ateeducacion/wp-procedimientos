@@ -93,24 +93,16 @@ final class PanelParts {
 	 * One section of a panel: its beige band, and what it holds.
 	 *
 	 * La banda es el rótulo del bloque, y va en `<legend>` para que sea
-	 * también el nombre accesible del grupo de campos. Un bloque que el
-	 * estado cierra se pinta **apagado y con el motivo escrito**: esconderlo
-	 * dejaría la pantalla distinta según el día sin decir por qué.
+	 * también el nombre accesible del grupo de campos.
 	 *
 	 * @param string $rotulo    Section label, in normal capitalisation.
 	 * @param string $contenido Already escaped markup of the fields.
-	 * @param bool   $apagado   Whether the state closes this block.
-	 * @param string $motivo    Why it is closed, in Spanish.
 	 * @return string
 	 */
-	public static function section( string $rotulo, string $contenido, bool $apagado = false, string $motivo = '' ): string {
-		$aviso = $apagado && '' !== $motivo
-			? '<p class="prc-seccion__bloqueo">' . esc_html( $motivo ) . '</p>'
-			: '';
-
-		return '<fieldset class="prc-seccion-campos"' . ( $apagado ? ' disabled' : '' ) . '>'
+	public static function section( string $rotulo, string $contenido ): string {
+		return '<fieldset class="prc-seccion-campos">'
 			. '<legend class="prc-seccion__titulo">' . esc_html( $rotulo ) . '</legend>'
-			. $aviso . $contenido
+			. $contenido
 			. '</fieldset>';
 	}
 

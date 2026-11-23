@@ -296,7 +296,7 @@ final class ProcedureInput {
 		if ( $entregas > 0 ) {
 			$lista[] = self::point( 'delivery', array() === $sin_fechas, true, 'Las entregas con plazo propio tienen sus fechas.', implode( ' ', $sin_fechas ), $sin_fechas );
 		}
-		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces».', array() );
+		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces», al final de «Datos».', array() );
 		return $lista;
 	}
 

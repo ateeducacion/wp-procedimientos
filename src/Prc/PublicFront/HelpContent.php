@@ -340,7 +340,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>. <strong>Todo se puede cambiar hasta que el procedimiento se marca como histórico</strong>, fechas incluidas y aunque ya haya solicitudes presentadas; lo único que no se deja es cambiar el tipo de un campo adicional que ya tiene respuestas.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -352,8 +352,8 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
-					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar. Si cambia el fin del plazo a un día que ya pasó, se le pide confirmación: con el plazo abierto, guardar lo cierra en ese momento.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
+					. '<p>Pulse <strong>«Guardar los datos»</strong>. Debajo, la sección <strong>«Enlaces»</strong> tiene su propio botón.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Datos», bloque de plazos',
@@ -384,10 +384,10 @@ final class HelpContent {
 				'id'    => 'taller-enlaces',
 				'level' => 3,
 				'title' => 'Enlaces',
-				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'html'  => '<p>Al final de la pestaña «Datos». <strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Enlaces»',
+						'caption' => 'sección «Enlaces», al final de la pestaña «Datos»',
 						'image'   => '',
 					),
 				),
@@ -476,7 +476,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Al final de la pestaña <strong>«Solicitudes»</strong>, <strong>«Plazos de entregas documentales»</strong>: los de las entregas con plazo propio, si las hay. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Las fechas de una entrega con plazo propio se cambian en <strong>su campo</strong>, en la pestaña <strong>«Campos adicionales»</strong>, sin reabrir la inscripción. Se pueden cambiar hasta que el procedimiento sea histórico.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(
@@ -659,7 +659,7 @@ final class HelpContent {
 				'id'    => 'enlaces-cortados',
 				'level' => 3,
 				'title' => 'Los enlaces de la resolución salen cortados o no abren',
-				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'html'  => '<p>Aquí no se sube el PDF: en la sección «Enlaces» de la pestaña «Datos» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
 				'shots' => array(),
 			),
 			array(

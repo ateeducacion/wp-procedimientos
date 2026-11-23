@@ -646,6 +646,76 @@ async function abrir( ctx, conSwal ) {
 		await page.close();
 	}
 
+	// --- 10. Un fin de plazo ya pasado pide confirmación (ADR-0050) --------
+	//
+	// Solo si la fecha se cambió y queda antes de hoy, que pone el servidor.
+	// Sin JavaScript se guarda sin preguntar, como cualquier otra fecha.
+	{
+		const DATOS = `<!doctype html><meta charset="utf-8">
+<body class="prc-app">
+<form id="datos" method="post" action="/enviado">
+  <input type="hidden" name="prc_do" value="datos" />
+  <input type="date" id="cierre" name="prc_closes_at" value="2026-12-01"
+         data-prc-confirm-before="2026-11-23"
+         data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado? Si el plazo de solicitud está abierto, se cierra en cuanto guarde." />
+  <button id="guardar" type="submit">Guardar los datos</button>
+</form>
+</body>`;
+		const abrirDatos = async ( contexto, conSwal ) => {
+			const page = await contexto.newPage();
+			await page.route( 'https://prc.test/**', ( route ) => {
+				const url = route.request().url();
+				route.fulfill( {
+					status: 200,
+					contentType: 'text/html; charset=utf-8',
+					body: url.includes( '/enviado' ) ? '<!doctype html><h1>ENVIADO</h1>' :
+						'<style>' + CSS + '</style>' + DATOS + ( conSwal ? '<script>' + SWAL + '</scr' + 'ipt>' : '' ) + '<script>' + APP + '</scr' + 'ipt>',
+				} );
+			} );
+			await page.goto( 'https://prc.test/panel' );
+			return page;
+		};
+
+		// Una fecha futura no pregunta.
+		let page = await abrirDatos( ctx, true );
+		await page.fill( '#cierre', '2026-12-15' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#guardar' ) ] );
+		ok( page.url().includes( 'enviado' ), 'un fin de plazo futuro se guarda sin preguntar' );
+		await page.close();
+
+		// Con SweetAlert2: el diálogo, y cancelar no guarda.
+		page = await abrirDatos( ctx, true );
+		await page.fill( '#cierre', '2026-11-20' );
+		await page.click( '#guardar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		ok( '¿Guardar con un fin de plazo que ya ha pasado?' === ( await page.textContent( '.swal2-title' ) ).trim(), 'un fin de plazo pasado pregunta con SweetAlert2' );
+		await page.click( '.swal2-cancel' );
+		await page.waitForSelector( '.swal2-popup', { state: 'hidden' } );
+		ok( ! page.url().includes( 'enviado' ), 'cancelar no guarda' );
+		await page.click( '#guardar' );
+		await page.waitForSelector( '.swal2-popup', { state: 'visible' } );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '.swal2-confirm' ) ] );
+		ok( page.url().includes( 'enviado' ), 'confirmar guarda' );
+		await page.close();
+
+		// Sin SweetAlert2: el confirm() del navegador.
+		page = await abrirDatos( ctx, false );
+		await page.fill( '#cierre', '2026-11-20' );
+		let pregunta = null;
+		page.on( 'dialog', async ( d ) => { pregunta = d.message(); await d.accept(); } );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#guardar' ) ] );
+		ok( null !== pregunta && pregunta.startsWith( '¿Guardar con un fin de plazo que ya ha pasado?' ), 'sin SweetAlert2 pregunta con confirm() y guarda al aceptar' );
+		await page.close();
+
+		// Sin JavaScript: se guarda sin preguntar.
+		const sinJs = await browser.newContext( { javaScriptEnabled: false } );
+		page = await abrirDatos( sinJs, true );
+		await page.fill( '#cierre', '2026-11-20' );
+		await Promise.all( [ page.waitForURL( '**/enviado' ), page.click( '#guardar' ) ] );
+		ok( page.url().includes( 'enviado' ), 'sin JavaScript el fin de plazo pasado se guarda igual' );
+		await sinJs.close();
+	}
+
 	// --- La ayuda en un diálogo (#86): abrir, cerrar y, sin JavaScript, navegar
 	{
 		const AYUDA = `<!doctype html><meta charset="utf-8"><body class="prc-app">

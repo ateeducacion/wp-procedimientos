@@ -282,7 +282,7 @@ class Test_Edit_Lock extends WP_UnitTestCase {
 			function () {
 				$this->enviar(
 					$this->segunda,
-					ProcedureEditor::PANEL_LINKS,
+					ProcedureEditor::OP_LINKS,
 					array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/resolucion.pdf' )
 				);
 			}
@@ -318,7 +318,7 @@ class Test_Edit_Lock extends WP_UnitTestCase {
 		$this->assertNotNull(
 			$this->enviar(
 				$this->primera,
-				ProcedureEditor::PANEL_LINKS,
+				ProcedureEditor::OP_LINKS,
 				array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/resolucion.pdf' )
 			)
 		);

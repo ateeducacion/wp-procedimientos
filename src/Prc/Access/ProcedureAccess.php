@@ -911,31 +911,6 @@ final class ProcedureAccess {
 	}
 
 	/**
-	 * Whether the user may edit that group of data, in the state the procedure is in today.
-	 *
-	 * El permiso es del dominio y no de la pantalla: qué deja tocar cada
-	 * estado lo dice {@see ProcedureState::editable_fields()} y aquí se cruza
-	 * con quién pregunta. Lo comprueba el POST antes de escribir; la pantalla
-	 * solo pinta apagado lo mismo.
-	 *
-	 * @param int    $user_id      User ID.
-	 * @param int    $procedure_id Procedure ID.
-	 * @param string $group        One of {@see ProcedureState::groups()}.
-	 * @return bool
-	 */
-	public static function can_edit_group( int $user_id, int $procedure_id, string $group ): bool {
-		if ( ! self::can_edit( $user_id, $procedure_id ) ) {
-			return false;
-		}
-		$estado = ProcedureState::of_post( $procedure_id );
-		// Histórico no lo juzga la tabla de estados: ya lo decidió can_edit()
-		// —cerrado para el ámbito que convocó y abierto para administración,
-		// que es quien tiene que poder rematarlo y reabrirlo (ADR-0023)—.
-		return ProcedureMetaKeys::STATE_ARCHIVED === $estado
-			|| in_array( $group, ProcedureState::editable_fields( $estado ), true );
-	}
-
-	/**
 	 * Whether the user may publish procedures, and this one in particular.
 	 *
 	 * @param int $user_id User ID.
@@ -1331,22 +1306,18 @@ final class ProcedureAccess {
 	}
 
 	/**
-	 * Why the user cannot touch this procedure, or that group of it, in words.
+	 * Why the user cannot touch this procedure, in words.
 	 *
-	 * Vive aquí y no en cada pantalla para que todas lo cuenten igual.
+	 * Vive aquí y no en cada pantalla para que todas lo cuenten igual. El
+	 * estado no cierra nada: todo se edita hasta histórico (ADR-0050).
 	 *
-	 * @param int    $user_id User ID.
-	 * @param int    $post_id Procedure ID.
-	 * @param string $group   Group being written; empty for the procedure as a whole.
+	 * @param int $user_id User ID.
+	 * @param int $post_id Procedure ID.
 	 * @return string Empty when there is nothing to explain.
 	 */
-	public static function why_not_editable( int $user_id, int $post_id, string $group = '' ): string {
+	public static function why_not_editable( int $user_id, int $post_id ): string {
 		if ( self::can_edit( $user_id, $post_id ) ) {
-			// Puede editarlo, así que lo único que puede faltar es que el
-			// estado de hoy cierre ese grupo.
-			return '' === $group || self::can_edit_group( $user_id, $post_id, $group )
-				? ''
-				: ProcedureState::why_locked( ProcedureState::of_post( $post_id ) );
+			return '';
 		}
 		if ( self::can_open( $user_id, $post_id ) ) {
 			return 'Este procedimiento está marcado como histórico: se puede consultar y exportar, pero ya no se edita. Para volver a abrirlo, pídalo a quien administre el aplicativo.';

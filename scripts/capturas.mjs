@@ -103,7 +103,7 @@ const SCENES = [
 	{
 		chapter: 'El taller del procedimiento',
 		title: 'Datos',
-		note: 'Título, descripción, ámbito, curso, a quién va dirigido, los dos plazos, contacto, compromisos y si pide persona coordinadora.',
+		note: 'Título, descripción, ámbito, curso, a quién va dirigido, los dos plazos, contacto, compromisos, si pide persona coordinadora y, al final, los enlaces. Se edita todo hasta que el procedimiento es histórico.',
 		who: 'gestion',
 		go: '/editar-procedimiento/?procedimiento={ID}&panel=datos',
 		screens: [ 'desktop' ],
@@ -136,9 +136,9 @@ const SCENES = [
 	{
 		chapter: 'El taller del procedimiento',
 		title: 'Enlaces',
-		note: 'La resolución y los listados provisional y definitivo: enlaces, no copias. El definitivo es lo que pasa el procedimiento a resuelto.',
+		note: 'La sección del final de «Datos», con su propio botón: la resolución y los listados provisional y definitivo, enlaces con una copia privada del PDF. El definitivo es lo que pasa el procedimiento a resuelto.',
 		who: 'gestion',
-		go: '/editar-procedimiento/?procedimiento={ID}&panel=enlaces',
+		go: '/editar-procedimiento/?procedimiento={ID}&panel=datos#prc-enlaces',
 		screens: [ 'desktop' ],
 	},
 	{
@@ -152,7 +152,7 @@ const SCENES = [
 	{
 		chapter: 'El taller del procedimiento',
 		title: 'Solicitudes',
-		note: 'La tabla de centros con cargo, coordinación y estado de revisión; admitir, pedir subsanar o excluir con nota, exportar a CSV por POST y, al final, los plazos de las entregas con plazo propio.',
+		note: 'La tabla de centros con cargo, coordinación y estado de revisión; admitir, pedir subsanar o excluir con nota, y exportar a CSV por POST.',
 		who: 'gestion',
 		go: '/editar-procedimiento/?procedimiento={ID}&panel=solicitudes',
 		screens: [ 'desktop' ],

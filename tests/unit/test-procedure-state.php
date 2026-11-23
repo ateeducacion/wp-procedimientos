@@ -148,62 +148,6 @@ class Test_Procedure_State extends WP_UnitTestCase {
 		$this->assertSame( ProcedureMetaKeys::STATE_UPCOMING, ProcedureState::of( array( ProcedureMetaKeys::OPENS_AT => array( 'x' ) ), '2027-01-03', true ) );
 	}
 
-	// ─── lo que cada estado deja tocar ─────────────────────────────────────
-
-	/**
-	 * La tabla «Lo que cada estado permite» de la SDD, columna de quien gestiona.
-	 */
-	public function test_editable_fields_is_the_table_of_the_sdd() {
-		$todo = array(
-			ProcedureState::GROUP_DATA,
-			ProcedureState::GROUP_DATES,
-			ProcedureState::GROUP_LINKS,
-			ProcedureState::GROUP_QUESTIONS,
-		);
-
-		$this->assertSame( $todo, ProcedureState::groups() );
-		$this->assertSame( $todo, ProcedureState::editable_fields( ProcedureMetaKeys::STATE_DRAFT ) );
-		$this->assertSame( $todo, ProcedureState::editable_fields( ProcedureMetaKeys::STATE_UPCOMING ) );
-		$this->assertSame( $todo, ProcedureState::editable_fields( ProcedureMetaKeys::STATE_OPEN ) );
-		$this->assertSame(
-			array( ProcedureState::GROUP_DATES, ProcedureState::GROUP_LINKS ),
-			ProcedureState::editable_fields( ProcedureMetaKeys::STATE_CLOSED )
-		);
-		$this->assertSame( array( ProcedureState::GROUP_LINKS ), ProcedureState::editable_fields( ProcedureMetaKeys::STATE_RESOLVED ) );
-		$this->assertSame( array(), ProcedureState::editable_fields( ProcedureMetaKeys::STATE_AMENDMENT ), 'en subsanación se gestionan solicitudes, no el procedimiento' );
-		$this->assertSame( array(), ProcedureState::editable_fields( ProcedureMetaKeys::STATE_ARCHIVED ) );
-		$this->assertSame( array(), ProcedureState::editable_fields( 'convocatoria-abierta' ), 'un estado que no es nuestro no abre nada' );
-
-		// Las preguntas son el motivo de todo esto: borrar una de un
-		// procedimiento con solicitudes presentadas descoloca su tabla y su CSV.
-		$cerrados = array(
-			ProcedureMetaKeys::STATE_CLOSED,
-			ProcedureMetaKeys::STATE_AMENDMENT,
-			ProcedureMetaKeys::STATE_RESOLVED,
-			ProcedureMetaKeys::STATE_ARCHIVED,
-		);
-		foreach ( $cerrados as $estado ) {
-			$this->assertNotContains( ProcedureState::GROUP_QUESTIONS, ProcedureState::editable_fields( $estado ), $estado );
-		}
-	}
-
-	/**
-	 * Y por qué, con las mismas palabras lo cuente quien lo cuente.
-	 */
-	public function test_why_locked_only_explains_the_states_that_close_something() {
-		$this->assertStringContainsString(
-			'Las solicitudes están cerradas',
-			ProcedureState::why_locked( ProcedureMetaKeys::STATE_CLOSED )
-		);
-		$this->assertStringContainsString( 'subsanación', ProcedureState::why_locked( ProcedureMetaKeys::STATE_AMENDMENT ) );
-		$this->assertStringContainsString( 'resuelto', ProcedureState::why_locked( ProcedureMetaKeys::STATE_RESOLVED ) );
-
-		$this->assertSame( '', ProcedureState::why_locked( ProcedureMetaKeys::STATE_DRAFT ) );
-		$this->assertSame( '', ProcedureState::why_locked( ProcedureMetaKeys::STATE_UPCOMING ) );
-		$this->assertSame( '', ProcedureState::why_locked( ProcedureMetaKeys::STATE_OPEN ) );
-		$this->assertSame( '', ProcedureState::why_locked( ProcedureMetaKeys::STATE_ARCHIVED ), 'histórico lo explica su propio aviso (ADR-0023), no el estado' );
-	}
-
 	/**
 	 * Solo en abierto se presenta o edita la solicitud.
 	 */

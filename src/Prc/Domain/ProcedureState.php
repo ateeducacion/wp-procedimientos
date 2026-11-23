@@ -25,27 +25,6 @@ use Prc\Meta\ProcedureMetaKeys;
 final class ProcedureState {
 
 	/**
-	 * Grupo «lo que el procedimiento es»: título, descripción, clasificación,
-	 * a quién se dirige, contacto y compromisos.
-	 */
-	public const GROUP_DATA = 'data';
-
-	/**
-	 * Grupo «las fechas»: el plazo de solicitud y el de subsanación.
-	 */
-	public const GROUP_DATES = 'dates';
-
-	/**
-	 * Grupo «los enlaces»: resolución, listado provisional y listado definitivo.
-	 */
-	public const GROUP_LINKS = 'links';
-
-	/**
-	 * Grupo «las preguntas» del procedimiento (ADR-0019).
-	 */
-	public const GROUP_QUESTIONS = 'questions';
-
-	/**
 	 * State of a procedure given its meta, a reference day and its status.
 	 *
 	 * El orden de la tabla de la SDD: el primero que se cumple manda. Sin
@@ -138,65 +117,6 @@ final class ProcedureState {
 			return 'Cerrado manualmente';
 		}
 		return (string) ( ProcedureMetaKeys::states()[ $state ] ?? '' );
-	}
-
-	/**
-	 * Every group of data the workshop writes.
-	 *
-	 * @return string[]
-	 */
-	public static function groups(): array {
-		return array( self::GROUP_DATA, self::GROUP_DATES, self::GROUP_LINKS, self::GROUP_QUESTIONS );
-	}
-
-	/**
-	 * What may still be edited in this state, by group.
-	 *
-	 * Es la columna «Quien gestiona» de la tabla «Lo que cada estado permite»
-	 * de la SDD, en código: borrador, próximo y abierto se editan enteros;
-	 * cerrado el plazo quedan las fechas y los enlaces; resuelto, los enlaces;
-	 * en subsanación no se toca el procedimiento —solo se gestionan sus
-	 * solicitudes—; e histórico, nada.
-	 *
-	 * Lo que de verdad protege son las preguntas: borrar una de un
-	 * procedimiento con solicitudes presentadas descoloca su tabla y su CSV.
-	 *
-	 * Pura, como {@see of()}: la cruza con quién pregunta
-	 * {@see \Prc\Access\ProcedureAccess::can_edit_group()}.
-	 *
-	 * @param string $state State slug.
-	 * @return string[] Group slugs; empty when nothing may be touched.
-	 */
-	public static function editable_fields( string $state ): array {
-		$todo  = self::groups();
-		$tabla = array(
-			ProcedureMetaKeys::STATE_DRAFT    => $todo,
-			ProcedureMetaKeys::STATE_UPCOMING => $todo,
-			ProcedureMetaKeys::STATE_OPEN     => $todo,
-			ProcedureMetaKeys::STATE_CLOSED   => array( self::GROUP_DATES, self::GROUP_LINKS ),
-			ProcedureMetaKeys::STATE_RESOLVED => array( self::GROUP_LINKS ),
-		);
-		return $tabla[ $state ] ?? array();
-	}
-
-	/**
-	 * Why this state closes part of the workshop, in words.
-	 *
-	 * Vive aquí y no en cada pantalla para que todas lo cuenten igual: el
-	 * envío rechazado y el panel que se pinta apagado dicen lo mismo.
-	 *
-	 * @param string $state State slug.
-	 * @return string Empty when the state edits everything, y también en
-	 *                histórico, que no lo decide el estado sino ADR-0023.
-	 */
-	public static function why_locked( string $state ): string {
-		$textos = array(
-			ProcedureMetaKeys::STATE_CLOSED    => 'Las solicitudes están cerradas: solo se pueden cambiar fechas y enlaces. '
-				. 'Las entregas documentales conservan sus propios plazos.',
-			ProcedureMetaKeys::STATE_AMENDMENT => 'La subsanación está en marcha: el procedimiento ya no se edita, para no mover el suelo a quien está subsanando. Las solicitudes se siguen gestionando.',
-			ProcedureMetaKeys::STATE_RESOLVED  => 'El procedimiento está resuelto: solo se pueden cambiar los enlaces.',
-		);
-		return (string) ( $textos[ $state ] ?? '' );
 	}
 
 	/**

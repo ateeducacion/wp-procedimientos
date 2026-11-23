@@ -316,14 +316,13 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		$this->assertTrue( ProcedureAccess::can_toggle_archived( $admin, $procedimiento ) );
 	}
 
-	// ─── el cierre por estado ──────────────────────────────────────────────
+	// ─── se edita hasta histórico ──────────────────────────────────────────
 
 	/**
-	 * El estado cierra grupos por encima del permiso: cerrado el plazo quedan
-	 * las fechas y los enlaces, en subsanación no queda nada y resuelto solo
-	 * deja los enlaces. Gestionar solicitudes no se toca.
+	 * El estado no cierra nada hasta histórico (ADR-0050): abierto, cerrado,
+	 * en subsanación o resuelto, quien gestiona su ámbito lo edita entero.
 	 */
-	public function test_the_state_closes_groups_on_top_of_the_permission() {
+	public function test_every_state_but_archived_edits_everything() {
 		$area = $this->area( 'Área de prueba' );
 		$yo   = $this->manager( array( $area ) );
 		$ella = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
@@ -354,47 +353,36 @@ class Test_Procedure_Access extends WP_UnitTestCase {
 		);
 		$resuelto = $this->procedure( $yo, array( $area ), array_merge( $plazo, array( ProcedureMetaKeys::FINAL_LIST_URL => 'https://example.org/definitivo.pdf' ) ) );
 
-		$esperado = array(
-			$abierto  => array( 'data', 'dates', 'links', 'questions' ),
-			$cerrado  => array( 'dates', 'links' ),
-			$subsana  => array(),
-			$resuelto => array( 'links' ),
+		$estados = array(
+			$abierto  => ProcedureMetaKeys::STATE_OPEN,
+			$cerrado  => ProcedureMetaKeys::STATE_CLOSED,
+			$subsana  => ProcedureMetaKeys::STATE_AMENDMENT,
+			$resuelto => ProcedureMetaKeys::STATE_RESOLVED,
 		);
-		foreach ( $esperado as $procedimiento => $abiertos ) {
-			foreach ( ProcedureState::groups() as $grupo ) {
-				$aviso = ProcedureState::of_post( $procedimiento ) . ' / ' . $grupo;
-				$this->assertSame( in_array( $grupo, $abiertos, true ), ProcedureAccess::can_edit_group( $yo, $procedimiento, $grupo ), $aviso );
-				$this->assertFalse( ProcedureAccess::can_edit_group( $ella, $procedimiento, $grupo ), 'otro ámbito no edita nada: ' . $aviso );
-			}
-			$this->assertTrue( ProcedureAccess::can_edit( $yo, $procedimiento ), 'el procedimiento se sigue abriendo y editando en parte' );
+		foreach ( $estados as $procedimiento => $estado ) {
+			$this->assertSame( $estado, ProcedureState::of_post( $procedimiento ) );
+			$this->assertTrue( ProcedureAccess::can_edit( $yo, $procedimiento ), 'se edita entero: ' . $estado );
+			$this->assertSame( '', ProcedureAccess::why_not_editable( $yo, $procedimiento ), $estado );
 			$this->assertTrue( ProcedureAccess::can_review( $yo, $procedimiento ), 'las solicitudes se gestionan en todos ellos' );
+			$this->assertFalse( ProcedureAccess::can_edit( $ella, $procedimiento ), 'otro ámbito no edita nada: ' . $estado );
+			$this->assertStringContainsString( 'de otro ámbito', ProcedureAccess::why_not_editable( $ella, $procedimiento ) );
 		}
-
-		// Y el motivo se cuenta por grupo, no por procedimiento.
-		$this->assertSame( '', ProcedureAccess::why_not_editable( $yo, $cerrado ) );
-		$this->assertSame( '', ProcedureAccess::why_not_editable( $yo, $cerrado, ProcedureState::GROUP_DATES ) );
-		$this->assertStringContainsString( 'Las solicitudes están cerradas', ProcedureAccess::why_not_editable( $yo, $cerrado, ProcedureState::GROUP_QUESTIONS ) );
-		$this->assertStringContainsString( 'subsanación', ProcedureAccess::why_not_editable( $yo, $subsana, ProcedureState::GROUP_DATES ) );
-		$this->assertStringContainsString( 'resuelto', ProcedureAccess::why_not_editable( $yo, $resuelto, ProcedureState::GROUP_DATA ) );
-		$this->assertStringContainsString( 'de otro ámbito', ProcedureAccess::why_not_editable( $ella, $cerrado, ProcedureState::GROUP_DATES ), 'primero el permiso, luego el estado' );
 	}
 
 	/**
-	 * Histórico no lo decide la tabla de estados, sino `can_edit()`: su ámbito
-	 * no toca nada y administración lo toca todo, que es quien va a reabrirlo.
+	 * Histórico es lo único que cierra: su ámbito no toca nada y
+	 * administración lo toca todo, que es quien va a reabrirlo (ADR-0023).
 	 */
-	public function test_the_archived_state_is_decided_by_can_edit_and_not_by_the_table() {
+	public function test_only_archived_is_read_only_and_not_for_administration() {
 		$area          = $this->area( 'Área de prueba' );
 		$yo            = $this->manager( array( $area ) );
 		$admin         = $this->administrator();
 		$procedimiento = $this->procedure( $yo, array( $area ), array( ProcedureMetaKeys::ARCHIVED => true ) );
 
 		$this->assertSame( ProcedureMetaKeys::STATE_ARCHIVED, ProcedureState::of_post( $procedimiento ) );
-		foreach ( ProcedureState::groups() as $grupo ) {
-			$this->assertFalse( ProcedureAccess::can_edit_group( $yo, $procedimiento, $grupo ), $grupo );
-			$this->assertTrue( ProcedureAccess::can_edit_group( $admin, $procedimiento, $grupo ), $grupo );
-		}
-		$this->assertStringContainsString( 'marcado como histórico', ProcedureAccess::why_not_editable( $yo, $procedimiento, ProcedureState::GROUP_LINKS ) );
+		$this->assertFalse( ProcedureAccess::can_edit( $yo, $procedimiento ) );
+		$this->assertTrue( ProcedureAccess::can_edit( $admin, $procedimiento ) );
+		$this->assertStringContainsString( 'marcado como histórico', ProcedureAccess::why_not_editable( $yo, $procedimiento ) );
 	}
 
 	// ─── revisar solicitudes ───────────────────────────────────────────────

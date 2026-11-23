@@ -214,7 +214,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureEditor::PANEL_DATA,
 				ProcedureEditor::PANEL_QUESTIONS,
 				ProcedureEditor::PANEL_PEOPLE,
-				ProcedureEditor::PANEL_LINKS,
 				ProcedureEditor::PANEL_PUBLISH,
 				ProcedureEditor::PANEL_ADVANCED,
 				ProcedureEditor::PANEL_APPLICATIONS,
@@ -233,7 +232,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_QUESTIONS ]['count'] );
 		$this->assertSame( 1, $m['panels'][ ProcedureEditor::PANEL_APPLICATIONS ]['count'] );
 		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_ADVANCED ]['count'] );
-		$this->assertNull( $m['panels'][ ProcedureEditor::PANEL_LINKS ]['count'] );
+		$this->assertArrayNotHasKey( 'enlaces', $m['panels'], '«Enlaces» es una sección de «Datos»' );
 		$this->assertSame( $procedimiento, $m['procedure_id'] );
 		$this->assertSame( (string) get_permalink( $procedimiento ), $m['view_url'] );
 		$this->assertTrue( $m['can_edit'] );
@@ -260,7 +259,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			ProcedureEditor::PANEL_DATA,
 			ProcedureEditor::PANEL_QUESTIONS,
 			ProcedureEditor::PANEL_PEOPLE,
-			ProcedureEditor::PANEL_LINKS,
 			ProcedureEditor::PANEL_ADVANCED,
 		);
 		foreach ( $paneles as $panel ) {
@@ -338,9 +336,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'procedimiento=', ProcedureEditor::url( 0 ) );
 		$this->assertNotSame( '', ProcedureEditor::url( 0 ), 'la pantalla de crear' );
 
-		$url = ProcedureEditor::url( 12, ProcedureEditor::PANEL_LINKS );
+		$url = ProcedureEditor::url( 12, ProcedureEditor::PANEL_QUESTIONS );
 		$this->assertStringContainsString( 'procedimiento=12', $url );
-		$this->assertStringContainsString( 'panel=' . ProcedureEditor::PANEL_LINKS, $url );
+		$this->assertStringContainsString( 'panel=' . ProcedureEditor::PANEL_QUESTIONS, $url );
 
 		$this->assertNotSame( ProcedureEditor::nonce_name( 'review', 3 ), ProcedureEditor::nonce_name( 'review', 4 ) );
 		$this->assertNotSame( ProcedureEditor::nonce_action( 'publish' ), ProcedureEditor::nonce_action( 'archive' ) );
@@ -719,18 +717,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Los límites se guardan con las mismas reglas que tenían en «Datos»:
-	 * con su grupo cerrado por el estado, ni se guardan ni se pintan
-	 * encendidos; y quien no edita el procedimiento no los cambia.
+	 * Los límites se guardan en cualquier estado hasta histórico (ADR-0050),
+	 * y quien no edita el procedimiento no los cambia.
 	 */
-	public function test_the_centre_limits_keep_the_rules_of_the_data_group() {
+	public function test_the_centre_limits_save_until_archived_and_only_for_whoever_edits() {
 		list( , $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
-		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedimiento, ProcedureState::GROUP_DATA ) );
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001' ) ) ) );
-		$this->assertSame( array(), (array) get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'cerrado, no se guarda' );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_CENTRES, $procedimiento, 0, $this->centros( array( ProcedureMetaKeys::ALLOWED_CENTRES => 'C0001' ) ) ) );
+		$this->assertSame( array( 'C0001' ), (array) get_post_meta( $procedimiento, ProcedureMetaKeys::ALLOWED_CENTRES, true ), 'cerrado el plazo, se guarda igual' );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
-		$this->assertMatchesRegularExpression( '/Qué centros pueden solicitar<\/h2>\s*<p class="prc-seccion__bloqueo">Cerrado por el estado del procedimiento\.<\/p>.*?<fieldset class="prc-seccion-campos" disabled>/s', $html, 'pintado apagado, y por qué, bajo el título' );
+		$this->assertStringNotContainsString( 'prc-seccion__bloqueo', $html );
+		$this->assertMatchesRegularExpression( '/Qué centros pueden solicitar<\/h2>.*?<fieldset class="prc-seccion-campos">/s', $html, 'encendido' );
 
 		$this->olvidar_rechazo();
 		$ajeno = $this->procedure( $this->administrator(), array( $this->area( 'Otro ámbito' ) ) );
@@ -781,7 +778,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		list( , $uid, $procedimiento ) = $this->mio();
 		$this->acting_as( $uid );
 		$casos = array(
-			'entregas' => array( ProcedureEditor::PANEL_APPLICATIONS, ProcedureEditor::SECTION_DELIVERIES ),
+			'entregas' => array( ProcedureEditor::PANEL_QUESTIONS, '' ),
+			'enlaces'  => array( ProcedureEditor::PANEL_DATA, ProcedureEditor::SECTION_LINKS ),
 			'consulta' => array( ProcedureEditor::PANEL_ADVANCED, ProcedureEditor::SECTION_OBSERVE ),
 			'codigo'   => array( ProcedureEditor::PANEL_ADVANCED, ProcedureEditor::SECTION_CODE ),
 		);
@@ -792,7 +790,11 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$this->assertSame( $nuevo[0], $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ), $viejo );
 			$this->assertSame( (string) $procedimiento, $this->query_arg( (string) $url, ProcedureEditor::ARG_PROCEDURE ), $viejo );
 			$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), 'el resto de la dirección se queda' );
-			$this->assertStringEndsWith( '#' . $nuevo[1], (string) $url, $viejo );
+			if ( '' === $nuevo[1] ) {
+				$this->assertStringNotContainsString( '#prc-entregas', (string) $url, 'sin sección propia: ' . $viejo );
+			} else {
+				$this->assertStringEndsWith( '#' . $nuevo[1], (string) $url, $viejo );
+			}
 		}
 
 		// Un «&» dentro de un valor no cuela otro parámetro.
@@ -804,13 +806,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$_POST = array( ProcedureEditor::FIELD_DO => ProcedureEditor::OP_CUSTOM_CODE );
 		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ) );
 		$_POST = array();
-		$this->go_to( ProcedureEditor::url( $procedimiento, ProcedureEditor::PANEL_LINKS ) );
+		$this->go_to( ProcedureEditor::url( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) );
 		$this->assertNull( $this->exit_url( array( AdvancedPanel::class, 'redirect_old_panel' ) ), 'una pestaña que existe no se toca' );
 	}
 
 	/**
-	 * Con «Datos» cerrado por el estado, guardar las fechas no toca un límite
-	 * que cubre todo el catálogo: ya no se deduce «sin límite» (#84).
+	 * Guardar «Datos» no toca un límite que cubre todo el catálogo: ya no se
+	 * deduce «sin límite» (#84).
 	 */
 	public function test_a_closed_data_group_keeps_a_limit_that_covers_the_catalogue() {
 		add_filter( 'prc_centres', array( $this, 'two_centres' ) );
@@ -1474,12 +1476,12 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	 * Los tres enlaces se guardan; con el definitivo el procedimiento está
 	 * resuelto; y lo que no es una URL no entra ni borra lo que había.
 	 */
-	public function test_the_links_panel_saves_urls_and_refuses_junk() {
+	public function test_the_links_section_saves_urls_and_refuses_junk() {
 		list( , $uid, $procedimiento ) = $this->mio();
 
 		$url = $this->submit(
 			$uid,
-			ProcedureEditor::PANEL_LINKS,
+			ProcedureEditor::OP_LINKS,
 			$procedimiento,
 			0,
 			array(
@@ -1497,7 +1499,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertNull(
 			$this->submit(
 				$uid,
-				ProcedureEditor::PANEL_LINKS,
+				ProcedureEditor::OP_LINKS,
 				$procedimiento,
 				0,
 				array(
@@ -1508,7 +1510,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		);
 		$this->assertSame( 'https://example.org/resolucion.pdf', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ), 'no se guarda nada a medias' );
 		$this->assertSame( 'https://example.org/definitivo.pdf', get_post_meta( $procedimiento, ProcedureMetaKeys::FINAL_LIST_URL, true ) );
-		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS );
+		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA );
 		$this->assertStringContainsString( 'enlace a la resolución', $m['flash']['texto'] );
 		$this->assertSame( 'esto no es un enlace', $m['values'][ ProcedureMetaKeys::RESOLUTION_URL ], 'lo tecleado vuelve' );
 	}
@@ -1573,7 +1575,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		// Su ámbito ya no lo toca: ni los datos ni la marca.
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_UNARCHIVE, $procedimiento ) );
 		$this->assertTrue( ProcedureAccess::is_archived( $procedimiento ) );
-		$this->submit( $uid, ProcedureEditor::PANEL_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
+		$this->submit( $uid, ProcedureEditor::OP_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
 		$this->assertSame( '', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ) );
 
 		$admin = $this->administrator();
@@ -1742,7 +1744,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$ajena                          = $this->manager( array( $this->area( 'Otro ámbito' ) ) );
 
 		$this->submit( $ajena, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $this->course(), array( ProcedureEditor::FIELD_TITLE => 'Secuestrado' ) ) );
-		$this->submit( $ajena, ProcedureEditor::PANEL_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
+		$this->submit( $ajena, ProcedureEditor::OP_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
 		$this->submit( $ajena, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, array( ProcedureEditor::FIELD_Q . 'label' => array( 'Colada' ) ) );
 		$this->submit( $ajena, ProcedureEditor::OP_ARCHIVE, $procedimiento );
 
@@ -1799,7 +1801,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $m ) );
 
 		$this->expectException( 'WPDieException' );
-		$this->submit( $uid, ProcedureEditor::PANEL_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
+		$this->submit( $uid, ProcedureEditor::OP_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
 	}
 
 	// ─── el cierre por estado ──────────────────────────────────────────────
@@ -1846,15 +1848,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Un procedimiento de antes sin titularidad guardada sigue guardando sus
-	 * fechas con los datos cerrados: la casilla que nadie puede tocar no
-	 * tumba el envío.
+	 * Un procedimiento de antes sin titularidad guardada se pinta dirigido a
+	 * todos, y guardar lo que enseña la pantalla no tumba el envío.
 	 */
 	public function test_an_old_procedure_without_ownership_still_saves_its_dates() {
 		list( $area, $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
 		delete_post_meta( $procedimiento, ProcedureMetaKeys::OWNERSHIP );
+		$this->acting_as( $uid );
+		$pintada = (array) $this->modelo( $procedimiento )['values'][ ProcedureMetaKeys::OWNERSHIP ];
+		$this->assertSame( array_keys( ProcedureMetaKeys::ownerships() ), $pintada );
 
-		$sin = $this->datos(
+		$sin                                 = $this->datos(
 			$area,
 			$this->course( '2099-2100' ),
 			array(
@@ -1862,8 +1866,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				ProcedureMetaKeys::CLOSES_AT => '2026-01-20',
 			)
 		);
-		unset( $sin[ ProcedureMetaKeys::OWNERSHIP ] );
-		$url = $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $sin );
+		$sin[ ProcedureMetaKeys::OWNERSHIP ] = $pintada;
+		$url                                 = $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $sin );
 
 		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
 		$this->assertSame( '2026-01-20', get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
@@ -1871,24 +1875,27 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Cerrado el plazo se cambian las fechas y los enlaces y nada más: el
-	 * título, los compromisos y las preguntas se quedan como estaban.
+	 * Cerrado el plazo, todo se sigue editando (ADR-0050): el título, las
+	 * fechas, los compromisos, el curso, los enlaces y los campos. Solo se
+	 * rechaza lo que protege las respuestas: cambiar el tipo de un campo
+	 * contestado.
 	 */
-	public function test_a_closed_procedure_only_saves_dates_and_links() {
-		list( $area, $uid, $procedimiento, $curso ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
+	public function test_a_closed_procedure_saves_everything_but_the_type_of_an_answered_field() {
+		list( $area, $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
 		update_post_meta(
 			$procedimiento,
 			ProcedureMetaKeys::QUESTIONS,
 			array(
 				array(
+					'key'   => 'q1',
 					'label' => 'Modalidad',
 					'type'  => ProcedureQuestions::TYPE_TEXT,
 				),
 			)
 		);
+		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q1' => 'A' ) ) );
+		$curso = $this->course( '2099-2100' );
 
-		// El envío trae de todo, como quien lo arma a mano contra la pantalla
-		// de antes: solo tienen que entrar las fechas.
 		$url = $this->submit(
 			$uid,
 			ProcedureEditor::PANEL_DATA,
@@ -1896,30 +1903,42 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			0,
 			$this->datos(
 				$area,
-				$this->course( '2099-2100' ),
+				$curso,
 				array(
-					ProcedureEditor::FIELD_TITLE   => 'Nombre secuestrado',
+					ProcedureEditor::FIELD_TITLE   => 'Nombre corregido',
 					ProcedureMetaKeys::OPENS_AT    => '2026-01-07',
 					ProcedureMetaKeys::CLOSES_AT   => '2026-01-20',
 					ProcedureMetaKeys::COMMITMENTS => 'Otros compromisos.',
 				)
 			)
 		);
-
 		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
-		$this->assertSame( '2026-01-07', get_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, true ), 'las fechas sí' );
 		$this->assertSame( '2026-01-20', get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
-		$this->assertSame( 'Red de prueba', get_the_title( $procedimiento ), 'el título no' );
-		$this->assertSame( 'Los compromisos de siempre.', get_post_meta( $procedimiento, ProcedureMetaKeys::COMMITMENTS, true ) );
-		$this->assertSame( array( $curso ), wp_get_post_terms( $procedimiento, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ), 'ni el curso' );
+		$this->assertSame( 'Nombre corregido', get_the_title( $procedimiento ) );
+		$this->assertSame( 'Otros compromisos.', get_post_meta( $procedimiento, ProcedureMetaKeys::COMMITMENTS, true ) );
+		$this->assertSame( array( $curso ), wp_get_post_terms( $procedimiento, ProcedureTaxonomies::COURSE, array( 'fields' => 'ids' ) ) );
 
-		// Los enlaces, también.
-		$url = $this->submit( $uid, ProcedureEditor::PANEL_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
+		$url = $this->submit( $uid, ProcedureEditor::OP_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
 		$this->assertSame( 'enlaces', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( ProcedureEditor::PANEL_DATA, $this->query_arg( (string) $url, ProcedureEditor::ARG_PANEL ), 'vuelve a «Datos», donde está la sección' );
 		$this->assertSame( 'https://example.org/r.pdf', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ) );
 
-		// Las preguntas, no: borrar una con solicitudes presentadas descoloca
-		// su tabla y su CSV.
+		// El texto de un campo contestado y un campo nuevo, sí.
+		$url = $this->submit(
+			$uid,
+			ProcedureEditor::PANEL_QUESTIONS,
+			$procedimiento,
+			0,
+			array(
+				ProcedureEditor::FIELD_Q . 'key'   => array( 'q1', '' ),
+				ProcedureEditor::FIELD_Q . 'label' => array( 'Modalidad elegida', 'Observaciones' ),
+				ProcedureEditor::FIELD_Q . 'type'  => array( ProcedureQuestions::TYPE_TEXT, ProcedureQuestions::TYPE_TEXT ),
+			)
+		);
+		$this->assertSame( 'preguntas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( array( 'Modalidad elegida', 'Observaciones' ), array_column( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'label' ) );
+
+		// Su tipo, no: las respuestas dadas dejarían de tener sentido.
 		$this->assertNull(
 			$this->submit(
 				$uid,
@@ -1928,36 +1947,45 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 				0,
 				array(
 					ProcedureEditor::FIELD_Q . 'key'   => array( 'q1' ),
-					ProcedureEditor::FIELD_Q . 'label' => array( '' ),
+					ProcedureEditor::FIELD_Q . 'label' => array( 'Modalidad elegida' ),
+					ProcedureEditor::FIELD_Q . 'type'  => array( ProcedureQuestions::TYPE_YESNO ),
 				)
 			)
 		);
-		$this->assertCount( 1, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'la pregunta sigue ahí' );
-
-		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS );
-		$this->assertSame( 'error', $m['flash']['tipo'] );
-		$this->assertStringContainsString( 'Las solicitudes están cerradas', $m['flash']['texto'] );
+		$this->assertSame( ProcedureQuestions::TYPE_TEXT, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true )[0]['type'] );
+		$this->assertStringContainsString( 'No se puede cambiar el tipo', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
 	}
 
 	/**
-	 * En subsanación el procedimiento no se toca —ni datos, ni fechas, ni
-	 * enlaces, ni preguntas—, pero sus solicitudes se gestionan igual.
+	 * The states after closing, for the test below.
+	 *
+	 * @return array<string, array{0:string}>
 	 */
-	public function test_an_amendment_freezes_the_procedure_but_not_its_applications() {
-		list( $area, $uid, $procedimiento, $curso ) = $this->en_estado( ProcedureMetaKeys::STATE_AMENDMENT );
+	public function late_states(): array {
+		return array(
+			'subsanación' => array( ProcedureMetaKeys::STATE_AMENDMENT ),
+			'resuelto'    => array( ProcedureMetaKeys::STATE_RESOLVED ),
+		);
+	}
+
+	/**
+	 * En subsanación y resuelto el procedimiento también se edita, y sus
+	 * solicitudes se siguen gestionando.
+	 *
+	 * @dataProvider late_states
+	 *
+	 * @param string $estado State slug.
+	 */
+	public function test_amendment_and_resolved_still_edit_the_procedure( string $estado ) {
+		list( $area, $uid, $procedimiento, $curso ) = $this->en_estado( $estado );
 		$solicitud                                  = $this->application( $procedimiento, $this->school_head( 'C0001' ) );
-		$abria                                      = (string) get_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, true );
 
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_TITLE => 'Nombre secuestrado' ) ) ) );
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_LINKS, $procedimiento, 0, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) ) );
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, array( ProcedureEditor::FIELD_Q . 'label' => array( 'Colada' ) ) ) );
+		$url = $this->submit( $uid, ProcedureEditor::PANEL_DATA, $procedimiento, 0, $this->datos( $area, $curso, array( ProcedureEditor::FIELD_TITLE => 'Nombre corregido' ) ) );
+		$this->assertSame( 'datos', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), $estado );
+		$this->assertSame( 'Nombre corregido', get_the_title( $procedimiento ), $estado );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, array( ProcedureEditor::FIELD_Q . 'label' => array( 'Nuevo campo' ) ) ), $estado );
+		$this->assertCount( 1, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), $estado );
 
-		$this->assertSame( 'Red de prueba', get_the_title( $procedimiento ) );
-		$this->assertSame( $abria, get_post_meta( $procedimiento, ProcedureMetaKeys::OPENS_AT, true ), 'las fechas tampoco' );
-		$this->assertSame( '', get_post_meta( $procedimiento, ProcedureMetaKeys::RESOLUTION_URL, true ) );
-		$this->assertSame( array(), get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
-
-		// Lo que sí: revisar. Es otra capacidad y no la toca el estado.
 		$url = $this->submit(
 			$uid,
 			ProcedureEditor::OP_REVIEW,
@@ -1965,86 +1993,32 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$solicitud,
 			array( ProcedureEditor::FIELD_STATE => ApplicationMetaKeys::REVIEW_ADMITTED )
 		);
-		$this->assertSame( 'revisada', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
-		$this->assertSame( ApplicationMetaKeys::REVIEW_ADMITTED, get_post_meta( $solicitud, ApplicationMetaKeys::REVIEW_STATE, true ) );
-
-		$m = $this->modelo( $procedimiento );
-		$this->assertTrue( $m['can_review'] );
-		$this->assertSame( array(), array_filter( (array) $m['groups'] ), 'ni un grupo abierto' );
-		$this->assertStringContainsString( 'subsanación está en marcha', ProcedureEditorView::html( $m ) );
-		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $m ) );
+		$this->assertSame( 'revisada', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ), $estado );
 	}
 
 	/**
-	 * Resuelto solo se cambian los enlaces: las fechas ya no.
+	 * Y la pantalla no apaga nada: ni aviso del estado, ni bloques en gris,
+	 * ni campos en solo lectura. «Enlaces» va al final de «Datos», con su
+	 * propio formulario.
 	 */
-	public function test_a_resolved_procedure_only_saves_links() {
-		list( $area, $uid, $procedimiento, $curso ) = $this->en_estado( ProcedureMetaKeys::STATE_RESOLVED );
-		$cerraba                                    = (string) get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true );
-
-		$url = $this->submit(
-			$uid,
-			ProcedureEditor::PANEL_LINKS,
-			$procedimiento,
-			0,
-			array(
-				ProcedureMetaKeys::PROVISIONAL_LIST_URL => 'https://example.org/provisional.pdf',
-				ProcedureMetaKeys::FINAL_LIST_URL       => 'https://example.org/definitivo.pdf',
-			)
-		);
-		$this->assertSame( 'enlaces', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
-		$this->assertSame( 'https://example.org/provisional.pdf', get_post_meta( $procedimiento, ProcedureMetaKeys::PROVISIONAL_LIST_URL, true ) );
-
-		$this->assertNull(
-			$this->submit(
-				$uid,
-				ProcedureEditor::PANEL_DATA,
-				$procedimiento,
-				0,
-				$this->datos(
-					$area,
-					$curso,
-					array(
-						ProcedureMetaKeys::OPENS_AT  => '2026-02-01',
-						ProcedureMetaKeys::CLOSES_AT => '2026-02-10',
-					)
-				)
-			)
-		);
-		$this->assertSame( $cerraba, get_post_meta( $procedimiento, ProcedureMetaKeys::CLOSES_AT, true ) );
-		$this->assertStringContainsString( 'resuelto', $this->modelo( $procedimiento )['flash']['texto'] );
-	}
-
-	/**
-	 * Y la pantalla lo cuenta: el aviso del estado, los bloques que no se
-	 * tocan apagados y el panel de preguntas en solo lectura.
-	 */
-	public function test_the_screen_says_why_and_paints_the_closed_groups() {
+	public function test_the_screen_closes_nothing_until_archived() {
 		list( , $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_CLOSED );
 		$this->acting_as( $uid );
 
-		$m = $this->modelo( $procedimiento );
-		$this->assertSame(
-			array(
-				ProcedureState::GROUP_DATA      => false,
-				ProcedureState::GROUP_DATES     => true,
-				ProcedureState::GROUP_LINKS     => true,
-				ProcedureState::GROUP_QUESTIONS => false,
-			),
-			(array) $m['groups']
-		);
-		$this->assertStringContainsString( 'Las solicitudes están cerradas', (string) $m['state_notice'] );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertStringNotContainsString( 'prc-solo-lectura', $html );
+		$this->assertStringNotContainsString( 'disabled>', $html );
+		$this->assertStringNotContainsString( 'prc-seccion__bloqueo', $html );
+		$this->assertStringNotContainsString( 'Las solicitudes están cerradas', $html );
+		$this->assertMatchesRegularExpression( '/Guardar los datos.*?<form[^>]*id="' . ProcedureEditor::SECTION_LINKS . '".*?value="' . ProcedureEditor::OP_LINKS . '".*?name="' . ProcedureMetaKeys::FINAL_LIST_URL . '".*?Guardar los enlaces/s', $html, 'los enlaces, al final de «Datos» y con su botón' );
+		$this->assertStringNotContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) ) );
 
-		$html = ProcedureEditorView::html( $m );
-		$this->assertStringContainsString( 'Las solicitudes están cerradas', $html );
-		$this->assertStringNotContainsString( 'prc-solo-lectura', $html, 'las fechas todavía se guardan' );
-		$this->assertSame( 5, substr_count( $html, '<fieldset class="prc-seccion-campos" disabled>' ), 'los cinco bloques que ya no se tocan; «Qué centros pueden solicitar» está en «Avanzado»' );
-		$this->assertStringContainsString( '<fieldset class="prc-seccion-campos"><legend class="prc-seccion__titulo">Plazos</legend>', $html, 'los plazos no' );
-		// Y cada bloque apagado dice por qué lo está, junto al bloque.
-		$this->assertSame( 5, substr_count( $html, 'class="prc-seccion__bloqueo"' ) );
+		// El fin del plazo pide confirmar un día ya pasado, y el día lo pone el servidor.
+		$this->assertMatchesRegularExpression( '/name="' . ProcedureMetaKeys::CLOSES_AT . '"[^>]*data-prc-confirm-before="' . ProcedureState::today() . '"[^>]*data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado\?/s', $html );
 
-		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) ), 'las preguntas no se pintan editables' );
-		$this->assertStringNotContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS ) ), 'los enlaces sí' );
+		// Histórico sí se pinta en solo lectura para su ámbito.
+		update_post_meta( $procedimiento, ProcedureMetaKeys::ARCHIVED, true );
+		$this->assertStringContainsString( 'prc-solo-lectura', ProcedureEditorView::html( $this->modelo( $procedimiento ) ) );
 	}
 
 	// ─── lo que se pinta ───────────────────────────────────────────────────
@@ -2090,7 +2064,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		foreach ( $labels as $rotulo ) {
 			$this->assertStringContainsString( $rotulo, $html, 'falta ' . $rotulo );
 		}
-		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Enlaces', 'Publicación', 'Avanzado', 'Solicitudes' ) as $pestana ) {
+		foreach ( array( 'Datos', 'Campos adicionales', 'Participantes', 'Publicación', 'Avanzado', 'Solicitudes' ) as $pestana ) {
 			$this->assertMatchesRegularExpression( '#<a class="prc-tab[^"]*"[^>]*>' . preg_quote( $pestana, '#' ) . '\s#', $html, 'falta la pestaña ' . $pestana );
 		}
 		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_TITLE . '"', $html );
@@ -2112,13 +2086,13 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		foreach ( array( 'Pregunta', 'pregunta', 'Rótulo', 'rótulo' ) as $vieja ) {
 			$this->assertStringNotContainsString( $vieja, $legible, 'en el panel ya no se dice ' . $vieja );
 		}
-		$this->assertStringContainsString( 'antes de cerrar la inscripción, mientras este panel siga editable', $html, 'la entrega con plazo propio dice cuándo se configura' );
+		$this->assertStringContainsString( 'también después de cerrar la inscripción, hasta que el procedimiento sea histórico', $html, 'la entrega con plazo propio dice cuándo se configura' );
 		$this->assertStringNotContainsString( 'rótulo', wp_strip_all_tags( ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PEOPLE ) ) ), 'los papeles tienen nombre, no rótulo' );
 		foreach ( ProcedureQuestions::types() as $rotulo ) {
 			$this->assertStringContainsString( esc_html( $rotulo ), $html );
 		}
 
-		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_LINKS ) );
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_DATA ) );
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::FINAL_LIST_URL . '"', $html );
 		$this->assertStringContainsString( 'Guardar los enlaces', $html );
 
@@ -2267,16 +2241,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$before = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
 		$this->assertTrue( $before[0]['delivery'] );
 		$this->assertSame( '2027-06-30', $before[0]['closes_at'] );
-		$this->acting_as( $uid );
-		$this->assertCount( 1, $this->modelo( $procedure )['deliveries'] );
 		$fields[ $q . 'closes_at' ] = array( '2027-05-01' );
 		$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedure, 0, $fields ) );
 		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
 	}
 
-	/** A scoped manager may only extend an existing delivery close after questions lock. */
-	public function test_delivery_closes_can_be_extended_without_reopening_questions() {
-		$procedure_close           = $this->dia( '-1 day' );
+	/**
+	 * Cerrada la inscripción, las fechas de una entrega se cambian en su
+	 * campo, en «Campos adicionales» (ADR-0050): ya no hay sección aparte
+	 * en «Solicitudes» ni su operación.
+	 */
+	public function test_delivery_dates_are_edited_in_their_field_after_closing() {
 		$question                  = array(
 			'key'       => 'q1',
 			'label'     => 'Memoria final',
@@ -2285,99 +2260,39 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			'choices'   => array(),
 			'delivery'  => true,
 			'opens_at'  => $this->dia( '-30 days' ),
-			'closes_at' => $procedure_close,
+			'closes_at' => $this->dia( '-1 day' ),
 		);
 		list( , $uid, $procedure ) = $this->mio(
 			array(
 				ProcedureMetaKeys::QUESTIONS => array( $question ),
 				ProcedureMetaKeys::OPENS_AT  => $this->dia( '-30 days' ),
-				ProcedureMetaKeys::CLOSES_AT => $procedure_close,
+				ProcedureMetaKeys::CLOSES_AT => $this->dia( '-1 day' ),
 			)
 		);
-		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
-		$this->assertFalse( ProcedureAccess::can_edit_group( $uid, $procedure, ProcedureState::GROUP_QUESTIONS ) );
-		$new_close = $this->dia( '+30 days' );
-		$redirect  = $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $new_close ) ) );
-
-		$this->assertNotNull( $redirect );
-		$this->assertSame( 'entregas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
-		$this->assertSame( ProcedureEditor::PANEL_APPLICATIONS, $this->query_arg( (string) $redirect, ProcedureEditor::ARG_PANEL ), 'vuelve a «Solicitudes»' );
-		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
-		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_DELIVERIES . '"', $html, 'al final de «Solicitudes»' );
-		$this->assertGreaterThan( strpos( $html, 'Exportar las solicitudes' ), strpos( $html, 'Plazos de entregas documentales' ) );
-		$this->assertStringContainsString( 'Guardar los nuevos cierres', $html );
-		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_DELIVERIES . '"(?:(?!disabled).)*Guardar los nuevos cierres/s', $html, 'abierta aunque los campos ya estén cerrados' );
-		$_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] = '1';
-		$this->assertStringNotContainsString( 'Plazos de entregas documentales', ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) ), 'debajo de «Retiradas», no' );
-		unset( $_GET[ ApplicationActionsPanel::ARG_WITHDRAWN ] );
-
-		// Histórico: el ámbito lo consulta sin poder ampliar plazos.
-		update_post_meta( $procedure, ProcedureMetaKeys::ARCHIVED, true );
-		$html = ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) );
-		$this->assertMatchesRegularExpression( '/id="' . ProcedureEditor::SECTION_DELIVERIES . '".*?<fieldset class="prc-solo-lectura" disabled>.*?Guardar los nuevos cierres/s', $html );
-		$after = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
-		$this->assertSame( $new_close, $after[0]['closes_at'] );
-		$after[0]['closes_at'] = $before[0]['closes_at'];
-		$this->assertSame( $before, $after, 'no cambió rótulo, apertura, obligatoriedad ni respuesta' );
-	}
-
-	/** Invalid or shorter dates reject the entire update; arbitrary keys are ignored. */
-	public function test_delivery_close_updates_reject_shorten_and_invalid_dates() {
-		$current_close             = $this->dia( '+10 days' );
-		$question                  = array(
-			'key'       => 'q1',
-			'label'     => 'Memoria',
-			'type'      => ProcedureQuestions::TYPE_FILE,
-			'required'  => true,
-			'choices'   => array(),
-			'delivery'  => true,
-			'opens_at'  => $this->dia( '-1 day' ),
-			'closes_at' => $current_close,
+		$this->assertSame( ProcedureMetaKeys::STATE_CLOSED, ProcedureState::of_post( $procedure ) );
+		$q        = ProcedureEditor::FIELD_Q;
+		$redirect = $this->submit(
+			$uid,
+			ProcedureEditor::PANEL_QUESTIONS,
+			$procedure,
+			0,
+			array(
+				$q . 'key'       => array( 'q1' ),
+				$q . 'label'     => array( 'Memoria final' ),
+				$q . 'type'      => array( ProcedureQuestions::TYPE_FILE ),
+				$q . 'required'  => array( '1' ),
+				$q . 'delivery'  => array( '1' ),
+				$q . 'opens_at'  => array( $this->dia( '-30 days' ) ),
+				$q . 'closes_at' => array( $this->dia( '+30 days' ) ),
+			)
 		);
-		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
-		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
-		foreach ( array( $this->dia( '+9 days' ), '2026-02-30' ) as $date ) {
-			$this->assertNull(
-				$this->submit(
-					$uid,
-					ProcedureEditor::OP_DELIVERY_DATES,
-					$procedure,
-					0,
-					array(
-						ProcedureEditor::FIELD_DELIVERY_CLOSES => array(
-							'q1'   => $date,
-							'q999' => '2027-01-01',
-						),
-					)
-				)
-			);
-			$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
-		}
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => array( '2027-01-01' ) ) ) ) );
-		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => 'not-an-array' ) ) );
-		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
-	}
+		$this->assertSame( 'preguntas', $this->query_arg( (string) $redirect, ProcedureEditor::ARG_NOTICE ) );
+		$this->assertSame( $this->dia( '+30 days' ), get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true )[0]['closes_at'] );
 
-	/** A submission without a delivery key cannot update unrelated questions. */
-	public function test_delivery_dates_reject_submissions_without_existing_deliveries() {
-		$question                  = array(
-			'key'      => 'q1',
-			'label'    => 'Texto',
-			'type'     => ProcedureQuestions::TYPE_TEXT,
-			'required' => false,
-			'choices'  => array(),
-		);
-		list( , $uid, $procedure ) = $this->mio( array( ProcedureMetaKeys::QUESTIONS => array( $question ) ) );
-		$before                    = get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true );
-
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_DELIVERY_DATES, $procedure, 0, array( ProcedureEditor::FIELD_DELIVERY_CLOSES => array( 'q1' => $this->dia( '+30 days' ) ) ) ) );
-		$this->assertSame( $before, get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true ) );
 		$this->acting_as( $uid );
-		$model = $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS );
-		$this->assertSame( 'error', $model['flash']['tipo'] );
-		$this->assertSame( 'No hay entregas documentales cuyos plazos se puedan ampliar.', $model['flash']['texto'] );
-		$this->assertStringNotContainsString( 'Guardar los nuevos cierres', ProcedureEditorView::html( $model ) );
+		$this->assertStringNotContainsString( 'Plazos de entregas documentales', ProcedureEditorView::html( $this->modelo( $procedure, ProcedureEditor::PANEL_APPLICATIONS ) ) );
+		$this->assertNull( $this->submit( $uid, 'delivery_dates', $procedure, 0, array( 'prc_delivery_closes' => array( 'q1' => $this->dia( '+60 days' ) ) ) ), 'la operación ya no existe' );
+		$this->assertSame( $this->dia( '+30 days' ), get_post_meta( $procedure, ProcedureMetaKeys::QUESTIONS, true )[0]['closes_at'] );
 	}
 
 	// ─── tipos de pregunta y orden (ADR-0040) ──────────────────────────────
@@ -2701,9 +2616,9 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Con las preguntas cerradas por el estado, tampoco se reordenan.
+	 * En subsanación también se reordenan: el estado no cierra nada (ADR-0050).
 	 */
-	public function test_a_locked_question_list_is_not_reordered() {
+	public function test_questions_are_reordered_in_any_state() {
 		list( , $uid, $procedimiento ) = $this->en_estado( ProcedureMetaKeys::STATE_AMENDMENT );
 		update_post_meta(
 			$procedimiento,
@@ -2714,8 +2629,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			)
 		);
 
-		$this->assertNull( $this->submit( $uid, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => 'q2:up' ) ) );
-		$this->assertSame( array( 'q1', 'q2' ), wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' ) );
+		$this->assertNotNull( $this->submit( $uid, ProcedureEditor::OP_MOVE_QUESTION, $procedimiento, 0, array( ProcedureEditor::FIELD_Q_MOVE => 'q2:up' ) ) );
+		$this->assertSame( array( 'q2', 'q1' ), wp_list_pluck( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 'key' ) );
 	}
 
 	/**
@@ -2880,7 +2795,6 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$paneles = array(
 			ProcedureEditor::PANEL_DATA,
 			ProcedureEditor::PANEL_QUESTIONS,
-			ProcedureEditor::PANEL_LINKS,
 			ProcedureEditor::PANEL_APPLICATIONS,
 			ProcedureEditor::PANEL_PEOPLE,
 			ProcedureEditor::PANEL_PUBLISH,

@@ -137,14 +137,14 @@ class Test_Link_Copies extends WP_UnitTestCase {
 		$this->post(
 			array_merge(
 				array(
-					ProcedureEditor::FIELD_DO        => ProcedureEditor::PANEL_LINKS,
+					ProcedureEditor::FIELD_DO        => ProcedureEditor::OP_LINKS,
 					ProcedureEditor::FIELD_PROCEDURE => (string) $procedure_id,
 					ProcedureEditor::FIELD_ROW       => '0',
 				),
 				$urls
 			),
-			ProcedureEditor::nonce_action( ProcedureEditor::PANEL_LINKS, 0 ),
-			ProcedureEditor::nonce_name( ProcedureEditor::PANEL_LINKS, 0 )
+			ProcedureEditor::nonce_action( ProcedureEditor::OP_LINKS, 0 ),
+			ProcedureEditor::nonce_name( ProcedureEditor::OP_LINKS, 0 )
 		);
 		return (string) $this->exit_url( array( ProcedureEditor::class, 'handle' ) );
 	}
@@ -478,14 +478,14 @@ class Test_Link_Copies extends WP_UnitTestCase {
 	/**
 	 * «Enlaces» dice cuándo se guardó la copia y ofrece descargarla.
 	 */
-	public function test_the_links_panel_shows_the_copy() {
+	public function test_the_links_section_shows_the_copy() {
 		list( , $uid, $p ) = $this->mio();
 		$this->guardar( $uid, $p, array( ProcedureMetaKeys::RESOLUTION_URL => 'https://example.org/r.pdf' ) );
 
 		$_POST = array();
 		$_GET  = array(
 			ProcedureEditor::ARG_PROCEDURE => (string) $p,
-			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_LINKS,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_DATA,
 		);
 		$html  = ProcedureEditorView::html( ProcedureEditor::model() );
 

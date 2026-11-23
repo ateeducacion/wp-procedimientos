@@ -72,7 +72,6 @@ final class ProcedureEditor {
 
 	public const PANEL_DATA         = 'datos';
 	public const PANEL_QUESTIONS    = 'preguntas';
-	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_PUBLISH      = 'publicacion';
 	public const PANEL_PEOPLE       = 'personas';
@@ -81,24 +80,26 @@ final class ProcedureEditor {
 	/**
 	 * Anchors of what used to be a tab of its own (#80).
 	 *
-	 * «Entregas» es una sección al final de «Solicitudes»; los centros que
-	 * pueden solicitar, «Acceso de consulta» y «Código», secciones de
+	 * «Enlaces» es una sección al final de «Datos» (ADR-0050); los centros
+	 * que pueden solicitar, «Acceso de consulta» y «Código», secciones de
 	 * «Avanzado».
 	 */
-	public const SECTION_DELIVERIES = 'prc-entregas';
-	public const SECTION_CENTRES    = 'prc-avanzado-centros';
-	public const SECTION_OBSERVE    = 'prc-avanzado-consulta';
-	public const SECTION_CODE       = 'prc-avanzado-codigo';
+	public const SECTION_LINKS   = 'prc-enlaces';
+	public const SECTION_CENTRES = 'prc-avanzado-centros';
+	public const SECTION_OBSERVE = 'prc-avanzado-consulta';
+	public const SECTION_CODE    = 'prc-avanzado-codigo';
 
 	/**
 	 * The tabs that no longer exist, with the tab and the section they live in now.
 	 *
-	 * Un enlace guardado o un correo de antes llevan ahí, no a «Datos».
+	 * Un enlace guardado o un correo de antes llevan ahí, no a «Datos». Los
+	 * plazos de las entregas se editan en su campo, en «Campos adicionales».
 	 *
 	 * @var array<string, array{0:string, 1:string}>
 	 */
 	public const OLD_PANELS = array(
-		'entregas' => array( self::PANEL_APPLICATIONS, self::SECTION_DELIVERIES ),
+		'entregas' => array( self::PANEL_QUESTIONS, '' ),
+		'enlaces'  => array( self::PANEL_DATA, self::SECTION_LINKS ),
 		'consulta' => array( self::PANEL_ADVANCED, self::SECTION_OBSERVE ),
 		'codigo'   => array( self::PANEL_ADVANCED, self::SECTION_CODE ),
 	);
@@ -111,7 +112,7 @@ final class ProcedureEditor {
 	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
 	public const OP_ARCHIVE             = 'archive';
 	public const OP_UNARCHIVE           = 'unarchive';
-	public const OP_DELIVERY_DATES      = 'delivery_dates';
+	public const OP_LINKS               = 'enlaces';
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
@@ -119,7 +120,6 @@ final class ProcedureEditor {
 	public const OP_CENTRES             = 'centres';
 	public const OP_DUPLICATE           = 'duplicate';
 	public const OP_DELETE              = 'delete';
-	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 	/**
 	 * Hidden field naming the operation a POST asks for.
@@ -198,13 +198,12 @@ final class ProcedureEditor {
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
 		self::OP_MOVE_QUESTION,
-		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
 		self::OP_CENTRES,
 		AdvancedPanel::OP_SIGNATURE,
-		self::PANEL_LINKS,
+		self::OP_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
 		self::OP_EXPORT,
@@ -243,7 +242,6 @@ final class ProcedureEditor {
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Campos adicionales guardados.',
 		'ordenadas'    => 'Orden de los campos guardado.',
-		'entregas'     => 'Plazos de entrega actualizados.',
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
@@ -323,7 +321,6 @@ final class ProcedureEditor {
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_PEOPLE       => 'Participantes',
-			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_ADVANCED     => 'Avanzado',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
@@ -455,9 +452,8 @@ final class ProcedureEditor {
 			Shell::leave( self::url( $procedure_id, self::PANEL_ADVANCED, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
-		// En cualquier estado mientras se pueda editar: entregas, personas (ADR-0041), consulta (ADR-0043) y firma (ADR-0049).
+		// Las que no tocan los términos ni el estado: personas (ADR-0041), consulta (ADR-0043) y firma (ADR-0049).
 		$sueltas = array(
-			self::OP_DELIVERY_DATES     => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC        => array( self::class, 'save_people_spec' ),
 			self::OP_OBSERVE            => array( self::class, 'save_observe' ),
 			AdvancedPanel::OP_SIGNATURE => array( AdvancedPanel::class, 'save_signature' ),
@@ -522,17 +518,11 @@ final class ProcedureEditor {
 			return;
 		}
 		if ( self::OP_CENTRES === $op ) {
-			self::$rejected = AdvancedPanel::save_centres( $procedure_id, $user_id, self::submitted_data( $procedure_id ) );
+			self::$rejected = AdvancedPanel::save_centres( $procedure_id, self::submitted_data( $procedure_id ) );
 			return;
 		}
 		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
-			if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_QUESTIONS ) ) {
-				return;
-			}
 			self::PANEL_QUESTIONS === $op ? self::save_questions( $procedure_id ) : self::move_question( $procedure_id );
-			return;
-		}
-		if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_LINKS ) ) {
 			return;
 		}
 		self::save_links( $procedure_id );
@@ -553,25 +543,6 @@ final class ProcedureEditor {
 			return;
 		}
 		ObserveSettings::handle( $procedure_id );
-	}
-
-	/**
-	 * Whether the state the procedure is in today still lets that group be written.
-	 *
-	 * Esta es la capa que protege: la pantalla pinta apagado lo que el estado
-	 * cierra, pero quien arme el POST a mano se para aquí, antes de escribir.
-	 *
-	 * @param int    $user_id      Who is asking.
-	 * @param int    $procedure_id Procedure post ID.
-	 * @param string $group        One of {@see ProcedureState::groups()}.
-	 * @return bool
-	 */
-	private static function allows_group( int $user_id, int $procedure_id, string $group ): bool {
-		if ( ProcedureAccess::can_edit_group( $user_id, $procedure_id, $group ) ) {
-			return true;
-		}
-		self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id, $group );
-		return false;
 	}
 
 	/**
@@ -638,27 +609,16 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Save the «Datos» panel, with what the state closes left as it was.
-	 *
-	 * El panel escribe dos grupos —lo que el procedimiento es y sus fechas— y
-	 * hay un estado, `closed`, que deja solo el segundo: ahí el envío se
-	 * acepta a medias en vez de rechazarse entero.
+	 * Save the «Datos» panel, in any state until «histórico» (ADR-0050).
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @param int $user_id      Who is asking.
 	 * @return void
 	 */
 	private static function save_data( int $procedure_id, int $user_id ): void {
-		$datos  = ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA );
-		$fechas = ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATES );
-		if ( ! $datos && ! $fechas && ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA ) ) {
-			return;
-		}
-
-		$crudo = self::gated_data( $procedure_id, $datos, $fechas );
-		if ( ! $datos && ! ProcedureAccess::can_edit_all_areas( $user_id ) ) {
-			$crudo['areas'] = array_intersect( (array) $crudo['areas'], ProcedureAccess::scope_areas( $user_id ) );
-		}
+		// Qué centros pueden solicitar ya no viaja con «Datos»: se guarda en
+		// «Avanzado» (#80), y aquí se reescribe lo guardado.
+		$crudo    = array_merge( self::submitted_data( $procedure_id ), CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 		$revisado = self::validate_data( $user_id, $crudo, $procedure_id );
 		if ( ! $revisado['ok'] ) {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
@@ -807,59 +767,6 @@ final class ProcedureEditor {
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
-	}
-
-	/**
-	 * The «Datos» payload, with the groups this state closes taken from what
-	 * is stored instead of from the POST.
-	 *
-	 * Se sustituye antes de validar y no después: un título que no llega
-	 * —la pantalla lo pinta apagado, y un control apagado no se envía—
-	 * tumbaría el envío entero por un campo que nadie quería tocar.
-	 *
-	 * @param int  $procedure_id Procedure post ID.
-	 * @param bool $datos        Whether the data group may be written.
-	 * @param bool $fechas       Whether the dates group may be written.
-	 * @return array<string, mixed>
-	 */
-	private static function gated_data( int $procedure_id, bool $datos, bool $fechas ): array {
-		$crudo = self::submitted_data( $procedure_id );
-		if ( ! $fechas ) {
-			$plazos = array(
-				'opens_at'        => ProcedureMetaKeys::OPENS_AT,
-				'closes_at'       => ProcedureMetaKeys::CLOSES_AT,
-				'amend_opens_at'  => ProcedureMetaKeys::AMEND_OPENS_AT,
-				'amend_closes_at' => ProcedureMetaKeys::AMEND_CLOSES_AT,
-			);
-			foreach ( $plazos as $campo => $clave ) {
-				$crudo[ $campo ] = self::meta( $procedure_id, $clave );
-			}
-		}
-		if ( ! $datos ) {
-			// En crudo, sin los filtros de `display`: esto se va a reescribir
-			// tal cual, no a pintar.
-			$post                       = get_post( $procedure_id );
-			$crudo                      = array_merge(
-				$crudo,
-				array(
-					'title'                => $post instanceof \WP_Post ? $post->post_title : '',
-					'description'          => $post instanceof \WP_Post ? $post->post_content : '',
-					'areas'                => self::terms_of( $procedure_id, ProcedureTaxonomies::AREA ),
-					'course'               => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
-					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
-					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
-					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ),
-					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
-					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
-					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
-			);
-			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
-		}
-		// Qué centros pueden solicitar ya no viaja con «Datos»: se guarda en
-		// «Avanzado» (#80), y aquí se reescribe lo guardado.
-		return array_merge( $crudo, CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 	}
 
 	/**
@@ -1025,46 +932,6 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * Extend the closing date of existing independent deliveries without
-	 * changing their questions or opening dates.
-	 *
-	 * @param int $procedure_id Procedure post ID.
-	 * @return void
-	 */
-	private static function save_delivery_dates( int $procedure_id ): void {
-		// phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- handle() verified this operation's nonce.
-		$closes = wp_unslash( $_POST[ self::FIELD_DELIVERY_CLOSES ] ?? array() );
-		// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		if ( ! is_array( $closes ) ) {
-			self::$rejected = 'No se han podido validar los nuevos plazos. No se ha cambiado nada.';
-			return;
-		}
-
-		$questions = Applications::questions( $procedure_id );
-		$updated   = 0;
-		foreach ( $questions as &$question ) {
-			if ( ! ProcedureQuestions::is_delivery( $question ) || ! array_key_exists( $question['key'], $closes ) ) {
-				continue;
-			}
-			$new_close = is_string( $closes[ $question['key'] ] ) ? sanitize_text_field( $closes[ $question['key'] ] ) : '';
-			++$updated;
-			if ( ! ProcedureInput::is_valid_date( $new_close ) || $new_close < $question['closes_at'] ) {
-				self::$rejected = 'El nuevo cierre debe ser una fecha válida igual o posterior al actual. No se ha cambiado ningún plazo.';
-				return;
-			}
-			$question['closes_at'] = $new_close;
-		}
-		unset( $question );
-
-		if ( 0 === $updated ) {
-			self::$rejected = 'No hay entregas documentales cuyos plazos se puedan ampliar.';
-			return;
-		}
-		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
-		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'entregas' ) ) );
-	}
-
-	/**
 	 * Save what the procedure asks about the people of each application.
 	 *
 	 * @param int $procedure_id Procedure post ID.
@@ -1104,7 +971,7 @@ final class ProcedureEditor {
 		if ( array() !== $fallos ) {
 			$aviso[ LinkCopies::ARG_FAILED ] = $fallos;
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, $aviso ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_DATA, $aviso ) );
 	}
 
 	/**
@@ -1477,8 +1344,7 @@ final class ProcedureEditor {
 				'texto' => '',
 			),
 			'can_edit'                => false,
-			'groups'                  => array(),
-			'state_notice'            => '',
+			'today'                   => '',
 			'can_review'              => false,
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
@@ -1561,10 +1427,8 @@ final class ProcedureEditor {
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}
-		$m['nuevo']    = true;
-		$m['can_edit'] = true;
-		// Nace en borrador, y en borrador se edita todo.
-		$m['groups']       = array_fill_keys( ProcedureState::editable_fields( ProcedureMetaKeys::STATE_DRAFT ), true );
+		$m['nuevo']        = true;
+		$m['can_edit']     = true;
 		$m['flash']        = self::flash( '' );
 		$m['status']       = 'draft';
 		$m['status_label'] = self::status_label( 'draft' );
@@ -1639,15 +1503,9 @@ final class ProcedureEditor {
 				}
 			}
 		}
-		$m['state']       = ProcedureState::of_post( $procedure_id );
-		$m['state_label'] = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
-		// Qué grupos deja tocar el estado de hoy, y por qué cierra el resto.
-		// Lo decide el dominio; la pantalla solo pinta apagado lo que aquí
-		// salga en `false`.
-		foreach ( ProcedureState::groups() as $grupo ) {
-			$m['groups'][ $grupo ] = true === $m['can_edit'] && ProcedureAccess::can_edit_group( $user_id, $procedure_id, $grupo );
-		}
-		$m['state_notice']   = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
+		$m['state']          = ProcedureState::of_post( $procedure_id );
+		$m['state_label']    = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
+		$m['today']          = ProcedureState::today();
 		$m['status']         = (string) $procedimiento->post_status;
 		$m['status_label']   = self::status_label( (string) $procedimiento->post_status );
 		$m['area_names']     = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
@@ -1659,10 +1517,9 @@ final class ProcedureEditor {
 		$m['view_url']       = ProcedureView::link( $procedimiento );
 		$m['view_label']     = ProcedureView::link_label( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
-		$m['link_copies']    = self::PANEL_LINKS === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
+		$m['link_copies']    = self::PANEL_DATA === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
-		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
 		return self::panel_model( $m, $procedure_id, $user_id );
 	}

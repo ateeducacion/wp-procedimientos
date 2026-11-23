@@ -66,13 +66,33 @@
 		};
 	}
 
+	/*
+	 * La pregunta de este envío: la fija del formulario o, si un campo de
+	 * fecha lleva `data-prc-confirm-before`, la suya cuando se cambió a un
+	 * día anterior a ese —el fin de plazo que, ya pasado, cierra las
+	 * solicitudes al guardar—. «AAAA-MM-DD» se compara bien como texto, y el
+	 * día de hoy lo pone el servidor: el reloj del navegador no manda.
+	 */
+	function preguntaDe( form ) {
+		var fija = form.getAttribute( 'data-prc-confirm' );
+		if ( fija ) {
+			return fija;
+		}
+		var campo = form.querySelector( '[data-prc-confirm-before]' );
+		if ( ! campo || ! campo.value || campo.value === campo.defaultValue ||
+			campo.value >= campo.getAttribute( 'data-prc-confirm-before' ) ) {
+			return '';
+		}
+		return campo.getAttribute( 'data-prc-confirm-text' ) || '';
+	}
+
 	document.addEventListener( 'submit', function ( e ) {
 		var form = e.target;
 		// La marca la pone el envío que sale del diálogo: se deja pasar.
 		if ( ! ( form instanceof HTMLFormElement ) || '1' === form.dataset.prcConfirmado ) {
 			return;
 		}
-		var pregunta = form.getAttribute( 'data-prc-confirm' );
+		var pregunta = preguntaDe( form );
 		if ( ! pregunta ) {
 			return;
 		}

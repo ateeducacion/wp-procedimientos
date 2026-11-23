@@ -171,6 +171,41 @@ describe( 'confirmation before an irreversible action', () => {
 	} );
 } );
 
+describe( 'confirmation of a closing date already past', () => {
+	const DATOS = `
+		<form id="f">
+			<input type="date" name="prc_closes_at" value="2026-12-01"
+				data-prc-confirm-before="2026-11-23" data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado? Se cierra." />
+			<button type="submit">Guardar los datos</button>
+		</form>`;
+
+	it( 'asks only when the date was changed to a day before today', async () => {
+		document.body.innerHTML = DATOS;
+		window.confirm = vi.fn( () => false );
+		await load();
+		const form = document.getElementById( 'f' );
+		const campo = form.querySelector( 'input' );
+
+		expect( submit( form ).defaultPrevented ).toBe( false );
+		campo.value = '2026-11-23';
+		expect( submit( form ).defaultPrevented ).toBe( false );
+		expect( window.confirm ).not.toHaveBeenCalled();
+
+		campo.value = '2026-11-22';
+		expect( submit( form ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( '¿Guardar con un fin de plazo que ya ha pasado? Se cierra.' );
+	} );
+
+	it( 'does not ask again for a past date that was already saved', async () => {
+		document.body.innerHTML = DATOS.replace( 'value="2026-12-01"', 'value="2026-11-01"' );
+		window.confirm = vi.fn( () => false );
+		await load();
+
+		expect( submit( document.getElementById( 'f' ) ).defaultPrevented ).toBe( false );
+		expect( window.confirm ).not.toHaveBeenCalled();
+	} );
+} );
+
 describe( 'fields for school procedures', () => {
 	it( 'hides and disables centre options for teachers, then restores them for schools', async () => {
 		document.body.innerHTML = `

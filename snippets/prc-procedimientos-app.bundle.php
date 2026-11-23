@@ -824,27 +824,6 @@ final class ProcedureState {
 
 
 
-	public const GROUP_DATA = 'data';
-
-
-
-
-	public const GROUP_DATES = 'dates';
-
-
-
-
-	public const GROUP_LINKS = 'links';
-
-
-
-
-	public const GROUP_QUESTIONS = 'questions';
-
-
-
-
-
 
 
 
@@ -934,65 +913,6 @@ final class ProcedureState {
 			return 'Cerrado manualmente';
 		}
 		return (string) ( ProcedureMetaKeys::states()[ $state ] ?? '' );
-	}
-
-
-
-
-
-
-	public static function groups(): array {
-		return array( self::GROUP_DATA, self::GROUP_DATES, self::GROUP_LINKS, self::GROUP_QUESTIONS );
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	public static function editable_fields( string $state ): array {
-		$todo  = self::groups();
-		$tabla = array(
-			ProcedureMetaKeys::STATE_DRAFT    => $todo,
-			ProcedureMetaKeys::STATE_UPCOMING => $todo,
-			ProcedureMetaKeys::STATE_OPEN     => $todo,
-			ProcedureMetaKeys::STATE_CLOSED   => array( self::GROUP_DATES, self::GROUP_LINKS ),
-			ProcedureMetaKeys::STATE_RESOLVED => array( self::GROUP_LINKS ),
-		);
-		return $tabla[ $state ] ?? array();
-	}
-
-
-
-
-
-
-
-
-
-
-
-	public static function why_locked( string $state ): string {
-		$textos = array(
-			ProcedureMetaKeys::STATE_CLOSED    => 'Las solicitudes están cerradas: solo se pueden cambiar fechas y enlaces. '
-				. 'Las entregas documentales conservan sus propios plazos.',
-			ProcedureMetaKeys::STATE_AMENDMENT => 'La subsanación está en marcha: el procedimiento ya no se edita, para no mover el suelo a quien está subsanando. Las solicitudes se siguen gestionando.',
-			ProcedureMetaKeys::STATE_RESOLVED  => 'El procedimiento está resuelto: solo se pueden cambiar los enlaces.',
-		);
-		return (string) ( $textos[ $state ] ?? '' );
 	}
 
 
@@ -2571,7 +2491,7 @@ final class ProcedureInput {
 		if ( $entregas > 0 ) {
 			$lista[] = self::point( 'delivery', array() === $sin_fechas, true, 'Las entregas con plazo propio tienen sus fechas.', implode( ' ', $sin_fechas ), $sin_fechas );
 		}
-		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces».', array() );
+		$lista[] = self::point( 'resolution', '' !== self::text( $facts, 'resolution' ), false, 'Resolución enlazada.', 'Sin enlace a la resolución: puede publicar igual y añadirlo después en «Enlaces», al final de «Datos».', array() );
 		return $lista;
 	}
 
@@ -7664,31 +7584,6 @@ final class ProcedureAccess {
 
 
 
-
-
-
-
-
-
-	public static function can_edit_group( int $user_id, int $procedure_id, string $group ): bool {
-		if ( ! self::can_edit( $user_id, $procedure_id ) ) {
-			return false;
-		}
-		$estado = ProcedureState::of_post( $procedure_id );
-
-
-
-		return ProcedureMetaKeys::STATE_ARCHIVED === $estado
-			|| in_array( $group, ProcedureState::editable_fields( $estado ), true );
-	}
-
-
-
-
-
-
-
-
 	public static function can_publish( int $user_id, int $post_id = 0 ): bool {
 		if ( $user_id <= 0 || ! user_can( $user_id, 'publish_prc_procedures' ) ) {
 			return false;
@@ -8087,13 +7982,9 @@ final class ProcedureAccess {
 
 
 
-	public static function why_not_editable( int $user_id, int $post_id, string $group = '' ): string {
+	public static function why_not_editable( int $user_id, int $post_id ): string {
 		if ( self::can_edit( $user_id, $post_id ) ) {
-
-
-			return '' === $group || self::can_edit_group( $user_id, $post_id, $group )
-				? ''
-				: ProcedureState::why_locked( ProcedureState::of_post( $post_id ) );
+			return '';
 		}
 		if ( self::can_open( $user_id, $post_id ) ) {
 			return 'Este procedimiento está marcado como histórico: se puede consultar y exportar, pero ya no se edita. Para volver a abrirlo, pídalo a quien administre el aplicativo.';
@@ -12804,18 +12695,10 @@ final class PanelParts {
 
 
 
-
-
-
-
-	public static function section( string $rotulo, string $contenido, bool $apagado = false, string $motivo = '' ): string {
-		$aviso = $apagado && '' !== $motivo
-			? '<p class="prc-seccion__bloqueo">' . esc_html( $motivo ) . '</p>'
-			: '';
-
-		return '<fieldset class="prc-seccion-campos"' . ( $apagado ? ' disabled' : '' ) . '>'
+	public static function section( string $rotulo, string $contenido ): string {
+		return '<fieldset class="prc-seccion-campos">'
 			. '<legend class="prc-seccion__titulo">' . esc_html( $rotulo ) . '</legend>'
-			. $aviso . $contenido
+			. $contenido
 			. '</fieldset>';
 	}
 
@@ -20206,7 +20089,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, la firma electrónica, el acceso de consulta y el código— y <strong>Solicitudes</strong>. <strong>Todo se puede cambiar hasta que el procedimiento se marca como histórico</strong>, fechas incluidas y aunque ya haya solicitudes presentadas; solo los campos adicionales ya contestados guardan lo que protege las respuestas: ni se borran ni cambian de tipo.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -20218,8 +20101,8 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
-					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar. Si cambia el fin del plazo a un día que ya pasó, se le pide confirmación: con el plazo abierto, guardar lo cierra en ese momento.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
+					. '<p>Pulse <strong>«Guardar los datos»</strong>. Debajo, la sección <strong>«Enlaces»</strong> tiene su propio botón.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Datos», bloque de plazos',
@@ -20250,10 +20133,10 @@ final class HelpContent {
 				'id'    => 'taller-enlaces',
 				'level' => 3,
 				'title' => 'Enlaces',
-				'html'  => '<p><strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
+				'html'  => '<p>Al final de la pestaña «Datos». <strong>Resolución</strong>, <strong>Listado provisional</strong> y <strong>Listado definitivo</strong>: pegue la <strong>dirección completa</strong> de donde ya están publicados, que empieza por https://. Con el listado definitivo, el procedimiento pasa a <strong>«Resuelto»</strong> y los centros lo ven en su solicitud. Pulse <strong>«Guardar los enlaces»</strong>.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Enlaces»',
+						'caption' => 'sección «Enlaces», al final de la pestaña «Datos»',
 						'image'   => '',
 					),
 				),
@@ -20342,7 +20225,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Al final de la pestaña <strong>«Solicitudes»</strong>, <strong>«Plazos de entregas documentales»</strong>: los de las entregas con plazo propio, si las hay. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Las fechas de una entrega con plazo propio se cambian en <strong>su campo</strong>, en la pestaña <strong>«Campos adicionales»</strong>, sin reabrir la inscripción. Se pueden cambiar hasta que el procedimiento sea histórico.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(
@@ -20525,7 +20408,7 @@ final class HelpContent {
 				'id'    => 'enlaces-cortados',
 				'level' => 3,
 				'title' => 'Los enlaces de la resolución salen cortados o no abren',
-				'html'  => '<p>Aquí no se sube el PDF: en «Enlaces» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
+				'html'  => '<p>Aquí no se sube el PDF: en la sección «Enlaces» de la pestaña «Datos» se pega la dirección completa donde está publicado. Copie la dirección entera desde la barra del navegador, empezando por https://, y compruébela abriendo la ficha pública con el ojo.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -24792,7 +24675,6 @@ final class ApplicationsPanelView {
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\CentreEligibility;
-use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\Assets;
@@ -24838,24 +24720,18 @@ final class AdvancedPanelView {
 
 
 
-
 	private static function centres_section( array $m ): string {
-		$op     = ProcedureEditor::OP_CENTRES;
-		$apagar = true !== ( ( (array) $m['groups'] )[ ProcedureState::GROUP_DATA ] ?? false );
-		$motivo = $apagar && '' !== ProcedureState::why_locked( (string) $m['state'] ) ? 'Cerrado por el estado del procedimiento.' : '';
+		$op = ProcedureEditor::OP_CENTRES;
 		ob_start();
 		?>
 		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
-			<?php if ( '' !== $motivo ) : ?>
-				<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
-			<?php endif; ?>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' );?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
+				<fieldset class="prc-seccion-campos"<?php disabled( empty( $m['can_edit'] ) ); ?>>
 					<?php echo self::centre_fields( $m, (array) $m['values'] );?>
 					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' );?>
 				</fieldset>
@@ -25079,7 +24955,6 @@ namespace Prc\PublicFront\View;
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
-use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
@@ -25132,8 +25007,6 @@ final class ProcedureEditorView {
 		echo self::flash( $m );
 		echo self::archived_notice( $m );
 
-		echo Shell::notice( 'aviso', (string) $m['state_notice'] );
-
 		echo Shell::notice( 'aviso', implode( ' ', (array) $m['not_ready'] ) );
 
 
@@ -25168,12 +25041,11 @@ final class ProcedureEditorView {
 	private static function panel( array $m, string $panel ): string {
 		return match ( $panel ) {
 			ProcedureEditor::PANEL_QUESTIONS => self::questions_panel( $m ),
-			ProcedureEditor::PANEL_LINKS => self::links_panel( $m ),
-			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ) . self::deliveries_section( $m ),
+			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
-			default => self::data_panel( $m ),
+			default => self::data_panel( $m ) . ( true === $m['nuevo'] ? '' : self::links_section( $m ) ),
 		};
 	}
 
@@ -25185,81 +25057,10 @@ final class ProcedureEditorView {
 
 
 
-
-
-
-
 	private static function read_only( array $m, string $panel ): bool {
-		if ( ProcedureEditor::PANEL_APPLICATIONS === $panel ) {
 
 
-			return false;
-		}
-		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
-			return ! self::open_group( $m, ProcedureState::GROUP_QUESTIONS );
-		}
-		if ( ProcedureEditor::PANEL_LINKS === $panel ) {
-			return ! self::open_group( $m, ProcedureState::GROUP_LINKS );
-		}
-		if ( ProcedureEditor::PANEL_DATA === $panel ) {
-			return ! self::open_group( $m, ProcedureState::GROUP_DATA ) && ! self::open_group( $m, ProcedureState::GROUP_DATES );
-		}
-		return true !== $m['can_edit'];
-	}
-
-
-
-
-
-
-
-
-	private static function open_group( array $m, string $group ): bool {
-		return true === ( ( (array) $m['groups'] )[ $group ] ?? false );
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function deliveries_section( array $m ): string {
-		if ( empty( $m['deliveries'] ) || ! empty( $m['actions']['withdrawn_open'] ) ) {
-			return '';
-		}
-		$cerrado = true !== $m['can_edit'];
-		ob_start();
-		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_DELIVERIES ); ?>" aria-labelledby="prc-deliveries-title">
-			<h2 class="prc-seccion__titulo" id="prc-deliveries-title">Plazos de entregas documentales</h2>
-			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y los campos adicionales se conservan; el nuevo cierre no puede ser anterior al actual.</p>
-			<?php if ( $cerrado ) : ?>
-				<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Plazos en solo lectura</legend>
-			<?php endif; ?>
-			<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<?php foreach ( $m['deliveries'] as $delivery ) : ?>
-					<div class="prc-campo">
-						<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
-						<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
-					</div>
-				<?php endforeach; ?>
-				<?php echo PanelParts::submit( 'Guardar los nuevos cierres' );?>
-			</form>
-			<?php if ( $cerrado ) : ?>
-				</fieldset>
-			<?php endif; ?>
-		</section>
-		<?php
-		return (string) ob_get_clean();
+		return ProcedureEditor::PANEL_APPLICATIONS !== $panel && true !== $m['can_edit'];
 	}
 
 
@@ -25508,26 +25309,16 @@ final class ProcedureEditorView {
 		$nuevo  = true === $m['nuevo'];
 
 
-		$apagar = ! self::open_group( $m, ProcedureState::GROUP_DATA );
-		$plazos = ! self::open_group( $m, ProcedureState::GROUP_DATES );
 
-
-
-		$motivo = '' !== ProcedureState::why_locked( (string) $m['state'] )
-			? 'Cerrado por el estado del procedimiento.'
-			: '';
-
-
-
-		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ), $apagar, $motivo );
+		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ) );
 		$secciones .= '<div class="prc-form__mitades">'
-			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ), $apagar, $motivo )
-			. PanelParts::section( 'Más información', self::email_fields( $v ), $apagar, $motivo )
+			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ) )
+			. PanelParts::section( 'Más información', self::email_fields( $v ) )
 			. '</div>';
-		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ), $apagar, $motivo );
+		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ) );
 		if ( ! $nuevo ) {
-			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
-			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
+			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v, (string) $m['today'] ) );
+			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ) );
 
 		}
 
@@ -25834,7 +25625,11 @@ final class ProcedureEditorView {
 
 
 
-	private static function date_fields( array $v ): string {
+
+
+
+
+	private static function date_fields( array $v, string $hoy ): string {
 		$fechas = array(
 			ProcedureMetaKeys::OPENS_AT        => array( 'prc-opens', 'Inicio del plazo de solicitud', 'Sin fecha, el procedimiento se publica como próximo y nadie puede solicitar.' ),
 			ProcedureMetaKeys::CLOSES_AT       => array( 'prc-closes', 'Fin del plazo de solicitud', 'Inclusive. En blanco, el plazo dura el día de inicio.' ),
@@ -25850,7 +25645,12 @@ final class ProcedureEditorView {
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $texto[0] ); ?>"><?php echo esc_html( $texto[1] ); ?></label>
 					<input class="prc-control" type="date" id="<?php echo esc_attr( $texto[0] ); ?>" name="<?php echo esc_attr( (string) $clave ); ?>"
-						value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>" />
+						value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>"
+						<?php if ( ProcedureMetaKeys::CLOSES_AT === $clave ) : ?>
+							data-prc-confirm-before="<?php echo esc_attr( $hoy ); ?>"
+							data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado? Si el plazo de solicitud está abierto, se cierra en cuanto guarde: los centros ya no podrán presentar ni cambiar su solicitud."
+						<?php endif; ?>
+						/>
 					<p class="prc-campo__ayuda"><?php echo esc_html( $texto[2] ); ?></p>
 				</div>
 			<?php endforeach; ?>
@@ -26132,7 +25932,7 @@ final class ProcedureEditorView {
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
 			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
 			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
-			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar la inscripción, mientras este panel siga editable.</p></div>';
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Sus fechas se cambian aquí, también después de cerrar la inscripción, hasta que el procedimiento sea histórico.</p></div>';
 		foreach ( array(
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
@@ -26216,10 +26016,13 @@ final class ProcedureEditorView {
 
 
 
-	private static function links_panel( array $m ): string {
+
+
+
+	private static function links_section( array $m ): string {
 		$v      = (array) $m['values'];
 		$copias = (array) ( $m['link_copies'] ?? array() );
-		$op     = ProcedureEditor::PANEL_LINKS;
+		$op     = ProcedureEditor::OP_LINKS;
 		$campos = array(
 			ProcedureMetaKeys::RESOLUTION_URL       => array( 'Resolución', 'La resolución que aprueba el procedimiento, donde esté publicada.' ),
 			ProcedureMetaKeys::PROVISIONAL_LIST_URL => array( 'Listado provisional', 'Los centros admitidos provisionalmente.' ),
@@ -26228,12 +26031,12 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedureEditor::SECTION_LINKS ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
-				<legend class="prc-seccion__titulo">Resolución y listados</legend>
+				<legend class="prc-seccion__titulo">Enlaces: resolución y listados</legend>
 				<p class="prc-intro">Son enlaces a donde ya están publicados, y en público se enlaza esa dirección.
 					Al guardar, el aplicativo se queda además una copia privada del PDF por si el enlace deja de funcionar:
 					solo la descarga quien gestiona el procedimiento.</p>
@@ -26603,7 +26406,6 @@ final class ProcedureEditor {
 
 	public const PANEL_DATA         = 'datos';
 	public const PANEL_QUESTIONS    = 'preguntas';
-	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
 	public const PANEL_PUBLISH      = 'publicacion';
 	public const PANEL_PEOPLE       = 'personas';
@@ -26616,10 +26418,11 @@ final class ProcedureEditor {
 
 
 
-	public const SECTION_DELIVERIES = 'prc-entregas';
-	public const SECTION_CENTRES    = 'prc-avanzado-centros';
-	public const SECTION_OBSERVE    = 'prc-avanzado-consulta';
-	public const SECTION_CODE       = 'prc-avanzado-codigo';
+	public const SECTION_LINKS   = 'prc-enlaces';
+	public const SECTION_CENTRES = 'prc-avanzado-centros';
+	public const SECTION_OBSERVE = 'prc-avanzado-consulta';
+	public const SECTION_CODE    = 'prc-avanzado-codigo';
+
 
 
 
@@ -26629,7 +26432,8 @@ final class ProcedureEditor {
 
 
 	public const OLD_PANELS = array(
-		'entregas' => array( self::PANEL_APPLICATIONS, self::SECTION_DELIVERIES ),
+		'entregas' => array( self::PANEL_QUESTIONS, '' ),
+		'enlaces'  => array( self::PANEL_DATA, self::SECTION_LINKS ),
 		'consulta' => array( self::PANEL_ADVANCED, self::SECTION_OBSERVE ),
 		'codigo'   => array( self::PANEL_ADVANCED, self::SECTION_CODE ),
 	);
@@ -26642,7 +26446,7 @@ final class ProcedureEditor {
 	public const OP_TOGGLE_APPLICATIONS = 'toggle_applications';
 	public const OP_ARCHIVE             = 'archive';
 	public const OP_UNARCHIVE           = 'unarchive';
-	public const OP_DELIVERY_DATES      = 'delivery_dates';
+	public const OP_LINKS               = 'enlaces';
 	public const OP_CUSTOM_CODE         = 'custom_code';
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
@@ -26650,7 +26454,6 @@ final class ProcedureEditor {
 	public const OP_CENTRES             = 'centres';
 	public const OP_DUPLICATE           = 'duplicate';
 	public const OP_DELETE              = 'delete';
-	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
 
 
 
@@ -26729,13 +26532,12 @@ final class ProcedureEditor {
 		self::PANEL_DATA,
 		self::PANEL_QUESTIONS,
 		self::OP_MOVE_QUESTION,
-		self::OP_DELIVERY_DATES,
 		self::OP_CUSTOM_CODE,
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
 		self::OP_CENTRES,
 		AdvancedPanel::OP_SIGNATURE,
-		self::PANEL_LINKS,
+		self::OP_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
 		self::OP_EXPORT,
@@ -26774,7 +26576,6 @@ final class ProcedureEditor {
 		'datos'        => 'Datos del procedimiento guardados.',
 		'preguntas'    => 'Campos adicionales guardados.',
 		'ordenadas'    => 'Orden de los campos guardado.',
-		'entregas'     => 'Plazos de entrega actualizados.',
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
@@ -26854,7 +26655,6 @@ final class ProcedureEditor {
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_PEOPLE       => 'Participantes',
-			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_ADVANCED     => 'Avanzado',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
@@ -26988,7 +26788,6 @@ final class ProcedureEditor {
 		}
 
 		$sueltas = array(
-			self::OP_DELIVERY_DATES     => array( self::class, 'save_delivery_dates' ),
 			self::OP_PEOPLE_SPEC        => array( self::class, 'save_people_spec' ),
 			self::OP_OBSERVE            => array( self::class, 'save_observe' ),
 			AdvancedPanel::OP_SIGNATURE => array( AdvancedPanel::class, 'save_signature' ),
@@ -27053,17 +26852,11 @@ final class ProcedureEditor {
 			return;
 		}
 		if ( self::OP_CENTRES === $op ) {
-			self::$rejected = AdvancedPanel::save_centres( $procedure_id, $user_id, self::submitted_data( $procedure_id ) );
+			self::$rejected = AdvancedPanel::save_centres( $procedure_id, self::submitted_data( $procedure_id ) );
 			return;
 		}
 		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
-			if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_QUESTIONS ) ) {
-				return;
-			}
 			self::PANEL_QUESTIONS === $op ? self::save_questions( $procedure_id ) : self::move_question( $procedure_id );
-			return;
-		}
-		if ( ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_LINKS ) ) {
 			return;
 		}
 		self::save_links( $procedure_id );
@@ -27084,25 +26877,6 @@ final class ProcedureEditor {
 			return;
 		}
 		ObserveSettings::handle( $procedure_id );
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function allows_group( int $user_id, int $procedure_id, string $group ): bool {
-		if ( ProcedureAccess::can_edit_group( $user_id, $procedure_id, $group ) ) {
-			return true;
-		}
-		self::$rejected = ProcedureAccess::why_not_editable( $user_id, $procedure_id, $group );
-		return false;
 	}
 
 
@@ -27175,21 +26949,10 @@ final class ProcedureEditor {
 
 
 
-
-
-
-
 	private static function save_data( int $procedure_id, int $user_id ): void {
-		$datos  = ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA );
-		$fechas = ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATES );
-		if ( ! $datos && ! $fechas && ! self::allows_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA ) ) {
-			return;
-		}
 
-		$crudo = self::gated_data( $procedure_id, $datos, $fechas );
-		if ( ! $datos && ! ProcedureAccess::can_edit_all_areas( $user_id ) ) {
-			$crudo['areas'] = array_intersect( (array) $crudo['areas'], ProcedureAccess::scope_areas( $user_id ) );
-		}
+
+		$crudo    = array_merge( self::submitted_data( $procedure_id ), CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 		$revisado = self::validate_data( $user_id, $crudo, $procedure_id );
 		if ( ! $revisado['ok'] ) {
 			self::$rejected = $revisado['area_error'] ?? ProcedureInput::why( $revisado['errors'] );
@@ -27338,59 +27101,6 @@ final class ProcedureEditor {
 		);
 		$datos['coordinator_count'] = $coordina;
 		return $datos;
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	private static function gated_data( int $procedure_id, bool $datos, bool $fechas ): array {
-		$crudo = self::submitted_data( $procedure_id );
-		if ( ! $fechas ) {
-			$plazos = array(
-				'opens_at'        => ProcedureMetaKeys::OPENS_AT,
-				'closes_at'       => ProcedureMetaKeys::CLOSES_AT,
-				'amend_opens_at'  => ProcedureMetaKeys::AMEND_OPENS_AT,
-				'amend_closes_at' => ProcedureMetaKeys::AMEND_CLOSES_AT,
-			);
-			foreach ( $plazos as $campo => $clave ) {
-				$crudo[ $campo ] = self::meta( $procedure_id, $clave );
-			}
-		}
-		if ( ! $datos ) {
-
-
-			$post                       = get_post( $procedure_id );
-			$crudo                      = array_merge(
-				$crudo,
-				array(
-					'title'                => $post instanceof \WP_Post ? $post->post_title : '',
-					'description'          => $post instanceof \WP_Post ? $post->post_content : '',
-					'areas'                => self::terms_of( $procedure_id, ProcedureTaxonomies::AREA ),
-					'course'               => self::first_term( $procedure_id, ProcedureTaxonomies::COURSE ),
-					'contact_emails'       => get_post_meta( $procedure_id, ProcedureMetaKeys::CONTACT_EMAILS, true ),
-					'header_color'         => self::meta( $procedure_id, ProcedureMetaKeys::HEADER_COLOR ),
-					'audience'             => self::meta( $procedure_id, ProcedureMetaKeys::AUDIENCE ),
-					'ownership'            => ProcedureInput::stored_ownership( get_post_meta( $procedure_id, ProcedureMetaKeys::OWNERSHIP, true ) ),
-					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
-					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
-					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				)
-			);
-			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
-		}
-
-
-		return array_merge( $crudo, CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 	}
 
 
@@ -27561,46 +27271,6 @@ final class ProcedureEditor {
 
 
 
-
-	private static function save_delivery_dates( int $procedure_id ): void {
-
-		$closes = wp_unslash( $_POST[ self::FIELD_DELIVERY_CLOSES ] ?? array() );
-
-		if ( ! is_array( $closes ) ) {
-			self::$rejected = 'No se han podido validar los nuevos plazos. No se ha cambiado nada.';
-			return;
-		}
-
-		$questions = Applications::questions( $procedure_id );
-		$updated   = 0;
-		foreach ( $questions as &$question ) {
-			if ( ! ProcedureQuestions::is_delivery( $question ) || ! array_key_exists( $question['key'], $closes ) ) {
-				continue;
-			}
-			$new_close = is_string( $closes[ $question['key'] ] ) ? sanitize_text_field( $closes[ $question['key'] ] ) : '';
-			++$updated;
-			if ( ! ProcedureInput::is_valid_date( $new_close ) || $new_close < $question['closes_at'] ) {
-				self::$rejected = 'El nuevo cierre debe ser una fecha válida igual o posterior al actual. No se ha cambiado ningún plazo.';
-				return;
-			}
-			$question['closes_at'] = $new_close;
-		}
-		unset( $question );
-
-		if ( 0 === $updated ) {
-			self::$rejected = 'No hay entregas documentales cuyos plazos se puedan ampliar.';
-			return;
-		}
-		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
-		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'entregas' ) ) );
-	}
-
-
-
-
-
-
-
 	private static function save_people_spec( int $procedure_id ): void {
 		self::$rejected = PeopleSpecPanel::save( $procedure_id );
 		if ( '' === self::$rejected ) {
@@ -27635,7 +27305,7 @@ final class ProcedureEditor {
 		if ( array() !== $fallos ) {
 			$aviso[ LinkCopies::ARG_FAILED ] = $fallos;
 		}
-		Shell::leave( self::url( $procedure_id, self::PANEL_LINKS, $aviso ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_DATA, $aviso ) );
 	}
 
 
@@ -28008,8 +27678,7 @@ final class ProcedureEditor {
 				'texto' => '',
 			),
 			'can_edit'                => false,
-			'groups'                  => array(),
-			'state_notice'            => '',
+			'today'                   => '',
 			'can_review'              => false,
 			'can_edit_custom_js'      => false,
 			'can_publish'             => false,
@@ -28092,10 +27761,8 @@ final class ProcedureEditor {
 			$m['aviso_tipo'] = 'error';
 			return $m;
 		}
-		$m['nuevo']    = true;
-		$m['can_edit'] = true;
-
-		$m['groups']       = array_fill_keys( ProcedureState::editable_fields( ProcedureMetaKeys::STATE_DRAFT ), true );
+		$m['nuevo']        = true;
+		$m['can_edit']     = true;
 		$m['flash']        = self::flash( '' );
 		$m['status']       = 'draft';
 		$m['status_label'] = self::status_label( 'draft' );
@@ -28170,15 +27837,9 @@ final class ProcedureEditor {
 				}
 			}
 		}
-		$m['state']       = ProcedureState::of_post( $procedure_id );
-		$m['state_label'] = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
-
-
-
-		foreach ( ProcedureState::groups() as $grupo ) {
-			$m['groups'][ $grupo ] = true === $m['can_edit'] && ProcedureAccess::can_edit_group( $user_id, $procedure_id, $grupo );
-		}
-		$m['state_notice']   = true === $m['can_edit'] ? ProcedureState::why_locked( (string) $m['state'] ) : '';
+		$m['state']          = ProcedureState::of_post( $procedure_id );
+		$m['state_label']    = ProcedureState::label( (string) $m['state'], $m['applications_closed'] );
+		$m['today']          = ProcedureState::today();
 		$m['status']         = (string) $procedimiento->post_status;
 		$m['status_label']   = self::status_label( (string) $procedimiento->post_status );
 		$m['area_names']     = self::area_names( ProcedureAccess::post_areas( $procedure_id ) );
@@ -28190,10 +27851,9 @@ final class ProcedureEditor {
 		$m['view_url']       = ProcedureView::link( $procedimiento );
 		$m['view_label']     = ProcedureView::link_label( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
-		$m['link_copies']    = self::PANEL_LINKS === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
+		$m['link_copies']    = self::PANEL_DATA === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
-		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
 		return self::panel_model( $m, $procedure_id, $user_id );
 	}
@@ -28552,7 +28212,6 @@ namespace Prc\PublicFront;
 use Prc\Access\ProcedureAccess;
 use Prc\Domain\CentreEligibility;
 use Prc\Domain\ProcedureInput;
-use Prc\Domain\ProcedureState;
 use Prc\Meta\ProcedureMetaKeys;
 
 
@@ -28619,12 +28278,7 @@ final class AdvancedPanel {
 
 
 
-
-
-	public static function save_centres( int $procedure_id, int $user_id, array $raw ): string {
-		if ( ! ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA ) ) {
-			return ProcedureAccess::why_not_editable( $user_id, $procedure_id, ProcedureState::GROUP_DATA );
-		}
+	public static function save_centres( int $procedure_id, array $raw ): string {
 		$acotados = CentreEligibility::input( $raw, self::for_schools( $procedure_id ) );
 		if ( array() !== $acotados['errors'] ) {
 			return ProcedureInput::why( $acotados['errors'] );
@@ -28674,7 +28328,7 @@ final class AdvancedPanel {
 		unset( $args[ ProcedureEditor::ARG_PANEL ] );
 
 		$args = array_map( 'rawurlencode', $args );
-		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . '#' . $seccion );
+		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . ( '' !== $seccion ? '#' . $seccion : '' ) );
 	}
 
 
@@ -36978,7 +36632,7 @@ final class App {
   outline: none;
 }
 
-/* Un campo que el estado cierra se distingue solo por el color: mismo alto,
+/* Un campo en solo lectura se distingue solo por el color: mismo alto,
    mismo borde, mismo radio, fondo blanco. Ni candado ni fondo gris. */
 .prc-form.prc-form--taller .prc-control[readonly],
 .prc-form.prc-form--taller .prc-control:disabled {
@@ -37040,14 +36694,6 @@ final class App {
   border: 0;
   border-top: 2px solid var(--prc-c-linea-seccion);
   border-radius: 0;
-}
-
-/* Por qué este bloque está apagado, junto al bloque y no solo arriba. */
-.prc-seccion__bloqueo {
-  margin: -18px 0 18px;
-  padding: 0;
-  font: 400 13px/20px var(--prc-fuente);
-  color: var(--prc-c-tenue);
 }
 
 .prc-intro {
@@ -40330,13 +39976,33 @@ body.prc-app .prc-btn-borrar {
 		};
 	}
 
+	/*
+	 * La pregunta de este envío: la fija del formulario o, si un campo de
+	 * fecha lleva `data-prc-confirm-before`, la suya cuando se cambió a un
+	 * día anterior a ese —el fin de plazo que, ya pasado, cierra las
+	 * solicitudes al guardar—. «AAAA-MM-DD» se compara bien como texto, y el
+	 * día de hoy lo pone el servidor: el reloj del navegador no manda.
+	 */
+	function preguntaDe( form ) {
+		var fija = form.getAttribute( \'data-prc-confirm\' );
+		if ( fija ) {
+			return fija;
+		}
+		var campo = form.querySelector( \'[data-prc-confirm-before]\' );
+		if ( ! campo || ! campo.value || campo.value === campo.defaultValue ||
+			campo.value >= campo.getAttribute( \'data-prc-confirm-before\' ) ) {
+			return \'\';
+		}
+		return campo.getAttribute( \'data-prc-confirm-text\' ) || \'\';
+	}
+
 	document.addEventListener( \'submit\', function ( e ) {
 		var form = e.target;
 		// La marca la pone el envío que sale del diálogo: se deja pasar.
 		if ( ! ( form instanceof HTMLFormElement ) || \'1\' === form.dataset.prcConfirmado ) {
 			return;
 		}
-		var pregunta = form.getAttribute( \'data-prc-confirm\' );
+		var pregunta = preguntaDe( form );
 		if ( ! pregunta ) {
 			return;
 		}

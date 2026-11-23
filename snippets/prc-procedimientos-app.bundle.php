@@ -25629,6 +25629,7 @@ final class ProcedureEditorView {
 
 
 
+
 	private static function date_fields( array $v, string $hoy ): string {
 		$fechas = array(
 			ProcedureMetaKeys::OPENS_AT        => array( 'prc-opens', 'Inicio del plazo de solicitud', 'Sin fecha, el procedimiento se publica como próximo y nadie puede solicitar.' ),
@@ -25648,6 +25649,7 @@ final class ProcedureEditorView {
 						value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>"
 						<?php if ( ProcedureMetaKeys::CLOSES_AT === $clave ) : ?>
 							data-prc-confirm-before="<?php echo esc_attr( $hoy ); ?>"
+							data-prc-confirm-blank="prc-opens"
 							data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado? Si el plazo de solicitud está abierto, se cierra en cuanto guarde: los centros ya no podrán presentar ni cambiar su solicitud."
 						<?php endif; ?>
 						/>
@@ -25926,7 +25928,11 @@ final class ProcedureEditorView {
 
 
 
-	private static function delivery_fields( int $i, array $p ): string {
+
+
+
+
+	private static function delivery_fields( int $i, array $p, string $hoy ): string {
 		$campo = ProcedureEditor::FIELD_Q;
 		$ayuda = 'prc-q-d-help-' . $i;
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
@@ -25937,9 +25943,12 @@ final class ProcedureEditorView {
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
 		) as $date_key => $date_label ) {
-			$id   = 'prc-q-' . $date_key . '-' . $i;
-			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
-				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+			$id       = 'prc-q-' . $date_key . '-' . $i;
+			$confirma = 'closes_at' === $date_key && '' !== $hoy
+				? ' data-prc-confirm-before="' . esc_attr( $hoy ) . '" data-prc-confirm-text="' . esc_attr( '¿Guardar con un cierre de entrega que ya ha pasado? La entrega «' . (string) ( $p['label'] ?? '' ) . '» se cierra en cuanto guarde: los centros ya no podrán subir su documento.' ) . '"'
+				: '';
+			$out     .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '"' . $confirma . ' /></div>';
 		}
 		return $out . '</div>';
 	}
@@ -25997,7 +26006,7 @@ final class ProcedureEditorView {
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p );?>
-			<?php echo self::delivery_fields( $i, $p );?>
+			<?php echo self::delivery_fields( $i, $p, (string) ( $m['today'] ?? '' ) );?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
@@ -26724,6 +26733,11 @@ final class ProcedureEditor {
 		$procedure_id = absint( wp_unslash( $_POST[ self::FIELD_PROCEDURE ] ?? 0 ) );
 		$row_id       = absint( wp_unslash( $_POST[ self::FIELD_ROW ] ?? 0 ) );
 
+
+		if ( 'delivery_dates' === $op ) {
+			self::$rejected = 'Las fechas de las entregas se cambian ahora en su campo, en «Campos adicionales». No se ha guardado nada.';
+			return;
+		}
 		if ( ! in_array( $op, self::OPS, true ) || ! is_user_logged_in() ) {
 			return;
 		}
@@ -39982,21 +39996,27 @@ body.prc-app .prc-btn-borrar {
 	/*
 	 * La pregunta de este envío: la fija del formulario o, si un campo de
 	 * fecha lleva `data-prc-confirm-before`, la suya cuando se cambió a un
-	 * día anterior a ese —el fin de plazo que, ya pasado, cierra las
-	 * solicitudes al guardar—. «AAAA-MM-DD» se compara bien como texto, y el
-	 * día de hoy lo pone el servidor: el reloj del navegador no manda.
+	 * día anterior a ese —un cierre que, ya pasado, cierra al guardar—. En
+	 * blanco, el cierre es el campo que nombra `data-prc-confirm-blank` (el
+	 * fin del plazo vacío dura el día de inicio). «AAAA-MM-DD» se compara bien
+	 * como texto, y el día de hoy lo pone el servidor: el reloj del navegador
+	 * no manda.
 	 */
 	function preguntaDe( form ) {
 		var fija = form.getAttribute( \'data-prc-confirm\' );
 		if ( fija ) {
 			return fija;
 		}
-		var campo = form.querySelector( \'[data-prc-confirm-before]\' );
-		if ( ! campo || ! campo.value || campo.value === campo.defaultValue ||
-			campo.value >= campo.getAttribute( \'data-prc-confirm-before\' ) ) {
-			return \'\';
+		var campos = form.querySelectorAll( \'[data-prc-confirm-before]\' );
+		for ( var i = 0; i < campos.length; i++ ) {
+			var campo = campos[ i ];
+			var otro = document.getElementById( campo.getAttribute( \'data-prc-confirm-blank\' ) || \'\' );
+			var dia = campo.value || ( otro ? otro.value : \'\' );
+			if ( campo.value !== campo.defaultValue && dia && dia < campo.getAttribute( \'data-prc-confirm-before\' ) ) {
+				return campo.getAttribute( \'data-prc-confirm-text\' ) || \'\';
+			}
 		}
-		return campo.getAttribute( \'data-prc-confirm-text\' ) || \'\';
+		return \'\';
 	}
 
 	document.addEventListener( \'submit\', function ( e ) {

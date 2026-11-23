@@ -170,43 +170,6 @@ final class ReceiptSignature {
 		return $procedure_id > 0 && (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::SIGNATURE_REQUIRED, true );
 	}
 
-	/**
-	 * Whether this user may sign the receipt of this application now.
-	 *
-	 * Quien la ve como propia —su centro, o la suya si es docente—, en un
-	 * procedimiento publicado, no histórico, que pide la firma, mientras no
-	 * esté a la espera de que el centro la complete y todavía sin firmar.
-	 *
-	 * @param int $user_id        User ID.
-	 * @param int $application_id Application ID.
-	 * @return bool
-	 */
-	public static function can_sign( int $user_id, int $application_id ): bool {
-		$procedure_id = (int) wp_get_post_parent_id( $application_id );
-		return self::required( $procedure_id )
-			&& 'publish' === get_post_status( $procedure_id )
-			&& ! ProcedureAccess::is_archived( $procedure_id )
-			&& ProcedureAccess::can_view_application( $user_id, $application_id, ProcedureAccess::VIEW_OWN )
-			&& ! ApplicationOperations::pending_for_school( $application_id )
-			&& array() === self::signed( $application_id );
-	}
-
-	/**
-	 * Whether this user may download the signed receipt: the school and whoever reviews.
-	 *
-	 * Quien consulta por zona no: la consulta enseña una lista cerrada
-	 * (ADR-0043) y esto no está en ella.
-	 *
-	 * @param int $user_id        User ID.
-	 * @param int $application_id Application ID.
-	 * @return bool
-	 */
-	public static function can_download( int $user_id, int $application_id ): bool {
-		return ApplicationPostType::POST_TYPE === get_post_type( $application_id )
-			&& ( ProcedureAccess::can_view_application( $user_id, $application_id, ProcedureAccess::VIEW_OWN )
-				|| ProcedureAccess::can_review( $user_id, $application_id ) );
-	}
-
 	// ─── lo que se firma ───────────────────────────────────────────────────
 
 	/**
@@ -353,7 +316,7 @@ final class ReceiptSignature {
 		if ( $id <= 0 || ! self::required( (int) wp_get_post_parent_id( $id ) ) || ApplicationOperations::pending_for_school( $id ) ) {
 			return array( 'show' => false );
 		}
-		$puede = self::can_sign( get_current_user_id(), $id );
+		$puede = ProcedureAccess::can_sign_receipt( get_current_user_id(), $id );
 		// El justificante para imprimir no pinta la sección: nada que cargar.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- solo decide si se cargan las librerías.
 		if ( $puede && ! isset( $_GET[ ApplicationProgress::ARG_RECEIPT ] ) ) {
@@ -443,7 +406,7 @@ final class ReceiptSignature {
 		if ( false === wp_verify_nonce( $nonce, self::nonce_action( $application_id ) ) ) {
 			return 'El formulario estuvo abierto demasiado tiempo y el envío caducó. Vuelva a intentarlo.';
 		}
-		if ( self::can_sign( $user_id, $application_id ) ) {
+		if ( ProcedureAccess::can_sign_receipt( $user_id, $application_id ) ) {
 			return '';
 		}
 		return array() === self::signed( $application_id ) ? 'No puede firmar el justificante de esta solicitud.' : 'El justificante de esta solicitud ya está firmado.';
@@ -541,12 +504,12 @@ final class ReceiptSignature {
 	 * @return void
 	 */
 	public static function serve(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- es una lectura; la autoriza can_download().
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- es una lectura; la autoriza ProcedureAccess::can_download_signed_receipt().
 		$id = isset( $_GET[ self::ARG_DOWNLOAD ] ) && is_string( $_GET[ self::ARG_DOWNLOAD ] ) ? absint( wp_unslash( $_GET[ self::ARG_DOWNLOAD ] ) ) : 0;
 		if ( $id <= 0 ) {
 			return;
 		}
-		if ( ! self::can_download( get_current_user_id(), $id ) ) {
+		if ( ! ProcedureAccess::can_download_signed_receipt( get_current_user_id(), $id ) ) {
 			ApplicationFiles::deny();
 			return;
 		}

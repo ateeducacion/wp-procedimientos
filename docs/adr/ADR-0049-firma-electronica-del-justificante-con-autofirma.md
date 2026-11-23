@@ -263,9 +263,8 @@ Tras la revisión del código de [#113](https://github.com/ateeducacion/wp-proce
   5,4 s de CPU por subida). Ahora cada intento cuenta, salga o no, hasta
   `SignedReceipt::MAX_INFLATES` (64); el flujo que no empieza como zlib ni se
   intenta, y sin salto antes de `endstream` no se repite. El mismo PDF, 0,2 s.
-- **Quién firma y quién descarga se quedan en `ReceiptSignature`**
-  (`can_sign()`, `can_download()`), fuera de `ProcedureAccess`: no deciden
-  sobre la solicitud sino sobre su firma, solo componen reglas de
-  `ProcedureAccess` (`can_view_application()`, `can_review()`,
-  `is_archived()`), y llevarlas allí sube a ese guardián por encima de los
-  umbrales de PHPMD.
+- **Quién firma y quién descarga lo decide `ProcedureAccess`**, como toda
+  decisión de «puede o no puede»: `can_sign_receipt()` y
+  `can_download_signed_receipt()`, que antes eran `can_sign()` y
+  `can_download()` de `ReceiptSignature`. `ReceiptSignature` las pregunta,
+  como `LinkCopies` pregunta `can_download_link_copy()` (ADR-0048).

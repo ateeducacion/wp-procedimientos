@@ -804,6 +804,42 @@ final class ProcedureAccess {
 	}
 
 	/**
+	 * Whether this user may sign the receipt of this application now (ADR-0049).
+	 *
+	 * Quien la ve como propia —su centro, o la suya si es docente—, en un
+	 * procedimiento publicado, no histórico, que pide la firma, mientras no
+	 * esté a la espera de que el centro la complete y todavía sin firmar.
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return bool
+	 */
+	public static function can_sign_receipt( int $user_id, int $application_id ): bool {
+		$procedure_id = (int) wp_get_post_parent_id( $application_id );
+		return \Prc\PublicFront\ReceiptSignature::required( $procedure_id )
+			&& 'publish' === get_post_status( $procedure_id )
+			&& ! self::is_archived( $procedure_id )
+			&& self::can_view_application( $user_id, $application_id, self::VIEW_OWN )
+			&& ! \Prc\PublicFront\ApplicationOperations::pending_for_school( $application_id )
+			&& array() === \Prc\PublicFront\ReceiptSignature::signed( $application_id );
+	}
+
+	/**
+	 * Whether this user may download the signed receipt: the school and whoever reviews (ADR-0049).
+	 *
+	 * Quien consulta por zona no: la consulta enseña una lista cerrada
+	 * (ADR-0043) y esto no está en ella.
+	 *
+	 * @param int $user_id        User ID.
+	 * @param int $application_id Application ID.
+	 * @return bool
+	 */
+	public static function can_download_signed_receipt( int $user_id, int $application_id ): bool {
+		return ApplicationPostType::POST_TYPE === get_post_type( $application_id )
+			&& ( self::can_view_application( $user_id, $application_id, self::VIEW_OWN ) || self::can_review( $user_id, $application_id ) );
+	}
+
+	/**
 	 * Whether the user may duplicate this procedure, and under which ámbitos (PR 8 del PLAN-0003).
 	 *
 	 * Quien lo abre en el taller y puede crear procedimientos —quien solo

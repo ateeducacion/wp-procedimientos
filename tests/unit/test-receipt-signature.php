@@ -21,6 +21,7 @@ use Prc\PublicFront\ApplicationQuery;
 use Prc\PublicFront\Applications;
 use Prc\PublicFront\ApplyForm;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\Access\ProcedureAccess;
 use Prc\PublicFront\ReceiptSignature;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Domain\ApplicationFilter;
@@ -429,20 +430,20 @@ class Test_Receipt_Signature extends WP_UnitTestCase {
 	 */
 	public function test_only_the_school_signs_and_only_once() {
 		$e = $this->escenario();
-		$this->assertFalse( ReceiptSignature::can_sign( $e['manager'], $e['application'] ), 'quien revisa no firma por el centro' );
-		$this->assertFalse( ReceiptSignature::can_sign( $this->school_head( 'C0002' ), $e['application'] ) );
-		$this->assertTrue( ReceiptSignature::can_sign( $e['head'], $e['application'] ) );
+		$this->assertFalse( ProcedureAccess::can_sign_receipt( $e['manager'], $e['application'] ), 'quien revisa no firma por el centro' );
+		$this->assertFalse( ProcedureAccess::can_sign_receipt( $this->school_head( 'C0002' ), $e['application'] ) );
+		$this->assertTrue( ProcedureAccess::can_sign_receipt( $e['head'], $e['application'] ) );
 		$this->assertNull( $this->enviar( $this->school_head( 'C0002' ), $e['application'], $this->firmado( $e['application'] ) ) );
 
 		$this->olvidar();
 		$this->assertNotNull( $this->enviar( $e['head'], $e['application'], $this->firmado( $e['application'] ) ) );
-		$this->assertFalse( ReceiptSignature::can_sign( $e['head'], $e['application'] ) );
+		$this->assertFalse( ProcedureAccess::can_sign_receipt( $e['head'], $e['application'] ) );
 		$this->assertNull( $this->enviar( $e['head'], $e['application'], $this->firmado( $e['application'] ) ) );
 
 		$sin = $this->escenario( false );
-		$this->assertFalse( ReceiptSignature::can_sign( $sin['head'], $sin['application'] ) );
+		$this->assertFalse( ProcedureAccess::can_sign_receipt( $sin['head'], $sin['application'] ) );
 		update_post_meta( $e['procedure'], ProcedureMetaKeys::ARCHIVED, true );
-		$this->assertFalse( ReceiptSignature::can_sign( $e['head'], $e['application'] ) );
+		$this->assertFalse( ProcedureAccess::can_sign_receipt( $e['head'], $e['application'] ) );
 	}
 
 	// ─── la descarga ───────────────────────────────────────────────────────

@@ -166,7 +166,7 @@ src/Prc/
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/WithdrawForm.php            Retirar la propia solicitud desde su pantalla (ADR-0044)
-├── PublicFront/ReceiptSignature.php       Firma del justificante: quién, la subida o lo de AutoFirma, el almacén y la descarga (ADR-0049)
+├── PublicFront/ReceiptSignature.php       Firma del justificante: la subida o lo de AutoFirma, el almacén y la descarga; quién, en ProcedureAccess (ADR-0049)
 ├── PublicFront/View/ReceiptSignatureView.php Pinta la sección de la firma en la solicitud
 ├── PublicFront/PeopleForm.php              La sección «Participantes» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»

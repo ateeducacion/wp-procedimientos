@@ -465,7 +465,7 @@ describe( 'the export dialog', () => {
 	const EXPORT = `
 		<div class="banda">
 			<details class="prc-exportar" data-prc-export open>
-				<summary class="prc-btn btn">Exportar…</summary>
+				<summary class="prc-btn btn"><svg aria-hidden="true"></svg>Exportar…</summary>
 				<form class="prc-exportar__form" aria-labelledby="t">
 					<h2 id="t">Exportar las solicitudes</h2>
 					<input type="radio" name="f" value="csv" data-prc-export-format checked>
@@ -513,6 +513,7 @@ describe( 'the export dialog', () => {
 		expect( boton.getAttribute( 'aria-haspopup' ) ).toBe( 'dialog' );
 		expect( boton.getAttribute( 'aria-controls' ) ).toBe( dialogo.id );
 		expect( boton.textContent ).toBe( 'Exportar…' );
+		expect( boton.querySelector( 'svg[aria-hidden="true"]' ) ).not.toBeNull();
 		expect( boton.className ).toBe( 'prc-btn btn' );
 
 		dialogo.showModal = vi.fn( () => dialogo.setAttribute( 'open', '' ) );

@@ -1504,6 +1504,7 @@ final class ProcedureEditor {
 			'area_names'              => '',
 			'foreign_areas'           => array(),
 			'view_url'                => '',
+			'view_label'              => '',
 			'workspace_url'           => Shell::url( 'workspace' ),
 			// Los dos sitios del taller que más dudas levantan: el alta y las preguntas.
 			'help_new_url'            => Help::url( HelpContent::GUIDE_MANAGE, 'crear-o-duplicar' ),
@@ -1648,6 +1649,7 @@ final class ProcedureEditor {
 		$all_labels          = ProcedureTaxonomies::area_options( 0, true );
 		$m['foreign_areas']  = array_values( array_intersect_key( $all_labels, array_flip( $foreign_ids ) ) );
 		$m['view_url']       = ProcedureView::link( $procedimiento );
+		$m['view_label']     = ProcedureView::link_label( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );

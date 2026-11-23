@@ -442,7 +442,8 @@ class Test_Workspace extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Solicitudes', $html );
 		$this->assertStringContainsString( 'Nuevo procedimiento', $html );
 		$this->assertStringContainsString( 'Abrir el taller de este procedimiento', $html );
-		$this->assertStringNotContainsString( '>Ver la ficha</a>', $html, 'ver la ficha está en el menú del taller' );
+		$this->assertStringContainsString( '<span class="screen-reader-text">Ver la ficha</span></a>', $html, 'el ojo, a la vista' );
+		$this->assertStringContainsString( esc_url( (string) get_permalink( $id ) ), $html );
 		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_DUPLICATE . '"', $html, 'y duplicar, también' );
 		$this->assertStringContainsString( '>1 solicitud</a>', $html, 'el recuento es el enlace a las solicitudes' );
 		$this->assertStringContainsString( esc_url( ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ) ), $html );
@@ -473,13 +474,14 @@ class Test_Workspace extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Las filas no llevan acciones: «Ver la ficha», «Duplicar» y «Borrar»
-	 * están en el menú de la cabecera del taller, al que lleva el título.
+	 * Cada fila lleva tres iconos a la vista: el taller, sus solicitudes y la
+	 * ficha —en un borrador, la vista previa—. «Duplicar» y «Borrar» siguen
+	 * en el menú de la cabecera del taller.
 	 */
-	public function test_the_rows_carry_no_actions() {
+	public function test_each_row_carries_three_icon_links() {
 		$area  = $this->area( 'Área de prueba' );
 		$quien = $this->manager( array( $area ) );
-		$this->procedure(
+		$id    = $this->procedure(
 			$quien,
 			array( $area ),
 			array(),
@@ -490,14 +492,19 @@ class Test_Workspace extends WP_UnitTestCase {
 		);
 
 		$this->acting_as( $quien );
-		$m = Workspace::model();
+		$m   = Workspace::model();
+		$row = $m['rows'][0];
 
-		$this->assertSame( 'Un borrador', $m['rows'][0]['title'] );
-		$this->assertArrayNotHasKey( 'view_url', $m['rows'][0] );
-		$this->assertArrayNotHasKey( 'can_duplicate', $m['rows'][0] );
+		$this->assertSame( 'Un borrador', $row['title'] );
+		$this->assertStringContainsString( 'preview', $row['view_url'], 'un borrador se mira en vista previa' );
+		$this->assertSame( 'Vista previa', $row['view_label'] );
 		$html = Workspace::render();
-		$this->assertStringNotContainsString( 'Previsualizar', $html );
-		$this->assertStringNotContainsString( 'prc-celda-accion', $html );
+		foreach ( array( 'Editar en el taller', 'Ver las solicitudes', 'Vista previa' ) as $rotulo ) {
+			$this->assertStringContainsString( '<span class="screen-reader-text">' . $rotulo . '</span></a>', $html, $rotulo );
+		}
+		$this->assertStringContainsString( 'data-rotulo="Acciones"', $html );
+		$this->assertStringContainsString( esc_url( ProcedureEditor::url( $id, ProcedureEditor::PANEL_APPLICATIONS ) ), $html );
+		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_DUPLICATE . '"', $html );
 		$this->assertStringNotContainsString( 'data-prc-confirm', $html );
 	}
 
@@ -598,11 +605,10 @@ class Test_Workspace extends WP_UnitTestCase {
 		// El recuento del curso que se está mirando.
 		$this->assertStringContainsString( 'Mostrando <strong>1</strong> procedimiento en <strong>2026-2027</strong>:', $seguido );
 
-		// Cinco columnas: lo que se mira. Sin color, sin la fecha de
-		// creación, sin el estado repetido en un icono y sin acciones, que
-		// están en el menú del taller.
+		// Seis columnas: lo que se mira y, al final, los iconos. Sin color,
+		// sin la fecha de creación y sin el estado repetido en un icono.
 		preg_match_all( '#<th scope="col"[^>]*>([^<]+)</th>#', $html, $cabeceras );
-		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes' ), array_map( 'trim', $cabeceras[1] ) );
+		$this->assertSame( array( 'Título', 'Estado', 'Plazo', 'Dirigido a', 'Solicitudes', 'Acciones' ), array_map( 'trim', $cabeceras[1] ) );
 		$this->assertStringNotContainsString( 'prc-mini-color', $html );
 		$this->assertStringNotContainsString( 'Detalles del procedimiento', $html );
 		$this->assertStringContainsString( 'Centros educativos', $html );

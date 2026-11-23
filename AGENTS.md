@@ -198,7 +198,7 @@ Ni una capa más. Si crees que hace falta otra, escribe la ADR primero.
 | Comprobar el código como lo revisaría WordPress.org | `make check-plugin` (errores **y avisos**) |
 | Ver cómo queda todo después de un cambio | `make capturas` — y en cada PR sale solo, comentado |
 | Publicar una versión | `make release` (tras cerrar el bloque del CHANGELOG) |
-| Llevar un snippet al sitio de destino | `npm run snippets -- push <id> --file snippets/… --dry-run` (sin `--yes` no escribe) |
+| Llevar un snippet al sitio de destino | `npm run snippets -- …`, siguiendo la skill `wp-code-snippets`: `list` → `diff` → `pull` → `push --dry-run` → `push --yes` solo con aprobación expresa |
 
 Sitio local: <http://localhost:8698> (`admin` / `password`). Tests en el 8699.
 
@@ -542,6 +542,7 @@ su origen en [`.agents/skills/README.md`](.agents/skills/README.md)—:
 | Seguridad | `security-audit`, `wp-plugin-security`, `github-actions-hardening` |
 | WordPress | `wp-plugin-development`, `wp-performance`, `wp-wpcli-and-ops`, `wp-project-triage`, `wp-playground`, `blueprint` |
 | Pruebas | `playwright-cli` |
+| Despliegue | `wp-code-snippets` |
 | Propias | `changelog` — el bloque de versión y `make release`; `profiler` — rendimiento con SPX |
 
 Skills propias: créalas en `.agents/skills/<nombre>/` y ejecuta

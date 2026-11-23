@@ -1,7 +1,7 @@
 ---
 id: ADR-0034
 title: "Ampliar el cierre de entregas sin editar las preguntas"
-status: Propuesta
+status: Sustituida
 date: 2026-11-06
 related:
   issues: []
@@ -9,7 +9,7 @@ related:
   sdds: [SDD-0001]
   adrs: [ADR-0019, ADR-0023, ADR-0033]
 supersedes: []
-superseded_by: []
+superseded_by: [ADR-0050]
 ai_assistance:
   tool: "Codex"
   model: "GPT-6"
@@ -19,7 +19,7 @@ ai_assistance:
 
 ## Estado
 
-Propuesta
+Sustituida por la [ADR-0050](ADR-0050-todo-se-edita-hasta-historico.md): las fechas de una entrega se editan en su campo hasta histórico.
 
 ## Contexto
 

@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046, ADR-0047, ADR-0048, ADR-0049]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0050]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -118,7 +118,7 @@ envía a la papelera desde el aplicativo—, la
 | [ADR-0031](ADR-0031-quien-coordina-una-agrupacion-rural-solicita-por-el-centro-o-por-la-agrupacion.md) | Quien coordina una agrupación de escuelas rurales solicita por su centro o por la agrupación | Propuesta | 2026-10-14 |
 | [ADR-0032](ADR-0032-el-ambito-de-la-persona-se-guarda-por-sitio.md) | El ámbito de la persona se guarda por sitio | Propuesta | 2026-11-17 |
 | [ADR-0033](ADR-0033-los-documentos-pueden-tener-un-plazo-de-entrega-propio.md) | Los documentos pueden tener un plazo de entrega propio | Propuesta | 2026-11-06 |
-| [ADR-0034](ADR-0034-ampliar-el-cierre-de-entregas-sin-editar-las-preguntas.md) | Ampliar el cierre de entregas sin editar las preguntas | Propuesta | 2026-11-06 |
+| [ADR-0034](ADR-0034-ampliar-el-cierre-de-entregas-sin-editar-las-preguntas.md) | Ampliar el cierre de entregas sin editar las preguntas | Sustituida | 2026-11-06 |
 | [ADR-0035](ADR-0035-cierre-manual-de-solicitudes-conservando-plazos.md) | Cierre manual de solicitudes sin cambiar los plazos | Propuesta | 2026-11-07 |
 | [ADR-0036](ADR-0036-codigo-adicional-por-procedimiento.md) | El código adicional se limita a la ficha pública del procedimiento | Propuesta | 2026-11-06 |
 | [ADR-0037](ADR-0037-solicitudes-individuales-del-profesorado.md) | Las solicitudes del profesorado son individuales y usan su cuenta | Propuesta | 2026-11-07 |
@@ -134,3 +134,4 @@ envía a la papelera desde el aplicativo—, la
 | [ADR-0047](ADR-0047-un-procedimiento-en-borrador-avisa-en-vez-de-dar-404.md) | Un procedimiento en borrador avisa en vez de dar 404 | Propuesta | 2026-11-17 |
 | [ADR-0048](ADR-0048-copia-privada-del-pdf-de-la-resolucion-y-los-listados.md) | El aplicativo guarda una copia privada del PDF de la resolución y los listados | Propuesta | 2026-11-18 |
 | [ADR-0049](ADR-0049-firma-electronica-del-justificante-con-autofirma.md) | El procedimiento puede pedir la firma electrónica del justificante, con AutoFirma o subiéndolo firmado | Propuesta | 2026-11-19 |
+| [ADR-0050](ADR-0050-todo-se-edita-hasta-historico.md) | Todo se edita hasta histórico | Propuesta | 2026-11-23 |

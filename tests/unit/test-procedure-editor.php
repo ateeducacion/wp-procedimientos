@@ -609,6 +609,8 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="' . ProcedureMetaKeys::CENTRE_TYPES . '[]" value="IES"', $html );
 		$this->assertStringContainsString( '>Guardar qué centros pueden solicitar</button>', $html );
 		$this->assertStringNotContainsString( '<details class="prc-acotar"', $html, 'en «Avanzado» ya no se pliega' );
+		$this->assertStringContainsString( 'data-prc-tick-all="1">Marcar todos</button>', $html, 'los tipos, en masculino' );
+		$this->assertStringContainsString( 'data-prc-tick-all="0">Ninguna</button>', $html, 'las islas, en femenino' );
 
 		$url = $this->submit(
 			$uid,

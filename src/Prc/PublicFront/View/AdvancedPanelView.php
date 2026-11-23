@@ -107,8 +107,8 @@ final class AdvancedPanelView {
 	private static function centre_fields( array $m, array $v ): string {
 		$options = (array) ( $m['centre_options'] ?? array() );
 		$lists   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.' ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.' ),
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.', 'Marcar todos', 'Ninguno' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.', 'Marcar todas', 'Ninguna' ),
 		);
 
 		$chosen = array();
@@ -138,8 +138,8 @@ final class AdvancedPanelView {
 							<div class="prc-acotar__opciones" data-prc-tick-group>
 								<p class="prc-campo__ayuda"><?php echo esc_html( $list[4] ); ?></p>
 								<p class="prc-acotar__marcar" hidden>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1"><?php echo esc_html( $list[5] ); ?></button>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0"><?php echo esc_html( $list[6] ); ?></button>
 								</p>
 								<div class="prc-opciones prc-opciones--vertical">
 									<?php foreach ( $list[1] as $i => $value ) : ?>

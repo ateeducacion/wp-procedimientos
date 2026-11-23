@@ -257,7 +257,7 @@
 /* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
 .prc-preguntas-mas { margin: 0 0 16px; }
 .prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
-/* «Qué centros pueden solicitar», en «Avanzado»: «Marcar todos» y «Ninguno». */
+/* «Qué centros pueden solicitar», en «Avanzado»: «Marcar todos» y «Ninguno» (o «todas» y «Ninguna»). */
 .prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
 .prc-acotar__marcar[hidden] { display: none; }
 /* Con el interruptor apagado, las casillas de esa lista no cuentan: se

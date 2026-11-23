@@ -337,3 +337,9 @@ ADR-0005 pedía en meta del procedimiento y siguen sin escribirse.
   `ApplicationActions` y la decisión, en su `map_meta_cap()`.
 - La ventana de la solicitud se mueve de `ApplyForm::window()` a
   `ProcedureState::application_window()`, sin cambiar lo que dice.
+
+## Adenda — 2026-11-23
+
+Los correos de retirar una solicitud (`application_withdrawn` y el acuse) ya
+no se apagan en «Avisos»: ese panel no existe. Lo deja sin efecto la
+ADR-0038, adenda del 2026-11-18 (#81).

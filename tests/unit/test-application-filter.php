@@ -27,6 +27,7 @@ class Test_Application_Filter extends WP_UnitTestCase {
 				'island'     => '',
 				'zone'       => '',
 				'incomplete' => false,
+				'unsigned'   => false,
 				'search'     => '',
 				'page'       => 1,
 			),
@@ -126,6 +127,8 @@ class Test_Application_Filter extends WP_UnitTestCase {
 		$this->assertArrayNotHasKey( ApplicationFilter::ARG_PAGE, ApplicationFilter::query( $f, array( 'review' => '' ) ) );
 		$this->assertSame( '5', ApplicationFilter::query( $f, array( 'page' => 5 ) )[ ApplicationFilter::ARG_PAGE ] );
 		$this->assertSame( array( ApplicationFilter::ARG_INCOMPLETE => '1' ), ApplicationFilter::query( ApplicationFilter::sanitize( array() ), array( 'incomplete' => true ) ) );
+		$this->assertSame( array( ApplicationFilter::ARG_UNSIGNED => '1' ), ApplicationFilter::query( ApplicationFilter::sanitize( array() ), array( 'unsigned' => true ) ) );
+		$this->assertTrue( ApplicationFilter::active( ApplicationFilter::sanitize( array( ApplicationFilter::ARG_UNSIGNED => '1' ) ) ) );
 	}
 
 	/**

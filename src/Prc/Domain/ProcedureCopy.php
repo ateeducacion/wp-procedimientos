@@ -77,6 +77,8 @@ final class ProcedureCopy {
 			ProcedureMetaKeys::COORDINATOR_COUNT    => self::COPY,
 			ProcedureMetaKeys::COMMITMENTS          => self::COPY,
 			ProcedureMetaKeys::CUSTOM_CSS           => self::COPY,
+			// Pedir la firma es del procedimiento, no de una convocatoria (ADR-0049).
+			ProcedureMetaKeys::SIGNATURE_REQUIRED   => self::COPY,
 			// Claves nuevas desde el principio, y sin fechas.
 			ProcedureMetaKeys::QUESTIONS            => self::TRANSFORM,
 			ProcedureMetaKeys::QUESTIONS_SEQ        => self::TRANSFORM,

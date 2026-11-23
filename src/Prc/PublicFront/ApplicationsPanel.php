@@ -162,6 +162,10 @@ final class ApplicationsPanel {
 				'possible' => (bool) $res['may_be_incomplete'],
 				'count'    => (int) $res['incomplete'],
 			),
+			'unsigned'   => array(
+				'possible' => (bool) $res['may_be_unsigned'],
+				'count'    => (int) $res['unsigned'],
+			),
 			'options'    => $res['options'],
 			'zone_label' => CentreColumns::zone_label(),
 			'teachers'   => ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ),

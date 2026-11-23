@@ -108,6 +108,7 @@ src/Prc/
 ├── Domain/ApplicationPeople.php            Valida cada persona de la lista; huella de la fila. Puro
 ├── Domain/ApplicationFilter.php            El filtro de la tabla de solicitudes por GET, su página y la búsqueda. Puro
 ├── Domain/ApplicationCompleteness.php      Si a una solicitud le faltan personas o entregas vencidas, y por qué. Puro
+├── Domain/SignedReceipt.php               Huella del justificante y qué tiene que llevar el PDF firmado. Puro (ADR-0049)
 ├── Domain/CentreEligibility.php            Qué centros admite un procedimiento: titularidad, tipo, isla, lista. Puro
 ├── Domain/CentreCatalog.php                Filtro prc_centres, find/search; titularidad derivada del tipo y zona
 ├── Access/CentreScope.php                  Código de centro de la persona (fail-closed)
@@ -165,6 +166,8 @@ src/Prc/
 ├── PublicFront/View/ApplyFormView.php      Pinta la solicitud
 ├── PublicFront/ApplyForm.php               [prc_apply]
 ├── PublicFront/WithdrawForm.php            Retirar la propia solicitud desde su pantalla (ADR-0044)
+├── PublicFront/ReceiptSignature.php       Firma del justificante: la subida o lo de AutoFirma, el almacén y la descarga; quién, en ProcedureAccess (ADR-0049)
+├── PublicFront/View/ReceiptSignatureView.php Pinta la sección de la firma en la solicitud
 ├── PublicFront/PeopleForm.php              La sección «Participantes» de la solicitud y su POST
 ├── PublicFront/View/MyCentreView.php       Pinta «Mi centro»
 ├── PublicFront/MyCentre.php                [prc_mine]

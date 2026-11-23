@@ -268,11 +268,11 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html, $panel );
 		}
 		// En «Avanzado», cada sección con su formulario: los centros y el
-		// código para quien gestiona; administración, además, la consulta.
-		$this->assertSame( 2, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html ) );
+		// código y la firma para quien gestiona; administración, además, la consulta.
+		$this->assertSame( 3, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html ) );
 		$this->acting_as( $this->administrator() );
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
-		$this->assertSame( 3, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ) ) );
+		$this->assertSame( 4, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ) ) );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringNotContainsString( 'data-prc-dirty-guard', $html, 'publicar es un botón, no un formulario que se rellena' );
@@ -745,7 +745,7 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_a_teachers_procedure_has_no_centre_limits() {
 		list( , $uid, $procedimiento ) = $this->mio( array( ProcedureMetaKeys::AUDIENCE => ProcedureMetaKeys::AUDIENCE_TEACHERS ) );
 		$this->acting_as( $uid );
-		$this->assertSame( array( 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$this->assertSame( array( 'signature', 'code' ), AdvancedPanel::sections( $procedimiento ) );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_CENTRES . '"', $html );
 	}
@@ -758,14 +758,14 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_the_advanced_sections_follow_who_is_looking() {
 		list( , $uid, $procedimiento ) = $this->mio();
 		$this->acting_as( $uid );
-		$this->assertSame( array( 'centres', 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$this->assertSame( array( 'centres', 'signature', 'code' ), AdvancedPanel::sections( $procedimiento ) );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_CODE . '"', $html );
 		$this->assertStringNotContainsString( 'id="' . ProcedureEditor::SECTION_OBSERVE . '"', $html );
 		$this->assertStringNotContainsString( 'value="' . ProcedureEditor::OP_OBSERVE . '"', $html );
 
 		$this->acting_as( $this->administrator() );
-		$this->assertSame( array( 'centres', 'observe', 'code' ), AdvancedPanel::sections( $procedimiento ) );
+		$this->assertSame( array( 'centres', 'signature', 'observe', 'code' ), AdvancedPanel::sections( $procedimiento ) );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
 		$this->assertStringContainsString( 'id="' . ProcedureEditor::SECTION_OBSERVE . '"', $html );
 		$this->assertStringContainsString( '>Acceso de consulta</h2>', $html );

@@ -146,3 +146,15 @@ dejan que la meta guarde una clave que no esté en la lista.
 - El color no participa en ninguna regla: ni en el estado, ni en los permisos,
   ni en los filtros. Solo se pinta.
 - No hay nada que migrar ([ADR-0024](ADR-0024-las-solicitudes-de-hoy-no-se-migran.md)).
+
+## Adenda — 2026-11-18
+
+La banda de color de la portada se reduce a una franja fina sobre el cartel
+(#91). En una rejilla con casi todos los procedimientos con cartel, una banda
+de 50 px no identificaba a nadie —lo que esta ADR ya daba por negativo—, y lo
+que la gente busca en la tarjeta es el ámbito. La tarjeta pasa a ser el cartel
+(la imagen destacada) en vertical y, sin cartel, la imagen del ámbito
+(`prc_scope_image_id`, o la del ámbito del que cuelga), con el nombre del
+ámbito debajo del título. La meta `prc_header_color` no cambia, y la portada
+es el único sitio donde se pinta: ni la ficha ni «Mis procedimientos» la
+usan.

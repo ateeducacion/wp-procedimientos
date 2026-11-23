@@ -90,9 +90,48 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'prc-bloque--' . ProcedureMetaKeys::STATE_OPEN, $html );
 		$this->assertStringContainsString( 'Abierto', $html );
 		$this->assertStringContainsString( 'prc-rejilla', $html );
-		$this->assertStringContainsString( 'prc-proc__marco', $html );
+		$this->assertStringContainsString( 'prc-proc__cartel', $html );
 		$this->assertStringContainsString( 'Todos los ámbitos', $html, 'con dos ámbitos hay algo que elegir' );
 		$this->assertStringContainsString( Home::VAR_AREA . '=', $html, 'el filtro es un enlace, no un desplegable' );
+	}
+
+	/**
+	 * Each card carries the procedure's colour as a thin stripe over the poster.
+	 */
+	public function test_the_card_carries_the_procedure_colour() {
+		$curso = $this->course( '2026-2027' );
+		$id    = $this->procedure( $this->administrator(), array( $this->area( 'Área de prueba' ) ), $this->abierto() );
+		wp_set_object_terms( $id, array( $curso ), ProcedureTaxonomies::COURSE );
+		update_post_meta( $id, ProcedureMetaKeys::HEADER_COLOR, 'teja' );
+
+		$this->acting_as( 0 );
+		$html = HomeView::html( Home::model() );
+
+		$this->assertStringContainsString( 'style="--prc-banda: #a34118"', $html, 'el color del procedimiento, en la franja de su tarjeta' );
+	}
+
+	/**
+	 * The first row of posters loads at once, the first one first; the rest, lazily.
+	 */
+	public function test_the_first_row_of_posters_is_not_lazy() {
+		$curso = $this->course( '2026-2027' );
+		$area  = $this->area( 'Área de prueba' );
+		for ( $i = 1; $i <= 6; $i++ ) {
+			$id = $this->procedure( $this->administrator(), array( $area ), $this->abierto(), array( 'post_title' => 'Red ' . $i ) );
+			wp_set_object_terms( $id, array( $curso ), ProcedureTaxonomies::COURSE );
+		}
+
+		$this->acting_as( 0 );
+		$m = Home::model();
+		foreach ( $m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'] as $n => $fila ) {
+			$m['groups'][ ProcedureMetaKeys::STATE_OPEN ]['rows'][ $n ]['poster'] = 'https://example.org/cartel-' . $n . '.jpg';
+		}
+		$html = HomeView::html( $m );
+
+		$this->assertSame( 6, substr_count( $html, '<img ' ) );
+		$this->assertSame( 1, substr_count( $html, 'loading="lazy"' ), 'solo el sexto, que ya no cabe en la primera fila' );
+		$this->assertSame( 1, substr_count( $html, 'fetchpriority="high"' ) );
+		$this->assertMatchesRegularExpression( '/cartel-0\.jpg"[^>]*fetchpriority="high"/', $html, 'y es el primero' );
 	}
 
 	/**
@@ -115,7 +154,10 @@ class Test_Views extends WP_UnitTestCase {
 		$fila['title']        = self::VENENO;
 		$fila['state_label']  = '<b>Abierto</b>';
 		$fila['deadline']     = '"><img src=x onerror=alert(1)>';
-		$fila['header_color'] = '#fff" onload="alert(1)';
+		$fila['poster']       = 'x" onload="alert(1)';
+		$fila['poster_set']   = 'x 1w" onerror="alert(1)';
+		$fila['areas']        = array( 1 => '<b>Ámbito</b>' );
+		$fila['header_color'] = '#fff" onclick="alert(1)';
 		$fila['url']          = 'javascript:alert(1)';
 		unset( $fila );
 
@@ -131,6 +173,8 @@ class Test_Views extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '<b>Ámbito</b>', $html );
 		$this->assertStringNotContainsString( '<b>Abierto</b>', $html );
 		$this->assertStringNotContainsString( 'onload="alert(1)"', $html );
+		$this->assertStringNotContainsString( 'onerror="alert(1)"', $html );
+		$this->assertStringNotContainsString( 'onclick="alert(1)"', $html );
 		$this->assertStringNotContainsString( 'href="javascript:', $html );
 		$this->assertStringContainsString( '&lt;script&gt;', $html );
 	}

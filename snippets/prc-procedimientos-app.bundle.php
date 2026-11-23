@@ -18685,6 +18685,17 @@ final class HomeView {
 
 
 
+	private const FIRST_ROW = 5;
+
+
+
+
+
+	private const SIZES = '(max-width: 530px) calc(50vw - 28px), (max-width: 980px) calc(33vw - 24px), 190px';
+
+
+
+
 
 
 
@@ -18709,8 +18720,10 @@ final class HomeView {
 				</div>
 			<?php endif; ?>
 
+			<?php $before = 0; ?>
 			<?php foreach ( (array) $m['groups'] as $state => $grupo ) : ?>
-				<?php self::group( (string) $state, (array) $grupo ); ?>
+				<?php self::group( (string) $state, (array) $grupo, $before ); ?>
+				<?php $before += count( (array) $grupo['rows'] ); ?>
 			<?php endforeach; ?>
 		</div>
 		<?php
@@ -18753,7 +18766,8 @@ final class HomeView {
 
 
 
-	private static function group( string $state, array $grupo ): void {
+
+	private static function group( string $state, array $grupo, int $before ): void {
 		$clase = sanitize_html_class( $state );
 		?>
 		<section class="prc-banda prc-bloque prc-bloque--<?php echo esc_attr( $clase ); ?> prc-grupo-<?php echo esc_attr( $clase ); ?>">
@@ -18763,8 +18777,8 @@ final class HomeView {
 					<strong class="prc-bloque__rotulo"><?php echo esc_html( (string) $grupo['label'] ); ?></strong>
 				</h2>
 				<ul class="prc-rejilla">
-					<?php foreach ( (array) $grupo['rows'] as $row ) : ?>
-						<?php self::card( (array) $row ); ?>
+					<?php foreach ( array_values( (array) $grupo['rows'] ) as $n => $row ) : ?>
+						<?php self::card( (array) $row, $before + $n ); ?>
 					<?php endforeach; ?>
 				</ul>
 			</div>
@@ -18782,15 +18796,27 @@ final class HomeView {
 
 
 
-	private static function card( array $row ): void {
+
+
+	private static function card( array $row, int $position ): void {
+
+		$loading  = $position < self::FIRST_ROW ? 'eager' : 'lazy';
+		$priority = 0 === $position ? 'high' : 'auto';
 		?>
-		<li class="prc-proc">
+		<li class="prc-proc" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>">
 			<a class="prc-proc__enlace" href="<?php echo esc_url( (string) $row['url'] ); ?>">
-				<span class="prc-proc__marco">
-					<span class="prc-proc__banda" style="--prc-banda: <?php echo esc_attr( (string) $row['header_color'] ); ?>"></span>
-				</span>
+				<?php if ( '' !== (string) $row['poster'] ) : ?>
+					<span class="prc-proc__cartel"><img src="<?php echo esc_url( (string) $row['poster'] ); ?>"<?php echo '' !== (string) $row['poster_set'] ? ' srcset="' . esc_attr( (string) $row['poster_set'] ) . '" sizes="' . esc_attr( self::SIZES ) . '"' : ''; ?> alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
+				<?php elseif ( '' !== (string) $row['area_logo'] ) : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--logo"><img src="<?php echo esc_url( (string) $row['area_logo'] ); ?>" alt="" loading="<?php echo esc_attr( $loading ); ?>" fetchpriority="<?php echo esc_attr( $priority ); ?>" decoding="async"></span>
+				<?php else : ?>
+					<span class="prc-proc__cartel prc-proc__cartel--vacio"></span>
+				<?php endif; ?>
 				<span class="prc-proc__titulo"><?php echo esc_html( (string) $row['title'] ); ?></span>
 			</a>
+			<?php if ( array() !== (array) $row['areas'] ) : ?>
+				<p class="prc-proc__ambito"><?php echo esc_html( implode( ' · ', array_map( 'strval', (array) $row['areas'] ) ) ); ?></p>
+			<?php endif; ?>
 			<?php if ( '' !== (string) $row['state_label'] ) : ?>
 				<p class="prc-proc__estado"><span class="<?php echo esc_attr( Assets::state_class( (string) $row['state'] ) ); ?>"><?php echo esc_html( (string) $row['state_label'] ); ?></span></p>
 			<?php endif; ?>
@@ -19162,6 +19188,8 @@ final class Home {
 			'order'               => 'ASC',
 			'no_found_rows'       => true,
 			'ignore_sticky_posts' => true,
+
+			'suppress_filters'    => true,
 		);
 		if ( $course > 0 ) {
 			$args['tax_query'] = array(
@@ -19175,8 +19203,11 @@ final class Home {
 
 		$solicitados = self::applied_by_centre();
 
-		$rows = array();
-		foreach ( get_posts( $args ) as $post ) {
+		$rows  = array();
+		$query = new \WP_Query( $args );
+
+		update_post_thumbnail_cache( $query );
+		foreach ( $query->posts as $post ) {
 			$rows[] = self::row( $post, $solicitados );
 		}
 
@@ -19256,13 +19287,19 @@ final class Home {
 		$quedan = in_array( $state, array( ProcedureMetaKeys::STATE_OPEN, ProcedureMetaKeys::STATE_AMENDMENT ), true )
 			? self::days_until( $fin )
 			: null;
+		$areas  = self::terms( $id );
+		$imagen = (int) get_post_thumbnail_id( $id );
+		$cartel = $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium_large' ) : '';
 
 		return array(
 			'id'           => $id,
 			'title'        => '' !== $titulo ? $titulo : 'Procedimiento sin título',
 			'url'          => (string) get_permalink( $id ),
 			'excerpt'      => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
-			'areas'        => self::terms( $id ),
+			'areas'        => $areas,
+			'poster'       => $cartel,
+			'poster_set'   => '' !== $cartel ? (string) wp_get_attachment_image_srcset( $imagen, 'medium_large' ) : '',
+			'area_logo'    => '' === $cartel ? self::area_logo( array_keys( $areas ) ) : '',
 			'state'        => $state,
 			'state_label'  => ProcedureState::label(
 				$state,
@@ -19316,6 +19353,51 @@ final class Home {
 			return array();
 		}
 		return wp_list_pluck( $terms, 'name', 'term_id' );
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function area_logo( array $term_ids ): string {
+
+
+		static $cache = array();
+		$blog         = get_current_blog_id();
+		foreach ( $term_ids as $term_id ) {
+			$term_id = (int) $term_id;
+			if ( ! isset( $cache[ $blog ][ $term_id ] ) ) {
+				$cache[ $blog ][ $term_id ] = self::logo_of( $term_id );
+			}
+			if ( '' !== $cache[ $blog ][ $term_id ] ) {
+				return $cache[ $blog ][ $term_id ];
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+	private static function logo_of( int $term_id ): string {
+		$linea = array_merge( array( $term_id ), get_ancestors( $term_id, ProcedureTaxonomies::AREA, 'taxonomy' ) );
+		foreach ( $linea as $id ) {
+			$imagen = absint( get_term_meta( $id, ProcedureTaxonomies::IMAGE_ID, true ) );
+			$url    = $imagen > 0 ? wp_get_attachment_image_url( $imagen, 'medium_large' ) : false;
+			if ( is_string( $url ) && '' !== $url ) {
+				return $url;
+			}
+		}
+		return '';
 	}
 
 
@@ -24923,7 +25005,7 @@ final class ProcedureEditorView {
 						</label>
 					<?php endforeach; ?>
 				</div>
-				<p class="prc-campo__ayuda">Es la banda de color de la tarjeta de la portada y de la ficha.</p>
+				<p class="prc-campo__ayuda">Es la franja de color sobre el cartel en la tarjeta de la portada.</p>
 			</fieldset>
 		</div>
 		<?php
@@ -35917,7 +35999,6 @@ html:has(.prc-acciones--pie) { scroll-padding-bottom: 80px; }
   --prc-alto-boton: 38px;
   --prc-alto-pestana: 32px;
   --prc-ancho-pestana: 129px;
-  --prc-banda-tarjeta: 50px;
   --prc-cuenta-bloque: 58px;
   --prc-cuenta-sep: 16px;
   --prc-cuenta-ancho: 280px;
@@ -38182,22 +38263,22 @@ body.prc-app .prc-btn-borrar {
 
 /* --- la rejilla de tarjetas ---------------------------------------------- */
 
-/* Cuatro columnas con hueco del 5,5 % en las dos direcciones: a 1176px de fila
-   son los 245,5px de tarjeta y los 64,7px de hueco medidos. El `auto-fill` las
-   va quitando solo al estrechar, sin un punto de ruptura por cada anchura. */
+/* Carteles en vertical a tamaño intermedio: cinco por fila a 1176px, dos en el
+   móvil. El `auto-fill` las va quitando solo al estrechar, sin un punto de
+   ruptura por cada anchura. */
 .prc-rejilla {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   column-gap: var(--prc-hueco);
   row-gap: var(--prc-hueco-px);
   align-items: start;
 }
 
-/* La tarjeta no es una caja: ni borde, ni sombra, ni fondo propio. El efecto
-   de tarjeta lo da el marco blanco contra el gris del bloque. */
+/* La tarjeta no es una caja: ni borde, ni sombra, ni fondo propio. Lo que se
+   ve es el cartel contra el gris del bloque. */
 .prc-proc {
   display: block;
   width: auto;
@@ -38218,13 +38299,21 @@ body.prc-app .prc-btn-borrar {
   outline-offset: 2px;
 }
 
-.prc-proc__marco { display: block; padding: 10px; background: var(--prc-c-fondo); }
-
-.prc-proc__banda {
+/* El cartel, en proporción A4 vertical: es el formato en que se hacen. Sin
+   cartel, el logo del ámbito entero y centrado sobre blanco. Encima, una
+   franja fina con el color del procedimiento (`prc_header_color`). */
+.prc-proc__cartel {
   display: block;
-  height: var(--prc-banda-tarjeta);
-  background: var(--prc-banda, #c9c9c9);
+  aspect-ratio: 1 / 1.414;
+  overflow: hidden;
+  background: var(--prc-c-fondo);
+  border-top: 5px solid var(--prc-banda, #c9c9c9);
 }
+.prc-proc__cartel img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.prc-proc__cartel--logo img { box-sizing: border-box; object-fit: contain; padding: 18%; }
+/* Sin cartel ni logo, el gris neutro de la banda de antes: no parece una
+   imagen que no ha cargado. */
+.prc-proc__cartel--vacio { background: #c9c9c9; }
 
 /* El título no se trunca: de una a seis líneas, como esté escrito. */
 .prc-proc__titulo {
@@ -38234,6 +38323,17 @@ body.prc-app .prc-btn-borrar {
   line-height: var(--prc-i-tarjeta);
   font-weight: 500;
   color: var(--prc-c-titulo);
+}
+
+/* El ámbito, a la vista: es por lo que la gente descarta lo que no le toca.
+   Con `.prc-proc` delante, para ganarle al `.prc-proc p { margin: 0 }`. */
+.prc-proc .prc-proc__ambito {
+  margin: 4px 0 0;
+  font-size: var(--prc-t-menudo);
+  line-height: var(--prc-i-menudo);
+  font-weight: 600;
+  color: var(--prc-c-medio);
+  text-transform: uppercase;
 }
 
 .prc-proc__estado { margin: 0; }

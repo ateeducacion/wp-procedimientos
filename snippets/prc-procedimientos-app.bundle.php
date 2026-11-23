@@ -3426,12 +3426,18 @@ final class PeopleSpec {
 		if ( true !== $spec['enabled'] || (int) $spec['min'] < max( 1, $wanted ) || array() === (array) $spec['roles'] ) {
 			return false;
 		}
-		foreach ( (array) $spec['roles'] as $role ) {
-			if ( false === strpos( strtolower( (string) $role['label'] ), 'coordina' ) ) {
-				return false;
-			}
-		}
-		return true;
+		$papeles = array_column( (array) $spec['roles'], 'label' );
+		return count( $papeles ) === count( array_filter( $papeles, array( self::class, 'names_coordination' ) ) );
+	}
+
+
+
+
+
+
+
+	public static function names_coordination( string $label ): bool {
+		return false !== strpos( strtolower( $label ), 'coordina' );
 	}
 
 
@@ -29990,6 +29996,9 @@ final class ReceiptSignatureView {
 				<?php endif; ?>
 			</p>
 			<?php if ( ! empty( $s['can'] ) ) : ?>
+				<?php if ( ! empty( $s['no_coordination'] ) ) : ?>
+					<?php echo Shell::notice( 'aviso', 'Su lista de participantes todavía no tiene a nadie en la coordinación: si firma ahora, el justificante saldrá sin ella. Le conviene añadirla antes en «Participantes».' );?>
+				<?php endif; ?>
 				<p class="prc-intro">Este procedimiento pide el justificante firmado electrónicamente. Su solicitud ya está presentada: firmarlo no cambia nada más. Puede firmarlo con AutoFirma desde esta pantalla, o descargarlo en PDF, firmarlo con otra aplicación y subirlo.</p>
 				<p class="prc-firma__botones" data-prc-firma-botones hidden>
 					<button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-firmar hidden>Firmar justificante con AutoFirma</button>
@@ -32066,6 +32075,7 @@ namespace Prc\PublicFront;
 
 use Prc\Access\ApplicationActions;
 use Prc\Domain\ApplicationCompleteness;
+use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureState;
 use Prc\Meta\ApplicationMetaKeys;
 use Prc\Meta\ApplicationMetaRegistration;
@@ -32173,9 +32183,29 @@ final class ApplicationProgress {
 
 
 
+
 	public static function coordination( int $application_id ): string {
+		$lista = self::coordinators_listed( $application_id );
 		return ApplicationMetaRegistration::receipt_coordinators(
-			Applications::coordinators_in_list( (int) wp_get_post_parent_id( $application_id ) ) ? People::of( $application_id ) : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+			array() !== $lista ? $lista : ApplicationMetaRegistration::sanitize_coordinator( get_post_meta( $application_id, ApplicationMetaKeys::COORDINATOR, true ) )
+		);
+	}
+
+
+
+
+
+
+
+	public static function coordinators_listed( int $application_id ): array {
+		$spec = People::spec( (int) wp_get_post_parent_id( $application_id ) );
+		return array_values(
+			array_filter(
+				People::of( $application_id ),
+				static function ( array $row ) use ( $spec ): bool {
+					return PeopleSpec::names_coordination( PeopleSpec::label( $spec, 'roles', (string) $row['role'] ) );
+				}
+			)
 		);
 	}
 
@@ -32680,18 +32710,20 @@ final class ReceiptSignature {
 			}
 		}
 		return array(
-			'show'         => true,
-			'can'          => $puede,
-			'label'        => self::label( $id ),
-			'signed'       => array() !== self::signed( $id ),
-			'download_url' => self::url( $id ),
-			'data'         => $puede ? self::data( $id ) : array(),
-			'servlets'     => self::servlets(),
-			'rejected'     => self::$rejected,
-			'application'  => $id,
-			'action'       => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ) . '#' . self::ANCHOR,
-			'nonce_action' => self::nonce_action( $id ),
-			'max_bytes'    => ApplicationFiles::max_bytes(),
+			'show'            => true,
+			'can'             => $puede,
+			'label'           => self::label( $id ),
+			'signed'          => array() !== self::signed( $id ),
+			'download_url'    => self::url( $id ),
+			'data'            => $puede ? self::data( $id ) : array(),
+			'servlets'        => self::servlets(),
+			'rejected'        => self::$rejected,
+
+			'no_coordination' => $puede && Applications::coordinators_in_list( (int) wp_get_post_parent_id( $id ) ) && array() === ApplicationProgress::coordinators_listed( $id ),
+			'application'     => $id,
+			'action'          => ApplyForm::url_for_code( (int) ( $m['procedure_id'] ?? 0 ), (string) ( $m['centre']['code'] ?? '' ) ) . '#' . self::ANCHOR,
+			'nonce_action'    => self::nonce_action( $id ),
+			'max_bytes'       => ApplicationFiles::max_bytes(),
 		);
 	}
 

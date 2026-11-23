@@ -192,3 +192,21 @@ solicitud, que es la otra clave de texto libre del armazón, toma otro camino:
 se escribe también en Ajustes, con el filtro mandando encima, porque lo cambia
 administración sin tocar código. Los motivos y el saneado, en la adenda del
 2026-11-18 de [ADR-0009](ADR-0009-el-repositorio-se-publica-sin-nada-de-nadie.md).
+
+## Adenda — 2026-11-18: la ayuda, en un sub-pie cuando el tema pinta el pie
+
+«Ayuda» está siempre en el menú, pero con `prc_show_chrome` en «no» el menú no
+sale, y con él se iban el enlace a la ayuda y el `credit` del pie. Ahora
+`Shell::render()` añade en ese caso una franja debajo de la pantalla —encima
+del pie del tema— con «Ayuda» (`Shell::subfooter()`). «Ayuda» sale siempre,
+como en el menú; el `credit` y los `footer_links` de `prc_chrome`, solo si
+están configurados (ADR-0009). Un enlace sin rótulo, sin dirección o con una
+dirección que `esc_url()` descarta no sale ni aquí, ni en el menú, ni en el pie
+(`ProcedureChrome::footer_links()`). A diferencia del pie, no se esconde en el
+móvil: allí es el único camino a la ayuda.
+
+Con el armazón apagado, la cabecera y el pie del tema tienen que verse: la
+hoja de estilos solo los esconde cuando el `body` lleva `prc-chrome`, que
+`Shell::body_class()` pone únicamente si el armazón está encendido. Contra: un
+despliegue que ya apagaba el armazón y tenía `footer_links` los ve ahora en el
+sub-pie, aunque su tema ya los pinte en su pie.

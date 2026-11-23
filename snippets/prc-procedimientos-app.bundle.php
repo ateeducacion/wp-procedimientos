@@ -313,7 +313,7 @@ final class ProcedureMetaKeys {
 			'application_received'  => 'Aviso a los correos de contacto de cada solicitud recibida o modificada',
 			'review_changed'        => 'Aviso a quien solicitó cuando cambia el estado de su revisión',
 			'delivery_received'     => 'Aviso de cada documento entregado con plazo propio, a quien lo entrega y a los contactos',
-			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de personas de una solicitud',
+			'people_changed'        => 'Aviso a los correos de contacto de cada alta, cambio o baja en la lista de participantes de una solicitud',
 			'application_withdrawn' => 'Aviso a los correos de contacto, y acuse a quien la retira, cuando un centro retira su solicitud',
 			'application_extended'  => 'Aviso a quien presentó la solicitud cuando se le concede una prórroga',
 		);
@@ -2183,7 +2183,7 @@ final class QuestionChanges {
 			$key = (string) ( $pregunta['key'] ?? '' );
 
 			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
-				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado las preguntas.';
+				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado los campos.';
 			}
 			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
 				$cambiadas[] = '«' . (string) $pregunta['label'] . '»';
@@ -2193,7 +2193,7 @@ final class QuestionChanges {
 			return '';
 		}
 		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
-			. ': ya hay solicitudes que la han contestado. Si necesita otro tipo, cree una pregunta nueva. No se han guardado las preguntas.';
+			. ': ya hay solicitudes que ' . ( count( $cambiadas ) > 1 ? 'los' : 'lo' ) . ' han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
 	}
 
 
@@ -2225,7 +2225,7 @@ final class QuestionChanges {
 			$antes  = $guardadas[ (string) ( $pregunta['key'] ?? '' ) ] ?? array();
 			$mal    = ProcedureQuestions::TYPE_MULTIPLE === $tipo ? self::bad_points( $pregunta['choices'] ?? '', self::known_lines( $antes ) ) : '';
 			if ( '' !== $mal ) {
-				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado las preguntas.';
+				return 'En ' . $rotulo . ' la opción «' . $mal . '» lleva unos puntos que no son un número entero de 0 en adelante. No se han guardado los campos.';
 			}
 			foreach ( array(
 				'min' => 'mínimo',
@@ -2233,7 +2233,7 @@ final class QuestionChanges {
 			) as $limite => $nombre ) {
 				$valor = is_scalar( $pregunta[ $limite ] ?? null ) ? trim( (string) $pregunta[ $limite ] ) : '';
 				if ( ProcedureQuestions::TYPE_NUMBER === $tipo && '' !== $valor && null === ProcedureQuestions::integer( $valor ) ) {
-					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado las preguntas.';
+					return 'En ' . $rotulo . ' el ' . $nombre . ' tiene que ser un número entero. No se han guardado los campos.';
 				}
 			}
 		}
@@ -2554,7 +2554,7 @@ final class ProcedureInput {
 		$lista      = array(
 			self::point( 'course', (int) ( $facts['course'] ?? 0 ) > 0, true, 'Curso elegido.', $sin_curso, array( $sin_curso ) ),
 			self::point( 'window', '' !== $abre, true, sprintf( 'Plazo de solicitud: del %1$s al %2$s.', self::dmy( $abre ), self::dmy( $cierra ) ), $sin_plazo . ' Sin él, el procedimiento se quedaría en «Próximo» y nadie podría solicitar.', array( $sin_plazo ) ),
-			self::point( 'questions', true, false, array() === $preguntas ? 'Sin preguntas propias: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Preguntas propias: %d.', count( $preguntas ) ), '', array() ),
+			self::point( 'questions', true, false, array() === $preguntas ? 'Sin campos adicionales: la solicitud pedirá solo los datos de siempre.' : sprintf( 'Campos adicionales: %d.', count( $preguntas ) ), '', array() ),
 		);
 		$sin_fechas = array();
 		$entregas   = 0;
@@ -2562,7 +2562,7 @@ final class ProcedureInput {
 			if ( ProcedureQuestions::is_delivery( $pregunta ) ) {
 				++$entregas;
 				if ( ! ProcedureQuestions::valid_delivery( $pregunta ) ) {
-					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Preguntas».', (string) ( $pregunta['label'] ?? '' ) );
+					$sin_fechas[] = sprintf( 'La entrega «%s» no tiene fechas de apertura y cierre: póngalas en «Campos adicionales».', (string) ( $pregunta['label'] ?? '' ) );
 				}
 			}
 		}
@@ -3299,7 +3299,7 @@ final class PeopleSpec {
 			return '';
 		}
 		return $count_after !== $count_before
-			? 'La coordinación ya se da de alta en la lista de la pestaña «Personas»: deje aquí «No se piden». No se ha guardado nada.'
+			? 'La coordinación ya se da de alta en la lista de la pestaña «Participantes»: deje aquí «No se piden». No se ha guardado nada.'
 			: 'En «Datos» se piden personas coordinadoras: para recogerlas en esta lista, deje antes «No se piden» en «Datos». No se ha guardado nada.';
 	}
 
@@ -3319,11 +3319,11 @@ final class PeopleSpec {
 			'Caben como mucho ' . self::MAX_GROUPS . ' grupos.' => $groups > self::MAX_GROUPS,
 			'Escriba al menos un papel, uno por línea.' => $spec['enabled'] && array() === $spec['roles'],
 			'Un papel exige grupo, pero no hay grupos: escriba los grupos o quite «| grupo».' => array() === $spec['groups'] && in_array( true, array_column( $spec['roles'], 'needs_group' ), true ),
-			'El mínimo y el máximo de personas tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
-			'El máximo de personas no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,
-			'El mínimo de personas no puede ser mayor que el máximo.' => $spec['min'] > $spec['max'],
-			'Las fechas de la lista de personas tienen que ser días que existen.' => ( '' !== $fechas[0] && '' === $spec['opens_at'] ) || ( '' !== $fechas[1] && '' === $spec['closes_at'] ),
-			'La lista de personas no puede cerrarse antes de abrirse.' => '' !== $spec['opens_at'] && '' !== $spec['closes_at'] && $spec['closes_at'] < $spec['opens_at'],
+			'El mínimo y el máximo de participantes tienen que ser números enteros, sin decimales.' => ! self::is_count( self::text( $raw, 'min' ) ) || ! self::is_count( self::text( $raw, 'max' ) ),
+			'El máximo de participantes no puede pasar de ' . self::MAX_PEOPLE . '.' => (int) self::text( $raw, 'max' ) > self::MAX_PEOPLE,
+			'El mínimo de participantes no puede ser mayor que el máximo.' => $spec['min'] > $spec['max'],
+			'Las fechas de la lista de participantes tienen que ser días que existen.' => ( '' !== $fechas[0] && '' === $spec['opens_at'] ) || ( '' !== $fechas[1] && '' === $spec['closes_at'] ),
+			'La lista de participantes no puede cerrarse antes de abrirse.' => '' !== $spec['opens_at'] && '' !== $spec['closes_at'] && $spec['closes_at'] < $spec['opens_at'],
 		);
 		foreach ( $checks as $texto => $falla ) {
 			if ( $falla ) {
@@ -3449,10 +3449,10 @@ final class PeopleSpec {
 		$spec   = self::sanitize( $spec );
 		$review = (string) ( $ctx['review'] ?? '' );
 		$checks = array(
-			'Este procedimiento no pide una lista de personas.' => ! $spec['enabled'] || ! empty( $ctx['teacher'] ),
-			'El procedimiento está marcado como histórico: la lista de personas ya no se cambia.' => ! empty( $ctx['archived'] ),
-			'La solicitud está excluida: su lista de personas ya no se cambia.' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review,
-			'La lista de personas se gestiona cuando la solicitud esté admitida, y todavía no lo está.' => $spec['admitted_only'] && ApplicationMetaKeys::REVIEW_ADMITTED !== $review,
+			'Este procedimiento no pide una lista de participantes.' => ! $spec['enabled'] || ! empty( $ctx['teacher'] ),
+			'El procedimiento está marcado como histórico: la lista de participantes ya no se cambia.' => ! empty( $ctx['archived'] ),
+			'La solicitud está excluida: su lista de participantes ya no se cambia.' => ApplicationMetaKeys::REVIEW_EXCLUDED === $review,
+			'La lista de participantes se gestiona cuando la solicitud esté admitida, y todavía no lo está.' => $spec['admitted_only'] && ApplicationMetaKeys::REVIEW_ADMITTED !== $review,
 		);
 		foreach ( $checks as $texto => $cierra ) {
 			if ( $cierra ) {
@@ -3478,13 +3478,13 @@ final class PeopleSpec {
 		if ( '' === $abre && '' === $cierra ) {
 			return self::application_editable( $state, $review, $late )
 				? ''
-				: 'La lista de personas sigue el plazo de la solicitud, y no está abierto para la suya.';
+				: 'La lista de participantes sigue el plazo de la solicitud, y no está abierto para la suya.';
 		}
 		if ( '' !== $abre && $today < $abre ) {
-			return 'La lista de personas se abre el ' . self::day( $abre ) . '.';
+			return 'La lista de participantes se abre el ' . self::day( $abre ) . '.';
 		}
 		if ( '' !== $cierra && $today > $cierra ) {
-			return 'El plazo de la lista de personas terminó el ' . self::day( $cierra ) . '.';
+			return 'El plazo de la lista de participantes terminó el ' . self::day( $cierra ) . '.';
 		}
 		return '';
 	}
@@ -7711,7 +7711,7 @@ final class ProcedureAccess {
 
 
 	public static function why_not_people( int $user_id, int $application_id ): string {
-		$ajena = 'Solo gestiona las personas de una solicitud el equipo directivo de su centro.';
+		$ajena = 'Solo gestiona la lista de participantes de una solicitud el equipo directivo de su centro.';
 		if ( ! self::can_view_application( $user_id, $application_id ) || ! user_can( $user_id, self::CAP_APPLY ) || 'publish' !== get_post_status( $application_id ) ) {
 			return $ajena;
 		}
@@ -15375,9 +15375,9 @@ final class ApplicationHistory {
 			return self::words( $fijos[ $evento ] );
 		}
 		$personas = array(
-			'person_added'   => 'Alta en la lista de personas',
-			'person_changed' => 'Cambio en la lista de personas',
-			'person_removed' => 'Baja en la lista de personas',
+			'person_added'   => 'Alta en la lista de participantes',
+			'person_changed' => 'Cambio en la lista de participantes',
+			'person_removed' => 'Baja en la lista de participantes',
 		);
 		if ( isset( $personas[ $evento ] ) ) {
 			return self::words( $personas[ $evento ], self::person( $spec, (array) ( $data['before'] ?? array() ) ), self::person( $spec, (array) ( $data['after'] ?? array() ) ) );
@@ -16169,9 +16169,9 @@ final class ApplicationExport {
 			'centre'       => 'Centro',
 			'applicant'    => 'Quien presenta',
 			'coordination' => 'Coordinación',
-			'people'       => 'Personas',
+			'people'       => 'Participantes',
 			'review'       => 'Revisión',
-			'questions'    => 'Preguntas',
+			'questions'    => 'Campos adicionales',
 		);
 		return PeopleExport::offered( $out, 'people', $procedure_id );
 	}
@@ -16312,7 +16312,7 @@ final class ApplicationExport {
 		$out = array(
 			self::WHO_COORDINATORS => 'Coordinación',
 			self::WHO_APPLICANT    => 'Quien presenta la solicitud',
-			self::WHO_PEOPLE       => 'Personas de la solicitud',
+			self::WHO_PEOPLE       => 'Participantes de la solicitud',
 		);
 
 		return PeopleExport::offered( $out, self::WHO_PEOPLE, $procedure_id );
@@ -17288,7 +17288,7 @@ final class PeopleSpecPanel {
 
 	public static function save( int $procedure_id ): string {
 		if ( ProcedureMetaKeys::AUDIENCE_TEACHERS === get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ) ) {
-			return 'Los procedimientos para profesorado no tienen lista de personas: cada solicitud es de una sola persona.';
+			return 'Los procedimientos para profesorado no tienen lista de participantes: cada solicitud es de una sola persona.';
 		}
 		$antes = People::spec( $procedure_id );
 		$res   = PeopleSpec::from_input( self::typed(), $antes );
@@ -19069,9 +19069,9 @@ final class HelpContent {
 				'level' => 2,
 				'title' => 'Rellene la solicitud',
 				'html'  => '<p>Pulse <strong>«Solicitar»</strong>. Se abre la pantalla de la solicitud con el plazo arriba («Plazo de solicitud: …»).</p>'
-					. '<p>Si el procedimiento pide una lista de personas o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Personas que participan», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
+					. '<p>Si el procedimiento pide una lista de participantes o documentos con plazo propio, arriba verá <strong>los pasos</strong> —«Datos de la solicitud», «Participantes», «Documentos con plazo propio»—, cada uno con <strong>«Hecho»</strong> o <strong>«Falta»</strong>. Pulse un paso para ir a su bloque.</p>'
 					. '<p>La pantalla tiene, por orden, estos bloques:</p>'
-					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Preguntas del procedimiento</strong>: las que haya puesto quien lo gestiona. Las marcadas con asterisco (*) son obligatorias. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En las de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de personas</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
+					. '<ol><li><strong>«Solicita en nombre de»</strong>: solo aparece si su cuenta tiene dos códigos (por ejemplo, el del centro y el de un CER) y el procedimiento admite los dos. Elija con cuál solicita: cada código tiene su propia solicitud.</li><li><strong>«Datos del centro educativo»</strong>: ya vienen con los de su cuenta y no se pueden cambiar.</li><li><strong>Sus datos</strong>: nombre y apellidos y, si solicita por un centro, su <strong>cargo en el centro</strong> (Dirección, Vicedirección, Jefatura de estudios, Secretaría u otro). El <strong>correo electrónico</strong> se lee de su cuenta: para cambiarlo, cambie el de su perfil.</li><li><strong>«Solicita»</strong>: si el procedimiento tiene compromisos, lea el texto y marque <strong>«El centro acepta estos compromisos»</strong> (o <strong>«Acepto estos compromisos»</strong> si solicita como docente). Sin esa casilla no se puede presentar.</li><li><strong>Campos adicionales del procedimiento</strong>: los que haya puesto quien lo gestiona. Los marcados con asterisco (*) son obligatorios. Pueden ser de texto libre, de una opción, de varias opciones, de sí o no, un número, una fecha, una tabla de cantidades por fila o un archivo. En los de archivo, pulse para elegir el fichero en su equipo: el documento solo se ve en la solicitud, no es público.</li><li><strong>«Datos de la coordinación»</strong>: si el procedimiento la pide, el nombre, los apellidos, el DNI o NIE completo <strong>con la letra</strong> y el correo de cada persona coordinadora. Si el procedimiento tiene <strong>lista de participantes</strong> con un papel de coordinación, este bloque no sale: las personas coordinadoras se dan de alta en la lista, después de presentar.</li></ol>'
 					. '<p>Pulse <strong>«Presentar la solicitud»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -19079,7 +19079,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => 'bloque de preguntas, con una obligatoria y una de archivo',
+						'caption' => 'bloque de campos adicionales, con uno obligatorio y uno de archivo',
 						'image'   => '',
 					),
 					array(
@@ -19092,7 +19092,7 @@ final class HelpContent {
 				'id'    => 'comprobar-la-presentacion',
 				'level' => 2,
 				'title' => 'Compruebe que ha quedado presentada',
-				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de personas—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
+				'html'  => '<ul><li>Si no le falta nada, verá el aviso verde <strong>«Solicitud presentada el … a las …. Está completa: no tiene que hacer nada más.»</strong> Si le falta algo —casi siempre, la lista de participantes—, el aviso es amarillo y dice qué falta y hasta cuándo, con un enlace para completarlo.</li><li>En la solicitud, la tarjeta de estado dice <strong>«Presentada el … a las …»</strong> y <strong>«Completa»</strong> o <strong>«Incompleta: …»</strong>.</li><li>Pulse <strong>«Ver e imprimir el justificante»</strong>: es la solicitud en una hoja, con su número, la fecha y la hora y lo presentado. Para guardarlo, use «Imprimir» en el menú del navegador y elija «Guardar como PDF».</li><li>Recibirá un correo de acuse, <strong>«Solicitud presentada n.º …: …»</strong>, en la dirección de su cuenta. Lleva el número de la solicitud, la fecha y la hora y si está completa: guárdelo, es su justificante.</li><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong> (o <strong>«Mis solicitudes»</strong> si es docente) aparece la fila con el estado de revisión <strong>«Presentada»</strong>.</li></ul>'
 					. '<p>Si ve un aviso rojo («No se ha podido guardar la solicitud…», «El formulario estuvo abierto demasiado tiempo…»), <strong>la solicitud no se ha presentado</strong>: vuelva a enviarla.</p>',
 				'shots' => array(
 					array(
@@ -19109,11 +19109,11 @@ final class HelpContent {
 				'id'    => 'personas-participantes',
 				'level' => 2,
 				'title' => 'No olvide a las personas participantes',
-				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de personas</strong> (participantes, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Personas que participan»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
-					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Personas» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
+				'html'  => '<p>Cuando el procedimiento pide una <strong>lista de participantes</strong> (quienes participan, coordinación de cada eje o grupo…), esa lista <strong>se rellena después de presentar la solicitud</strong>, en la misma pantalla, en el bloque <strong>«Participantes»</strong>, que va antes de los documentos con plazo propio. Hasta entonces verá: «Cuando presente la solicitud podrá dar de alta aquí a las personas que participan».</p>'
+					. '<ul><li>Pulse <strong>«Dar de alta a una persona»</strong>, escriba sus datos, elija su <strong>papel</strong> y, si el papel lo pide, su <strong>grupo</strong> (por ejemplo, el eje que coordina).</li><li>Si la lista pide un mínimo y no se llega, la solicitud queda marcada como <strong>incompleta</strong> («Incompleta: faltan … personas»). No se rechaza, pero quien revisa lo verá, y en <a href="%mine%">«Solicitudes de mi centro»</a> la columna «Participantes» lo marca.</li><li>Para <strong>sustituir</strong> a alguien, use <strong>«Sustituir o corregir»</strong> en su fila; no dé de alta a otra persona nueva. Para quitarla, <strong>«Dar de baja a …»</strong>.</li><li>Lo primero del bloque, en negrita, es hasta cuándo: <strong>«Puede dar de alta, cambiar o sustituir personas hasta el …, incluido.»</strong> Puede ser distinto del plazo de solicitud.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'bloque «Personas que participan» vacío, con «Dar de alta a una persona»',
+						'caption' => 'bloque «Participantes» vacío, con «Dar de alta a una persona»',
 						'image'   => '',
 					),
 					array(
@@ -19148,7 +19148,7 @@ final class HelpContent {
 				'html'  => '<p>Algunos documentos (una memoria, un proyecto, un anexo firmado) se entregan <strong>después</strong>, en su propio plazo. Aparecen en la solicitud con su apertura y su cierre. Elija el fichero y pulse <strong>«Entregar documento»</strong>. Si ya había entregado uno, el nuevo lo sustituye; la solicitud y su revisión se conservan.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pregunta de entrega con plazo propio y el botón «Entregar documento»',
+						'caption' => 'campo de tipo Archivo con plazo propio y el botón «Entregar documento»',
 						'image'   => '',
 					),
 				),
@@ -19164,7 +19164,7 @@ final class HelpContent {
 				'id'    => 'despues-de-presentar',
 				'level' => 2,
 				'title' => 'Qué verá después',
-				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de personas, la columna <strong>«Personas»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
+				'html'  => '<ul><li>En <strong><a href="%mine%">«Solicitudes de mi centro»</a></strong>, la columna <strong>«Revisión»</strong>: Presentada, A subsanar, Admitida o Excluida, con la nota de quien revisa si la hay. Cada cambio le llega también por correo. Si el procedimiento pide lista de participantes, la columna <strong>«Participantes»</strong> dice cuántas hay, si falta alguna («Completar») y hasta cuándo se cambian.</li><li>En la ficha del procedimiento, los enlaces a los <strong>listados provisional y definitivo</strong> y a la resolución cuando se publiquen. Con el listado definitivo el procedimiento pasa a <strong>«Resuelto»</strong>.</li><li>Si le conceden una <strong>prórroga</strong>, recibirá un correo y verá en la solicitud hasta qué día puede editarla.</li></ul>',
 				'shots' => array(),
 			),
 		),
@@ -19200,7 +19200,7 @@ final class HelpContent {
 				'html'  => '<p><strong>Nuevo</strong>: pulse <strong>«Nuevo procedimiento»</strong>, junto al título de su lista, o <a href="%editor%">«Administrar» → «Crear procedimiento»</a>. El alta pide solo lo mínimo:</p>'
 					. '<ul><li><strong>Título del procedimiento</strong>, de 120 caracteres como mucho. El curso no se escribe en el título.</li><li><strong>Quién solicita</strong>: «Centros educativos» o «Profesorado».</li><li><strong>Dirigido a</strong>: «Centros públicos», «Centros privados y concertados» o los dos. Al crear no viene ninguna marcada: hay que elegir. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué. Lo que elija se ve en la ficha, en la fila «Pueden solicitar», y en «Gestión de procedimientos».</li><li><strong>Modalidad para centros CER</strong>, <strong>Ámbito convocante</strong>, <strong>Correo de contacto</strong> (sale en la ficha), <strong>Otros correos de contacto</strong>, si quiere, y <strong>Color de cabecera</strong>, que ya viene elegido.</li></ul>'
 					. '<p>Pulse <strong>«Crear el procedimiento»</strong>. Nace en <strong>borrador</strong> (nadie lo ve) y se abre su taller. Los correos de contacto del procedimiento y quienes gestionan su ámbito reciben un aviso con lo que falta por completar.</p>'
-					. '<p><strong>Duplicar</strong>: abra el procedimiento que quiere copiar, pulse el menú <strong>«⋮»</strong> de arriba a la derecha del taller y elija <strong>«Duplicar»</strong>. Crea un borrador con los mismos datos, <strong>las mismas preguntas</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
+					. '<p><strong>Duplicar</strong>: abra el procedimiento que quiere copiar, pulse el menú <strong>«⋮»</strong> de arriba a la derecha del taller y elija <strong>«Duplicar»</strong>. Crea un borrador con los mismos datos, <strong>los mismos campos adicionales</strong> y la misma configuración, pero <strong>sin plazos, sin curso, sin los enlaces de la resolución y sin solicitudes</strong>. Es la forma de reutilizar el procedimiento del curso pasado.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pantalla «Crear un procedimiento»',
@@ -19212,7 +19212,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Preguntas, Personas, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Más ajustes</strong> (Avisos, Acceso de consulta y Código).</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19224,7 +19224,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Personas») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin nada marcado, puede solicitar cualquier centro.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -19240,14 +19240,14 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-preguntas',
 				'level' => 3,
-				'title' => 'Preguntas',
-				'html'  => '<p>Hasta 40 preguntas propias. Al final hay siempre una <strong>«Pregunta nueva»</strong> vacía y, en <strong>«Añadir otra pregunta»</strong>, dos más: rellene las que necesite y pulse <strong>«Guardar las preguntas»</strong>. Las que deje sin rótulo no se crean. Cada pregunta enseña solo los campos de su tipo.</p>'
-					. '<p>Cada pregunta lleva <strong>Rótulo</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatoria</strong>. Los tipos:</p>'
+				'title' => 'Campos adicionales',
+				'html'  => '<p>Hasta 40 campos adicionales. Al final hay siempre un <strong>«Campo nuevo»</strong> vacío y, en <strong>«Añadir otro campo»</strong>, dos más: rellene los que necesite y pulse <strong>«Guardar los campos»</strong>. Los que deje sin título no se crean. Cada campo enseña solo las opciones de su tipo.</p>'
+					. '<p>Cada campo lleva <strong>Título</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatorio</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar una pregunta, marque <strong>«Quitar esta pregunta»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el rótulo se dice cuántas la han contestado. El rótulo sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si la pregunta es otra, cree una nueva.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar un campo, marque <strong>«Quitar este campo»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el título se dice cuántas lo han contestado. El título sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si el campo es otro, cree uno nuevo.</li></ul>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Preguntas» con una pregunta de «Una opción» y la «Pregunta nueva»',
+						'caption' => 'pestaña «Campos adicionales» con un campo de «Una opción» y el «Campo nuevo»',
 						'image'   => '',
 					),
 				),
@@ -19267,13 +19267,13 @@ final class HelpContent {
 			array(
 				'id'    => 'taller-personas',
 				'level' => 3,
-				'title' => 'Personas',
-				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de personas que participan»</strong> si necesita saber quién participa. Defina:</p>'
-					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de personas, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
-					. '<p>Con la lista encendida, un papel cuyo rótulo nombre la coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
+				'title' => 'Participantes',
+				'html'  => '<p>Active <strong>«Pedir a cada centro la lista de participantes»</strong> si necesita saber quién participa. Defina:</p>'
+					. '<ul><li>Los <strong>papeles</strong>, uno por fila (por ejemplo, «Coordinación general» y «Coordinación de eje»). Marque <strong>«Exige indicar el grupo»</strong> en el que lo necesite: el centro no podrá guardar a esa persona sin su grupo.</li><li>Los <strong>grupos</strong>, uno por línea (por ejemplo, «Eje 1», «Eje 2»).</li><li>El <strong>mínimo</strong> y el <strong>máximo</strong> de participantes, y si hay <strong>«Una sola persona por papel y grupo»</strong>, que una lista nueva trae marcada.</li><li>Si <strong>«Una persona puede tener varios papeles»</strong>. Sin marcar, la misma persona (el mismo DNI o NIE) no entra dos veces en la lista, ni con otro papel.</li><li>Las fechas en que se abre y se cierra la lista, que pueden ir más allá del plazo de solicitud.</li></ul>'
+					. '<p>Con la lista encendida, un papel cuyo nombre diga coordinación (por ejemplo, «Coordinación») y un mínimo de al menos una persona, el formulario de la solicitud <strong>ya no pide las personas coordinadoras</strong> de «Datos»: se dan de alta en la lista, con su papel. Si falta alguna de las dos cosas, el formulario las sigue pidiendo. Las que ya estuvieran guardadas en solicitudes anteriores se conservan. Para no pedirla dos veces, en «Datos» deje «No se piden»: el taller no deja configurar la coordinación en los dos sitios.</p>',
 				'shots' => array(
 					array(
-						'caption' => 'pestaña «Personas» con papeles y grupos',
+						'caption' => 'pestaña «Participantes» con papeles y grupos',
 						'image'   => '',
 					),
 				),
@@ -19282,7 +19282,7 @@ final class HelpContent {
 				'id'    => 'taller-avisos',
 				'level' => 3,
 				'title' => 'Avisos',
-				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios de personas, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
+				'html'  => '<p>Los correos que manda el aplicativo para este procedimiento: el acuse al presentar, el aviso al modificar, el aviso a los contactos de cada solicitud, los cambios de revisión, las entregas, los cambios en la lista de participantes, las retiradas y las prórrogas. Desmarque los que no quiera y pulse <strong>«Guardar los avisos»</strong>.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -19303,9 +19303,9 @@ final class HelpContent {
 				'id'    => 'publicar',
 				'level' => 2,
 				'title' => 'Publique',
-				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, las preguntas, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
+				'html'  => '<p>Pestaña <strong>«Publicación»</strong>. Mientras está en borrador, <strong>«Antes de publicar»</strong> marca cada punto con ✓, ✗ o !: el curso, el plazo de solicitud, los campos adicionales, las fechas de las entregas con plazo propio y la resolución. <strong>Sin curso no se puede publicar; sin fecha de inicio del plazo tampoco</strong>, porque se quedaría en «Próximo» y nadie podría solicitar nunca; si quiere anunciarlo antes, ponga fechas futuras y se publicará como «Próximo». La resolución solo avisa: puede enlazarla después.</p>'
 					. '<p>Pulse <strong>«Publicar el procedimiento»</strong>: pasa a verse en la portada. Los centros podrán solicitar cuando llegue la fecha de inicio del plazo. Para retirarlo temporalmente, <strong>«Devolver a borrador»</strong>, que tiene el aspecto de las acciones delicadas y dice al lado lo que pasa: deja de verse en la portada.</p>'
-					. '<p>Antes de publicar, repase también a quién se dirige, las preguntas obligatorias y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
+					. '<p>Antes de publicar, repase también a quién se dirige, los campos obligatorios y los compromisos. Abra la ficha con el ojo para verla como la verá un centro.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Publicación» con la línea de estados y la etapa actual',
@@ -19410,7 +19410,7 @@ final class HelpContent {
 				'id'    => 'inscripcion-incompleta',
 				'level' => 3,
 				'title' => 'Me dicen que la inscripción no está completa, pero lo rellené todo',
-				'html'  => '<p>Casi siempre falta la <strong>lista de personas</strong>, que se rellena después de presentar, en «Personas que participan», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
+				'html'  => '<p>Casi siempre falta la <strong>lista de participantes</strong>, que se rellena después de presentar, en «Participantes», o un <strong>documento con plazo propio</strong> obligatorio. Abra la solicitud y mire si pone «Incompleta: …»; los pasos de arriba dicen cuál «Falta». La solicitud sigue presentada: complétela dentro del plazo de la lista.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -19424,7 +19424,7 @@ final class HelpContent {
 				'id'    => 'cambiar-personas-coordinadoras',
 				'level' => 3,
 				'title' => '¿Dónde añado o cambio a las personas después de presentar? ¿Hasta cuándo?',
-				'html'  => '<p>En la misma solicitud, en el bloque «Personas que participan». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
+				'html'  => '<p>En la misma solicitud, en el bloque «Participantes». Lo primero del bloque dice hasta cuándo («Puede dar de alta, cambiar o sustituir personas hasta el …, incluido»), y puede durar más que el plazo de solicitud; lo dice también el correo de acuse. Si el procedimiento tiene lista, las personas coordinadoras están en ella y en ningún otro sitio.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -19493,14 +19493,14 @@ final class HelpContent {
 			array(
 				'id'    => 'varias-casillas',
 				'level' => 3,
-				'title' => '¿Cómo creo varias casillas o varias preguntas?',
-				'html'  => '<p>Rellene la «Pregunta nueva» y, si necesita más, las dos de «Añadir otra pregunta», y pulse «Guardar las preguntas»; aparecerán otras tres vacías. Para una lista de casillas que marcar, use una sola pregunta de tipo «Varias opciones», con una opción por línea.</p>',
+				'title' => '¿Cómo creo varias casillas o varios campos?',
+				'html'  => '<p>Rellene el «Campo nuevo» y, si necesita más, los dos de «Añadir otro campo», y pulse «Guardar los campos»; aparecerán otros tres vacíos. Para una lista de casillas que marcar, use un solo campo de tipo «Varias opciones», con una opción por línea.</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'mismas-preguntas',
 				'level' => 3,
-				'title' => 'Quiero las mismas preguntas que el curso pasado',
+				'title' => 'Quiero los mismos campos que el curso pasado',
 				'html'  => '<p>Abra el procedimiento del curso pasado, pulse el menú «⋮» de arriba a la derecha y elija «Duplicar». Después, ponga el curso nuevo y las fechas.</p>',
 				'shots' => array(),
 			),
@@ -19515,14 +19515,14 @@ final class HelpContent {
 				'id'    => 'documento-firmado',
 				'level' => 3,
 				'title' => 'Necesito que el centro suba un documento de compromiso firmado',
-				'html'  => '<p>Cree una pregunta de tipo «Archivo», obligatoria. Si se entrega más tarde, marque «Entrega con plazo propio» y ponga sus fechas. Si basta con que el centro acepte un texto, use «Compromisos del centro» en «Datos».</p>',
+				'html'  => '<p>Cree un campo de tipo «Archivo», obligatorio. Si se entrega más tarde, marque «Entrega con plazo propio» y ponga sus fechas. Si basta con que el centro acepte un texto, use «Compromisos del centro» en «Datos».</p>',
 				'shots' => array(),
 			),
 			array(
 				'id'    => 'cambie-un-rotulo',
 				'level' => 3,
-				'title' => 'He cambiado el rótulo de una pregunta con solicitudes ya presentadas',
-				'html'  => '<p>Las respuestas ya dadas se quedan como estaban, ahora bajo el rótulo nuevo. Si la pregunta significa otra cosa, vuelva al rótulo anterior y cree una pregunta nueva.</p>',
+				'title' => 'He cambiado el título de un campo con solicitudes ya presentadas',
+				'html'  => '<p>Las respuestas ya dadas se quedan como estaban, ahora bajo el título nuevo. Si el campo significa otra cosa, vuelva al título anterior y cree un campo nuevo.</p>',
 				'shots' => array(),
 			),
 			array(
@@ -23761,7 +23761,7 @@ final class ProcedureEditorView {
 		?>
 		<section aria-labelledby="prc-deliveries-title">
 			<h2 id="prc-deliveries-title">Plazos de entregas documentales</h2>
-			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y las preguntas se conservan; el nuevo cierre no puede ser anterior al actual.</p>
+			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y los campos adicionales se conservan; el nuevo cierre no puede ser anterior al actual.</p>
 			<?php if ( empty( $m['deliveries'] ) ) : ?>
 				<p>Este procedimiento no tiene entregas con plazo propio.</p>
 			<?php else : ?>
@@ -23804,7 +23804,7 @@ final class ProcedureEditorView {
 		</div>
 		<p class="prc-intro">
 			Rellene lo mínimo para crearlo. Queda en <strong>borrador</strong>: nadie lo ve hasta que
-			lo publique. Después, en su taller, podrá añadir <strong>los plazos, las preguntas y los
+			lo publique. Después, en su taller, podrá añadir <strong>los plazos, los campos adicionales y los
 			enlaces</strong>.
 		</p>
 		<?php
@@ -23957,7 +23957,7 @@ final class ProcedureEditorView {
 
 	public static function duplicate_question( string $title ): string {
 		return sprintf(
-			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus preguntas y su configuración, sin plazos, sin curso y sin solicitudes.',
+			'¿Duplicar «%s»? Se creará un borrador nuevo con sus datos, sus campos adicionales y su configuración, sin plazos, sin curso y sin solicitudes.',
 			'' !== $title ? $title : 'Procedimiento sin título'
 		);
 	}
@@ -24429,7 +24429,7 @@ final class ProcedureEditorView {
 					</select>
 				</div>
 			</div>
-			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Personas».</p>
+			<p class="prc-campo__ayuda">Lo habitual es pedir una persona coordinadora. El centro indicará su nombre y apellidos, DNI o NIE y correo. Si necesita varios papeles o ejes (coordinación general, coordinación de eje…), deje aquí «No se piden» y configúrelos en la pestaña «Participantes».</p>
 		</fieldset>
 		<div class="prc-campo">
 			<label class="prc-campo__etiqueta" for="prc-commitments">Compromisos del centro</label>
@@ -24595,11 +24595,11 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 
 			<p class="prc-intro">
-				Las opciones propias de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
+				Los campos adicionales de este procedimiento, hasta <?php echo esc_html( (string) (int) $m['q_max'] ); ?>. El resto de la
 				solicitud —centro, cargo, coordinación y compromisos— es siempre el mismo y se ajusta en «Datos».
 				«Subir» y «Bajar» cambian el orden al momento: guarde antes lo que haya escrito.
 			</p>
-			<p class="prc-intro">¿Las mismas preguntas que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus preguntas, sin plazos ni solicitudes.</p>
+			<p class="prc-intro">¿Los mismos campos que el curso pasado? Abra aquel procedimiento y pulse «Duplicar»: se copia con sus campos, sin plazos ni solicitudes.</p>
 			<?php echo PanelParts::help_link( (string) ( $m['help_questions_url'] ?? '' ) );?>
 
 			<?php foreach ( $guardas as $i => $pregunta ) : ?>
@@ -24608,7 +24608,7 @@ final class ProcedureEditorView {
 			<?php for ( $n = 0; $n < $nuevas; $n++ ) : ?>
 				<?php if ( 1 === $n ) : ?>
 					<details class="prc-preguntas-mas">
-						<summary>Añadir otra pregunta</summary>
+						<summary>Añadir otro campo</summary>
 				<?php endif; ?>
 				<?php echo self::question_row( $total + $n, $en_blanco, $m, $total );?>
 			<?php endfor; ?>
@@ -24616,7 +24616,7 @@ final class ProcedureEditorView {
 				</details>
 			<?php endif; ?>
 
-			<?php echo PanelParts::submit( 'Guardar las preguntas' );?>
+			<?php echo PanelParts::submit( 'Guardar los campos' );?>
 		</form>
 		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_MOVE_QUESTION ), ProcedureEditor::nonce_name( ProcedureEditor::OP_MOVE_QUESTION ), false ); ?>
@@ -24649,14 +24649,14 @@ final class ProcedureEditorView {
 				esc_attr( Assets::button_class() ),
 				esc_attr( ProcedureEditor::FIELD_Q_MOVE ),
 				esc_attr( (string) $p['key'] . ':' . $hacia ),
-				esc_attr( $boton[0] . ' la pregunta ' . ( $i + 1 ) ),
+				esc_attr( $boton[0] . ' el campo ' . ( $i + 1 ) ),
 				$boton[1] ? ' disabled' : '',
 				esc_html( $boton[0] )
 			);
 		}
 		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
 			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
-			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar esta pregunta al guardar (lo ya contestado se conserva)</label></span>';
+			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar (lo ya contestado se conserva)</label></span>';
 		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
@@ -24713,7 +24713,7 @@ final class ProcedureEditorView {
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
 			. '<input type="checkbox" id="prc-q-d-' . esc_attr( (string) $i ) . '" name="' . esc_attr( $campo . 'delivery[' . $i . ']' ) . '" value="1"' . checked( ProcedureQuestions::is_delivery( $p ), true, false ) . ' aria-describedby="' . esc_attr( $ayuda ) . '" />'
 			. '<label for="prc-q-d-' . esc_attr( (string) $i ) . '">Entrega con plazo propio (solo para «Archivo»)</label>'
-			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar las preguntas.</p></div>';
+			. '<p class="prc-campo__ayuda" id="' . esc_attr( $ayuda ) . '">Se entrega por separado después de presentar la solicitud. Puede seguir abierta tras la inscripción o el listado definitivo. Configure sus fechas antes de cerrar la inscripción, mientras este panel siga editable.</p></div>';
 		foreach ( array(
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
@@ -24737,7 +24737,7 @@ final class ProcedureEditorView {
 	private static function question_row( int $i, array $p, array $m, int $total ): string {
 		$nueva     = '' === (string) $p['key'];
 		$campo     = ProcedureEditor::FIELD_Q;
-		$rotulo    = $nueva ? 'Pregunta nueva' : 'Pregunta ' . ( $i + 1 );
+		$rotulo    = $nueva ? 'Campo nuevo' : 'Campo ' . ( $i + 1 );
 		$contestan = $nueva ? 0 : (int) ( ( (array) ( $m['answers'] ?? array() ) )[ (string) $p['key'] ] ?? 0 );
 		$aviso     = 'prc-q-l-aviso-' . $i;
 
@@ -24749,11 +24749,11 @@ final class ProcedureEditorView {
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
-					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Rótulo</label>
+					<label class="prc-campo__etiqueta" for="prc-q-l-<?php echo esc_attr( (string) $i ); ?>">Título</label>
 					<input class="prc-control" type="text" id="prc-q-l-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'label' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
 						maxlength="200" value="<?php echo esc_attr( (string) $p['label'] ); ?>"<?php echo $contestan > 0 ? ' aria-describedby="' . esc_attr( $aviso ) . '"' : ''; ?> />
 					<?php if ( $contestan > 0 ) : ?>
-						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya la han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a preguntar otra cosa, cree una pregunta nueva.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
+						<p class="prc-aviso prc-aviso-warning prc-pregunta__contestada" id="<?php echo esc_attr( $aviso ); ?>"><?php echo esc_html( sprintf( 'Ya lo han contestado %1$d %2$s. Corrija la redacción, no el sentido: si va a pedir otra cosa, cree un campo nuevo.', $contestan, 1 === $contestan ? 'solicitud' : 'solicitudes' ) ); ?></p>
 					<?php endif; ?>
 				</div>
 				<div class="prc-campo prc-campo--medio">
@@ -24769,7 +24769,7 @@ final class ProcedureEditorView {
 				<label class="prc-campo__etiqueta" for="prc-q-h-<?php echo esc_attr( (string) $i ); ?>">Indicaciones</label>
 				<input class="prc-control" type="text" id="prc-q-h-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'help' ); ?>[<?php echo esc_attr( (string) $i ); ?>]"
 					value="<?php echo esc_attr( (string) $p['help'] ); ?>" />
-				<p class="prc-campo__ayuda">Una línea bajo la pregunta que ayude a contestarla. Puede dejarse en blanco.</p>
+				<p class="prc-campo__ayuda">Una línea bajo el campo que ayude a contestarlo. Puede dejarse en blanco.</p>
 			</div>
 			<div class="prc-campo" data-prc-q-for="single multiple">
 				<label class="prc-campo__etiqueta" for="prc-q-c-<?php echo esc_attr( (string) $i ); ?>">Opciones, una por línea</label>
@@ -24782,7 +24782,7 @@ final class ProcedureEditorView {
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
-				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatoria</label>
+				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatorio</label>
 			</div>
 		</fieldset>
 		<?php
@@ -25420,15 +25420,15 @@ final class ProcedureEditor {
 
 
 	private const DONE = array(
-		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus preguntas y sus enlaces, y publíquelo cuando esté listo.',
+		'creado'       => 'Procedimiento creado, en borrador: no se ve fuera hasta que lo publique. Añada sus campos adicionales y sus enlaces, y publíquelo cuando esté listo.',
 		'datos'        => 'Datos del procedimiento guardados.',
-		'preguntas'    => 'Preguntas guardadas.',
-		'ordenadas'    => 'Orden de las preguntas guardado.',
+		'preguntas'    => 'Campos adicionales guardados.',
+		'ordenadas'    => 'Orden de los campos guardado.',
 		'entregas'     => 'Plazos de entrega actualizados.',
 		'enlaces'      => 'Enlaces guardados.',
 		'codigo'       => 'Código adicional guardado.',
 		'avisos'       => 'Avisos por correo guardados.',
-		'personas'     => 'Lista de personas guardada.',
+		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
@@ -25528,11 +25528,11 @@ final class ProcedureEditor {
 		);
 		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
-			self::PANEL_QUESTIONS    => 'Preguntas',
+			self::PANEL_QUESTIONS    => 'Campos adicionales',
 			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_APPLICATIONS => 'Solicitudes',
 			self::PANEL_DELIVERIES   => 'Entregas',
-			self::PANEL_PEOPLE       => 'Personas',
+			self::PANEL_PEOPLE       => 'Participantes',
 			self::PANEL_PUBLISH      => 'Publicación',
 			self::PANEL_NOTICES      => 'Avisos',
 			self::PANEL_OBSERVE      => 'Acceso de consulta',
@@ -26162,7 +26162,7 @@ final class ProcedureEditor {
 		$questions = ProcedureQuestions::sanitize( $crudas, $seq );
 		foreach ( $questions as $question ) {
 			if ( ProcedureQuestions::is_delivery( $question ) && ! ProcedureQuestions::valid_delivery( $question ) ) {
-				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado las preguntas.';
+				self::$rejected = 'Cada entrega con plazo propio necesita fechas válidas de apertura y cierre, en ese orden. No se han guardado los campos.';
 				return;
 			}
 		}
@@ -27623,7 +27623,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<section class="prc-seccion prc-personas" id="<?php echo esc_attr( PeopleForm::ANCHOR ); ?>" aria-labelledby="prc-personas-titulo">
-			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Personas que participan</h2>
+			<h2 class="prc-seccion__titulo" id="prc-personas-titulo">Participantes</h2>
 			<div class="prc-seccion__cuerpo">
 				<?php echo Shell::notice( (string) ( $flash['tipo'] ?? '' ), (string) ( $flash['texto'] ?? '' ) );?>
 				<?php if ( '' !== (string) ( $p['clash_row'] ?? '' ) ) : ?>
@@ -27703,7 +27703,7 @@ final class PeopleView {
 		?>
 		<div class="prc-tabla-caja prc-campo--completo">
 			<table class="prc-tabla prc-tabla--densa">
-				<caption class="screen-reader-text">Personas de la solicitud</caption>
+				<caption class="screen-reader-text">Participantes de la solicitud</caption>
 				<thead>
 					<tr>
 						<th class="prc-th" scope="col">Nombre y apellidos</th>
@@ -27873,7 +27873,7 @@ final class PeopleView {
 
 	private static function remove_form( array $p, array $fila ): string {
 		$nombre   = trim( $fila['name'] . ' ' . $fila['surname'] );
-		$pregunta = sprintf( '¿Dar de baja a %s de la lista de personas? Quedará anotado en el historial de la solicitud.', $nombre );
+		$pregunta = sprintf( '¿Dar de baja a %s de la lista de participantes? Quedará anotado en el historial de la solicitud.', $nombre );
 		return '<form class="prc-acciones" method="post" action="' . esc_url( '#' . PeopleForm::ANCHOR ) . '"'
 			. ' data-prc-confirm="' . esc_attr( $pregunta ) . '" data-prc-confirm-ok="Dar de baja">'
 			. self::hidden( $p, PeopleForm::OP_REMOVE, $fila )
@@ -27898,7 +27898,7 @@ final class PeopleView {
 		ob_start();
 		?>
 		<div class="prc-personas-revision">
-			<p><strong>Personas</strong>
+			<p><strong>Participantes</strong>
 				<?php echo esc_html( sprintf( '(%d)', count( $filas ) ) ); ?>
 				<?php if ( empty( $r['complete'] ) ) : ?>
 					<span class="<?php echo esc_attr( Assets::state_class( 'amend' ) ); ?>"><?php echo esc_html( sprintf( 'Incompleta: pide al menos %d', (int) $r['min'] ) ); ?></span>
@@ -27922,8 +27922,8 @@ final class PeopleView {
 		$v  = (array) ( $p['values'] ?? array() );
 		$op = ProcedureEditor::OP_PEOPLE_SPEC;
 		if ( ! empty( $p['teachers'] ) ) {
-			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Personas de la solicitud</h2>'
-				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de personas.</p></section>';
+			return '<section class="prc-seccion-campos"><h2 class="prc-seccion__titulo">Participantes de la solicitud</h2>'
+				. '<p class="prc-intro">Este procedimiento es para profesorado: cada solicitud es de una sola persona y no tiene lista de participantes.</p></section>';
 		}
 
 		ob_start();
@@ -27933,17 +27933,17 @@ final class PeopleView {
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
 			<fieldset class="prc-seccion-campos">
-				<legend class="prc-seccion__titulo">Personas de la solicitud</legend>
+				<legend class="prc-seccion__titulo">Participantes de la solicitud</legend>
 				<p class="prc-intro">Con la lista encendida, cada centro da de alta, cambia o da de baja a las personas que participan, con su papel y, si hace falta, su grupo, sin pedir que se reabra la solicitud. Cada cambio queda en el historial de la solicitud y se avisa a los correos de contacto.</p>
-				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de personas que participan', $v, 'enabled' );?>
+				<?php echo self::check( PeopleSpecPanel::FIELD_ENABLED, 'Pedir a cada centro la lista de participantes', $v, 'enabled' );?>
 				<?php echo self::role_rows( $p );?>
 				<div class="prc-campo prc-campo--medio">
 					<label class="prc-campo__etiqueta" for="prc-people-groups">Grupos <span class="prc-campo__opcional">(opcional)</span></label>
 					<textarea class="prc-control" id="prc-people-groups" name="<?php echo esc_attr( PeopleSpecPanel::FIELD_GROUPS ); ?>" rows="5" aria-describedby="prc-people-groups-ayuda"><?php echo esc_textarea( (string) ( $v['groups'] ?? '' ) ); ?></textarea>
 					<p class="prc-campo__ayuda" id="prc-people-groups-ayuda"><?php echo esc_html( sprintf( 'Uno por línea, hasta %d; por ejemplo «Eje 1». Para quitar uno, deje su línea en blanco.', (int) ( $p['max_groups'] ?? 0 ) ) ); ?></p>
 				</div>
-				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de personas', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) );?>
-				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de personas', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) );?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MIN, 'Mínimo de participantes', $v, 'min', 'Por debajo, la solicitud se marca incompleta; no se rechaza.', (int) ( $p['max_people'] ?? 0 ) );?>
+				<?php echo self::number( PeopleSpecPanel::FIELD_MAX, 'Máximo de participantes', $v, 'max', sprintf( 'Hasta %d.', (int) ( $p['max_people'] ?? 0 ) ), (int) ( $p['max_people'] ?? 0 ) );?>
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_OPENS, 'La lista se abre el', $v, 'opens_at' );?>
 				<?php echo self::day_field( PeopleSpecPanel::FIELD_CLOSES, 'Y se cierra el', $v, 'closes_at' );?>
 				<p class="prc-campo__ayuda prc-campo--completo">Los dos días cuentan. Sin fechas, la lista se gestiona mientras se pueda modificar la solicitud; con ellas, aunque el plazo de solicitud esté cerrado.</p>
@@ -27951,7 +27951,7 @@ final class PeopleView {
 				<?php echo self::check( PeopleSpecPanel::FIELD_MULTI_ROLE, 'Una persona puede tener varios papeles (sin marcar, la misma persona no entra dos veces en la lista)', $v, 'multi_role' );?>
 				<?php echo self::check( PeopleSpecPanel::FIELD_ADMITTED, 'Solo las solicitudes admitidas gestionan su lista', $v, 'admitted_only' );?>
 			</fieldset>
-			<?php echo PanelParts::submit( 'Guardar la lista de personas' );?>
+			<?php echo PanelParts::submit( 'Guardar la lista de participantes' );?>
 		</form>
 		<?php
 		return (string) ob_get_clean();
@@ -27973,7 +27973,7 @@ final class PeopleView {
 		);
 		$filas = array_merge( $filas, array_fill( 0, max( 0, min( 2, $max - count( $filas ) ) ), $vacia ) );
 		$out   = '<fieldset class="prc-campo prc-campo--completo prc-papeles"><legend class="prc-campo__etiqueta">Papeles</legend>'
-			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su rótulo en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
+			. '<p class="prc-campo__ayuda" id="prc-people-roles-ayuda">' . esc_html( sprintf( 'Uno por fila, hasta %d; por ejemplo «Coordinación general» y, en otra fila, «Coordinación de eje» con «Exige indicar el grupo» marcada. Para quitar uno, deje su nombre en blanco; cambiarle el nombre no cambia a nadie de papel.', $max ) ) . '</p>';
 		foreach ( $filas as $i => $fila ) {
 			$id   = 'prc-people-role-' . $i;
 			$out .= '<div class="prc-papel">'
@@ -28218,7 +28218,7 @@ final class ApplicationProgressView {
 		}
 		$enlaces = array();
 		if ( ! empty( $p['people_missing'] ) ) {
-			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de personas</a>';
+			$enlaces[] = '<a href="' . esc_url( '#' . PeopleForm::ANCHOR ) . '">Ir a la lista de participantes</a>';
 		}
 		if ( '' !== (string) ( $p['receipt_url'] ?? '' ) ) {
 			$enlaces[] = '<a href="' . esc_url( (string) $p['receipt_url'] ) . '">Ver e imprimir el justificante</a>';
@@ -28686,7 +28686,7 @@ final class ApplyFormView {
 
 			<?php if ( array() !== (array) $spec['questions'] ) : ?>
 				<section class="prc-seccion prc-seccion--sin-titulo" aria-labelledby="prc-preguntas">
-					<h2 class="screen-reader-text" id="prc-preguntas">Preguntas del procedimiento</h2>
+					<h2 class="screen-reader-text" id="prc-preguntas">Campos adicionales del procedimiento</h2>
 					<div class="prc-seccion__cuerpo">
 						<?php foreach ( (array) $spec['questions'] as $pregunta ) : ?>
 							<?php echo self::question( (array) $pregunta, (array) $v['answers'], $subidos, $falla );?>
@@ -28717,7 +28717,7 @@ final class ApplyFormView {
 			$despues = (string) ( $m['people']['after_submit'] ?? '' );
 			$cuando  = '' !== $hasta ? ' Allí podrá cambiarlas hasta el ' . $hasta . ', incluido.' : '';
 			return '<div class="prc-nota prc-campo--completo"><p>'
-				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de personas, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
+				. esc_html( 'Las personas coordinadoras se dan de alta en la lista de participantes, después de presentar la solicitud.' . ( '' !== $despues ? ' ' . $despues : $cuando ) )
 				. '</p></div>';
 		}
 		$cuantas = (int) ( $spec['coordinator_count'] ?? 0 );
@@ -30487,7 +30487,7 @@ final class ApplicationProgress {
 		);
 		if ( ! empty( $people['show'] ) ) {
 			$pasos[] = array(
-				'label'  => 'Personas que participan',
+				'label'  => 'Participantes',
 				'anchor' => PeopleForm::ANCHOR,
 				'done'   => $hay && ! empty( $people['complete'] ),
 			);
@@ -30553,10 +30553,10 @@ final class ApplicationProgress {
 				return $out;
 			}
 			$hasta            = (string) $p['people_until'];
-			$out['texto']     = $falta . ' Hágalo abajo, en «Personas que participan»'
+			$out['texto']     = $falta . ' Hágalo abajo, en «Participantes»'
 				. ( '' !== $hasta ? ', hasta el ' . $hasta . ', incluido.' : '.' );
 			$out['link']      = '#' . PeopleForm::ANCHOR;
-			$out['link_text'] = 'Ir a la lista de personas';
+			$out['link_text'] = 'Ir a la lista de participantes';
 			return $out;
 		}
 		$out['texto'] = $verbo . ', pero todavía no está completa. Le falta: ' . lcfirst( implode( '; ', (array) $p['missing'] ) ) . '.';
@@ -30717,8 +30717,8 @@ final class MyCentreView {
 			return '';
 		}
 		$texto = 1 === $cuantas
-			? '<strong>1 solicitud</strong> está incompleta: le faltan personas en la lista.'
-			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan personas en la lista.';
+			? '<strong>1 solicitud</strong> está incompleta: le faltan participantes en la lista.'
+			: '<strong>' . $cuantas . ' solicitudes</strong> están incompletas: les faltan participantes en la lista.';
 		if ( '' !== (string) ( $incomplete['id'] ?? '' ) ) {
 			$texto .= ' <a href="#fila-' . esc_attr( (string) $incomplete['id'] ) . '">' . ( 1 === $cuantas ? 'Ir a la solicitud' : 'Ir a la primera' ) . '</a>';
 		}
@@ -30733,7 +30733,7 @@ final class MyCentreView {
 
 	private static function people_cell( array $fila ): string {
 		if ( empty( $fila['people'] ) ) {
-			return '<td class="prc-celda" data-rotulo="Personas">' . self::value( '' ) . '</td>';
+			return '<td class="prc-celda" data-rotulo="Participantes">' . self::value( '' ) . '</td>';
 		}
 		$hay = (int) $fila['people_count'];
 		$min = (int) $fila['people_min'];
@@ -30754,7 +30754,7 @@ final class MyCentreView {
 			$porque = (string) ( $fila['people_why'] ?? '' );
 			$out   .= '<span class="prc-nota-revision">' . esc_html( '' !== $porque ? $porque : 'La lista ya no se puede cambiar.' ) . '</span>';
 		}
-		return '<td class="prc-celda" data-rotulo="Personas">' . $out . '</td>';
+		return '<td class="prc-celda" data-rotulo="Participantes">' . $out . '</td>';
 	}
 
 
@@ -30941,7 +30941,7 @@ final class MyCentre {
 			),
 
 			'personas'      => array(
-				'label' => 'Personas',
+				'label' => 'Participantes',
 				'field' => 'people_sort',
 			),
 		);
@@ -31746,7 +31746,7 @@ final class ObserveView {
 				<legend class="prc-seccion__titulo">Qué más puede hacer quien consulta</legend>
 				<?php echo self::check( ObserveSettings::FIELD_FILES, 'Pueden descargar los documentos de las solicitudes de su zona', true === $c['files'] );?>
 				<?php echo self::check( ObserveSettings::FIELD_EXPORT, 'Pueden exportar a CSV lo que ven', true === $c['export'] );?>
-				<?php echo self::check( ObserveSettings::FIELD_NOTIFY, 'Avisar también a quienes consultan la zona de cada alta, cambio o baja de personas', true === $c['notify'] );?>
+				<?php echo self::check( ObserveSettings::FIELD_NOTIFY, 'Avisar también a quienes consultan la zona de cada alta, cambio o baja en la lista de participantes', true === $c['notify'] );?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar la consulta' );?>
 		</form>
@@ -32486,7 +32486,7 @@ final class Messages {
 			array(
 				'',
 				'Los pasos:',
-				'1. Complete los datos del procedimiento: la descripción, los plazos, las preguntas y los correos de contacto.',
+				'1. Complete los datos del procedimiento: la descripción, los plazos, los campos adicionales y los correos de contacto.',
 				'2. El día de la publicación, ponga las fechas definitivas, enlace la resolución y publíquelo.',
 			),
 			self::link( 'Taller del procedimiento:', $ctx, 'editor_url' ),
@@ -32519,9 +32519,9 @@ final class Messages {
 			return null;
 		}
 		return array(
-			'Personas de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
+			'Participantes de la solicitud: ' . $cambio[0] . ' — ' . $titulo . ( '' !== $quien ? ' — ' . $quien : '' ),
 			array_merge(
-				array( $cambio[1] . ' la lista de personas de una solicitud del procedimiento «' . $titulo . '».', '' ),
+				array( $cambio[1] . ' la lista de participantes de una solicitud del procedimiento «' . $titulo . '».', '' ),
 				self::field( 'Procedimiento', $titulo ),
 				self::field( 'Centro', self::text( $ctx, 'centre' ) ),
 				self::field( 'Hecho por', self::text( $ctx, 'applicant' ) ),
@@ -33430,7 +33430,7 @@ final class Mailer {
 			$falta[] = 'Plazo de solicitud: fechas de apertura y cierre';
 		}
 		if ( array() === Applications::questions( $procedure_id ) ) {
-			$falta[] = 'Preguntas de la solicitud, si las necesita';
+			$falta[] = 'Campos adicionales de la solicitud, si los necesita';
 		}
 		if ( '' === (string) get_post_meta( $procedure_id, ProcedureMetaKeys::RESOLUTION_URL, true ) ) {
 			$falta[] = 'Enlace a la resolución';
@@ -37148,7 +37148,7 @@ body.prc-app .prc-btn-borrar {
    ==========================================================================
 
    Lo propio de esta pantalla y nada más: la ayuda de ordenación, el
-   recuento, la columna «Personas», las cabeceras ordenables con su flecha y el convenio de celda
+   recuento, la columna «Participantes», las cabeceras ordenables con su flecha y el convenio de celda
    sin dato. La tabla, la cebra, los bordes y la piel densa vienen de
    `prc-app.css` y no se tocan.
 
@@ -37703,7 +37703,7 @@ body.prc-app .prc-btn-borrar {
   .prc-tabla--taller tbody td { border: 0; text-align: left; }
 }
 
-/* --- «Preguntas» ---------------------------------------------------------- */
+/* --- «Campos adicionales» ------------------------------------------------- */
 
 /* Cada pregunta enseña solo los campos de su tipo. Cada grupo dice para qué
    tipos es (`data-prc-q-for`) y aquí se esconde el resto según la opción
@@ -37726,7 +37726,7 @@ body.prc-app .prc-btn-borrar {
 .prc-pregunta__quitar { margin-left: auto; }
 .prc-pregunta__contestada { margin: 6px 0 0; font-size: .875rem; }
 
-/* --- «Personas» ----------------------------------------------------------- */
+/* --- «Participantes» ------------------------------------------------------ */
 
 /* Un papel por fila: el rótulo y, al lado, si exige indicar el grupo. */
 .prc-papel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 8px; }

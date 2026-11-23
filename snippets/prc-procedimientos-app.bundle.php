@@ -19809,7 +19809,7 @@ final class HelpContent {
 				'id'    => 'el-taller',
 				'level' => 2,
 				'title' => 'El taller, pestaña a pestaña',
-				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en tres grupos y en el orden en que se trabaja: <strong>Preparar</strong> (Datos, Campos adicionales, Participantes, Enlaces y Publicación), <strong>Gestionar</strong> (Solicitudes y Entregas) y <strong>Avanzado</strong> (Acceso de consulta, solo para quien administra el aplicativo, y Código).</p>',
+				'html'  => '<p>Arriba están el título, el estado (Borrador, Abierto…) y si está publicado. A la derecha, el <strong>ojo</strong> abre la ficha —en un borrador, la vista previa— y el menú <strong>«⋮»</strong> («Más acciones para este procedimiento») reúne <strong>«Ver la ficha»</strong> —en un borrador, <strong>«Vista previa»</strong>—, <strong>«Duplicar»</strong> y, en un borrador sin ninguna solicitud, <strong>«Borrar»</strong>. Debajo, las pestañas, en el orden en que se trabaja: <strong>Datos</strong>, <strong>Campos adicionales</strong>, <strong>Participantes</strong>, <strong>Enlaces</strong>, <strong>Publicación</strong>, <strong>Avanzado</strong> —lo que rara vez se toca: qué centros pueden solicitar, el acceso de consulta y el código— y <strong>Solicitudes</strong>.</p>',
 				'shots' => array(
 					array(
 						'caption' => 'cabecera del taller con las pestañas',
@@ -19821,7 +19821,7 @@ final class HelpContent {
 				'id'    => 'taller-datos',
 				'level' => 3,
 				'title' => 'Datos',
-				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li><li><strong>Qué centros pueden solicitar</strong>, dentro de «Limitar a ciertos centros (avanzado)»: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado.</li></ul>'
+				'html'  => '<ul><li><strong>Ajustes generales</strong>: título, curso, quién solicita y <strong>Descripción</strong>, que es lo que se lee en la ficha; los apartados «Objetivos», «Dirigido a» o «Calendario» salen de sus encabezados.</li><li><strong>Promociona</strong>: el ámbito convocante. Puede marcar varios; todos editan.</li><li><strong>Más información</strong>: hasta tres correos de contacto.</li><li><strong>Plazos</strong>: inicio y fin del plazo de solicitud, e inicio y fin de la subsanación. <strong>El estado sale de estas fechas</strong>: no hay que «pasarlo a abierto» a mano. Sin fecha de inicio no se puede publicar: se quedaría como «Próximo» y nadie podría solicitar.</li><li><strong>La solicitud</strong>: si pide personas coordinadoras (ninguna, una o varias; para varios papeles o ejes, deje «No se piden» y use la pestaña «Participantes») y el texto de los <strong>Compromisos del centro</strong>, que se aceptan con una casilla obligatoria. En blanco, no se pide nada.</li></ul>'
 					. '<p>Pulse <strong>«Guardar los datos»</strong>.</p>',
 				'shots' => array(
 					array(
@@ -19829,7 +19829,7 @@ final class HelpContent {
 						'image'   => '',
 					),
 					array(
-						'caption' => 'pestaña «Datos», bloques de la solicitud y de qué centros pueden solicitar',
+						'caption' => 'pestaña «Datos», bloque de la solicitud',
 						'image'   => '',
 					),
 				),
@@ -19883,18 +19883,19 @@ final class HelpContent {
 				'shots' => array(),
 			),
 			array(
-				'id'    => 'taller-consulta',
+				'id'    => 'taller-avanzado',
 				'level' => 3,
-				'title' => 'Acceso de consulta',
-				'html'  => '<p>Solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</p>',
-				'shots' => array(),
-			),
-			array(
-				'id'    => 'taller-codigo',
-				'level' => 3,
-				'title' => 'Código',
-				'html'  => '<p>Estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</p>',
-				'shots' => array(),
+				'title' => 'Avanzado',
+				'html'  => '<p>Lo que rara vez se toca, en secciones que se guardan cada una con su botón:</p>'
+					. '<ul><li><strong>Qué centros pueden solicitar</strong>, solo en los procedimientos para centros: tipos de centro, islas o una <strong>lista cerrada</strong> de códigos. Sin limitar y con la lista en blanco, puede solicitar cualquier centro. Para limitar por tipo, marque <strong>«Limitar por tipo de centro»</strong> y desmarque los tipos que sobren —salen todos marcados—; por isla, igual con <strong>«Limitar por isla»</strong>. Encendido, hay que dejar al menos uno marcado. Pulse <strong>«Guardar qué centros pueden solicitar»</strong>. Se cierra con el resto de «Datos» cuando el estado del procedimiento ya no deja cambiarlo.</li>'
+					. '<li><strong>Acceso de consulta</strong>: solo lo ve y lo guarda quien administra el aplicativo. Permite que otras personas vean <strong>en solo lectura</strong> las solicitudes de los centros de su zona. Marque qué columnas ven y si pueden descargar documentos o exportar. Nunca ven el DNI o NIE, la nota de revisión ni el historial.</li>'
+					. '<li><strong>Código</strong>: estilos propios (CSS) para la ficha pública de este procedimiento. Los guiones (JavaScript) solo los añade quien administra el aplicativo.</li></ul>',
+				'shots' => array(
+					array(
+						'caption' => 'pestaña «Avanzado», con qué centros pueden solicitar',
+						'image'   => '',
+					),
+				),
 			),
 			array(
 				'id'    => 'publicar',
@@ -19943,7 +19944,7 @@ final class HelpContent {
 				'id'    => 'entregas-y-prorrogas',
 				'level' => 2,
 				'title' => 'Entregas y prórrogas',
-				'html'  => '<ul><li>Pestaña <strong>«Entregas»</strong>: los plazos de las entregas con plazo propio. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
+				'html'  => '<ul><li>Al final de la pestaña <strong>«Solicitudes»</strong>, <strong>«Plazos de entregas documentales»</strong>: los de las entregas con plazo propio, si las hay. Puede <strong>ampliar el cierre</strong> sin reabrir la inscripción, con <strong>«Guardar los nuevos cierres»</strong>.</li><li>Prórroga <strong>a un solo centro</strong>: desde su solicitud, como se explica en «Revise las solicitudes». No afecta a los demás.</li></ul>',
 				'shots' => array(),
 			),
 			array(
@@ -24357,6 +24358,249 @@ final class ApplicationsPanelView {
 namespace Prc\PublicFront\View;
 
 use Prc\Domain\CentreEligibility;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ProcedureMetaKeys;
+use Prc\PublicFront\Assets;
+use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\Shell;
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\View\AdvancedPanelView', false ) ) {
+final class AdvancedPanelView {
+
+
+
+
+
+
+
+	public static function html( array $m ): string {
+		$secciones = array(
+			'centres' => array( self::class, 'centres_section' ),
+			'observe' => array( self::class, 'observe_section' ),
+			'code'    => array( self::class, 'code_section' ),
+		);
+		$out       = '';
+		foreach ( (array) $m['advanced'] as $seccion ) {
+			$out .= call_user_func( $secciones[ $seccion ], $m );
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function centres_section( array $m ): string {
+		$op     = ProcedureEditor::OP_CENTRES;
+		$apagar = true !== ( ( (array) $m['groups'] )[ ProcedureState::GROUP_DATA ] ?? false );
+		$motivo = $apagar && '' !== ProcedureState::why_locked( (string) $m['state'] ) ? 'Cerrado por el estado del procedimiento.' : '';
+		ob_start();
+		?>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
+			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
+			<?php if ( '' !== $motivo ) : ?>
+				<p class="prc-seccion__bloqueo"><?php echo esc_html( $motivo ); ?></p>
+			<?php endif; ?>
+			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' );?>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<fieldset class="prc-seccion-campos"<?php echo $apagar ? ' disabled' : ''; ?>>
+					<?php echo self::centre_fields( $m, (array) $m['values'] );?>
+					<?php echo PanelParts::submit( 'Guardar qué centros pueden solicitar' );?>
+				</fieldset>
+			</form>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function observe_section( array $m ): string {
+		return '<section class="prc-seccion-campos" id="' . esc_attr( ProcedureEditor::SECTION_OBSERVE ) . '" aria-labelledby="prc-avanzado-consulta-titulo">'
+			. '<h2 class="prc-seccion__titulo" id="prc-avanzado-consulta-titulo">Acceso de consulta</h2>'
+			. ObserveView::settings( $m )
+			. '</section>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function centre_fields( array $m, array $v ): string {
+		$options = (array) ( $m['centre_options'] ?? array() );
+		$lists   = array(
+			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.', 'Marcar todos', 'Ninguno' ),
+			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.', 'Marcar todas', 'Ninguna' ),
+		);
+
+		$chosen = array();
+		foreach ( array_keys( $lists ) as $name ) {
+			$chosen[ $name ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $name ] ) );
+		}
+
+		ob_start();
+		?>
+		<div class="prc-seccion__cuerpo">
+			<div class="prc-campo prc-campo--completo">
+				<p class="prc-campo__ayuda">Sin limitar por tipo ni por isla y con la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
+			</div>
+			<?php foreach ( $lists as $name => $list ) : ?>
+				<?php $limited = ! empty( $v[ $list[2] ] ); ?>
+				<div class="prc-campo prc-campo--medio">
+					<fieldset class="prc-acotar__lista">
+						<legend class="prc-campo__etiqueta"><?php echo esc_html( $list[0] ); ?></legend>
+						<?php if ( array() === $list[1] ) : ?>
+							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
+						<?php else : ?>
+							<div class="prc-opcion prc-acotar__interruptor">
+								<input type="checkbox" id="<?php echo esc_attr( $list[2] ); ?>" name="<?php echo esc_attr( $list[2] ); ?>" value="1"
+									<?php checked( $limited ); ?> />
+								<label for="<?php echo esc_attr( $list[2] ); ?>"><?php echo esc_html( $list[3] ); ?></label>
+							</div>
+							<div class="prc-acotar__opciones" data-prc-tick-group>
+								<p class="prc-campo__ayuda"><?php echo esc_html( $list[4] ); ?></p>
+								<p class="prc-acotar__marcar" hidden>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1"><?php echo esc_html( $list[5] ); ?></button>
+									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0"><?php echo esc_html( $list[6] ); ?></button>
+								</p>
+								<div class="prc-opciones prc-opciones--vertical">
+									<?php foreach ( $list[1] as $i => $value ) : ?>
+										<div class="prc-opcion">
+											<input type="checkbox" id="<?php echo esc_attr( $name . '-' . $i ); ?>"
+												name="<?php echo esc_attr( $name ); ?>[]" value="<?php echo esc_attr( (string) $value ); ?>"
+												<?php checked( ! $limited || in_array( CentreEligibility::fold( (string) $value ), $chosen[ $name ], true ) ); ?> />
+											<label for="<?php echo esc_attr( $name . '-' . $i ); ?>"><?php echo esc_html( (string) $value ); ?></label>
+										</div>
+									<?php endforeach; ?>
+								</div>
+							</div>
+						<?php endif; ?>
+					</fieldset>
+				</div>
+			<?php endforeach; ?>
+			<div class="prc-campo prc-campo--completo">
+				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
+				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
+					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
+				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
+			</div>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+	private static function code_section( array $m ): string {
+		$op = ProcedureEditor::OP_CUSTOM_CODE;
+		ob_start();
+		?>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CODE ); ?>" aria-labelledby="prc-avanzado-codigo-titulo">
+			<h2 class="prc-seccion__titulo" id="prc-avanzado-codigo-titulo">Código adicional</h2>
+			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
+			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
+				<div class="prc-aviso prc-aviso-info">
+					<p>La consulta por zona está activa en este procedimiento. La configura quien administra el aplicativo.</p>
+					<?php if ( true === ( $m['observe_status']['gone'] ?? false ) ) : ?>
+						<p>Pero las columnas que se eligieron ya no existen, así que ahora no enseña ninguna. Avise a quien administra el aplicativo.</p>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
+			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) );?>
+				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
+					<div class="prc-aviso prc-aviso-warning prc-codigo-admin">
+						<h3 id="prc-codigo-admin-titulo">Solo para administración</h3>
+						<p>Este JavaScript se ejecuta en la ficha pública del procedimiento. Revíselo antes de guardarlo.</p>
+					</div>
+					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false );?>
+				<?php endif; ?>
+				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
+			</form>
+		</section>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function code_editor_field( string $id, string $name, string $label, string $value, bool $disabled ): string {
+		ob_start();
+		?>
+		<div class="prc-code">
+			<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $label ); ?></label>
+			<textarea
+				class="prc-control"
+				id="<?php echo esc_attr( $id ); ?>"
+				name="<?php echo esc_attr( $name ); ?>"
+				rows="14"
+				spellcheck="false"
+				autocapitalize="off"
+				autocomplete="off"
+				autocorrect="off"
+				<?php disabled( $disabled ); ?>
+				><?php echo esc_textarea( $value ); ?></textarea>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront\View;
+
 use Prc\Domain\ProcedureQuestions;
 use Prc\Domain\QuestionChanges;
 use Prc\Domain\QuestionPoints;
@@ -24450,12 +24694,10 @@ final class ProcedureEditorView {
 		return match ( $panel ) {
 			ProcedureEditor::PANEL_QUESTIONS => self::questions_panel( $m ),
 			ProcedureEditor::PANEL_LINKS => self::links_panel( $m ),
-			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ),
-			ProcedureEditor::PANEL_DELIVERIES => self::deliveries_panel( $m ),
+			ProcedureEditor::PANEL_APPLICATIONS => ApplicationsPanelView::html( $m ) . self::deliveries_section( $m ),
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
-			ProcedureEditor::PANEL_OBSERVE => ObserveView::settings( $m ),
-			ProcedureEditor::PANEL_CODE => self::custom_code_panel( $m ),
+			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
 			default => self::data_panel( $m ),
 		};
 	}
@@ -24477,9 +24719,6 @@ final class ProcedureEditorView {
 
 
 			return false;
-		}
-		if ( ProcedureEditor::PANEL_DELIVERIES === $panel ) {
-			return true !== $m['can_edit'];
 		}
 		if ( ProcedureEditor::PANEL_QUESTIONS === $panel ) {
 			return ! self::open_group( $m, ProcedureState::GROUP_QUESTIONS );
@@ -24510,27 +24749,38 @@ final class ProcedureEditorView {
 
 
 
-	private static function deliveries_panel( array $m ): string {
+
+
+
+
+
+	private static function deliveries_section( array $m ): string {
+		if ( empty( $m['deliveries'] ) || ! empty( $m['actions']['withdrawn_open'] ) ) {
+			return '';
+		}
+		$cerrado = true !== $m['can_edit'];
 		ob_start();
 		?>
-		<section aria-labelledby="prc-deliveries-title">
-			<h2 id="prc-deliveries-title">Plazos de entregas documentales</h2>
+		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_DELIVERIES ); ?>" aria-labelledby="prc-deliveries-title">
+			<h2 class="prc-seccion__titulo" id="prc-deliveries-title">Plazos de entregas documentales</h2>
 			<p>Puede ampliar el cierre sin reabrir la inscripción. El inicio y los campos adicionales se conservan; el nuevo cierre no puede ser anterior al actual.</p>
-			<?php if ( empty( $m['deliveries'] ) ) : ?>
-				<p>Este procedimiento no tiene entregas con plazo propio.</p>
-			<?php else : ?>
-				<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-					<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
-					<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-					<?php foreach ( $m['deliveries'] as $delivery ) : ?>
-						<div class="prc-campo">
-							<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
-							<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
-						</div>
-					<?php endforeach; ?>
-					<?php echo PanelParts::submit( 'Guardar los nuevos cierres' );?>
-				</form>
+			<?php if ( $cerrado ) : ?>
+				<fieldset class="prc-solo-lectura" disabled><legend class="screen-reader-text">Plazos en solo lectura</legend>
+			<?php endif; ?>
+			<form class="prc-form" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+				<?php wp_nonce_field( ProcedureEditor::nonce_action( ProcedureEditor::OP_DELIVERY_DATES ), ProcedureEditor::nonce_name( ProcedureEditor::OP_DELIVERY_DATES ), false ); ?>
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( ProcedureEditor::OP_DELIVERY_DATES ); ?>" />
+				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+				<?php foreach ( $m['deliveries'] as $delivery ) : ?>
+					<div class="prc-campo">
+						<label class="prc-campo__etiqueta" for="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>"><?php echo esc_html( (string) $delivery['label'] ); ?> — cierre actual: <?php echo esc_html( (string) $delivery['closes_at'] ); ?></label>
+						<input class="prc-control" type="date" id="prc-delivery-close-<?php echo esc_attr( (string) $delivery['key'] ); ?>" name="<?php echo esc_attr( ProcedureEditor::FIELD_DELIVERY_CLOSES . '[' . $delivery['key'] . ']' ); ?>" min="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" value="<?php echo esc_attr( (string) $delivery['closes_at'] ); ?>" required />
+					</div>
+				<?php endforeach; ?>
+				<?php echo PanelParts::submit( 'Guardar los nuevos cierres' );?>
+			</form>
+			<?php if ( $cerrado ) : ?>
+				</fieldset>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -24725,30 +24975,20 @@ final class ProcedureEditorView {
 
 
 
-
 	private static function tabs( array $m ): string {
 		$activa = (string) $m['panel'];
-		$grupos = array();
-		foreach ( (array) $m['panels'] as $clave => $panel ) {
-			$grupos[ (string) ( $panel['group'] ?? '' ) ][ $clave ] = $panel;
-		}
 
 		ob_start();
 		?>
 		<nav class="prc-tabs prc-tabs--taller" aria-label="Paneles del procedimiento">
 			<div class="prc-tabs-fila">
-				<?php foreach ( $grupos as $grupo => $paneles ) : ?>
-					<div class="prc-tabs-grupo" role="group" aria-label="<?php echo esc_attr( $grupo ); ?>">
-						<span class="prc-tabs-grupo__rotulo" aria-hidden="true"><?php echo esc_html( $grupo ); ?></span>
-						<?php foreach ( $paneles as $clave => $panel ) : ?>
-							<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
-								<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
-								href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
-								<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
-									<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
-								<?php endif; ?></a>
-						<?php endforeach; ?>
-					</div>
+				<?php foreach ( (array) $m['panels'] as $clave => $panel ) : ?>
+					<a class="prc-tab<?php echo $clave === $activa ? ' prc-tab-on' : ''; ?>"
+						<?php echo $clave === $activa ? ' aria-current="page"' : ''; ?>
+						href="<?php echo esc_url( (string) $panel['url'] ); ?>"><?php echo esc_html( (string) $panel['label'] ); ?>
+						<?php if ( null !== ( $panel['count'] ?? null ) ) : ?>
+							<span class="prc-tab-n"><?php echo esc_html( (string) (int) $panel['count'] ); ?></span>
+						<?php endif; ?></a>
 				<?php endforeach; ?>
 			</div>
 		</nav>
@@ -24814,9 +25054,6 @@ final class ProcedureEditorView {
 			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v ), $plazos, $motivo );
 			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), $apagar, $motivo );
 
-			$secciones .= '<div data-prc-schools-only ' . self::hidden_unless_schools( $v ) . '>'
-				. PanelParts::section( 'Qué centros pueden solicitar', self::eligibility_fields( $m, $v ), $apagar, $motivo )
-				. '</div>';
 		}
 
 		ob_start();
@@ -24902,7 +25139,7 @@ final class ProcedureEditorView {
 						<?php endforeach; ?>
 					</div>
 					<p class="prc-campo__ayuda">Marque al menos una. Un centro de otra titularidad no podrá solicitar, y la ficha le dirá por qué.</p>
-					<?php echo self::centre_warning( $m, 'ownership' );?>
+					<?php echo self::centre_warning( $m, 'ownership' ) . self::centre_warning( $m, 'catalogue' );?>
 				</fieldset>
 			</div>
 			<div class="prc-campo prc-campo--medio" data-prc-schools-only <?php echo ProcedureMetaKeys::AUDIENCE_SCHOOLS === $v[ ProcedureMetaKeys::AUDIENCE ] ? '' : 'hidden'; ?>>
@@ -25217,93 +25454,7 @@ final class ProcedureEditorView {
 
 
 
-
-
-
-
-
-
-
-
-	private static function eligibility_fields( array $m, array $v ): string {
-		$options = (array) ( $m['centre_options'] ?? array() );
-		$lists   = array(
-			ProcedureMetaKeys::CENTRE_TYPES => array( 'Tipos de centro', (array) ( $options['types'] ?? array() ), ProcedureEditor::FIELD_LIMIT_TYPES, 'Limitar por tipo de centro', 'Marque los tipos que pueden solicitar.' ),
-			ProcedureMetaKeys::ISLANDS      => array( 'Islas', (array) ( $options['islands'] ?? array() ), ProcedureEditor::FIELD_LIMIT_ISLANDS, 'Limitar por isla', 'Marque las islas que pueden solicitar.' ),
-		);
-
-		$chosen = array();
-		foreach ( array_keys( $lists ) as $name ) {
-			$chosen[ $name ] = array_map( array( CentreEligibility::class, 'fold' ), array_map( 'strval', (array) $v[ $name ] ) );
-		}
-		$open = ! empty( $v[ ProcedureEditor::FIELD_LIMIT_TYPES ] )
-			|| ! empty( $v[ ProcedureEditor::FIELD_LIMIT_ISLANDS ] )
-			|| '' !== trim( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] )
-			|| 1 === count( (array) $v[ ProcedureMetaKeys::OWNERSHIP ] );
-
-		ob_start();
-		?>
-		<?php echo self::centre_warning( $m, 'catalogue' );?>
-		<details class="prc-acotar"<?php echo $open ? ' open' : ''; ?>>
-		<summary>Limitar a ciertos centros (avanzado)</summary>
-		<div class="prc-seccion__cuerpo">
-			<div class="prc-campo prc-campo--completo">
-				<p class="prc-campo__ayuda">Sin limitar por tipo ni por isla y con la lista en blanco, puede solicitar cualquier centro, también uno que todavía no esté en el catálogo. Con tipos o islas, solo los centros del catálogo que los cumplan; con la lista cerrada sola, los de la lista, estén o no en el catálogo. Los límites se miran al presentar una solicitud nueva: un centro que ya la presentó la sigue editando o subsanando cuando el plazo lo permita, aunque el procedimiento se acote después.</p>
-			</div>
-			<?php foreach ( $lists as $name => $list ) : ?>
-				<?php $limited = ! empty( $v[ $list[2] ] ); ?>
-				<div class="prc-campo prc-campo--medio">
-					<fieldset class="prc-acotar__lista">
-						<legend class="prc-campo__etiqueta"><?php echo esc_html( $list[0] ); ?></legend>
-						<?php if ( array() === $list[1] ) : ?>
-							<p class="prc-campo__ayuda">El catálogo de centros no trae ninguno.</p>
-						<?php else : ?>
-							<div class="prc-opcion prc-acotar__interruptor">
-								<input type="checkbox" id="<?php echo esc_attr( $list[2] ); ?>" name="<?php echo esc_attr( $list[2] ); ?>" value="1"
-									<?php checked( $limited ); ?> />
-								<label for="<?php echo esc_attr( $list[2] ); ?>"><?php echo esc_html( $list[3] ); ?></label>
-							</div>
-							<div class="prc-acotar__opciones" data-prc-tick-group>
-								<p class="prc-campo__ayuda"><?php echo esc_html( $list[4] ); ?></p>
-								<p class="prc-acotar__marcar" hidden>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="1">Marcar todos</button>
-									<button type="button" class="<?php echo esc_attr( Assets::button_class( false ) ); ?>" data-prc-tick-all="0">Ninguno</button>
-								</p>
-								<div class="prc-opciones prc-opciones--vertical">
-									<?php foreach ( $list[1] as $i => $value ) : ?>
-										<div class="prc-opcion">
-											<input type="checkbox" id="<?php echo esc_attr( $name . '-' . $i ); ?>"
-												name="<?php echo esc_attr( $name ); ?>[]" value="<?php echo esc_attr( (string) $value ); ?>"
-												<?php checked( ! $limited || in_array( CentreEligibility::fold( (string) $value ), $chosen[ $name ], true ) ); ?> />
-											<label for="<?php echo esc_attr( $name . '-' . $i ); ?>"><?php echo esc_html( (string) $value ); ?></label>
-										</div>
-									<?php endforeach; ?>
-								</div>
-							</div>
-						<?php endif; ?>
-					</fieldset>
-				</div>
-			<?php endforeach; ?>
-			<div class="prc-campo prc-campo--completo">
-				<label class="prc-campo__etiqueta" for="prc-allowed-centres">Lista cerrada de centros</label>
-				<textarea class="prc-control" id="prc-allowed-centres" name="<?php echo esc_attr( ProcedureMetaKeys::ALLOWED_CENTRES ); ?>" rows="4"
-					aria-describedby="prc-allowed-centres-ayuda"><?php echo esc_textarea( (string) $v[ ProcedureMetaKeys::ALLOWED_CENTRES ] ); ?></textarea>
-				<p class="prc-campo__ayuda" id="prc-allowed-centres-ayuda">Códigos de centro, uno por línea o separados por comas, hasta <?php echo esc_html( (string) CentreEligibility::MAX_CODES ); ?>. En blanco, sin lista.</p>
-			</div>
-		</div>
-		</details>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-	private static function centre_warning( array $m, string $key ): string {
+	public static function centre_warning( array $m, string $key ): string {
 		$texto = (string) ( $m['centre_warnings'][ $key ] ?? '' );
 		return '' === $texto ? '' : '<p class="prc-aviso prc-aviso-warning prc-aviso-centros" role="status">' . esc_html( $texto ) . '</p>';
 	}
@@ -25812,77 +25963,6 @@ final class ProcedureEditorView {
 
 
 
-	private static function custom_code_panel( array $m ): string {
-		$op = ProcedureEditor::OP_CUSTOM_CODE;
-		ob_start();
-		?>
-		<section class="prc-seccion-campos">
-			<h2 class="prc-seccion__titulo">Código adicional</h2>
-			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
-			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
-				<div class="prc-aviso prc-aviso-info">
-					<p>La consulta por zona está activa en este procedimiento. La configura quien administra el aplicativo.</p>
-					<?php if ( true === ( $m['observe_status']['gone'] ?? false ) ) : ?>
-						<p>Pero las columnas que se eligieron ya no existen, así que ahora no enseña ninguna. Avise a quien administra el aplicativo.</p>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
-			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
-				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
-				<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
-				<?php echo self::code_editor_field( 'prc-custom-css', 'prc_custom_css', 'CSS', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_CSS ] ?? '' ), empty( $m['can_edit'] ) );?>
-				<?php if ( ! empty( $m['can_edit_custom_js'] ) ) : ?>
-					<div class="prc-aviso prc-aviso-warning prc-codigo-admin">
-						<h3 id="prc-codigo-admin-titulo">Solo para administración</h3>
-						<p>Este JavaScript se ejecuta en la ficha pública del procedimiento. Revíselo antes de guardarlo.</p>
-					</div>
-					<?php echo self::code_editor_field( 'prc-custom-js', 'prc_custom_js', 'JavaScript', (string) ( $m['values'][ ProcedureMetaKeys::CUSTOM_JS ] ?? '' ), false );?>
-				<?php endif; ?>
-				<button class="<?php echo esc_attr( Assets::button_class( true ) . ' prc-envio' ); ?>" type="submit"<?php disabled( empty( $m['can_edit'] ) ); ?>>Guardar el código</button>
-			</form>
-		</section>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
-
-
-
-
-	private static function code_editor_field( string $id, string $name, string $label, string $value, bool $disabled ): string {
-		ob_start();
-		?>
-		<div class="prc-code">
-			<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $label ); ?></label>
-			<textarea
-				class="prc-control"
-				id="<?php echo esc_attr( $id ); ?>"
-				name="<?php echo esc_attr( $name ); ?>"
-				rows="14"
-				spellcheck="false"
-				autocapitalize="off"
-				autocomplete="off"
-				autocorrect="off"
-				<?php disabled( $disabled ); ?>
-				><?php echo esc_textarea( $value ); ?></textarea>
-		</div>
-		<?php
-		return (string) ob_get_clean();
-	}
-
-
-
-
-
-
-
 
 
 
@@ -26050,11 +26130,34 @@ final class ProcedureEditor {
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
-	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
-	public const PANEL_CODE         = 'codigo';
 	public const PANEL_PEOPLE       = 'personas';
-	public const PANEL_OBSERVE      = 'consulta';
+	public const PANEL_ADVANCED     = 'avanzado';
+
+
+
+
+
+
+
+
+	public const SECTION_DELIVERIES = 'prc-entregas';
+	public const SECTION_CENTRES    = 'prc-avanzado-centros';
+	public const SECTION_OBSERVE    = 'prc-avanzado-consulta';
+	public const SECTION_CODE       = 'prc-avanzado-codigo';
+
+
+
+
+
+
+
+
+	public const OLD_PANELS = array(
+		'entregas' => array( self::PANEL_APPLICATIONS, self::SECTION_DELIVERIES ),
+		'consulta' => array( self::PANEL_ADVANCED, self::SECTION_OBSERVE ),
+		'codigo'   => array( self::PANEL_ADVANCED, self::SECTION_CODE ),
+	);
 
 	public const OP_REVIEW              = 'review';
 	public const OP_BULK_REVIEW         = 'bulk_review';
@@ -26069,6 +26172,7 @@ final class ProcedureEditor {
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
+	public const OP_CENTRES             = 'centres';
 	public const OP_DUPLICATE           = 'duplicate';
 	public const OP_DELETE              = 'delete';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
@@ -26154,6 +26258,7 @@ final class ProcedureEditor {
 		self::OP_CUSTOM_CODE,
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
+		self::OP_CENTRES,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -26197,6 +26302,7 @@ final class ProcedureEditor {
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
+		'centros'      => 'Guardado qué centros pueden solicitar.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -26224,33 +26330,12 @@ final class ProcedureEditor {
 
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
-		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_code_editor' ), 20 );
+		add_action( 'wp_enqueue_scripts', array( AdvancedPanel::class, 'enqueue_code_editor' ), 20 );
 
 
 		add_action( 'init', array( self::class, 'handle' ), 20 );
-	}
 
-
-	public static function enqueue_code_editor(): void {
-
-		if ( 'editor' !== Shell::current_section() || self::PANEL_CODE !== sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_PANEL ] ?? '' ) ) ) ) {
-			return;
-		}
-		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
-
-		$user_id = get_current_user_id();
-		if ( ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
-			$settings = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
-			if ( is_array( $settings ) ) {
-				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-css",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
-			}
-		}
-		if ( ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
-			$settings = wp_enqueue_code_editor( array( 'type' => 'text/javascript' ) );
-			if ( is_array( $settings ) ) {
-				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-js",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
-			}
-		}
+		add_action( 'template_redirect', array( AdvancedPanel::class, 'redirect_old_panel' ) );
 	}
 
 
@@ -26287,41 +26372,28 @@ final class ProcedureEditor {
 
 
 
-
 	public static function panels( int $procedure_id ): array {
-		$advanced = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
-		$grupos   = array(
-			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
-			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Avanzado'  => array_merge( $advanced, array( self::PANEL_CODE ) ),
-		);
-		$rotulos  = array(
+		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
-			self::PANEL_LINKS        => 'Enlaces',
-			self::PANEL_APPLICATIONS => 'Solicitudes',
-			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PEOPLE       => 'Participantes',
+			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_PUBLISH      => 'Publicación',
-			self::PANEL_OBSERVE      => 'Acceso de consulta',
-			self::PANEL_CODE         => 'Código',
+			self::PANEL_ADVANCED     => 'Avanzado',
+			self::PANEL_APPLICATIONS => 'Solicitudes',
 		);
-		$cuentas  = array(
+		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
-			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
 		);
 
 		$out = array();
-		foreach ( $grupos as $grupo => $slugs ) {
-			foreach ( $slugs as $slug ) {
-				$out[ $slug ] = array(
-					'label' => $rotulos[ $slug ],
-					'url'   => self::url( $procedure_id, $slug ),
-					'count' => $cuentas[ $slug ] ?? null,
-					'group' => $grupo,
-				);
-			}
+		foreach ( $rotulos as $slug => $rotulo ) {
+			$out[ $slug ] = array(
+				'label' => $rotulo,
+				'url'   => self::url( $procedure_id, $slug ),
+				'count' => $cuentas[ $slug ] ?? null,
+			);
 		}
 		return $out;
 	}
@@ -26434,7 +26506,7 @@ final class ProcedureEditor {
 			if ( is_string( $js ) && ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
 				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
 			}
-			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
+			Shell::leave( self::url( $procedure_id, self::PANEL_ADVANCED, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
 
@@ -26503,6 +26575,10 @@ final class ProcedureEditor {
 		}
 		if ( self::PANEL_DATA === $op ) {
 			self::save_data( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_CENTRES === $op ) {
+			self::$rejected = AdvancedPanel::save_centres( $procedure_id, $user_id, self::submitted_data( $procedure_id ) );
 			return;
 		}
 		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
@@ -26833,12 +26909,13 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				),
-				CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) )
+				)
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
-		return $crudo;
+
+
+		return array_merge( $crudo, CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 	}
 
 
@@ -27040,7 +27117,7 @@ final class ProcedureEditor {
 			return;
 		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
-		Shell::leave( self::url( $procedure_id, self::PANEL_DELIVERIES, array( self::ARG_NOTICE => 'entregas' ) ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'entregas' ) ) );
 	}
 
 
@@ -27427,11 +27504,11 @@ final class ProcedureEditor {
 
 		$m['confirm_delete'] = $m['can_delete'] && ! empty( $_GET[ self::ARG_DELETE ] );
 
-		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+		$m['centre_options'] = CentreCatalog::choices( self::PANEL_ADVANCED === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 
 
 
-		$m['centre_warnings'] = self::PANEL_DATA === $m['panel']
+		$m['centre_warnings'] = in_array( $m['panel'], array( self::PANEL_DATA, self::PANEL_ADVANCED ), true )
 			? CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() )
 			: array();
 		return $m;
@@ -27517,6 +27594,7 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
+			'advanced'                => array(),
 
 			'observe_status'          => array(
 				'observable' => false,
@@ -27642,13 +27720,27 @@ final class ProcedureEditor {
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		if ( self::PANEL_OBSERVE === $m['panel'] ) {
-			$m['observe'] = ObserveSettings::model( $procedure_id );
-		}
-		if ( self::PANEL_CODE === $m['panel'] && ! isset( $paneles[ self::PANEL_OBSERVE ] ) ) {
-			$m['observe_status'] = ObserveSettings::status( $procedure_id );
-		}
+		return self::panel_model( $m, $procedure_id, $user_id );
+	}
 
+
+
+
+
+
+
+
+
+	private static function panel_model( array $m, int $procedure_id, int $user_id ): array {
+		if ( self::PANEL_ADVANCED === $m['panel'] ) {
+			$m['advanced'] = AdvancedPanel::sections( $procedure_id );
+
+			if ( in_array( 'observe', $m['advanced'], true ) ) {
+				$m['observe'] = ObserveSettings::model( $procedure_id );
+			} else {
+				$m['observe_status'] = ObserveSettings::status( $procedure_id );
+			}
+		}
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 
 
@@ -27967,6 +28059,146 @@ final class ProcedureEditor {
 
 
 		return EditLock::render( EditLock::claim( (array) $m['lock'] ) ) . ProcedureEditorView::html( $m );
+	}
+}
+
+}
+
+
+
+
+
+
+
+
+namespace Prc\PublicFront;
+
+use Prc\Access\ProcedureAccess;
+use Prc\Domain\CentreEligibility;
+use Prc\Domain\ProcedureInput;
+use Prc\Domain\ProcedureState;
+use Prc\Meta\ProcedureMetaKeys;
+
+
+
+
+
+
+
+
+
+if ( ! class_exists( 'Prc\PublicFront\AdvancedPanel', false ) ) {
+final class AdvancedPanel {
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function sections( int $procedure_id ): array {
+		return array_keys(
+			array_filter(
+				array(
+					'centres' => self::for_schools( $procedure_id ),
+					'observe' => ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ),
+					'code'    => true,
+				)
+			)
+		);
+	}
+
+
+
+
+
+
+
+	private static function for_schools( int $procedure_id ): bool {
+		return ProcedureMetaKeys::AUDIENCE_SCHOOLS === ProcedureMetaKeys::in_list( (string) get_post_meta( $procedure_id, ProcedureMetaKeys::AUDIENCE, true ), ProcedureMetaKeys::audiences(), ProcedureMetaKeys::AUDIENCE_SCHOOLS );
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function save_centres( int $procedure_id, int $user_id, array $raw ): string {
+		if ( ! ProcedureAccess::can_edit_group( $user_id, $procedure_id, ProcedureState::GROUP_DATA ) ) {
+			return ProcedureAccess::why_not_editable( $user_id, $procedure_id, ProcedureState::GROUP_DATA );
+		}
+		$acotados = CentreEligibility::input( $raw, self::for_schools( $procedure_id ) );
+		if ( array() !== $acotados['errors'] ) {
+			return ProcedureInput::why( $acotados['errors'] );
+		}
+		update_post_meta( $procedure_id, ProcedureMetaKeys::CENTRE_TYPES, wp_slash( $acotados['data']['centre_types'] ) );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::ISLANDS, wp_slash( $acotados['data']['islands'] ) );
+		update_post_meta( $procedure_id, ProcedureMetaKeys::ALLOWED_CENTRES, wp_slash( $acotados['data']['allowed_centres'] ) );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'centros' ) ) );
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+	public static function redirect_old_panel(): void {
+
+		$pedido = sanitize_key( wp_unslash( (string) ( $_GET[ ProcedureEditor::ARG_PANEL ] ?? '' ) ) );
+
+		if ( ! empty( $_POST ) || ! isset( ProcedureEditor::OLD_PANELS[ $pedido ] ) || 'editor' !== Shell::current_section() ) {
+			return;
+		}
+		list( $panel, $seccion ) = ProcedureEditor::OLD_PANELS[ $pedido ];
+
+		$args = array_map( 'sanitize_text_field', array_filter( wp_unslash( $_GET ), 'is_string' ) );
+		unset( $args[ ProcedureEditor::ARG_PANEL ] );
+
+		$args = array_map( 'rawurlencode', $args );
+		Shell::leave( ProcedureEditor::url( 0, $panel, $args ) . '#' . $seccion );
+	}
+
+
+	public static function enqueue_code_editor(): void {
+
+		if ( 'editor' !== Shell::current_section() || ProcedureEditor::PANEL_ADVANCED !== sanitize_key( wp_unslash( (string) ( $_GET[ ProcedureEditor::ARG_PANEL ] ?? '' ) ) ) ) {
+			return;
+		}
+		$procedure_id = absint( wp_unslash( $_GET[ ProcedureEditor::ARG_PROCEDURE ] ?? 0 ) );
+
+		$user_id = get_current_user_id();
+		if ( ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-css",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
+		if ( ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
+			$settings = wp_enqueue_code_editor( array( 'type' => 'text/javascript' ) );
+			if ( is_array( $settings ) ) {
+				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-js",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
+			}
+		}
 	}
 }
 
@@ -32355,7 +32587,7 @@ final class ObserveSettings {
 	public static function handle( int $procedure_id ): void {
 
 		self::save( $procedure_id, $_POST );
-		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_OBSERVE, array( ProcedureEditor::ARG_NOTICE => 'consulta' ) ) );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'consulta' ) ) );
 	}
 
 
@@ -34081,7 +34313,7 @@ final class Mailer {
 				self::send( self::EVENT_DELIVERY_RECEIVED, array( self::email_of( (int) $user_id ) ), $ctx );
 
 
-				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_DELIVERIES );
+				$ctx['url'] = ProcedureEditor::url( (int) $ctx['procedure_id'], ProcedureEditor::PANEL_APPLICATIONS );
 				self::send( self::EVENT_DELIVERY_RECEIVED, self::contacts( (int) $ctx['procedure_id'] ), $ctx );
 			}
 		);
@@ -36557,21 +36789,6 @@ html:has(> body.prc-app) { overflow-x: clip; }
   font-weight: 700;
 }
 
-/* Las pestañas del taller, en tres grupos con su rótulo encima y un filete
-   entre uno y otro: Preparar, Gestionar y Avanzado. */
-.prc-tabs--taller .prc-tabs-fila { display: flex; flex-wrap: wrap; gap: 0 24px; }
-.prc-tabs-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 4px; position: relative; padding-top: 18px; }
-.prc-tabs-grupo + .prc-tabs-grupo { padding-left: 24px; border-left: 1px solid var(--prc-c-linea, #ddd); }
-.prc-tabs-grupo__rotulo {
-  position: absolute;
-  top: 0;
-  font-size: var(--prc-t-menudo);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--prc-c-medio);
-}
-
 /* --- lienzo -------------------------------------------------------------- */
 
 .prc-hoja {
@@ -38824,8 +39041,7 @@ body.prc-app .prc-btn-borrar {
 /* Las preguntas nuevas de más, plegadas: la primera va a la vista. */
 .prc-preguntas-mas { margin: 0 0 16px; }
 .prc-preguntas-mas > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
-/* «Limitar a ciertos centros», plegado como avanzado, con el mismo rótulo. */
-.prc-acotar > summary { cursor: pointer; font-weight: 700; color: var(--prc-c-azul); padding: 8px 0; }
+/* «Qué centros pueden solicitar», en «Avanzado»: «Marcar todos» y «Ninguno» (o «todas» y «Ninguna»). */
 .prc-acotar__marcar { display: flex; gap: 8px; margin: 0 0 8px; }
 .prc-acotar__marcar[hidden] { display: none; }
 /* Con el interruptor apagado, las casillas de esa lista no cuentan: se

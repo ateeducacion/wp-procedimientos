@@ -31,9 +31,9 @@ use Prc\Taxonomy\ProcedureTaxonomies;
  *
  * Hoy dar de alta una convocatoria es un formulario de más de cien campos del
  * gestor de formularios, y gestionar sus solicitudes, unas vistas filtradas
- * por parámetros de la URL. Aquí es una pantalla con cinco pestañas
- * (`?panel=datos|preguntas|enlaces|solicitudes|publicacion`) y cada una
- * enseña lo suyo y nada más.
+ * por parámetros de la URL. Aquí es una pantalla con siete pestañas
+ * (`?panel=datos|preguntas|personas|enlaces|publicacion|avanzado|solicitudes`)
+ * y cada una enseña lo suyo y nada más.
  *
  * Todo lo que muta va por POST con su nonce propio y con
  * {@see ProcedureAccess} comprobado, y vuelve a la misma pestaña con el aviso
@@ -74,11 +74,34 @@ final class ProcedureEditor {
 	public const PANEL_QUESTIONS    = 'preguntas';
 	public const PANEL_LINKS        = 'enlaces';
 	public const PANEL_APPLICATIONS = 'solicitudes';
-	public const PANEL_DELIVERIES   = 'entregas';
 	public const PANEL_PUBLISH      = 'publicacion';
-	public const PANEL_CODE         = 'codigo';
 	public const PANEL_PEOPLE       = 'personas';
-	public const PANEL_OBSERVE      = 'consulta';
+	public const PANEL_ADVANCED     = 'avanzado';
+
+	/**
+	 * Anchors of what used to be a tab of its own (#80).
+	 *
+	 * «Entregas» es una sección al final de «Solicitudes»; los centros que
+	 * pueden solicitar, «Acceso de consulta» y «Código», secciones de
+	 * «Avanzado».
+	 */
+	public const SECTION_DELIVERIES = 'prc-entregas';
+	public const SECTION_CENTRES    = 'prc-avanzado-centros';
+	public const SECTION_OBSERVE    = 'prc-avanzado-consulta';
+	public const SECTION_CODE       = 'prc-avanzado-codigo';
+
+	/**
+	 * The tabs that no longer exist, with the tab and the section they live in now.
+	 *
+	 * Un enlace guardado o un correo de antes llevan ahí, no a «Datos».
+	 *
+	 * @var array<string, array{0:string, 1:string}>
+	 */
+	public const OLD_PANELS = array(
+		'entregas' => array( self::PANEL_APPLICATIONS, self::SECTION_DELIVERIES ),
+		'consulta' => array( self::PANEL_ADVANCED, self::SECTION_OBSERVE ),
+		'codigo'   => array( self::PANEL_ADVANCED, self::SECTION_CODE ),
+	);
 
 	public const OP_REVIEW              = 'review';
 	public const OP_BULK_REVIEW         = 'bulk_review';
@@ -93,6 +116,7 @@ final class ProcedureEditor {
 	public const OP_MOVE_QUESTION       = 'move_question';
 	public const OP_PEOPLE_SPEC         = 'people_spec';
 	public const OP_OBSERVE             = 'observe';
+	public const OP_CENTRES             = 'centres';
 	public const OP_DUPLICATE           = 'duplicate';
 	public const OP_DELETE              = 'delete';
 	public const FIELD_DELIVERY_CLOSES  = 'prc_delivery_closes';
@@ -178,6 +202,7 @@ final class ProcedureEditor {
 		self::OP_CUSTOM_CODE,
 		self::OP_PEOPLE_SPEC,
 		self::OP_OBSERVE,
+		self::OP_CENTRES,
 		self::PANEL_LINKS,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
@@ -221,6 +246,7 @@ final class ProcedureEditor {
 		'codigo'       => 'Código adicional guardado.',
 		'personas'     => 'Lista de participantes guardada.',
 		'consulta'     => 'Consulta de solicitudes guardada.',
+		'centros'      => 'Guardado qué centros pueden solicitar.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -248,33 +274,12 @@ final class ProcedureEditor {
 	 */
 	public static function register(): void {
 		add_shortcode( self::SHORTCODE, array( self::class, 'render' ) );
-		add_action( 'wp_enqueue_scripts', array( self::class, 'enqueue_code_editor' ), 20 );
+		add_action( 'wp_enqueue_scripts', array( AdvancedPanel::class, 'enqueue_code_editor' ), 20 );
 		// Después de que el CPT y sus capacidades estén registrados (init 10 y
 		// 11), y antes de que se pinte nada: aquí todavía se puede redirigir.
 		add_action( 'init', array( self::class, 'handle' ), 20 );
-	}
-
-	/** Enqueue WordPress CodeMirror before the page head, only on this tab. */
-	public static function enqueue_code_editor(): void {
-		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- lectura de la pestaña; mutar lleva su nonce.
-		if ( 'editor' !== Shell::current_section() || self::PANEL_CODE !== sanitize_key( wp_unslash( (string) ( $_GET[ self::ARG_PANEL ] ?? '' ) ) ) ) {
-			return;
-		}
-		$procedure_id = absint( wp_unslash( $_GET[ self::ARG_PROCEDURE ] ?? 0 ) );
-		// phpcs:enable WordPress.Security.NonceVerification.Recommended
-		$user_id = get_current_user_id();
-		if ( ProcedureAccess::can_edit( $user_id, $procedure_id ) ) {
-			$settings = wp_enqueue_code_editor( array( 'type' => 'text/css' ) );
-			if ( is_array( $settings ) ) {
-				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-css",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
-			}
-		}
-		if ( ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
-			$settings = wp_enqueue_code_editor( array( 'type' => 'text/javascript' ) );
-			if ( is_array( $settings ) ) {
-				wp_add_inline_script( 'code-editor', sprintf( 'jQuery(function(){wp.codeEditor.initialize("prc-custom-js",%s);});', wp_json_encode( $settings, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES ) ), 'after' );
-			}
-		}
+		// Con la consulta ya resuelta, para saber que es la página del taller.
+		add_action( 'template_redirect', array( AdvancedPanel::class, 'redirect_old_panel' ) );
 	}
 
 	/*
@@ -302,50 +307,37 @@ final class ProcedureEditor {
 	}
 
 	/**
-	 * The inner tabs, in three groups, with where each one goes.
+	 * The inner tabs, with where each one goes.
 	 *
-	 * En el orden en que se trabaja: lo que se prepara antes de publicar, lo
-	 * que se gestiona con el plazo abierto y lo avanzado. «Acceso de consulta»
-	 * y no «Consulta», que es como se llama la entrada del menú de arriba; y
-	 * solo para administración (`ProcedureAccess::can_configure_observe()`).
+	 * En el orden en que se trabaja y sin grupos (#80): lo que se prepara
+	 * antes de publicar, «Avanzado» —lo que rara vez se toca— y, al final, las
+	 * solicitudes. «Avanzado» sale siempre: «Código» lo lee quien abre el taller.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array<string, array{label:string, url:string, count:?int, group:string}>
+	 * @return array<string, array{label:string, url:string, count:?int}>
 	 */
 	public static function panels( int $procedure_id ): array {
-		$advanced = ProcedureAccess::can_configure_observe( get_current_user_id(), $procedure_id ) ? array( self::PANEL_OBSERVE ) : array();
-		$grupos   = array(
-			'Preparar'  => array( self::PANEL_DATA, self::PANEL_QUESTIONS, self::PANEL_PEOPLE, self::PANEL_LINKS, self::PANEL_PUBLISH ),
-			'Gestionar' => array( self::PANEL_APPLICATIONS, self::PANEL_DELIVERIES ),
-			'Avanzado'  => array_merge( $advanced, array( self::PANEL_CODE ) ),
-		);
-		$rotulos  = array(
+		$rotulos = array(
 			self::PANEL_DATA         => 'Datos',
 			self::PANEL_QUESTIONS    => 'Campos adicionales',
-			self::PANEL_LINKS        => 'Enlaces',
-			self::PANEL_APPLICATIONS => 'Solicitudes',
-			self::PANEL_DELIVERIES   => 'Entregas',
 			self::PANEL_PEOPLE       => 'Participantes',
+			self::PANEL_LINKS        => 'Enlaces',
 			self::PANEL_PUBLISH      => 'Publicación',
-			self::PANEL_OBSERVE      => 'Acceso de consulta',
-			self::PANEL_CODE         => 'Código',
+			self::PANEL_ADVANCED     => 'Avanzado',
+			self::PANEL_APPLICATIONS => 'Solicitudes',
 		);
-		$cuentas  = array(
+		$cuentas = array(
 			self::PANEL_QUESTIONS    => count( Applications::questions( $procedure_id ) ),
 			self::PANEL_APPLICATIONS => Applications::count( $procedure_id ),
-			self::PANEL_DELIVERIES   => count( array_filter( Applications::questions( $procedure_id ), array( ProcedureQuestions::class, 'is_delivery' ) ) ),
 		);
 
 		$out = array();
-		foreach ( $grupos as $grupo => $slugs ) {
-			foreach ( $slugs as $slug ) {
-				$out[ $slug ] = array(
-					'label' => $rotulos[ $slug ],
-					'url'   => self::url( $procedure_id, $slug ),
-					'count' => $cuentas[ $slug ] ?? null,
-					'group' => $grupo,
-				);
-			}
+		foreach ( $rotulos as $slug => $rotulo ) {
+			$out[ $slug ] = array(
+				'label' => $rotulo,
+				'url'   => self::url( $procedure_id, $slug ),
+				'count' => $cuentas[ $slug ] ?? null,
+			);
 		}
 		return $out;
 	}
@@ -458,7 +450,7 @@ final class ProcedureEditor {
 			if ( is_string( $js ) && ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) ) {
 				update_post_meta( $procedure_id, ProcedureMetaKeys::CUSTOM_JS, $js );
 			}
-			Shell::leave( self::url( $procedure_id, self::PANEL_CODE, array( self::ARG_NOTICE => 'codigo' ) ) );
+			Shell::leave( self::url( $procedure_id, self::PANEL_ADVANCED, array( self::ARG_NOTICE => 'codigo' ) ) );
 			return;
 		}
 		// Lo que se guarda en cualquier estado mientras el procedimiento se
@@ -527,6 +519,10 @@ final class ProcedureEditor {
 		}
 		if ( self::PANEL_DATA === $op ) {
 			self::save_data( $procedure_id, $user_id );
+			return;
+		}
+		if ( self::OP_CENTRES === $op ) {
+			self::$rejected = AdvancedPanel::save_centres( $procedure_id, $user_id, self::submitted_data( $procedure_id ) );
 			return;
 		}
 		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
@@ -857,12 +853,13 @@ final class ProcedureEditor {
 					'centre_kinds'         => ProcedureAccess::centre_kinds( $procedure_id ),
 					'requires_coordinator' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::REQUIRES_COORDINATOR, true ),
 					'commitments'          => self::meta( $procedure_id, ProcedureMetaKeys::COMMITMENTS ),
-				),
-				CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) )
+				)
 			);
 			$crudo['coordinator_count'] = Applications::coordinator_count( $procedure_id );
 		}
-		return $crudo;
+		// Qué centros pueden solicitar ya no viaja con «Datos»: se guarda en
+		// «Avanzado» (#80), y aquí se reescribe lo guardado.
+		return array_merge( $crudo, CentreEligibility::form_values( ProcedureAccess::eligibility( $procedure_id ) ) );
 	}
 
 	/**
@@ -1064,7 +1061,7 @@ final class ProcedureEditor {
 			return;
 		}
 		update_post_meta( $procedure_id, ProcedureMetaKeys::QUESTIONS, wp_slash( $questions ) );
-		Shell::leave( self::url( $procedure_id, self::PANEL_DELIVERIES, array( self::ARG_NOTICE => 'entregas' ) ) );
+		Shell::leave( self::url( $procedure_id, self::PANEL_APPLICATIONS, array( self::ARG_NOTICE => 'entregas' ) ) );
 	}
 
 	/**
@@ -1450,12 +1447,12 @@ final class ProcedureEditor {
 		$m['delete_url'] = $m['can_delete'] ? self::url( $procedure_id, '', array( self::ARG_DELETE => 1 ) ) : '';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- pide pintar la confirmación; borrar lleva su nonce.
 		$m['confirm_delete'] = $m['can_delete'] && ! empty( $_GET[ self::ARG_DELETE ] );
-		// Solo el panel «Datos» las pinta: los demás no recorren el catálogo.
-		$m['centre_options'] = CentreCatalog::choices( self::PANEL_DATA === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
+		// Solo «Avanzado» pinta las casillas: los demás no recorren el catálogo.
+		$m['centre_options'] = CentreCatalog::choices( self::PANEL_ADVANCED === $m['panel'], (array) $m['values'][ ProcedureMetaKeys::CENTRE_TYPES ], (array) $m['values'][ ProcedureMetaKeys::ISLANDS ] );
 		// Lo que el taller tiene que avisar de los acotados guardados: un
 		// catálogo vacío o ningún tipo de centro marcado como privado (ADR-0042).
-		// También solo en «Datos», que es donde se pinta.
-		$m['centre_warnings'] = self::PANEL_DATA === $m['panel']
+		// Solo donde se pinta: la titularidad en «Datos», el catálogo en «Avanzado».
+		$m['centre_warnings'] = in_array( $m['panel'], array( self::PANEL_DATA, self::PANEL_ADVANCED ), true )
 			? CentreEligibility::warnings( ProcedureAccess::eligibility( $procedure_id ), array() === CentreCatalog::all(), array() === CentreCatalog::private_types() )
 			: array();
 		return $m;
@@ -1541,7 +1538,8 @@ final class ProcedureEditor {
 			'people_spec'             => array(),
 			'people'                  => array(),
 			'observe'                 => array(),
-			// Sin la pestaña «Acceso de consulta»: si la consulta está activa.
+			'advanced'                => array(),
+			// Sin la sección «Acceso de consulta»: si la consulta está activa.
 			'observe_status'          => array(
 				'observable' => false,
 				'gone'       => false,
@@ -1666,13 +1664,27 @@ final class ProcedureEditor {
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['deliveries']     = array_values( array_filter( $m['questions'], array( ProcedureQuestions::class, 'is_delivery' ) ) );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
-		if ( self::PANEL_OBSERVE === $m['panel'] ) {
-			$m['observe'] = ObserveSettings::model( $procedure_id );
-		}
-		if ( self::PANEL_CODE === $m['panel'] && ! isset( $paneles[ self::PANEL_OBSERVE ] ) ) {
-			$m['observe_status'] = ObserveSettings::status( $procedure_id );
-		}
+		return self::panel_model( $m, $procedure_id, $user_id );
+	}
 
+	/**
+	 * What only «Avanzado» or «Solicitudes» read, built only there.
+	 *
+	 * @param array<string, mixed> $m            Model so far.
+	 * @param int                  $procedure_id Procedure post ID.
+	 * @param int                  $user_id      Who is looking.
+	 * @return array<string, mixed>
+	 */
+	private static function panel_model( array $m, int $procedure_id, int $user_id ): array {
+		if ( self::PANEL_ADVANCED === $m['panel'] ) {
+			$m['advanced'] = AdvancedPanel::sections( $procedure_id );
+			// Quien no configura la consulta lee en «Código» si está activa.
+			if ( in_array( 'observe', $m['advanced'], true ) ) {
+				$m['observe'] = ObserveSettings::model( $procedure_id );
+			} else {
+				$m['observe_status'] = ObserveSettings::status( $procedure_id );
+			}
+		}
 		if ( self::PANEL_APPLICATIONS === $m['panel'] ) {
 			// La tabla filtrada, una página, y lo que cuenta el diálogo de
 			// exportar: sin leer las metas de todas las solicitudes.

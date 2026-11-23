@@ -287,3 +287,41 @@ todo marcado limita a los centros del catálogo aunque crea no limitar; el
 texto de ayuda lo dice.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-19
+
+«Qué centros pueden solicitar» sale de «Datos» y pasa a la pestaña
+«Avanzado» del taller (#80). Las reglas de fondo, la validación
+(`CentreEligibility::input()`) y los interruptores de la adenda anterior no
+cambian; cambia dónde se pinta y con qué formulario se guarda.
+
+- **Una pestaña «Avanzado», sin grupos.** Las pestañas del taller vuelven a
+  ir en una fila y sin rótulos de grupo, en el orden en que se trabaja:
+  Datos, Campos adicionales, Participantes, Enlaces, Publicación, Avanzado y
+  Solicitudes. «Avanzado» reúne en secciones, cada una con su ancla y su
+  formulario, lo que rara vez se toca: qué centros pueden solicitar (solo
+  en un procedimiento para centros), «Acceso de consulta» (solo
+  administración, ADR-0043) y «Código», que lee quien abre el taller, así
+  que la pestaña sale siempre (`AdvancedPanel::sections()`).
+- **Su propio formulario y su propia operación**, `centres`. Guarda las tres
+  metas con la audiencia guardada y con la regla del grupo de «Datos»: con
+  el grupo cerrado por el estado, el envío se rechaza y la sección se pinta
+  apagada con su motivo, como cuando iba en «Datos». Guardar «Datos»
+  reescribe lo guardado: ya no viaja con su formulario.
+- **Sin plegar.** En «Avanzado», «Limitar a ciertos centros (avanzado)» ya
+  no se pliega en un `details`: la pestaña entera es lo avanzado. El aviso
+  del catálogo vacío sale arriba de la sección y también en «Datos», junto a
+  «Dirigido a», con el de la titularidad sin tipos privados: dice que la
+  titularidad elegida allí no se puede comprobar.
+- **«Entregas» deja de ser pestaña.** «Plazos de entregas documentales» es
+  una sección al final de «Solicitudes», solo con entregas de plazo propio.
+- **Los enlaces de antes no rompen.** `?panel=entregas`, `?panel=consulta` y
+  `?panel=codigo` redirigen a «Solicitudes» o a «Avanzado» con el ancla de
+  su sección y el resto de la dirección (`ProcedureEditor::OLD_PANELS`).
+
+Contra: limitar los centros pasa a estar a una pestaña de «Dirigido a», que
+también decide quién solicita; quien acota por titularidad y por tipo lo
+hace en dos sitios. Y «Avanzado» junta tres cosas que solo comparten que se
+tocan poco.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

@@ -121,7 +121,7 @@ final class ObserveSettings {
 	public static function handle( int $procedure_id ): void {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- ProcedureEditor::handle() comprobó el nonce; save() solo guarda columnas ofrecidas y casillas.
 		self::save( $procedure_id, $_POST );
-		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_OBSERVE, array( ProcedureEditor::ARG_NOTICE => 'consulta' ) ) );
+		Shell::leave( ProcedureEditor::url( $procedure_id, ProcedureEditor::PANEL_ADVANCED, array( ProcedureEditor::ARG_NOTICE => 'consulta' ) ) );
 	}
 
 	/**

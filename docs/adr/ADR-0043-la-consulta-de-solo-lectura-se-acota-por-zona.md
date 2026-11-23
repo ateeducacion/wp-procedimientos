@@ -308,3 +308,14 @@ administración. A cambio, cada procedimiento con consulta pasa por una
 persona más.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-19
+
+Donde la adenda anterior dice «la pestaña «Acceso de consulta» […] en el
+grupo «Avanzado» junto a «Código»», léase: la **sección** «Acceso de
+consulta» de la pestaña «Avanzado», junto a la de «Código» (#80). La regla
+no cambia: la sección solo se pinta con
+`ProcedureAccess::can_configure_observe()` y el POST se rechaza sin ella
+(ADR-0042, adenda del 2026-11-19).
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

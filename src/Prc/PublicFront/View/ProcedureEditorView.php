@@ -245,7 +245,7 @@ final class ProcedureEditorView {
 			<?php echo self::badge( (string) $m['state'], (string) $m['state_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( (string) $m['status'], (string) $m['status_label'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::badge( 'audience', (string) ( $m['audience_label'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa', 'prc-cabecera__ojo' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo PanelParts::icon_link( (string) $m['view_url'], 'ojo', (string) $m['view_label'], 'prc-cabecera__ojo' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo self::menu( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</div>
 		<p class="prc-sub"><?php echo esc_html( 'Ámbito: ' . (string) $m['area_names'] ); ?></p>
@@ -282,7 +282,7 @@ final class ProcedureEditorView {
 			</summary>
 			<div class="prc-mas__menu">
 				<?php if ( '' !== $view_url ) : ?>
-					<a class="prc-mas__opcion" href="<?php echo esc_url( $view_url ); ?>"><?php echo esc_html( 'publish' === (string) $m['status'] ? 'Ver la ficha' : 'Vista previa' ); ?></a>
+					<a class="prc-mas__opcion" href="<?php echo esc_url( $view_url ); ?>"><?php echo esc_html( (string) $m['view_label'] ); ?></a>
 				<?php endif; ?>
 				<?php if ( $can_duplicate ) : ?>
 					<?php echo self::duplicate_form( $m ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>

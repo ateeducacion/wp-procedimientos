@@ -616,6 +616,16 @@ final class ProcedureView {
 	}
 
 	/**
+	 * What the link of {@see self::link()} says: «Ver la ficha» or «Vista previa».
+	 *
+	 * @param \WP_Post $procedure The procedure.
+	 * @return string
+	 */
+	public static function link_label( \WP_Post $procedure ): string {
+		return 'publish' === $procedure->post_status ? 'Ver la ficha' : 'Vista previa';
+	}
+
+	/**
 	 * Who may apply, written out for the «Pueden solicitar» row of the summary.
 	 *
 	 * Lo que antes solo se sabía cuando el botón no aparecía: a quién se

@@ -312,3 +312,22 @@ coordinación con su DNI o NIE, junto a quien presenta y solo si lo hay.
   `can_download_signed_receipt()`, que antes eran `can_sign()` y
   `can_download()` de `ReceiptSignature`. `ReceiptSignature` las pregunta,
   como `LinkCopies` pregunta `can_download_link_copy()` (ADR-0048).
+
+## Adenda — 2026-11-23: la coordinación del justificante se decide por solicitud
+
+- **De dónde sale la coordinación lo decide cada solicitud, no cómo está hoy
+  el procedimiento.** Si su lista de personas tiene a alguien con un papel de
+  coordinación —el papel dice «coordina», la misma regla que
+  `PeopleSpec::collects_coordination()`, ahora en
+  `PeopleSpec::names_coordination()`—, el justificante la lee de ahí; si no,
+  de `prc_coordinator`. Antes dependía de `Applications::coordinators_in_list()`,
+  que mira la configuración actual: apagar la lista cambiaba en silencio la
+  coordinación —y la huella— de todos los justificantes ya presentados.
+  Renombrar un papel a algo que no coordina sigue cambiándola: el papel es
+  texto libre y la fila solo guarda su clave. Lo lee
+  `ApplicationProgress::coordinators_listed()`.
+- **Firmar sin coordinación no se bloquea: se avisa.** Si el procedimiento
+  recoge la coordinación en la lista y la de esta solicitud aún no tiene a
+  nadie que coordine, la sección de la firma dice que el justificante saldrá
+  sin ella y que conviene añadirla antes en «Participantes». Bloquear dejaría
+  sin firmar a quien tiene la lista cerrada.

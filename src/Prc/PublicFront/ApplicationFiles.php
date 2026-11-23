@@ -91,7 +91,7 @@ final class ApplicationFiles {
 	 * el paso a `..`, a una ruta absoluta y a cualquier cosa que no hayamos
 	 * escrito nosotros, sin depender de resolver enlaces.
 	 */
-	private const STORED_SHAPE = '#^[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{32}\.[a-z0-9]{1,8}$#';
+	public const STORED_SHAPE = '#^[a-f0-9]{2}/[a-f0-9]{2}/[a-f0-9]{32}\.[a-z0-9]{1,8}$#';
 
 	/**
 	 * Hook registration.
@@ -431,9 +431,8 @@ final class ApplicationFiles {
 			return null;
 		}
 
-		$raiz = self::root();
-		$fs   = self::filesystem();
-		if ( '' === $raiz || null === $fs ) {
+		$fs = self::filesystem();
+		if ( null === $fs ) {
 			return null;
 		}
 
@@ -446,19 +445,10 @@ final class ApplicationFiles {
 			return null;
 		}
 
-		$opaco  = bin2hex( random_bytes( 16 ) );
-		$stored = substr( $opaco, 0, 2 ) . '/' . substr( $opaco, 2, 2 ) . '/' . $opaco . '.' . $ext;
-		$camino = $raiz . '/' . $stored;
-
-		if ( ! self::prepare_dir( dirname( $camino ) ) ) {
+		$stored = self::put( $bytes, $ext );
+		if ( '' === $stored ) {
 			return null;
 		}
-		if ( ! $fs->put_contents( $camino, $bytes, self::MODE_CLOSED ) ) {
-			return null;
-		}
-		// Y se comprueba que quedó cerrado de verdad: guardar y dejarlo
-		// legible es peor que no guardarlo, porque no se nota.
-		$fs->chmod( $camino, self::MODE_CLOSED );
 
 		return array(
 			'id'     => bin2hex( random_bytes( 16 ) ),
@@ -468,6 +458,40 @@ final class ApplicationFiles {
 			'sha256' => hash( 'sha256', $bytes ),
 			'stored' => $stored,
 		);
+	}
+
+	/**
+	 * Write bytes under an opaque name in the private root, closed.
+	 *
+	 * Lo comparten los documentos de las solicitudes y las copias de los
+	 * enlaces del procedimiento (ADR-0048): el mismo almacén y las mismas
+	 * reglas.
+	 *
+	 * @param string $bytes Content.
+	 * @param string $ext   Extension, already validated by the caller.
+	 * @return string The `stored` value, or '' when it could not be written.
+	 */
+	public static function put( string $bytes, string $ext ): string {
+		$raiz = self::root();
+		$fs   = self::filesystem();
+		if ( '' === $raiz || null === $fs || '' === $bytes ) {
+			return '';
+		}
+
+		$opaco  = bin2hex( random_bytes( 16 ) );
+		$stored = substr( $opaco, 0, 2 ) . '/' . substr( $opaco, 2, 2 ) . '/' . $opaco . '.' . $ext;
+		$camino = $raiz . '/' . $stored;
+
+		if ( ! self::prepare_dir( dirname( $camino ) ) ) {
+			return '';
+		}
+		if ( ! $fs->put_contents( $camino, $bytes, self::MODE_CLOSED ) ) {
+			return '';
+		}
+		// Y se comprueba que quedó cerrado de verdad: guardar y dejarlo
+		// legible es peor que no guardarlo, porque no se nota.
+		$fs->chmod( $camino, self::MODE_CLOSED );
+		return $stored;
 	}
 
 	/**
@@ -637,7 +661,7 @@ final class ApplicationFiles {
 	 * @param array<string, mixed> $descriptor Stored descriptor.
 	 * @return void
 	 */
-	private static function erase( array $descriptor ): void {
+	public static function erase( array $descriptor ): void {
 		$camino = self::path( $descriptor );
 		$fs     = self::filesystem();
 		if ( '' !== $camino && null !== $fs && $fs->exists( $camino ) ) {
@@ -768,7 +792,7 @@ final class ApplicationFiles {
 	 * @param string $texto  What to say.
 	 * @return void
 	 */
-	private static function deny( int $codigo = 403, string $texto = 'No puede descargar este documento.' ): void {
+	public static function deny( int $codigo = 403, string $texto = 'No puede descargar este documento.' ): void {
 		status_header( $codigo );
 		Shell::send_header( 'Content-Type: text/plain; charset=utf-8' );
 		Shell::send_header( 'X-Content-Type-Options: nosniff' );

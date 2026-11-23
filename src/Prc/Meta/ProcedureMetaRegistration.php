@@ -14,6 +14,8 @@ use Prc\Domain\PeopleSpec;
 use Prc\Domain\ProcedureInput;
 use Prc\Domain\ProcedureQuestions;
 use Prc\PostType\ProcedurePostType;
+use Prc\PublicFront\ApplicationFiles;
+use Prc\PublicFront\LinkCopies;
 
 /**
  * Registers every procedure meta key with register_post_meta().
@@ -73,6 +75,10 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::FINAL_LIST_URL       => array(
 				'type'     => 'string',
 				'sanitize' => array( self::class, 'sanitize_url' ),
+			),
+			ProcedureMetaKeys::LINK_COPIES          => array(
+				'type'     => 'array',
+				'sanitize' => array( self::class, 'sanitize_link_copies' ),
 			),
 			ProcedureMetaKeys::CONTACT_EMAILS       => array(
 				'type'     => 'array',
@@ -210,6 +216,35 @@ final class ProcedureMetaRegistration {
 			'integer' => 0,
 			'array'   => array(),
 		);
+	}
+
+	/**
+	 * Keep only well-formed copies, keyed by one of the three links (ADR-0048).
+	 *
+	 * Un `stored` que no tenga la forma del almacén privado no entra: es lo
+	 * que luego se convierte en ruta.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return array<string, array{url:string, stored:string, saved_at:int, size:int}>
+	 */
+	public static function sanitize_link_copies( $value ): array {
+		$out = array();
+		foreach ( is_array( $value ) ? $value : array() as $key => $copy ) {
+			if ( ! isset( LinkCopies::links()[ $key ] ) || ! is_array( $copy ) ) {
+				continue;
+			}
+			$stored = (string) ( $copy['stored'] ?? '' );
+			if ( ! (bool) preg_match( ApplicationFiles::STORED_SHAPE, $stored ) ) {
+				continue;
+			}
+			$out[ $key ] = array(
+				'url'      => esc_url_raw( (string) ( $copy['url'] ?? '' ) ),
+				'stored'   => $stored,
+				'saved_at' => absint( $copy['saved_at'] ?? 0 ),
+				'size'     => absint( $copy['size'] ?? 0 ),
+			);
+		}
+		return $out;
 	}
 
 	/**

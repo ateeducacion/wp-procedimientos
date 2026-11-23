@@ -5,7 +5,7 @@ status: Propuesta
 date: 2026-11-23
 related:
   issues: [119]
-  prs: []
+  prs: [120]
   sdds: [SDD-0001]
   adrs: [ADR-0013, ADR-0019, ADR-0021, ADR-0023, ADR-0033, ADR-0034, ADR-0040, ADR-0048]
 supersedes: [ADR-0034]

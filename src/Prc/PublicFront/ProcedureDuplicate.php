@@ -110,7 +110,11 @@ final class ProcedureDuplicate {
 
 		// Sin curso: es lo primero que hay que elegir para la convocatoria nueva.
 		wp_set_object_terms( $id, $areas, ProcedureTaxonomies::AREA, false );
-		$copia = ProcedureCopy::meta( self::source( $procedure_id ), ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ) );
+		$copia = ProcedureCopy::meta(
+			self::source( $procedure_id ),
+			ProcedureAccess::can_edit_custom_js( $user_id, $procedure_id ),
+			ProcedureAccess::can_configure_observe( $user_id, $procedure_id )
+		);
 		// Con menos ámbitos que el original, sus contactos son de un ámbito
 		// que ya no participa: no se copian, y el correo de alta no les llega.
 		$sin_contactos = array() !== array_diff( ProcedureAccess::post_areas( $procedure_id ), $areas )

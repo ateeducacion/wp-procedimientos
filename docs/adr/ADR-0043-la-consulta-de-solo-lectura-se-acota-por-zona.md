@@ -279,3 +279,32 @@ La revisión del PR cambió cinco detalles; la decisión no cambia.
   zona, en una consulta, sin cargar el resto de sus metas.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-18
+
+Qué enseña la consulta por zona deja de decidirlo quien gestiona el ámbito
+del procedimiento: **lo configura solo administración** (#82). El factor
+«el procedimiento decide» sigue igual; lo que cambia es quién escribe esa
+decisión.
+
+- **Una regla, `ProcedureAccess::can_configure_observe()`**: `prc_manage_app`
+  y poder editar el procedimiento. La pestaña «Acceso de consulta» solo se
+  pinta con ella, ahora en el grupo «Avanzado» junto a «Código»; el POST del
+  panel se rechaza sin ella, y las cinco metas (`prc_observable`,
+  `prc_observer_columns`, `prc_observer_files`, `prc_observer_export`,
+  `prc_observer_notify`) llevan `auth_callback` con la misma regla, así que
+  tampoco se escriben por la REST ni por el escritorio.
+- **Duplicar no la hereda sin poder configurarla.** Las cinco metas pasan a
+  `TRANSFORM` en `ProcedureCopy::policy()` y solo se copian si quien duplica
+  la puede configurar, como el JavaScript: si no, un gestor de ámbito
+  publicaría una copia con la consulta activa y sin forma de apagarla.
+- **Quien gestiona su ámbito la sigue viendo, sin cambiarla.** En «Código»
+  lee si la consulta está activa y si las columnas elegidas ya no existen
+  (`ObserveSettings::status()`), para saber a quién avisar.
+
+La consecuencia positiva «quien lo gestiona ve en el taller qué enseña» se
+queda en eso: ve si está activa, pero el detalle lo ve y lo cambia
+administración. A cambio, cada procedimiento con consulta pasa por una
+persona más.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

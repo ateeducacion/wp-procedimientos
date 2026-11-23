@@ -38,7 +38,9 @@ final class ProcedureMetaRegistration {
 	 * one of its own, its authorisation callback.
 	 *
 	 * Sin `auth` la clave la escribe quien pueda editar el procedimiento
-	 * ({@see auth_edit_procedure()}); la marca de histórico pide su regla.
+	 * ({@see auth_edit_procedure()}); la marca de histórico, el JavaScript y
+	 * la consulta por zona ({@see auth_observe()}, solo administración) piden
+	 * su regla.
 	 *
 	 * @return array<string, array{type:string, sanitize:callable, auth?:callable}>
 	 */
@@ -149,22 +151,27 @@ final class ProcedureMetaRegistration {
 			ProcedureMetaKeys::OBSERVABLE           => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_COLUMNS     => array(
 				'type'     => 'array',
 				'sanitize' => array( self::class, 'sanitize_observer_columns' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_FILES       => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_EXPORT      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 			ProcedureMetaKeys::OBSERVER_NOTIFY      => array(
 				'type'     => 'boolean',
 				'sanitize' => array( self::class, 'sanitize_bool' ),
+				'auth'     => array( self::class, 'auth_observe' ),
 			),
 		);
 	}
@@ -249,6 +256,20 @@ final class ProcedureMetaRegistration {
 	public static function auth_custom_js( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
 		unset( $allowed, $meta_key );
 		return ProcedureAccess::can_edit_custom_js( $user_id, $post_id );
+	}
+
+	/**
+	 * What the zone consultation shows is decided by administración only (ADR-0043).
+	 *
+	 * @param bool   $allowed  Current permission.
+	 * @param string $meta_key Meta key.
+	 * @param int    $post_id  Post ID.
+	 * @param int    $user_id  User ID.
+	 * @return bool
+	 */
+	public static function auth_observe( bool $allowed, string $meta_key, int $post_id, int $user_id ): bool {
+		unset( $allowed, $meta_key );
+		return ProcedureAccess::can_configure_observe( $user_id, $post_id );
 	}
 
 	/**

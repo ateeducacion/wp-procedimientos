@@ -219,7 +219,9 @@
 }
 
 .prc-form.prc-form--solicitud textarea.prc-control { line-height: var(--prc-i-base); }
-.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-bloq-texto, #a1a1a1); font-style: normal; opacity: 1; }
+/* El ejemplo de un campo, con su propio token: claro para no pasar por una
+   respuesta ya escrita, y aun así de 4,5:1 sobre blanco (#767676). */
+.prc-form.prc-form--solicitud .prc-control::placeholder { color: var(--prc-c-placeholder, #767676); font-style: normal; opacity: 1; }
 
 /* Al enfocar, el original solo cambia el borde. Con el teclado eso es poco
    —un borde de 1px que pasa de gris a turquesa—, así que ahí va además el
@@ -236,7 +238,7 @@
 
 /* Bloqueado: lo que viene dado —centro, código, nombre, correo— no se
    rellena, y tiene que notarse a la primera: fondo gris, borde claro y sin
-   cursor de texto (#87). El texto se queda en 5,7:1 para leerse bien.
+   cursor de texto (#87). El texto se queda en 4,9:1 sobre el gris.
    Quien despliegue lo cambia redefiniendo `--prc-c-bloq-*` sin tocar esta hoja. */
 .prc-form.prc-form--solicitud .prc-control--bloqueado,
 .prc-form.prc-form--solicitud .prc-control[readonly],

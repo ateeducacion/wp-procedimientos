@@ -53,7 +53,7 @@ final class ApplyFormView {
 	 *
 	 * @var string
 	 */
-	private const REQUIRED_MARK = '<span class="prc-campo__obligatorio" aria-hidden="true">*</span>';
+	public const REQUIRED_MARK = '<span class="prc-campo__obligatorio" aria-hidden="true">*</span>';
 
 	/**
 	 * Paint the screen.
@@ -342,7 +342,7 @@ final class ApplyFormView {
 
 			<?php echo self::privacy(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 
-			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio">*</span> Campo obligatorio</p>
+			<p class="prc-leyenda-obligatorio"><span class="prc-campo__obligatorio" aria-hidden="true">*</span> Campo obligatorio</p>
 
 			<?php if ( ! $docente ) : ?>
 				<section class="prc-seccion">
@@ -462,14 +462,14 @@ final class ApplyFormView {
 
 		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
 			. esc_html( $rotulo )
-			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. ( $obligatorio ? ' ' . self::REQUIRED_MARK : '' )
 			. '</' . $etiqueta . '>';
 	}
 
 	/**
 	 * A read-only field: what comes from the account or from the catalogue.
 	 *
-	 * Se distingue solo por el color —texto y borde aclarados, fondo blanco—,
+	 * Se distingue por el fondo gris, el borde claro y el cursor (#87),
 	 * y sin dato escribe un guion, para que no se confunda «este centro no
 	 * tiene municipio» con «esto no ha cargado». No lleva `name`: el valor lo
 	 * resuelve el servidor y no viaja en el formulario.
@@ -534,16 +534,17 @@ final class ApplyFormView {
 			<?php if ( ProcedureQuestions::TYPE_TEXT === $tipo ) : ?>
 				<label class="prc-campo__etiqueta prc-campo__etiqueta--enunciado" for="<?php echo esc_attr( $id ); ?>">
 					<strong><?php echo esc_html( (string) $p['label'] ); ?></strong>
-					<?php if ( $obliga ) : ?>
-						<span class="prc-campo__obligatorio" aria-hidden="true">*</span>
-					<?php endif; ?>
+					<?php echo $obliga ? self::REQUIRED_MARK : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- constante. ?>
 				</label>
 				<textarea id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( $nombre ); ?>" class="<?php echo esc_attr( $clase ); ?>" rows="3"
 					placeholder="Escriba aquí"
 					maxlength="<?php echo esc_attr( (string) ProcedureQuestions::TEXT_MAX ); ?>" <?php echo $obliga ? 'required' : ''; ?>
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>><?php echo esc_textarea( is_scalar( $valor ) ? (string) $valor : '' ); ?></textarea>
 			<?php elseif ( ProcedureQuestions::TYPE_FILE === $tipo ) : ?>
-				<?php echo self::label( $id, (string) $p['label'], $obliga ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+				<?php
+				echo self::label( $id, (string) $p['label'], $obliga ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado.
+				$extensiones = array_keys( ApplicationFiles::mimes() );
+				?>
 				<?php if ( array() !== $subido ) : ?>
 					<p class="prc-campo__adjunto">
 						Ya adjuntó
@@ -552,13 +553,13 @@ final class ApplyFormView {
 					</p>
 				<?php endif; ?>
 				<input type="file" id="<?php echo esc_attr( $id ); ?>" name="<?php echo esc_attr( ApplicationFiles::FIELD . '[' . $key . ']' ); ?>"
-					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( '.' . str_replace( '|', ',.', implode( ',.', array_keys( ApplicationFiles::mimes() ) ) ) ); ?>"
+					class="<?php echo esc_attr( $clase ); ?>" accept="<?php echo esc_attr( '.' . str_replace( '|', ',.', implode( ',.', $extensiones ) ) ); ?>"
 					<?php echo $obliga && array() === $subido ? 'required' : ''; ?>
 					<?php echo $pie; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?> />
 				<div class="prc-campo__ayuda">
 					<?php
 					// Una extensión por formato (la primera de `jpg|jpeg|jpe`), de la misma lista que valida el servidor.
-					$formatos = array_map( static fn( $ext ) => strtoupper( strtok( (string) $ext, '|' ) ), array_keys( ApplicationFiles::mimes() ) );
+					$formatos = array_map( static fn( $ext ) => strtoupper( strtok( (string) $ext, '|' ) ), $extensiones );
 					echo esc_html( 'Un solo documento. Formatos admitidos: ' . implode( ', ', $formatos ) . ' · Tamaño máximo: ' . size_format( ApplicationFiles::max_bytes() ) );
 					?>
 				</div>

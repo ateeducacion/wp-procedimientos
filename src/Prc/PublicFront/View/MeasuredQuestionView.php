@@ -102,7 +102,7 @@ final class MeasuredQuestionView {
 		$etiqueta = $grupo ? 'p' : 'label';
 		return '<' . $etiqueta . ' class="prc-campo__etiqueta"' . $atributo . '>'
 			. esc_html( $rotulo )
-			. ( $obligatorio ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' )
+			. ( $obligatorio ? ' ' . ApplyFormView::REQUIRED_MARK : '' )
 			. '</' . $etiqueta . '>';
 	}
 }

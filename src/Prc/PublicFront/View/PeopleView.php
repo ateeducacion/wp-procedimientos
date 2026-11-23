@@ -241,7 +241,7 @@ final class PeopleView {
 			<?php echo self::hidden( $p, $op, $fila ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php foreach ( $campos as $campo => list( $rotulo, $tipo, $obliga, $auto ) ) : ?>
 				<div class="prc-campo prc-campo--cuarto">
-					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $base . $campo ); ?>"><?php echo esc_html( $rotulo ); ?><?php echo $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : ''; ?></label>
+					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $base . $campo ); ?>"><?php echo esc_html( $rotulo ); ?><?php echo $obliga ? ' ' . ApplyFormView::REQUIRED_MARK : ''; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- constante. ?></label>
 					<input class="prc-control" type="<?php echo esc_attr( $tipo ); ?>" id="<?php echo esc_attr( $base . $campo ); ?>"
 						name="<?php echo esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ); ?>" autocomplete="<?php echo esc_attr( $auto ); ?>"
 						value="<?php echo esc_attr( (string) ( $valores[ $campo ] ?? '' ) ); ?>"<?php echo $obliga ? ' required' : ''; ?> />
@@ -273,7 +273,7 @@ final class PeopleView {
 	 */
 	private static function select( string $id, string $campo, string $rotulo, array $opciones, string $elegida, bool $obliga ): string {
 		$out = '<div class="prc-campo prc-campo--cuarto"><label class="prc-campo__etiqueta" for="' . esc_attr( $id ) . '">' . esc_html( $rotulo )
-			. ( $obliga ? ' <span class="prc-campo__obligatorio" aria-hidden="true">*</span>' : '' ) . '</label>'
+			. ( $obliga ? ' ' . ApplyFormView::REQUIRED_MARK : '' ) . '</label>'
 			. '<select class="prc-control" id="' . esc_attr( $id ) . '" name="' . esc_attr( PeopleForm::FIELD_PERSON . '[' . $campo . ']' ) . '"' . ( $obliga ? ' required' : '' ) . '>'
 			. ( $obliga ? '<option value="">— Elija —</option>' : '' );
 		foreach ( $opciones as $clave => $texto ) {

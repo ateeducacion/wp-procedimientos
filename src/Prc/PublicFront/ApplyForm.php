@@ -418,7 +418,6 @@ final class ApplyForm {
 			),
 			'application'     => array(),
 			'max_file_size'   => ApplicationFiles::max_bytes(),
-			'file_mimes'      => ApplicationFiles::mimes(),
 			'deliveries'      => array(),
 			'can_submit'      => false,
 			'why'             => '',

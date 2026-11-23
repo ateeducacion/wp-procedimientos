@@ -70,16 +70,17 @@ final class ObserveSettings {
 	 * Lo que ve, sin poder cambiarlo, quien gestiona su ámbito sin
 	 * administrar el aplicativo (#82).
 	 *
-	 * @param int $procedure_id Procedure post ID.
+	 * @param int                        $procedure_id Procedure post ID.
+	 * @param array<string, string>|null $columns      {@see self::columns()}, when the caller already has them.
 	 * @return array{observable:bool, gone:bool}
 	 */
-	public static function status( int $procedure_id ): array {
+	public static function status( int $procedure_id, ?array $columns = null ): array {
 		$elegidas = get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVER_COLUMNS, true );
 		return array(
 			'observable' => (bool) get_post_meta( $procedure_id, ProcedureMetaKeys::OBSERVABLE, true ),
 			// Se eligieron columnas y ya no existe ninguna: la consulta no
 			// enseña nada, y el panel sin marcar no puede decir lo contrario.
-			'gone'       => is_array( $elegidas ) && array() !== $elegidas && array() === self::columns( $procedure_id ),
+			'gone'       => is_array( $elegidas ) && array() !== $elegidas && array() === ( $columns ?? self::columns( $procedure_id ) ),
 		);
 	}
 
@@ -90,13 +91,14 @@ final class ObserveSettings {
 	 * @return array{observable:bool, columns:string[], gone:bool, groups:array<string, array<string, string>>, group_labels:array<string, string>, files:bool, export:bool, notify:bool, url:string}
 	 */
 	public static function model( int $procedure_id ): array {
-		$leer   = static function ( string $clave ) use ( $procedure_id ): bool {
+		$leer     = static function ( string $clave ) use ( $procedure_id ): bool {
 			return (bool) get_post_meta( $procedure_id, $clave, true );
 		};
-		$status = self::status( $procedure_id );
+		$columnas = self::columns( $procedure_id );
+		$status   = self::status( $procedure_id, $columnas );
 		return array(
 			'observable'   => $status['observable'],
-			'columns'      => array_keys( self::columns( $procedure_id ) ),
+			'columns'      => array_keys( $columnas ),
 			'gone'         => $status['gone'],
 			'groups'       => self::offered( $procedure_id ),
 			'group_labels' => ApplicationExport::group_labels( $procedure_id ),

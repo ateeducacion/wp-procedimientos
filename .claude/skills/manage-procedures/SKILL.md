@@ -1,6 +1,6 @@
 ---
 name: manage-procedures
-description: Lista y gestiona procedimientos educativos en el aplicativo de WordPress: buscar, crear borradores, completar datos y preguntas, editar enlaces y plazos, revisar solicitudes y publicar o cerrar cuando se pide. Actívala ante cualquier petición de gestión de convocatorias o procedimientos.
+description: "Lista y gestiona procedimientos educativos en el aplicativo de WordPress: buscar, crear borradores, completar datos y preguntas, editar enlaces y plazos, revisar solicitudes y publicar o cerrar cuando se pide. Actívala ante cualquier petición de gestión de convocatorias o procedimientos."
 metadata:
   author: ateeducacion
   version: "1.0.0"

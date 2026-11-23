@@ -12020,6 +12020,8 @@ final class Shell {
 
 			'descarga' => '<path fill="currentColor" d="M11 4h2v8.6l3.3-3.3 1.4 1.4L12 16.4l-5.7-5.7 1.4-1.4 3.3 3.3V4ZM4 18h16v2H4v-2Z"/>',
 
+			'imprimir' => '<path fill="currentColor" d="M7 3h10v4h2a3 3 0 0 1 3 3v6h-4v5H6v-5H2v-6a3 3 0 0 1 3-3h2V3Zm2 4h6V5H9v2Zm-1 8v4h8v-4H8Zm10-5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>',
+
 			'ayuda'    => '<path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm-1-4h2v2h-2v-2Zm1-10a4 4 0 0 0-4 4h2a2 2 0 1 1 4 0c0 2-3 1.8-3 5h2c0-2.3 3-2.5 3-5a4 4 0 0 0-4-4Z"/>',
 		);
 		if ( ! isset( $caminos[ $nombre ] ) ) {
@@ -20593,6 +20595,7 @@ final class ProcedureChrome {
 			'footer_links'   => array(),
 
 
+
 			'brand_logo'     => '',
 			'brand_alt'      => '',
 
@@ -20625,6 +20628,29 @@ final class ProcedureChrome {
 		$puesto = apply_filters( self::HOOK, $defecto );
 
 		return is_array( $puesto ) ? array_merge( $defecto, $puesto ) : $defecto;
+	}
+
+
+
+
+
+
+
+
+
+
+
+	public static function brand_logo( array $attrs = array() ): string {
+		$chrome = self::chrome();
+		$logo   = (string) $chrome['brand_logo'];
+		if ( '' === $logo ) {
+			return '';
+		}
+		$extra = '';
+		foreach ( $attrs as $nombre => $valor ) {
+			$extra .= ' ' . sanitize_key( $nombre ) . '="' . esc_attr( $valor ) . '"';
+		}
+		return '<img src="' . esc_url( $logo ) . '" alt="' . esc_attr( (string) $chrome['brand_alt'] ) . '"' . $extra . ' />';
 	}
 
 
@@ -22070,14 +22096,8 @@ final class DraftNotice {
 		}
 
 
-		$chrome = ProcedureChrome::chrome();
-		$logo   = '' !== (string) $chrome['brand_logo']
-			? sprintf(
-				'<p class="logo"><img src="%1$s" alt="%2$s" width="300" /></p>',
-				esc_url( (string) $chrome['brand_logo'] ),
-				esc_attr( (string) $chrome['brand_alt'] )
-			)
-			: '';
+		$logo = ProcedureChrome::brand_logo( array( 'width' => '300' ) );
+		$logo = '' !== $logo ? '<p class="logo">' . $logo . '</p>' : '';
 
 		return '<!doctype html><html lang="es"><head><meta charset="utf-8" />'
 			. '<meta name="viewport" content="width=device-width, initial-scale=1" />'
@@ -29039,38 +29059,56 @@ final class ApplicationProgressView {
 
 
 
+
+
+
 	public static function receipt( array $m ): string {
 		$p       = (array) $m['progress'];
 		$s       = (array) $m['application'];
 		$centro  = (array) $m['centre'];
 		$docente = ApplicationMetaKeys::TYPE_TEACHER === (string) $m['applicant_type'];
-		$quien   = (string) $p['author'] . ( '' !== (string) ( $s['position'] ?? '' ) ? ' (' . (string) $s['position'] . ')' : '' );
+		$autor   = trim( (string) $p['author'] );
+		$cargo   = (string) ( $s['position'] ?? '' );
+		$quien   = '' !== $autor && '' !== $cargo ? $autor . ' (' . $cargo . ')' : $autor;
+		$logo    = ProcedureChrome::brand_logo( array( 'class' => 'prc-justificante__escudo' ) );
+		$rotulo  = (string) ProcedureChrome::chrome()['org'];
 		$datos   = array(
-			'N.º de solicitud'        => (string) (int) $p['application'],
-			'Procedimiento'           => (string) $m['title'],
-			'Centro'                  => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
-			'Presentada'              => 'El ' . (string) $p['submitted'] . ( '' !== trim( $quien ) ? ', por ' . $quien : '' ) . '.',
-			'Registrada en su nombre' => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
-			'Última modificación'     => (string) $p['modified'],
-			'Estado de revisión'      => (string) ( $s['state_label'] ?? '' ),
-			'Estado'                  => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
+			'N.º de solicitud'             => (string) (int) $p['application'],
+			'Procedimiento'                => (string) $m['title'],
+			'Centro'                       => $docente ? '' : (string) $centro['name'] . ' (' . (string) $centro['code'] . ')',
+			'Fecha y hora de presentación' => (string) $p['submitted'],
+			'Presentada por'               => $quien,
+			'Registrada en su nombre'      => '' !== (string) ( $p['on_behalf'] ?? '' ) ? 'El ' . (string) $p['on_behalf'] . ', por quien gestiona el procedimiento.' : '',
+			'Última modificación'          => (string) $p['modified'],
+			'Estado de revisión'           => (string) ( $s['state_label'] ?? '' ),
+			'Estado'                       => ! empty( $p['show_complete'] ) ? self::completeness( $p ) : '',
 		);
 
 		ob_start();
 		?>
 		<div class="prc-justificante">
 			<p class="prc-sub prc-no-imprimir"><a href="<?php echo esc_url( (string) $p['apply_url'] ); ?>">&larr; Volver a la solicitud</a></p>
-			<h1 class="prc-h1">Justificante de presentación</h1>
-			<dl class="prc-respuestas prc-justificante__datos">
-				<?php foreach ( $datos as $rotulo => $valor ) : ?>
-					<?php if ( '' !== $valor ) : ?>
-						<dt><?php echo esc_html( $rotulo ); ?></dt>
-						<dd><?php echo esc_html( $valor ); ?></dd>
+			<?php if ( '' !== $logo || '' !== $rotulo ) : ?>
+				<div class="prc-justificante__cab">
+					<?php echo $logo;?>
+					<?php if ( '' !== $rotulo ) : ?>
+						<span class="prc-justificante__org"><?php echo esc_html( $rotulo ); ?></span>
 					<?php endif; ?>
-				<?php endforeach; ?>
-			</dl>
+				</div>
+			<?php endif; ?>
+			<h1 class="prc-h1">Justificante de presentación</h1>
+			<table class="prc-justificante__tabla">
+				<tbody>
+					<?php foreach ( $datos as $etiqueta => $valor ) : ?>
+						<?php if ( '' !== $valor ) : ?>
+							<tr><th scope="row"><?php echo esc_html( $etiqueta ); ?></th><td><?php echo esc_html( $valor ); ?></td></tr>
+						<?php endif; ?>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
 			<?php echo ApplyFormView::summary( $m );?>
 			<?php echo PeopleView::review( (array) ( $m['people'] ?? array() ) );?>
+			<p class="prc-no-imprimir" hidden><button type="button" class="<?php echo esc_attr( Assets::button_class( true ) ); ?>" data-prc-print><?php echo Shell::icon( 'imprimir' );?> Imprimir justificante</button></p>
 			<p class="prc-campo__ayuda prc-no-imprimir">Para imprimirlo o guardarlo, use «Imprimir» en el menú de su navegador y, si lo quiere en un fichero, elija «Guardar como PDF».</p>
 		</div>
 		<?php
@@ -38132,17 +38170,59 @@ body.prc-app .prc-btn-borrar {
 
 /* --- el justificante -----------------------------------------------------
    Se imprime con el navegador: sin cabecera, sin menú, sin pie y sin lo que
-   solo sirve en pantalla. Sin JavaScript. */
-.prc-justificante__datos { margin-bottom: 20px; }
+   solo sirve en pantalla. El botón «Imprimir justificante» es un atajo del
+   guion; sin él, se imprime igual desde el menú del navegador. La cabecera
+   con el escudo y el rótulo de quien despliega solo sale en papel: en
+   pantalla ya los enseña el armazón. */
+.prc-justificante__cab {
+  display: none;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--prc-c-borde-campo);
+}
+
+.prc-justificante__escudo { max-height: 64px; max-width: 100%; min-width: 0; width: auto; }
+.prc-justificante__org { font-weight: var(--prc-p-fuerte); }
+
+.prc-justificante__tabla { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+
+.prc-justificante__tabla th,
+.prc-justificante__tabla td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  border: 1px solid var(--prc-c-borde-campo);
+}
+
+.prc-justificante__tabla th { width: 30%; font-weight: var(--prc-p-fuerte); }
 
 @media print {
-  body:has(.prc-justificante) .prc-top,
-  body:has(.prc-justificante) .prc-tabs,
-  body:has(.prc-justificante) .prc-pie,
-  body:has(.prc-justificante) #wpadminbar,
+  /* Fuera todo lo que no es el justificante, ni lo contiene, ni está dentro:
+     el marco del aplicativo, el del tema —se llame como se llame— y la barra
+     de administración. */
+  body:has(.prc-justificante) :not(:has(.prc-justificante), .prc-justificante, .prc-justificante *) { display: none !important; }
+
+  /* En su propia regla: un navegador sin `:has()` descarta la de arriba
+     entera, y esta tiene que seguir valiendo. */
   .prc-justificante .prc-no-imprimir { display: none !important; }
 
+  /* La hoja rompe la columna del tema en pantalla; en papel, la página es
+     la columna. */
+  body.prc-app .prc-hoja:has(.prc-justificante) {
+    position: static;
+    left: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+
   .prc-justificante { color: #000; }
+  .prc-justificante__cab { display: flex; }
+  .prc-justificante__tabla { break-inside: avoid; }
+  .prc-justificante__tabla th,
+  .prc-justificante__tabla td { border-color: #000; }
 }
 ',
   'css/prc-mi-centro.css' => '/* «Solicitudes de mi centro» (y «Mis solicitudes» del profesorado).
@@ -39293,10 +39373,12 @@ body.prc-app .prc-btn-borrar {
 	 * «Marcar todos» y «Ninguno» (`data-prc-tick-all="1"` o `"0"`) dentro de un
 	 * `data-prc-tick-group`: marcan o desmarcan las casillas del grupo. Salen
 	 * escondidos y solo los enseña el guion; sin él, las casillas se marcan
-	 * una a una.
+	 * una a una. «Imprimir justificante» (`data-prc-print`), igual: sin guion,
+	 * se imprime desde el menú del navegador. Se enseña el contenedor propio
+	 * del botón, nunca un antepasado más lejano.
 	 */
 	document.addEventListener( \'DOMContentLoaded\', function () {
-		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-tick-all]\' ), function ( button ) {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-tick-all], [data-prc-print]\' ), function ( button ) {
 			button.parentElement.hidden = false;
 		} );
 	} );
@@ -39313,6 +39395,13 @@ body.prc-app .prc-btn-borrar {
 		} );
 		// Cuenta como un cambio del formulario, para el aviso de cambios sin guardar.
 		marcar( { target: button } );
+	} );
+
+	// «Imprimir justificante» abre el diálogo de imprimir del navegador.
+	document.addEventListener( \'click\', function ( e ) {
+		if ( e.target.closest && e.target.closest( \'[data-prc-print]\' ) ) {
+			window.print();
+		}
 	} );
 
 	/* --- 8. Un solo envío ------------------------------------------------ */

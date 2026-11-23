@@ -144,14 +144,8 @@ final class DraftNotice {
 		}
 
 		// El logo es de quien despliega: sin configurarlo en `prc_chrome`, no hay (ADR-0009).
-		$chrome = ProcedureChrome::chrome();
-		$logo   = '' !== (string) $chrome['brand_logo']
-			? sprintf(
-				'<p class="logo"><img src="%1$s" alt="%2$s" width="300" /></p>',
-				esc_url( (string) $chrome['brand_logo'] ),
-				esc_attr( (string) $chrome['brand_alt'] )
-			)
-			: '';
+		$logo = ProcedureChrome::brand_logo( array( 'width' => '300' ) );
+		$logo = '' !== $logo ? '<p class="logo">' . $logo . '</p>' : '';
 
 		return '<!doctype html><html lang="es"><head><meta charset="utf-8" />'
 			. '<meta name="viewport" content="width=device-width, initial-scale=1" />'

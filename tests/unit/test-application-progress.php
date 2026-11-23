@@ -264,8 +264,8 @@ class Test_Application_Progress extends WP_UnitTestCase {
 	}
 
 	/**
-	 * El justificante: número, cuándo y quién, la completitud y lo
-	 * presentado, sin formularios; se imprime con el navegador.
+	 * The receipt: number, when and who, completeness and what was submitted,
+	 * with no forms; it prints from the browser, with or without the button.
 	 */
 	public function test_the_receipt_proves_what_was_submitted() {
 		$procedimiento = $this->procedimiento();
@@ -277,14 +277,83 @@ class Test_Application_Progress extends WP_UnitTestCase {
 		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
 		$this->assertStringContainsString( 'class="prc-justificante"', $html );
 		$this->assertStringContainsString( 'Justificante de presentación', $html );
-		$this->assertStringContainsString( '<dd>' . $solicitud . '</dd>', $html );
+		$this->assertStringContainsString( '<table class="prc-justificante__tabla">', $html, 'los datos, en una tabla' );
+		$this->assertStringContainsString( '<th scope="row">N.º de solicitud</th><td>' . $solicitud . '</td>', $html );
+		$this->assertStringContainsString( '<th scope="row">Fecha y hora de presentación</th><td>' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . '</td>', $html );
 		$this->assertStringContainsString( 'Red de prueba', $html );
 		$this->assertStringContainsString( 'Centro de prueba Norte (C0001)', $html );
-		$this->assertStringContainsString( 'El ' . get_the_date( 'd-m-Y', $solicitud ) . ' a las ' . get_the_time( 'H:i', $solicitud ) . ', por ' . get_userdata( $director )->display_name, $html );
+		$this->assertStringContainsString( '<th scope="row">Presentada por</th><td>' . get_userdata( $director )->display_name . ' (', $html );
 		$this->assertStringContainsString( 'Incompleta: falta 1 persona', $html );
 		$this->assertStringContainsString( 'Ana Pérez', $html, 'con la lista de personas' );
 		$this->assertStringContainsString( 'Guardar como PDF', $html );
+		$this->assertStringNotContainsString( 'pulse «Imprimir justificante»', $html, 'la ayuda vale también sin el botón' );
+		$this->assertMatchesRegularExpression( '/<p class="prc-no-imprimir" hidden><button type="button"[^>]* data-prc-print>.*Imprimir justificante<\/button>/s', $html, 'el botón, escondido hasta que el guion lo enseña' );
 		$this->assertStringNotContainsString( '<form', $html, 'solo lectura' );
+		$this->assertStringNotContainsString( 'prc-justificante__cab', $html, 'sin marca configurada, sin cabecera' );
+	}
+
+	/**
+	 * The receipt header carries the logo and the name of whoever deploys,
+	 * each one only if `prc_chrome` brings it (ADR-0009).
+	 */
+	public function test_the_receipt_header_has_the_brand_of_whoever_deploys() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$this->application( $procedimiento, $director );
+		$this->acting_as( $director );
+		$puesto = array();
+		add_filter(
+			'prc_chrome',
+			static function ( array $chrome ) use ( &$puesto ): array {
+				return array_merge( $chrome, $puesto );
+			}
+		);
+		$recibo = function () use ( $procedimiento ): string {
+			return $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		};
+
+		$puesto = array(
+			'brand_logo' => 'https://example.org/escudo.png',
+			'brand_alt'  => 'Escudo de ejemplo',
+			'org'        => 'Organismo de ejemplo',
+		);
+		$html   = $recibo();
+		$this->assertStringContainsString( '<div class="prc-justificante__cab">', $html );
+		$this->assertStringContainsString( '<img src="https://example.org/escudo.png" alt="Escudo de ejemplo" class="prc-justificante__escudo"', $html );
+		$this->assertStringContainsString( '<span class="prc-justificante__org">Organismo de ejemplo</span>', $html );
+
+		$puesto = array( 'org' => 'Organismo de ejemplo' );
+		$html   = $recibo();
+		$this->assertStringContainsString( '<div class="prc-justificante__cab">', $html, 'solo el rótulo' );
+		$this->assertStringContainsString( 'prc-justificante__org', $html );
+		$this->assertStringNotContainsString( 'prc-justificante__escudo', $html );
+
+		$puesto = array( 'brand_logo' => 'https://example.org/escudo.png' );
+		$html   = $recibo();
+		$this->assertStringContainsString( '<div class="prc-justificante__cab">', $html, 'solo el escudo' );
+		$this->assertStringContainsString( '<img src="https://example.org/escudo.png" alt="" class="prc-justificante__escudo"', $html, 'sin texto alternativo, decorativo' );
+		$this->assertStringNotContainsString( 'prc-justificante__org', $html );
+	}
+
+	/**
+	 * Without an author there is no «Presentada por» row, not a lone «(cargo)».
+	 */
+	public function test_the_receipt_skips_who_submitted_when_nobody_is_known() {
+		$procedimiento = $this->procedimiento();
+		$director      = $this->school_head( 'C0001' );
+		$solicitud     = $this->application( $procedimiento, $director, '', array( ApplicationMetaKeys::APPLICANT_POSITION => ApplicationMetaKeys::POSITION_HEAD ) );
+		wp_update_post(
+			array(
+				'ID'          => $solicitud,
+				'post_author' => 0,
+			)
+		);
+		$this->acting_as( $director );
+
+		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
+		$this->assertStringContainsString( 'Justificante de presentación', $html );
+		$this->assertStringNotContainsString( 'Presentada por', $html );
+		$this->assertStringNotContainsString( '<td>(', $html );
 	}
 
 	/**
@@ -462,8 +531,8 @@ class Test_Application_Progress extends WP_UnitTestCase {
 
 		$html = $this->pintar( $procedimiento, array( ApplicationProgress::ARG_RECEIPT => '1' ) );
 		$this->assertStringContainsString( 'Justificante de presentación', $html );
-		$this->assertDoesNotMatchRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( $registrada, '/' ) . '/', $html, 'presentada no es el día en que se registró' );
-		$this->assertMatchesRegularExpression( '/<dt>Presentada<\/dt>\s*<dd>El ' . preg_quote( (string) wp_date( 'd-m-Y' ), '/' ) . '/', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<th scope="row">Fecha y hora de presentación<\/th><td>' . preg_quote( $registrada, '/' ) . '/', $html, 'presentada no es el día en que se registró' );
+		$this->assertMatchesRegularExpression( '/<th scope="row">Fecha y hora de presentación<\/th><td>' . preg_quote( (string) wp_date( 'd-m-Y' ), '/' ) . '/', $html );
 		$this->assertStringContainsString( 'El ' . $registrada . ', por quien gestiona el procedimiento.', $html );
 
 		$acuse = array_values(

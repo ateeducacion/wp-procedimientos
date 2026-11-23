@@ -63,7 +63,8 @@ final class ProcedureChrome {
 			'credit'         => '',
 			'footer_links'   => array(),
 			// Logo de quien despliega, para las páginas que no llevan el marco
-			// del armazón (el aviso de borrador, ADR-0047): URL y texto alternativo.
+			// del armazón (el aviso de borrador, ADR-0047) y para la cabecera
+			// del justificante impreso: URL y texto alternativo.
 			'brand_logo'     => '',
 			'brand_alt'      => '',
 			// Aviso de protección de datos de la pantalla de solicitud: el órgano
@@ -96,6 +97,29 @@ final class ProcedureChrome {
 		$puesto = apply_filters( self::HOOK, $defecto );
 
 		return is_array( $puesto ) ? array_merge( $defecto, $puesto ) : $defecto;
+	}
+
+	/**
+	 * The logo of whoever deploys, as an `img`; empty when it is not configured.
+	 *
+	 * Lo usan las páginas que lo enseñan fuera del armazón: el aviso de
+	 * borrador (ADR-0047) y la cabecera del justificante impreso. Sin
+	 * `brand_logo` en `prc_chrome`, nada (ADR-0009).
+	 *
+	 * @param array<string, string> $attrs Extra attributes, such as `class` or `width`.
+	 * @return string
+	 */
+	public static function brand_logo( array $attrs = array() ): string {
+		$chrome = self::chrome();
+		$logo   = (string) $chrome['brand_logo'];
+		if ( '' === $logo ) {
+			return '';
+		}
+		$extra = '';
+		foreach ( $attrs as $nombre => $valor ) {
+			$extra .= ' ' . sanitize_key( $nombre ) . '="' . esc_attr( $valor ) . '"';
+		}
+		return '<img src="' . esc_url( $logo ) . '" alt="' . esc_attr( (string) $chrome['brand_alt'] ) . '"' . $extra . ' />';
 	}
 
 	/**

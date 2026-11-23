@@ -145,6 +145,28 @@ class Test_Signed_Receipt extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Muchas bombas pequeñas no obligan a inflar cada una: un intento fallido
+	 * también cuenta, y pasado el tope ya no se lee nada más. El texto del
+	 * justificante, detrás de ellas, no llega a leerse.
+	 */
+	public function test_many_small_bombs_stop_the_reading() {
+		$huella = SignedReceipt::fingerprint( $this->datos() );
+		$bomba  = gzcompress( str_repeat( "\0", 200000 ) );
+		$texto  = gzcompress( 'BT (Solicitud: 57) Tj (Huella SHA-256: ' . $huella . ") Tj ET /Type /Sig\n" );
+		$con    = function ( int $bombas ) use ( $bomba, $texto ): string {
+			$pdf = "%PDF-1.3\n" . str_repeat( "4 0 obj\n<< >>\nstream\n" . $bomba . "\nendstream\nendobj\n", $bombas );
+			return $this->resign( $pdf . "6 0 obj\n<< >>\nstream\n" . $texto . "\nendstream\nendobj\n" );
+		};
+
+		$antes = microtime( true );
+		$this->assertSame( 'not_this', SignedReceipt::refuse( $con( 300 ), '57', $huella, 100000 ) );
+		$this->assertLessThan( 2.0, microtime( true ) - $antes, 'se corta pronto' );
+
+		// Con unas pocas, el mismo texto sí se lee.
+		$this->assertSame( '', SignedReceipt::refuse( $con( 3 ), '57', $huella, 100000 ) );
+	}
+
+	/**
 	 * Añadir una revisión de firma a unos bytes cualquiera.
 	 *
 	 * @param string $pdf Unsigned PDF.

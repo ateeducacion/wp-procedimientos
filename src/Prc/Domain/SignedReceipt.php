@@ -31,6 +31,16 @@ final class SignedReceipt {
 	public const FIELDS = array( 'number', 'procedure', 'centre', 'submitted' );
 
 	/**
+	 * Most decompression attempts per PDF, failed ones included.
+	 *
+	 * El justificante trae unos pocos flujos; un PDF con cientos de bombas
+	 * pequeñas no obliga a inflar cada una hasta el tope.
+	 *
+	 * @var int
+	 */
+	public const MAX_INFLATES = 64;
+
+	/**
 	 * The fingerprint of the receipt: SHA-256 of its four fields, one per line.
 	 *
 	 * @param array<string, string> $fields `number`, `procedure`, `centre` and `submitted`.
@@ -152,7 +162,11 @@ final class SignedReceipt {
 	 * Un flujo que no se deja descomprimir simplemente no aporta.
 	 *
 	 * Todo lo descomprimido junto no pasa de `$max`: un flujo que se infla
-	 * sin fin (una bomba de compresión) se corta ahí y no se lee.
+	 * sin fin (una bomba de compresión) se corta ahí y no se lee. Y el trabajo
+	 * también tiene tope: un intento que falla cuesta lo mismo que uno que sale
+	 * —inflar hasta lo que queda—, así que cuenta igual, y no se pasa de
+	 * {@see self::MAX_INFLATES}. Un flujo que no empieza como zlib (una imagen
+	 * JPEG, por ejemplo) ni se intenta.
 	 *
 	 * @param string $pdf PDF bytes.
 	 * @param int    $max Most inflated bytes read, all streams together.
@@ -163,17 +177,21 @@ final class SignedReceipt {
 		if ( ! function_exists( 'gzuncompress' ) || ! preg_match_all( '~(?<!end)stream\r?\n~', $pdf, $marcas, PREG_OFFSET_CAPTURE ) ) {
 			return $texto;
 		}
+		$quedan = self::MAX_INFLATES;
 		foreach ( $marcas[0] as $marca ) {
 			$ini = (int) $marca[1] + strlen( (string) $marca[0] );
 			$fin = strpos( $pdf, 'endstream', $ini );
-			if ( false === $fin ) {
+			if ( false === $fin || ! self::looks_zlib( $pdf, $ini ) ) {
 				continue;
 			}
 			$crudo = substr( $pdf, $ini, $fin - $ini );
-			// El salto antes de `endstream` puede ser del flujo o del formato: se prueba con y sin él.
-			foreach ( array( $crudo, rtrim( $crudo, "\r\n" ) ) as $intento ) {
+			// El salto antes de `endstream` puede ser del flujo o del formato: se
+			// prueba con y sin él, y sin él solo si había salto.
+			$recorte  = rtrim( $crudo, "\r\n" );
+			$intentos = $recorte === $crudo ? array( $crudo ) : array( $crudo, $recorte );
+			foreach ( $intentos as $intento ) {
 				$queda = $max - ( strlen( $texto ) - strlen( $pdf ) );
-				if ( $queda <= 0 ) {
+				if ( $queda <= 0 || $quedan-- <= 0 ) {
 					return $texto;
 				}
 				$claro = @gzuncompress( $intento, $queda ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- un flujo que no es Flate no es un error, es un flujo que no aporta.
@@ -184,5 +202,18 @@ final class SignedReceipt {
 			}
 		}
 		return $texto;
+	}
+
+	/**
+	 * Whether the bytes at an offset start like a zlib stream (RFC 1950 header).
+	 *
+	 * @param string $pdf    PDF bytes.
+	 * @param int    $offset Where the stream starts.
+	 * @return bool
+	 */
+	private static function looks_zlib( string $pdf, int $offset ): bool {
+		$cmf = ord( (string) substr( $pdf, $offset, 1 ) );
+		$flg = ord( (string) substr( $pdf, $offset + 1, 1 ) );
+		return 8 === ( $cmf & 0x0f ) && ( $cmf >> 4 ) <= 7 && 0 === ( ( $cmf << 8 ) | $flg ) % 31;
 	}
 }

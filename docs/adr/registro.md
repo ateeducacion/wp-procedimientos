@@ -6,7 +6,7 @@ date: 2026-09-15
 related:
   issues: []
   prs: []
-  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0050]
+  adrs: [ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019, ADR-0020, ADR-0021, ADR-0022, ADR-0023, ADR-0024, ADR-0025, ADR-0026, ADR-0027, ADR-0028, ADR-0029, ADR-0030, ADR-0031, ADR-0032, ADR-0033, ADR-0034, ADR-0035, ADR-0036, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0045, ADR-0046, ADR-0047, ADR-0048, ADR-0049, ADR-0050, ADR-0051]
   sdds: [SDD-0001]
 supersedes: []
 superseded_by: []
@@ -135,3 +135,4 @@ envía a la papelera desde el aplicativo—, la
 | [ADR-0048](ADR-0048-copia-privada-del-pdf-de-la-resolucion-y-los-listados.md) | El aplicativo guarda una copia privada del PDF de la resolución y los listados | Propuesta | 2026-11-18 |
 | [ADR-0049](ADR-0049-firma-electronica-del-justificante-con-autofirma.md) | El procedimiento puede pedir la firma electrónica del justificante, con AutoFirma o subiéndolo firmado | Propuesta | 2026-11-19 |
 | [ADR-0050](ADR-0050-todo-se-edita-hasta-historico.md) | Todo se edita hasta histórico | Propuesta | 2026-11-23 |
+| [ADR-0051](ADR-0051-lo-contestado-no-se-descoloca.md) | Lo contestado no se descoloca al editar los campos | Propuesta | 2026-11-24 |

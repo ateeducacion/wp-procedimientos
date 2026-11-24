@@ -775,6 +775,108 @@ class Test_Procedure_Questions extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Lo que dejaría sin sitio una respuesta dada no pasa (ADR-0051): quitar
+	 * un campo contestado, una opción elegida o una fila con cantidades, y
+	 * cambiar la entrega de un archivo entregado. Los puntos de una opción
+	 * elegida cambian solo confirmándolo; sin respuestas, todo cambia.
+	 */
+	public function test_what_was_answered_keeps_its_place() {
+		$antes         = ProcedureQuestions::sanitize(
+			array(
+				array(
+					'key'     => 'q1',
+					'label'   => 'Modalidad',
+					'type'    => ProcedureQuestions::TYPE_SINGLE,
+					'choices' => "A\nB",
+				),
+				array(
+					'key'     => 'q2',
+					'label'   => 'Méritos',
+					'type'    => ProcedureQuestions::TYPE_MULTIPLE,
+					'choices' => "Huerto | 3\nRadio | 1",
+				),
+				array(
+					'key'   => 'q3',
+					'label' => 'Alumnado',
+					'type'  => ProcedureQuestions::TYPE_GRID,
+					'rows'  => "Infantil\nPrimaria",
+				),
+				array(
+					'key'   => 'q4',
+					'label' => 'Proyecto',
+					'type'  => ProcedureQuestions::TYPE_FILE,
+				),
+			)
+		);
+		$todas         = array_fill_keys( array( 'q1', 'q2', 'q3', 'q4' ), true );
+		$usados        = array(
+			'q1' => array( 'A' => true ),
+			'q2' => array( 'Radio' => true ),
+			'q3' => array( 'r1' => true ),
+		);
+		$con           = function ( int $i, array $cambio ) use ( $antes ): array {
+			$despues       = $antes;
+			$despues[ $i ] = $cambio + $despues[ $i ];
+			return $despues;
+		};
+		$sin_opcion_a  = $con( 0, array( 'choices' => array( 'B', 'C' ) ) );
+		$radio_vale_2  = $con( 1, array( 'points' => array( 3, 2 ) ) );
+		$huerto_vale_9 = $con( 1, array( 'points' => array( 9, 1 ) ) );
+		$sin_infantil  = $con(
+			2,
+			array(
+				'rows' => array(
+					array(
+						'key'   => 'r2',
+						'label' => 'Primaria',
+					),
+				),
+			)
+		);
+		$entrega       = $con(
+			3,
+			array(
+				'delivery'  => true,
+				'opens_at'  => '2026-01-01',
+				'closes_at' => '2026-02-01',
+			)
+		);
+
+		$this->assertStringContainsString( 'No se puede quitar «Modalidad»', QuestionChanges::refusal( $antes, array_slice( $antes, 1 ), $todas, $usados ) );
+		$this->assertStringContainsString( 'En «Modalidad» falta una opción', QuestionChanges::refusal( $antes, $sin_opcion_a, $todas, $usados ) );
+		$this->assertSame( '', QuestionChanges::refusal( $antes, $con( 0, array( 'choices' => array( 'A', 'C' ) ) ), $todas, $usados ), 'quitar B, que nadie eligió, y añadir C' );
+		$this->assertStringContainsString( 'cambian los puntos', QuestionChanges::refusal( $antes, $radio_vale_2, $todas, $usados ) );
+		$this->assertSame( '', QuestionChanges::refusal( $antes, $radio_vale_2, $todas, $usados, true ), 'confirmado' );
+		$this->assertSame( '', QuestionChanges::refusal( $antes, $huerto_vale_9, $todas, $usados ), 'nadie eligió el huerto' );
+		$this->assertStringContainsString( 'falta una fila', QuestionChanges::refusal( $antes, $sin_infantil, $todas, $usados ) );
+		$this->assertSame(
+			'',
+			QuestionChanges::refusal(
+				$antes,
+				$con(
+					2,
+					array(
+						'rows' => array(
+							array(
+								'key'   => 'r1',
+								'label' => 'Infantil',
+							),
+						),
+					)
+				),
+				$todas,
+				$usados
+			),
+			'Primaria no tiene cantidades'
+		);
+		$this->assertStringContainsString( '«Entrega con plazo propio» en «Proyecto»', QuestionChanges::refusal( $antes, $entrega, $todas, $usados ) );
+
+		foreach ( array( array_slice( $antes, 1 ), $sin_opcion_a, $radio_vale_2, $sin_infantil, $entrega ) as $despues ) {
+			$this->assertSame( '', QuestionChanges::refusal( $antes, $despues, array(), array() ), 'sin respuestas, todo cambia' );
+		}
+	}
+
+	/**
 	 * El tipo de una pregunta con respuestas no cambia; el resto sí.
 	 */
 	public function test_the_type_of_an_answered_question_cannot_change() {

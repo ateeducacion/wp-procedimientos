@@ -264,3 +264,9 @@ tipos nuevos en `View/MeasuredQuestionView`.
   rejilla). Una clave borrada no vuelve a darse.
 - El navegador ayuda con `type="number"` y `type="date"`, pero quien decide
   es el servidor: sin ellos se teclea igual.
+
+## Adenda — 2026-11-24
+
+Con respuestas, una fila de rejilla con cantidades ya no se quita, y cambiar
+los puntos de una opción elegida pide confirmarlo en el taller:
+[ADR-0051](ADR-0051-lo-contestado-no-se-descoloca.md).

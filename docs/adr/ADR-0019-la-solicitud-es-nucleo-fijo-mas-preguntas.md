@@ -257,3 +257,10 @@ cambia: la coordinación (`prc_coordinator`) sigue siendo del formulario, con
 su plazo y su validación.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-24
+
+Un campo que alguna solicitud ya ha contestado **ya no se puede quitar**, ni
+una opción que alguien eligió: lo decide
+[ADR-0051](ADR-0051-lo-contestado-no-se-descoloca.md). El resto de esta ADR
+sigue vigente.

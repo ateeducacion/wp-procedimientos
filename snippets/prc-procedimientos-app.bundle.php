@@ -15322,12 +15322,56 @@ final class ProcedurePoster {
 
 
 
+	public static function type_error(): string {
+		return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
+	}
+
+
+
+
+
+
+	public static function size_error(): string {
+		return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
+	}
+
+
+
+
+
+
+
+
+
 
 	public static function summary( int $procedure_id ): array {
 		$imagen = (int) get_post_thumbnail_id( $procedure_id );
+		if ( $imagen <= 0 ) {
+			return self::none();
+		}
+		$datos = wp_get_attachment_metadata( $imagen );
+		$datos = is_array( $datos ) ? $datos : array();
 		return array(
-			'url' => $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium' ) : '',
-			'alt' => $imagen > 0 ? (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ) : '',
+			'url'    => (string) wp_get_attachment_image_url( $imagen, 'large' ),
+			'alt'    => (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ),
+			'name'   => wp_basename( (string) get_attached_file( $imagen ) ),
+			'width'  => (int) ( $datos['width'] ?? 0 ),
+			'height' => (int) ( $datos['height'] ?? 0 ),
+		);
+	}
+
+
+
+
+
+
+	public static function none(): array {
+		return array(
+			'url'    => '',
+			'alt'    => '',
+			'name'   => '',
+			'width'  => 0,
+			'height' => 0,
 		);
 	}
 
@@ -15470,7 +15514,7 @@ final class ProcedurePoster {
 
 	private static function check( array $fichero ) {
 		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::max_bytes() ) {
-			return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
+			return self::size_error();
 		}
 		if ( UPLOAD_ERR_OK !== $fichero['error'] || '' === $fichero['tmp_name'] || ! is_readable( $fichero['tmp_name'] ) ) {
 			return 'No se ha podido subir la imagen. Vuelva a intentarlo.';
@@ -15478,7 +15522,7 @@ final class ProcedurePoster {
 
 		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::mimes() );
 		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::mimes(), true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
-			return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
+			return self::type_error();
 		}
 		return $tipo;
 	}
@@ -26454,9 +26498,13 @@ final class ProcedureEditorView {
 
 
 
+
+
+
+
+
 	private static function poster_section( array $m ): string {
 		$cartel = (array) ( $m['poster'] ?? array() );
-		$url    = (string) ( $cartel['url'] ?? '' );
 		$op     = ProcedurePoster::OP;
 
 		ob_start();
@@ -26468,30 +26516,74 @@ final class ProcedureEditorView {
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Cartel</legend>
 				<p class="prc-intro">Es la imagen de la tarjeta en la portada y de la ficha pública. Sin cartel, la tarjeta lleva el logo del ámbito.</p>
-				<?php if ( '' !== $url ) : ?>
-					<p><img class="prc-cartel-actual" src="<?php echo esc_url( $url ); ?>" alt="" /></p>
-				<?php endif; ?>
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>"><?php echo esc_html( '' !== $url ? 'Cambiar la imagen' : 'Imagen' ); ?></label>
-					<input class="prc-control" type="file" id="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" accept="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" />
-					<p class="prc-campo__ayuda"><?php echo esc_html( ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho. Mejor en vertical, como un cartel.' ); ?></p>
-				</div>
+				<?php echo self::poster_field( $cartel );?>
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>">Texto alternativo</label>
 					<input class="prc-control" type="text" id="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" value="<?php echo esc_attr( (string) ( $cartel['alt'] ?? '' ) ); ?>" />
 					<p class="prc-campo__ayuda">Lo que se lee en lugar de la imagen: lo que dice el cartel, en una frase. Si cambia la imagen, revíselo.</p>
 				</div>
-				<?php if ( '' !== $url ) : ?>
-					<div class="prc-campo prc-campo--completo">
-						<div class="prc-opcion">
-							<input type="checkbox" id="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" value="1" />
-							<label for="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>">Quitar el cartel</label>
-						</div>
-					</div>
-				<?php endif; ?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar el cartel' );?>
 		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+
+
+
+
+
+
+
+
+
+
+	private static function poster_field( array $cartel ): string {
+		$url    = (string) ( $cartel['url'] ?? '' );
+		$ancho  = (int) ( $cartel['width'] ?? 0 );
+		$alto   = (int) ( $cartel['height'] ?? 0 );
+		$datos  = (string) ( $cartel['name'] ?? '' );
+		$datos .= $ancho > 0 && $alto > 0 ? ( '' !== $datos ? ' · ' : '' ) . $ancho . ' × ' . $alto . ' px' : '';
+		$campo  = ProcedurePoster::FIELD_FILE;
+		$quitar = ProcedurePoster::FIELD_REMOVE;
+
+		ob_start();
+		?>
+		<div class="prc-campo prc-campo--completo prc-cartel" data-prc-cartel data-prc-cartel-estado="<?php echo esc_attr( '' !== $url ? 'guardada' : 'vacia' ); ?>" data-prc-cartel-tipos="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" data-prc-cartel-max="<?php echo esc_attr( (string) ProcedurePoster::max_bytes() ); ?>" data-prc-cartel-error-tipo="<?php echo esc_attr( ProcedurePoster::type_error() ); ?>" data-prc-cartel-error-peso="<?php echo esc_attr( ProcedurePoster::size_error() ); ?>">
+			<label class="prc-campo__etiqueta" for="<?php echo esc_attr( $campo ); ?>">Imagen</label>
+			<p class="prc-campo__ayuda" id="prc-cartel-ayuda">Mejor en vertical, como un cartel.</p>
+			<div class="prc-cartel__marco">
+				<div class="prc-cartel__vista">
+					<img class="prc-cartel__img"<?php echo '' !== $url ? ' src="' . esc_url( $url ) . '"' : ''; ?> alt="" />
+					<span class="prc-cartel__reemplazar" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+						Reemplazar
+					</span>
+				</div>
+				<div class="prc-cartel__vacio">
+					<span class="prc-cartel__icono" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+					</span>
+					<span class="prc-cartel__texto"><strong>Elija una imagen</strong> o arrástrela aquí</span>
+					<span class="prc-cartel__formatos" id="prc-cartel-formatos"><?php echo esc_html( ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho' ); ?></span>
+				</div>
+				<input class="prc-cartel__fichero" type="file" id="<?php echo esc_attr( $campo ); ?>" name="<?php echo esc_attr( $campo ); ?>" accept="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" aria-describedby="prc-cartel-ayuda prc-cartel-formatos prc-cartel-error" />
+				<button class="prc-cartel__quitar" type="button" aria-label="Quitar el cartel" title="Quitar el cartel">
+					<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" focusable="false" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+				</button>
+			</div>
+			<p class="prc-cartel__barra"><span id="prc-cartel-quitado">Se quitará al guardar.</span> <button class="prc-cartel__deshacer" type="button" aria-describedby="prc-cartel-quitado">Deshacer</button></p>
+			<p class="prc-cartel__datos" data-prc-cartel-guardado="<?php echo esc_attr( $datos ); ?>"><?php echo esc_html( $datos ); ?></p>
+			<p class="prc-cartel__nota">Se aplicará al guardar.</p>
+			<p class="prc-cartel__error" id="prc-cartel-error" aria-live="polite"></p>
+			<?php if ( '' !== $url ) : ?>
+				<div class="prc-opcion prc-cartel__casilla">
+					<input type="checkbox" id="<?php echo esc_attr( $quitar ); ?>" name="<?php echo esc_attr( $quitar ); ?>" value="1" />
+					<label for="<?php echo esc_attr( $quitar ); ?>">Quitar el cartel</label>
+				</div>
+			<?php endif; ?>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}
@@ -28214,10 +28306,7 @@ final class ProcedureEditor {
 			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'link_copies'             => array(),
-			'poster'                  => array(
-				'url' => '',
-				'alt' => '',
-			),
+			'poster'                  => ProcedurePoster::none(),
 			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
@@ -28437,10 +28526,7 @@ final class ProcedureEditor {
 
 	private static function poster( int $procedure_id, string $panel ): array {
 		if ( self::PANEL_DATA !== $panel ) {
-			return array(
-				'url' => '',
-				'alt' => '',
-			);
+			return ProcedurePoster::none();
 		}
 		$cartel = ProcedurePoster::summary( $procedure_id );
 
@@ -38811,11 +38897,220 @@ body.prc-app .prc-btn-borrar {
   .prc-app * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 
-/* El cartel actual en «Datos» del taller (#126). */
-.prc-cartel-actual {
-	max-width: 12rem;
-	height: auto;
+/* El cartel en «Datos» del taller (#126): una zona de soltar o la imagen
+   entera, con el aspa para quitar y «Reemplazar». La entrada de fichero es la
+   zona: sin guion se pulsa o se suelta encima igual. El estado lo lleva
+   `data-prc-cartel-estado` (vacia, guardada, nueva, quitada) y `--js` dice que
+   el guion está: sin él no hay aspa ni «Reemplazar», y queda la casilla. */
+.prc-cartel__marco {
+  position: relative;
+  margin-top: 10px;
+  border: 2px dashed var(--prc-c-tenue);
+  border-radius: 10px;
+  background: var(--prc-c-fondo-barra);
+  transition: border-color .15s, background-color .15s;
 }
+.prc-cartel__marco:hover,
+.prc-cartel__marco:focus-within {
+  border-color: var(--prc-c-azul);
+  background-color: rgba(0, 123, 255, .06);
+}
+.prc-cartel__marco:has(.prc-cartel__fichero:focus-visible) {
+  outline: 3px solid var(--prc-c-azul);
+  outline-offset: 2px;
+}
+.prc-cartel__marco--encima {
+  border-style: solid;
+  border-color: var(--prc-c-azul);
+  background-color: rgba(0, 123, 255, .12);
+}
+.prc-cartel--error .prc-cartel__marco {
+  border-color: var(--prc-c-obligatorio);
+  background-color: var(--prc-mal-fondo);
+}
+
+.prc-cartel__vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--prc-c-texto);
+}
+.prc-cartel__vacio strong { color: var(--prc-c-azul-borde); }
+.prc-cartel__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: 50%;
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-azul-borde);
+}
+.prc-cartel__formatos { font-size: .875rem; color: var(--prc-c-medio); }
+
+/* La imagen grande y entera; el damero deja ver la transparencia de un PNG. */
+.prc-cartel__vista {
+  position: relative;
+  height: 240px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%),
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+.prc-cartel__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__marco,
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__marco {
+  border-style: solid;
+  border-color: var(--prc-c-linea);
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__vacio,
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__vacio,
+.prc-cartel[data-prc-cartel-estado="vacia"] .prc-cartel__vista,
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__vista { display: none; }
+
+/* Sin guion, la entrada se ve, debajo de lo que haya. Con él, cubre la zona
+   entera, transparente: pulsar o soltar en cualquier punto la usa. */
+.prc-cartel__fichero {
+  display: block;
+  max-width: calc(100% - 32px);
+  margin: 0 auto 16px;
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__fichero { margin-top: 12px; }
+.prc-cartel--js .prc-cartel__fichero {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* «Reemplazar»: la propia entrada, que está debajo; esto solo lo rotula. */
+.prc-cartel__vista::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 45%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .5));
+}
+.prc-cartel__reemplazar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-titulo);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.prc-cartel__vista::after,
+.prc-cartel__reemplazar {
+  opacity: 0;
+  transition: opacity .15s;
+}
+.prc-cartel__marco:hover .prc-cartel__vista::after,
+.prc-cartel__marco:hover .prc-cartel__reemplazar,
+.prc-cartel__marco:focus-within .prc-cartel__vista::after,
+.prc-cartel__marco:focus-within .prc-cartel__reemplazar { opacity: 1; }
+@media (hover: none) {
+  .prc-cartel__vista::after,
+  .prc-cartel__reemplazar { opacity: 1; }
+}
+.prc-cartel:not(.prc-cartel--js) .prc-cartel__vista::after,
+.prc-cartel:not(.prc-cartel--js) .prc-cartel__reemplazar { display: none; }
+
+/* El aspa, por encima de la entrada. */
+.prc-cartel__quitar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color .15s;
+}
+.prc-cartel__quitar:hover { background: #c82333; }
+.prc-cartel__quitar:focus-visible {
+  outline: 3px solid #fff;
+  box-shadow: 0 0 0 6px var(--prc-c-azul);
+}
+.prc-cartel--js[data-prc-cartel-estado="guardada"] .prc-cartel__quitar,
+.prc-cartel--js[data-prc-cartel-estado="nueva"] .prc-cartel__quitar { display: inline-flex; }
+
+.prc-cartel__barra {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
+}
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__barra { display: flex; }
+.prc-cartel__deshacer {
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, .75);
+  border-radius: var(--prc-radio);
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prc-cartel__deshacer:hover { background: rgba(255, 255, 255, .15); }
+.prc-cartel__deshacer:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+.prc-cartel__datos,
+.prc-cartel__nota,
+.prc-cartel__error {
+  margin: 6px 0 0;
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+}
+.prc-cartel__datos { color: var(--prc-c-medio); }
+.prc-cartel__nota { display: none; color: var(--prc-info-texto); }
+.prc-cartel__error { color: var(--prc-mal-texto); font-weight: 600; }
+.prc-cartel__datos:empty,
+.prc-cartel__error:empty,
+.prc-cartel[data-prc-cartel-estado="vacia"] .prc-cartel__datos,
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__datos { display: none; }
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__nota { display: block; }
+.prc-cartel__casilla { margin-top: 8px; }
+.prc-cartel--js .prc-cartel__casilla { display: none; }
 ',
   'css/prc-ayuda.css' => '/* La ayuda: dos guías y las preguntas frecuentes (ADR-0045).
    ==========================================================================
@@ -41211,6 +41506,171 @@ body.prc-app .prc-btn-borrar {
 				salir();
 			}
 		} );
+	} );
+
+	/* --- 11. El cartel de «Datos»: vista previa, aspa y «Deshacer» ------- */
+
+	/*
+	 * `data-prc-cartel` en el campo. Sin guion ya funciona: la entrada de
+	 * fichero es la zona entera —se pulsa o se suelta encima— y «Quitar el
+	 * cartel» es una casilla. Con guion, la imagen elegida se ve al momento, el
+	 * aspa marca esa misma casilla (que se esconde) y «Deshacer» la desmarca.
+	 * El servidor sigue decidiendo: tipo, peso y qué se guarda.
+	 *
+	 * El estado va en `data-prc-cartel-estado` y lo pinta la hoja:
+	 *   vacia    — sin cartel: la zona de soltar.
+	 *   guardada — el cartel guardado, con el aspa y «Reemplazar».
+	 *   nueva    — una imagen elegida, aún sin guardar.
+	 *   quitada  — el guardado, marcado para quitar: la zona y «Deshacer».
+	 */
+	function piezasCartel( raiz ) {
+		return {
+			raiz: raiz,
+			marco: raiz.querySelector( \'.prc-cartel__marco\' ),
+			img: raiz.querySelector( \'.prc-cartel__img\' ),
+			fichero: raiz.querySelector( \'.prc-cartel__fichero\' ),
+			quitar: raiz.querySelector( \'.prc-cartel__quitar\' ),
+			deshacer: raiz.querySelector( \'.prc-cartel__deshacer\' ),
+			datos: raiz.querySelector( \'.prc-cartel__datos\' ),
+			error: raiz.querySelector( \'.prc-cartel__error\' ),
+			casilla: raiz.querySelector( \'.prc-cartel__casilla input[type="checkbox"]\' )
+		};
+	}
+
+	function errorCartel( p, texto ) {
+		p.error.textContent = texto;
+		p.raiz.classList.toggle( \'prc-cartel--error\', \'\' !== texto );
+	}
+
+	// La vista previa anterior, si era de un fichero elegido, ya no se usa.
+	function soltarVistaPrevia( p ) {
+		var src = p.img.getAttribute( \'src\' ) || \'\';
+		if ( 0 === src.indexOf( \'blob:\' ) && window.URL && URL.revokeObjectURL ) {
+			URL.revokeObjectURL( src );
+		}
+	}
+
+	// Vuelve a lo guardado: el cartel que había, o la zona vacía.
+	function cartelGuardado( p ) {
+		var original = p.raiz.getAttribute( \'data-prc-cartel-original\' ) || \'\';
+		soltarVistaPrevia( p );
+		if ( original ) {
+			p.img.setAttribute( \'src\', original );
+		} else {
+			p.img.removeAttribute( \'src\' );
+		}
+		p.datos.textContent = p.datos.getAttribute( \'data-prc-cartel-guardado\' ) || \'\';
+		p.raiz.setAttribute( \'data-prc-cartel-estado\', original ? \'guardada\' : \'vacia\' );
+	}
+
+	function marcarQuitar( p, quitar ) {
+		if ( p.casilla && p.casilla.checked !== quitar ) {
+			p.casilla.checked = quitar;
+			// Para el aviso de cambios sin guardar (sección 10).
+			p.casilla.dispatchEvent( new Event( \'change\', { bubbles: true } ) );
+		}
+	}
+
+	// Lo que el servidor rechazaría, dicho antes de enviar y con sus palabras.
+	function motivoCartel( p, fichero ) {
+		var tipos = ( p.raiz.getAttribute( \'data-prc-cartel-tipos\' ) || \'\' ).split( \',\' );
+		var max = parseInt( p.raiz.getAttribute( \'data-prc-cartel-max\' ), 10 ) || 0;
+		// Sin `type` (algunos sistemas no lo dan), decide el servidor.
+		if ( fichero.type && -1 === tipos.indexOf( fichero.type ) ) {
+			return p.raiz.getAttribute( \'data-prc-cartel-error-tipo\' ) || \'\';
+		}
+		if ( max > 0 && fichero.size > max ) {
+			return p.raiz.getAttribute( \'data-prc-cartel-error-peso\' ) || \'\';
+		}
+		return \'\';
+	}
+
+	function elegirCartel( p ) {
+		var fichero = p.fichero.files && p.fichero.files[ 0 ];
+		var motivo = fichero ? motivoCartel( p, fichero ) : \'\';
+		errorCartel( p, motivo );
+		if ( ! fichero || motivo ) {
+			p.fichero.value = \'\';
+			if ( \'quitada\' !== p.raiz.getAttribute( \'data-prc-cartel-estado\' ) ) {
+				cartelGuardado( p );
+			}
+			return;
+		}
+		// Elegir otra imagen ya sustituye: quitar a la vez lo rechazaría el servidor.
+		marcarQuitar( p, false );
+		soltarVistaPrevia( p );
+		if ( window.URL && URL.createObjectURL ) {
+			p.img.setAttribute( \'src\', URL.createObjectURL( fichero ) );
+		}
+		p.datos.textContent = fichero.name;
+		p.raiz.setAttribute( \'data-prc-cartel-estado\', \'nueva\' );
+	}
+
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( \'[data-prc-cartel]\' ), function ( raiz ) {
+			var p = piezasCartel( raiz );
+			raiz.setAttribute( \'data-prc-cartel-original\', p.img.getAttribute( \'src\' ) || \'\' );
+			raiz.classList.add( \'prc-cartel--js\' );
+			// Las medidas de la imagen elegida, cuando el navegador la ha leído.
+			p.img.addEventListener( \'load\', function () {
+				if ( \'nueva\' === raiz.getAttribute( \'data-prc-cartel-estado\' ) && p.img.naturalWidth ) {
+					p.datos.textContent = p.fichero.files[ 0 ].name + \' · \' + p.img.naturalWidth + \' × \' + p.img.naturalHeight + \' px\';
+				}
+			} );
+		} );
+	} );
+
+	document.addEventListener( \'change\', function ( e ) {
+		var raiz = e.target.closest && e.target.matches( \'.prc-cartel__fichero\' ) ? e.target.closest( \'[data-prc-cartel]\' ) : null;
+		if ( raiz ) {
+			elegirCartel( piezasCartel( raiz ) );
+		}
+	} );
+
+	document.addEventListener( \'click\', function ( e ) {
+		var boton = e.target.closest ? e.target.closest( \'.prc-cartel__quitar, .prc-cartel__deshacer\' ) : null;
+		var raiz = boton && boton.closest( \'[data-prc-cartel]\' );
+		if ( ! raiz ) {
+			return;
+		}
+		var p = piezasCartel( raiz );
+		errorCartel( p, \'\' );
+		if ( boton === p.deshacer ) {
+			marcarQuitar( p, false );
+			cartelGuardado( p );
+			p.quitar.focus();
+			return;
+		}
+		// El aspa sobre una imagen recién elegida solo descarta la elección.
+		if ( \'nueva\' === raiz.getAttribute( \'data-prc-cartel-estado\' ) ) {
+			p.fichero.value = \'\';
+			cartelGuardado( p );
+			( \'guardada\' === raiz.getAttribute( \'data-prc-cartel-estado\' ) ? p.quitar : p.fichero ).focus();
+			return;
+		}
+		marcarQuitar( p, true );
+		raiz.setAttribute( \'data-prc-cartel-estado\', \'quitada\' );
+		p.deshacer.focus();
+	} );
+
+	// Resaltar la zona mientras se arrastra un fichero encima; soltar lo hace la entrada.
+	function encima( e, si ) {
+		var marco = e.target.closest ? e.target.closest( \'[data-prc-cartel] .prc-cartel__marco\' ) : null;
+		if ( marco && ( si || ! marco.contains( e.relatedTarget ) ) ) {
+			marco.classList.toggle( \'prc-cartel__marco--encima\', si );
+		}
+	}
+	document.addEventListener( \'dragenter\', function ( e ) {
+		encima( e, true );
+	} );
+	document.addEventListener( \'dragover\', function ( e ) {
+		encima( e, true );
+	} );
+	document.addEventListener( \'dragleave\', function ( e ) {
+		encima( e, false );
+	} );
+	document.addEventListener( \'drop\', function ( e ) {
+		encima( e, false );
 	} );
 }() );
 ',

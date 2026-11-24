@@ -766,4 +766,169 @@
 			}
 		} );
 	} );
+
+	/* --- 11. El cartel de «Datos»: vista previa, aspa y «Deshacer» ------- */
+
+	/*
+	 * `data-prc-cartel` en el campo. Sin guion ya funciona: la entrada de
+	 * fichero es la zona entera —se pulsa o se suelta encima— y «Quitar el
+	 * cartel» es una casilla. Con guion, la imagen elegida se ve al momento, el
+	 * aspa marca esa misma casilla (que se esconde) y «Deshacer» la desmarca.
+	 * El servidor sigue decidiendo: tipo, peso y qué se guarda.
+	 *
+	 * El estado va en `data-prc-cartel-estado` y lo pinta la hoja:
+	 *   vacia    — sin cartel: la zona de soltar.
+	 *   guardada — el cartel guardado, con el aspa y «Reemplazar».
+	 *   nueva    — una imagen elegida, aún sin guardar.
+	 *   quitada  — el guardado, marcado para quitar: la zona y «Deshacer».
+	 */
+	function piezasCartel( raiz ) {
+		return {
+			raiz: raiz,
+			marco: raiz.querySelector( '.prc-cartel__marco' ),
+			img: raiz.querySelector( '.prc-cartel__img' ),
+			fichero: raiz.querySelector( '.prc-cartel__fichero' ),
+			quitar: raiz.querySelector( '.prc-cartel__quitar' ),
+			deshacer: raiz.querySelector( '.prc-cartel__deshacer' ),
+			datos: raiz.querySelector( '.prc-cartel__datos' ),
+			error: raiz.querySelector( '.prc-cartel__error' ),
+			casilla: raiz.querySelector( '.prc-cartel__casilla input[type="checkbox"]' )
+		};
+	}
+
+	function errorCartel( p, texto ) {
+		p.error.textContent = texto;
+		p.raiz.classList.toggle( 'prc-cartel--error', '' !== texto );
+	}
+
+	// La vista previa anterior, si era de un fichero elegido, ya no se usa.
+	function soltarVistaPrevia( p ) {
+		var src = p.img.getAttribute( 'src' ) || '';
+		if ( 0 === src.indexOf( 'blob:' ) && window.URL && URL.revokeObjectURL ) {
+			URL.revokeObjectURL( src );
+		}
+	}
+
+	// Vuelve a lo guardado: el cartel que había, o la zona vacía.
+	function cartelGuardado( p ) {
+		var original = p.raiz.getAttribute( 'data-prc-cartel-original' ) || '';
+		soltarVistaPrevia( p );
+		if ( original ) {
+			p.img.setAttribute( 'src', original );
+		} else {
+			p.img.removeAttribute( 'src' );
+		}
+		p.datos.textContent = p.datos.getAttribute( 'data-prc-cartel-guardado' ) || '';
+		p.raiz.setAttribute( 'data-prc-cartel-estado', original ? 'guardada' : 'vacia' );
+	}
+
+	function marcarQuitar( p, quitar ) {
+		if ( p.casilla && p.casilla.checked !== quitar ) {
+			p.casilla.checked = quitar;
+			// Para el aviso de cambios sin guardar (sección 10).
+			p.casilla.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		}
+	}
+
+	// Lo que el servidor rechazaría, dicho antes de enviar y con sus palabras.
+	function motivoCartel( p, fichero ) {
+		var tipos = ( p.raiz.getAttribute( 'data-prc-cartel-tipos' ) || '' ).split( ',' );
+		var max = parseInt( p.raiz.getAttribute( 'data-prc-cartel-max' ), 10 ) || 0;
+		// Sin `type` (algunos sistemas no lo dan), decide el servidor.
+		if ( fichero.type && -1 === tipos.indexOf( fichero.type ) ) {
+			return p.raiz.getAttribute( 'data-prc-cartel-error-tipo' ) || '';
+		}
+		if ( max > 0 && fichero.size > max ) {
+			return p.raiz.getAttribute( 'data-prc-cartel-error-peso' ) || '';
+		}
+		return '';
+	}
+
+	function elegirCartel( p ) {
+		var fichero = p.fichero.files && p.fichero.files[ 0 ];
+		var motivo = fichero ? motivoCartel( p, fichero ) : '';
+		errorCartel( p, motivo );
+		if ( ! fichero || motivo ) {
+			p.fichero.value = '';
+			if ( 'quitada' !== p.raiz.getAttribute( 'data-prc-cartel-estado' ) ) {
+				cartelGuardado( p );
+			}
+			return;
+		}
+		// Elegir otra imagen ya sustituye: quitar a la vez lo rechazaría el servidor.
+		marcarQuitar( p, false );
+		soltarVistaPrevia( p );
+		if ( window.URL && URL.createObjectURL ) {
+			p.img.setAttribute( 'src', URL.createObjectURL( fichero ) );
+		}
+		p.datos.textContent = fichero.name;
+		p.raiz.setAttribute( 'data-prc-cartel-estado', 'nueva' );
+	}
+
+	document.addEventListener( 'DOMContentLoaded', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-cartel]' ), function ( raiz ) {
+			var p = piezasCartel( raiz );
+			raiz.setAttribute( 'data-prc-cartel-original', p.img.getAttribute( 'src' ) || '' );
+			raiz.classList.add( 'prc-cartel--js' );
+			// Las medidas de la imagen elegida, cuando el navegador la ha leído.
+			p.img.addEventListener( 'load', function () {
+				if ( 'nueva' === raiz.getAttribute( 'data-prc-cartel-estado' ) && p.img.naturalWidth ) {
+					p.datos.textContent = p.fichero.files[ 0 ].name + ' · ' + p.img.naturalWidth + ' × ' + p.img.naturalHeight + ' px';
+				}
+			} );
+		} );
+	} );
+
+	document.addEventListener( 'change', function ( e ) {
+		var raiz = e.target.closest && e.target.matches( '.prc-cartel__fichero' ) ? e.target.closest( '[data-prc-cartel]' ) : null;
+		if ( raiz ) {
+			elegirCartel( piezasCartel( raiz ) );
+		}
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		var boton = e.target.closest ? e.target.closest( '.prc-cartel__quitar, .prc-cartel__deshacer' ) : null;
+		var raiz = boton && boton.closest( '[data-prc-cartel]' );
+		if ( ! raiz ) {
+			return;
+		}
+		var p = piezasCartel( raiz );
+		errorCartel( p, '' );
+		if ( boton === p.deshacer ) {
+			marcarQuitar( p, false );
+			cartelGuardado( p );
+			p.quitar.focus();
+			return;
+		}
+		// El aspa sobre una imagen recién elegida solo descarta la elección.
+		if ( 'nueva' === raiz.getAttribute( 'data-prc-cartel-estado' ) ) {
+			p.fichero.value = '';
+			cartelGuardado( p );
+			( 'guardada' === raiz.getAttribute( 'data-prc-cartel-estado' ) ? p.quitar : p.fichero ).focus();
+			return;
+		}
+		marcarQuitar( p, true );
+		raiz.setAttribute( 'data-prc-cartel-estado', 'quitada' );
+		p.deshacer.focus();
+	} );
+
+	// Resaltar la zona mientras se arrastra un fichero encima; soltar lo hace la entrada.
+	function encima( e, si ) {
+		var marco = e.target.closest ? e.target.closest( '[data-prc-cartel] .prc-cartel__marco' ) : null;
+		if ( marco && ( si || ! marco.contains( e.relatedTarget ) ) ) {
+			marco.classList.toggle( 'prc-cartel__marco--encima', si );
+		}
+	}
+	document.addEventListener( 'dragenter', function ( e ) {
+		encima( e, true );
+	} );
+	document.addEventListener( 'dragover', function ( e ) {
+		encima( e, true );
+	} );
+	document.addEventListener( 'dragleave', function ( e ) {
+		encima( e, false );
+	} );
+	document.addEventListener( 'drop', function ( e ) {
+		encima( e, false );
+	} );
 }() );

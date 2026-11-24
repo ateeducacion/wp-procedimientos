@@ -1392,10 +1392,7 @@ final class ProcedureEditor {
 			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'link_copies'             => array(),
-			'poster'                  => array(
-				'url' => '',
-				'alt' => '',
-			),
+			'poster'                  => ProcedurePoster::none(),
 			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
@@ -1611,14 +1608,11 @@ final class ProcedureEditor {
 	 *
 	 * @param int    $procedure_id Procedure post ID.
 	 * @param string $panel        Panel being drawn; only «Datos» shows it.
-	 * @return array{url:string, alt:string}
+	 * @return array{url:string, alt:string, name:string, width:int, height:int}
 	 */
 	private static function poster( int $procedure_id, string $panel ): array {
 		if ( self::PANEL_DATA !== $panel ) {
-			return array(
-				'url' => '',
-				'alt' => '',
-			);
+			return ProcedurePoster::none();
 		}
 		$cartel = ProcedurePoster::summary( $procedure_id );
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se repinta lo tecleado; handle() comprobó el nonce.

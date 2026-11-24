@@ -1238,8 +1238,217 @@ body.prc-app .prc-btn-borrar {
   .prc-app * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 
-/* El cartel actual en «Datos» del taller (#126). */
-.prc-cartel-actual {
-	max-width: 12rem;
-	height: auto;
+/* El cartel en «Datos» del taller (#126): una zona de soltar o la imagen
+   entera, con el aspa para quitar y «Reemplazar». La entrada de fichero es la
+   zona: sin guion se pulsa o se suelta encima igual. El estado lo lleva
+   `data-prc-cartel-estado` (vacia, guardada, nueva, quitada) y `--js` dice que
+   el guion está: sin él no hay aspa ni «Reemplazar», y queda la casilla. */
+.prc-cartel__marco {
+  position: relative;
+  margin-top: 10px;
+  border: 2px dashed var(--prc-c-tenue);
+  border-radius: 10px;
+  background: var(--prc-c-fondo-barra);
+  transition: border-color .15s, background-color .15s;
 }
+.prc-cartel__marco:hover,
+.prc-cartel__marco:focus-within {
+  border-color: var(--prc-c-azul);
+  background-color: rgba(0, 123, 255, .06);
+}
+.prc-cartel__marco:has(.prc-cartel__fichero:focus-visible) {
+  outline: 3px solid var(--prc-c-azul);
+  outline-offset: 2px;
+}
+.prc-cartel__marco--encima {
+  border-style: solid;
+  border-color: var(--prc-c-azul);
+  background-color: rgba(0, 123, 255, .12);
+}
+.prc-cartel--error .prc-cartel__marco {
+  border-color: var(--prc-c-obligatorio);
+  background-color: var(--prc-mal-fondo);
+}
+
+.prc-cartel__vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--prc-c-texto);
+}
+.prc-cartel__vacio strong { color: var(--prc-c-azul-borde); }
+.prc-cartel__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border: 1px solid var(--prc-c-linea);
+  border-radius: 50%;
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-azul-borde);
+}
+.prc-cartel__formatos { font-size: .875rem; color: var(--prc-c-medio); }
+
+/* La imagen grande y entera; el damero deja ver la transparencia de un PNG. */
+.prc-cartel__vista {
+  position: relative;
+  height: 240px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%),
+    linear-gradient(45deg, #e9e9e9 25%, transparent 25%, transparent 75%, #e9e9e9 75%);
+  background-position: 0 0, 8px 8px;
+  background-size: 16px 16px;
+}
+.prc-cartel__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__marco,
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__marco {
+  border-style: solid;
+  border-color: var(--prc-c-linea);
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__vacio,
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__vacio,
+.prc-cartel[data-prc-cartel-estado="vacia"] .prc-cartel__vista,
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__vista { display: none; }
+
+/* Sin guion, la entrada se ve, debajo de lo que haya. Con él, cubre la zona
+   entera, transparente: pulsar o soltar en cualquier punto la usa. */
+.prc-cartel__fichero {
+  display: block;
+  max-width: calc(100% - 32px);
+  margin: 0 auto 16px;
+}
+.prc-cartel[data-prc-cartel-estado="guardada"] .prc-cartel__fichero { margin-top: 12px; }
+.prc-cartel--js .prc-cartel__fichero {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* «Reemplazar»: la propia entrada, que está debajo; esto solo lo rotula. */
+.prc-cartel__vista::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 45%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .5));
+}
+.prc-cartel__reemplazar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--prc-c-fondo);
+  color: var(--prc-c-titulo);
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.prc-cartel__vista::after,
+.prc-cartel__reemplazar {
+  opacity: 0;
+  transition: opacity .15s;
+}
+.prc-cartel__marco:hover .prc-cartel__vista::after,
+.prc-cartel__marco:hover .prc-cartel__reemplazar,
+.prc-cartel__marco:focus-within .prc-cartel__vista::after,
+.prc-cartel__marco:focus-within .prc-cartel__reemplazar { opacity: 1; }
+@media (hover: none) {
+  .prc-cartel__vista::after,
+  .prc-cartel__reemplazar { opacity: 1; }
+}
+.prc-cartel:not(.prc-cartel--js) .prc-cartel__vista::after,
+.prc-cartel:not(.prc-cartel--js) .prc-cartel__reemplazar { display: none; }
+
+/* El aspa, por encima de la entrada. */
+.prc-cartel__quitar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color .15s;
+}
+.prc-cartel__quitar:hover { background: #c82333; }
+.prc-cartel__quitar:focus-visible {
+  outline: 3px solid #fff;
+  box-shadow: 0 0 0 6px var(--prc-c-azul);
+}
+.prc-cartel--js[data-prc-cartel-estado="guardada"] .prc-cartel__quitar,
+.prc-cartel--js[data-prc-cartel-estado="nueva"] .prc-cartel__quitar { display: inline-flex; }
+
+.prc-cartel__barra {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  padding: 8px 8px 8px 14px;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
+}
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__barra { display: flex; }
+.prc-cartel__deshacer {
+  padding: 4px 14px;
+  border: 1px solid rgba(255, 255, 255, .75);
+  border-radius: var(--prc-radio);
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.prc-cartel__deshacer:hover { background: rgba(255, 255, 255, .15); }
+.prc-cartel__deshacer:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+
+.prc-cartel__datos,
+.prc-cartel__nota,
+.prc-cartel__error {
+  margin: 6px 0 0;
+  font-size: .875rem;
+  overflow-wrap: anywhere;
+}
+.prc-cartel__datos { color: var(--prc-c-medio); }
+.prc-cartel__nota { display: none; color: var(--prc-info-texto); }
+.prc-cartel__error { color: var(--prc-mal-texto); font-weight: 600; }
+.prc-cartel__datos:empty,
+.prc-cartel__error:empty,
+.prc-cartel[data-prc-cartel-estado="vacia"] .prc-cartel__datos,
+.prc-cartel[data-prc-cartel-estado="quitada"] .prc-cartel__datos { display: none; }
+.prc-cartel[data-prc-cartel-estado="nueva"] .prc-cartel__nota { display: block; }
+.prc-cartel__casilla { margin-top: 8px; }
+.prc-cartel--js .prc-cartel__casilla { display: none; }

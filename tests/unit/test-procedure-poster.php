@@ -117,6 +117,13 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'id="' . ProcedurePoster::SECTION . '"', $html );
 		$this->assertStringContainsString( 'enctype="multipart/form-data"', $html );
 		$this->assertStringContainsString( 'value="' . ProcedurePoster::OP . '"', $html );
+		// Sin cartel, la zona de soltar: la propia entrada de fichero, extendida sobre ella.
+		$this->assertStringContainsString( 'data-prc-cartel-estado="vacia"', $html );
+		$this->assertStringContainsString( '<strong>Elija una imagen</strong> o arrástrela aquí', $html );
+		$this->assertMatchesRegularExpression( '/<input class="prc-cartel__fichero" type="file" id="' . ProcedurePoster::FIELD_FILE . '" name="' . ProcedurePoster::FIELD_FILE . '"/', $html );
+		$this->assertStringContainsString( 'data-prc-cartel-error-tipo="' . esc_attr( ProcedurePoster::type_error() ) . '"', $html );
+		$this->assertStringContainsString( 'data-prc-cartel-max="' . ProcedurePoster::max_bytes() . '"', $html );
+		$this->assertStringNotContainsString( 'name="' . ProcedurePoster::FIELD_REMOVE . '"', $html );
 
 		$url = $this->enviar( $manager, $procedure, $this->png(), 'cartel.png', array( ProcedurePoster::FIELD_ALT => 'Cartel de la red' ) );
 		$this->assertNotNull( $url );
@@ -133,8 +140,13 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_DATA,
 		);
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
-		$this->assertStringContainsString( (string) wp_get_attachment_image_url( $imagen, 'medium' ), $html );
+		$this->assertStringContainsString( (string) wp_get_attachment_image_url( $imagen, 'large' ), $html );
+		$this->assertStringContainsString( 'data-prc-cartel-estado="guardada"', $html );
 		$this->assertStringContainsString( 'name="' . ProcedurePoster::FIELD_REMOVE . '"', $html );
+		$this->assertStringContainsString( 'aria-label="Quitar el cartel"', $html );
+		$this->assertStringContainsString( 'Reemplazar', $html );
+		$this->assertStringContainsString( 'Se quitará al guardar.', $html );
+		$this->assertStringContainsString( esc_html( wp_basename( (string) get_attached_file( $imagen ) ) ) . ' · 1 × 1 px', $html );
 
 		// Cambiar solo el texto alternativo no pide otra imagen.
 		$this->assertNotNull( $this->enviar( $manager, $procedure, null, '', array( ProcedurePoster::FIELD_ALT => 'Otro texto' ) ) );

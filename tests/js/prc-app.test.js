@@ -6,7 +6,7 @@
  * Escape, the no-JavaScript step) are checked in a real browser by
  * `npm run test:browser`; here only the decisions the script takes.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Load the script and fire DOMContentLoaded, as the page does.
@@ -1242,5 +1242,170 @@ describe( 'the print button of the receipt', () => {
 		expect( document.querySelector( 'section' ).hidden ).toBe( true );
 		button.click();
 		expect( window.print ).toHaveBeenCalledTimes( 1 );
+	} );
+} );
+
+describe( 'the poster field of «Datos»', () => {
+	/**
+	 * The field as the server paints it, with or without a saved poster.
+	 *
+	 * @param {boolean} saved Whether there is a poster already.
+	 * @return {string} The markup.
+	 */
+	function field( saved ) {
+		return `
+		<form id="f" data-prc-dirty-guard>
+			<div class="prc-cartel" data-prc-cartel data-prc-cartel-estado="${ saved ? 'guardada' : 'vacia' }"
+				data-prc-cartel-tipos="image/jpeg,image/png,image/webp" data-prc-cartel-max="1000"
+				data-prc-cartel-error-tipo="El cartel tiene que ser una imagen JPEG, PNG o WebP."
+				data-prc-cartel-error-peso="El cartel ocupa más de 1 KB. Redúzcalo y vuelva a subirlo.">
+				<div class="prc-cartel__marco">
+					<div class="prc-cartel__vista"><img class="prc-cartel__img"${ saved ? ' src="http://x.test/cartel.png"' : '' } alt="" /></div>
+					<div class="prc-cartel__vacio"></div>
+					<input class="prc-cartel__fichero" type="file" id="prc_poster" name="prc_poster" />
+					<button class="prc-cartel__quitar" type="button" aria-label="Quitar el cartel"></button>
+				</div>
+				<p class="prc-cartel__barra"><span>Se quitará al guardar.</span> <button class="prc-cartel__deshacer" type="button">Deshacer</button></p>
+				<p class="prc-cartel__datos" data-prc-cartel-guardado="${ saved ? 'cartel.png · 600 × 800 px' : '' }">${ saved ? 'cartel.png · 600 × 800 px' : '' }</p>
+				<p class="prc-cartel__nota">Se aplicará al guardar.</p>
+				<p class="prc-cartel__error" aria-live="polite"></p>
+				${ saved ? '<div class="prc-opcion prc-cartel__casilla"><input type="checkbox" id="prc_poster_remove" name="prc_poster_remove" value="1" /><label for="prc_poster_remove">Quitar el cartel</label></div>' : '' }
+			</div>
+		</form>`;
+	}
+
+	const $ = ( selector ) => document.querySelector( selector );
+	const state = () => $( '[data-prc-cartel]' ).getAttribute( 'data-prc-cartel-estado' );
+
+	/**
+	 * Choose a file in the input, the way the browser does after a pick or a drop.
+	 *
+	 * @param {File|null} file The file, or null to clear the choice.
+	 */
+	function choose( file ) {
+		const input = $( '.prc-cartel__fichero' );
+		Object.defineProperty( input, 'files', { value: file ? [ file ] : [], configurable: true } );
+		input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	}
+
+	// Node trae su propio URL.createObjectURL, que no acepta un File de jsdom.
+	beforeEach( () => {
+		vi.spyOn( URL, 'createObjectURL' ).mockReturnValue( 'blob:cartel' );
+		vi.spyOn( URL, 'revokeObjectURL' ).mockImplementation( () => {} );
+	} );
+
+	afterEach( () => {
+		vi.restoreAllMocks();
+	} );
+
+	it( 'marks the field as enhanced, so the X replaces the checkbox', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--js' ) ).toBe( true );
+	} );
+
+	it( 'previews a chosen image at once, with its name and a note', async () => {
+		document.body.innerHTML = field( false );
+		await load();
+
+		choose( new File( [ 'x' ], 'nuevo.png', { type: 'image/png' } ) );
+
+		expect( state() ).toBe( 'nueva' );
+		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'blob:cartel' );
+		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'nuevo.png' );
+		expect( $( '#f' ).hasAttribute( 'data-prc-sucio' ) ).toBe( true );
+	} );
+
+	it( 'refuses another type or a file too big, and says why', async () => {
+		document.body.innerHTML = field( false );
+		await load();
+
+		choose( new File( [ 'x' ], 'cartel.pdf', { type: 'application/pdf' } ) );
+		expect( state() ).toBe( 'vacia' );
+		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--error' ) ).toBe( true );
+		expect( $( '.prc-cartel__error' ).textContent ).toBe( 'El cartel tiene que ser una imagen JPEG, PNG o WebP.' );
+		expect( $( '.prc-cartel__fichero' ).value ).toBe( '' );
+
+		choose( new File( [ 'x'.repeat( 2000 ) ], 'grande.png', { type: 'image/png' } ) );
+		expect( $( '.prc-cartel__error' ).textContent ).toBe( 'El cartel ocupa más de 1 KB. Redúzcalo y vuelva a subirlo.' );
+
+		choose( new File( [ 'x' ], 'bueno.webp', { type: 'image/webp' } ) );
+		expect( state() ).toBe( 'nueva' );
+		expect( $( '.prc-cartel__error' ).textContent ).toBe( '' );
+		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--error' ) ).toBe( false );
+	} );
+
+	it( 'the X ticks «Quitar el cartel», shows the undo bar and focuses «Deshacer»', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+
+		$( '.prc-cartel__quitar' ).click();
+
+		expect( state() ).toBe( 'quitada' );
+		expect( $( '#prc_poster_remove' ).checked ).toBe( true );
+		expect( document.activeElement ).toBe( $( '.prc-cartel__deshacer' ) );
+		expect( $( '#f' ).hasAttribute( 'data-prc-sucio' ) ).toBe( true );
+	} );
+
+	it( '«Deshacer» unticks it, brings the poster back and focuses the X', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+		$( '.prc-cartel__quitar' ).click();
+
+		$( '.prc-cartel__deshacer' ).click();
+
+		expect( state() ).toBe( 'guardada' );
+		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
+		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'http://x.test/cartel.png' );
+		expect( document.activeElement ).toBe( $( '.prc-cartel__quitar' ) );
+	} );
+
+	it( 'choosing an image after removing replaces instead of removing', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+		$( '.prc-cartel__quitar' ).click();
+
+		choose( new File( [ 'x' ], 'otro.jpg', { type: 'image/jpeg' } ) );
+
+		expect( state() ).toBe( 'nueva' );
+		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
+	} );
+
+	it( 'the X on a chosen image drops the choice and goes back to what was saved', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+		choose( new File( [ 'x' ], 'otro.jpg', { type: 'image/jpeg' } ) );
+		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'otro.jpg' );
+
+		$( '.prc-cartel__quitar' ).click();
+
+		expect( state() ).toBe( 'guardada' );
+		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
+		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'http://x.test/cartel.png' );
+		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'cartel.png · 600 × 800 px' );
+		expect( document.activeElement ).toBe( $( '.prc-cartel__quitar' ) );
+	} );
+
+	it( 'the X on a chosen image with nothing saved goes back to the empty zone', async () => {
+		document.body.innerHTML = field( false );
+		await load();
+		choose( new File( [ 'x' ], 'nuevo.png', { type: 'image/png' } ) );
+
+		$( '.prc-cartel__quitar' ).click();
+
+		expect( state() ).toBe( 'vacia' );
+		expect( $( '.prc-cartel__img' ).hasAttribute( 'src' ) ).toBe( false );
+		expect( document.activeElement ).toBe( $( '.prc-cartel__fichero' ) );
+	} );
+
+	it( 'highlights the zone while a file is dragged over it', async () => {
+		document.body.innerHTML = field( false );
+		await load();
+		const marco = $( '.prc-cartel__marco' );
+
+		$( '.prc-cartel__fichero' ).dispatchEvent( new Event( 'dragenter', { bubbles: true } ) );
+		expect( marco.classList.contains( 'prc-cartel__marco--encima' ) ).toBe( true );
+		$( '.prc-cartel__fichero' ).dispatchEvent( new Event( 'drop', { bubbles: true } ) );
+		expect( marco.classList.contains( 'prc-cartel__marco--encima' ) ).toBe( false );
 	} );
 } );

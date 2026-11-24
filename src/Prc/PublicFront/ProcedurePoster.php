@@ -101,16 +101,60 @@ final class ProcedurePoster {
 	}
 
 	/**
-	 * The current poster, for the section.
+	 * Why a file of another type is refused; the same words on the server and in the browser.
+	 *
+	 * @return string
+	 */
+	public static function type_error(): string {
+		return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
+	}
+
+	/**
+	 * Why a file that is too big is refused; the same words on the server and in the browser.
+	 *
+	 * @return string
+	 */
+	public static function size_error(): string {
+		return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
+	}
+
+	/**
+	 * The current poster, for the section: the image, its text and what the file is.
+	 *
+	 * La vista previa es grande (`large`, o el original si es menor): en el
+	 * taller se mira el cartel entero, no una miniatura.
 	 *
 	 * @param int $procedure_id Procedure post ID.
-	 * @return array{url:string, alt:string}
+	 * @return array{url:string, alt:string, name:string, width:int, height:int}
 	 */
 	public static function summary( int $procedure_id ): array {
 		$imagen = (int) get_post_thumbnail_id( $procedure_id );
+		if ( $imagen <= 0 ) {
+			return self::none();
+		}
+		$datos = wp_get_attachment_metadata( $imagen );
+		$datos = is_array( $datos ) ? $datos : array();
 		return array(
-			'url' => $imagen > 0 ? (string) wp_get_attachment_image_url( $imagen, 'medium' ) : '',
-			'alt' => $imagen > 0 ? (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ) : '',
+			'url'    => (string) wp_get_attachment_image_url( $imagen, 'large' ),
+			'alt'    => (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ),
+			'name'   => wp_basename( (string) get_attached_file( $imagen ) ),
+			'width'  => (int) ( $datos['width'] ?? 0 ),
+			'height' => (int) ( $datos['height'] ?? 0 ),
+		);
+	}
+
+	/**
+	 * No poster: the shape of summary(), empty.
+	 *
+	 * @return array{url:string, alt:string, name:string, width:int, height:int}
+	 */
+	public static function none(): array {
+		return array(
+			'url'    => '',
+			'alt'    => '',
+			'name'   => '',
+			'width'  => 0,
+			'height' => 0,
 		);
 	}
 
@@ -253,7 +297,7 @@ final class ProcedurePoster {
 	 */
 	private static function check( array $fichero ) {
 		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::max_bytes() ) {
-			return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
+			return self::size_error();
 		}
 		if ( UPLOAD_ERR_OK !== $fichero['error'] || '' === $fichero['tmp_name'] || ! is_readable( $fichero['tmp_name'] ) ) {
 			return 'No se ha podido subir la imagen. Vuelva a intentarlo.';
@@ -261,7 +305,7 @@ final class ProcedurePoster {
 		// Solo los tipos que este sitio admite (en un multisitio, `upload_filetypes`): `wp_upload_bits()` rechazaría los demás.
 		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::mimes() );
 		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::mimes(), true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
-			return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
+			return self::type_error();
 		}
 		return $tipo;
 	}

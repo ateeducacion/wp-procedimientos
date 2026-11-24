@@ -104,8 +104,8 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * Whether this panel opens read-only: por permiso, por bloqueo o por
-	 * histórico. El estado no cierra nada más (ADR-0050).
+	 * Whether this panel opens read-only: by permission, by the edit lock or
+	 * because the procedure is archived. No other state closes anything (ADR-0050).
 	 *
 	 * @param array<string, mixed> $m     Model.
 	 * @param string               $panel Panel slug.
@@ -676,8 +676,9 @@ final class ProcedureEditorView {
 	/**
 	 * «Plazos»: las cuatro fechas de las que sale el estado.
 	 *
-	 * El fin del plazo pide confirmación si se cambia a un día ya pasado:
-	 * con el plazo abierto, guardar lo cierra al momento (ADR-0050).
+	 * The closing date asks for confirmation when changed to a day already
+	 * past, or cleared while the opening day is past: with the window open,
+	 * saving closes it at once (ADR-0050).
 	 *
 	 * @param array<string, mixed> $v   Field values.
 	 * @param string               $hoy Today, Y-m-d.
@@ -702,6 +703,7 @@ final class ProcedureEditorView {
 						value="<?php echo esc_attr( (string) $v[ $clave ] ); ?>"
 						<?php if ( ProcedureMetaKeys::CLOSES_AT === $clave ) : ?>
 							data-prc-confirm-before="<?php echo esc_attr( $hoy ); ?>"
+							data-prc-confirm-blank="prc-opens"
 							data-prc-confirm-text="¿Guardar con un fin de plazo que ya ha pasado? Si el plazo de solicitud está abierto, se cierra en cuanto guarde: los centros ya no podrán presentar ni cambiar su solicitud."
 						<?php endif; ?>
 						/>
@@ -976,11 +978,15 @@ final class ProcedureEditorView {
 	/**
 	 * «Entrega con plazo propio» and its two dates: only for «Archivo».
 	 *
-	 * @param int                  $i Row index.
-	 * @param array<string, mixed> $p Question.
+	 * The closing date asks for confirmation when changed to a day already
+	 * past, like the procedure's own (ADR-0050).
+	 *
+	 * @param int                  $i   Row index.
+	 * @param array<string, mixed> $p   Question.
+	 * @param string               $hoy Today, Y-m-d.
 	 * @return string
 	 */
-	private static function delivery_fields( int $i, array $p ): string {
+	private static function delivery_fields( int $i, array $p, string $hoy ): string {
 		$campo = ProcedureEditor::FIELD_Q;
 		$ayuda = 'prc-q-d-help-' . $i;
 		$out   = '<div data-prc-q-for="file"><div class="prc-campo prc-opcion">'
@@ -991,9 +997,12 @@ final class ProcedureEditorView {
 			'opens_at'  => 'Apertura de la entrega',
 			'closes_at' => 'Cierre de la entrega (inclusive)',
 		) as $date_key => $date_label ) {
-			$id   = 'prc-q-' . $date_key . '-' . $i;
-			$out .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
-				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '" /></div>';
+			$id       = 'prc-q-' . $date_key . '-' . $i;
+			$confirma = 'closes_at' === $date_key && '' !== $hoy
+				? ' data-prc-confirm-before="' . esc_attr( $hoy ) . '" data-prc-confirm-text="' . esc_attr( '¿Guardar con un cierre de entrega que ya ha pasado? La entrega «' . (string) ( $p['label'] ?? '' ) . '» se cierra en cuanto guarde: los centros ya no podrán subir su documento.' ) . '"'
+				: '';
+			$out     .= '<div class="prc-campo"><label for="' . esc_attr( $id ) . '">' . esc_html( $date_label ) . '</label>'
+				. '<input class="prc-control" type="date" id="' . esc_attr( $id ) . '" name="' . esc_attr( $campo . $date_key . '[' . $i . ']' ) . '" value="' . esc_attr( (string) ( $p[ $date_key ] ?? '' ) ) . '" aria-describedby="' . esc_attr( $ayuda ) . '"' . $confirma . ' /></div>';
 		}
 		return $out . '</div>';
 	}
@@ -1051,7 +1060,7 @@ final class ProcedureEditorView {
 				<p class="prc-campo__ayuda" id="prc-q-c-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Una opción» y «Varias opciones». En «Varias opciones», una opción escrita «Texto | 3» vale 3 puntos y quien solicita solo ve «Texto»; la solicitud suma los puntos de lo que marque.</p>
 			</div>
 			<?php echo self::type_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
-			<?php echo self::delivery_fields( $i, $p ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo self::delivery_fields( $i, $p, (string) ( $m['today'] ?? '' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<div class="prc-campo prc-opcion">
 				<input type="checkbox" id="prc-q-r-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'required' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="1"
 					<?php checked( (bool) $p['required'] ); ?> />
@@ -1067,8 +1076,8 @@ final class ProcedureEditorView {
 	/**
 	 * «Enlaces», at the end of «Datos»: links in public, a private copy for the workshop (ADR-0021, ADR-0048).
 	 *
-	 * Era una pestaña; ahora es una sección de «Datos» con su propio
-	 * formulario y su botón (ADR-0050).
+	 * Formerly a tab of its own; now a section of «Datos» with its own form
+	 * and button (ADR-0050).
 	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string

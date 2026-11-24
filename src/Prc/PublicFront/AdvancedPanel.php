@@ -65,8 +65,8 @@ final class AdvancedPanel {
 	/**
 	 * Save «Qué centros pueden solicitar», a section of «Avanzado».
 	 *
-	 * La misma validación que cuando iba en «Datos»,
-	 * {@see CentreEligibility::input()}, con la audiencia guardada.
+	 * Validated with {@see CentreEligibility::input()} against the stored
+	 * audience, as when it lived in «Datos».
 	 *
 	 * Lo llama {@see ProcedureEditor::handle()} después de comprobar el
 	 * nonce, el bloqueo y `ProcedureAccess::can_edit()`.

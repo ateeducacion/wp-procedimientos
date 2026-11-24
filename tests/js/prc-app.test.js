@@ -206,6 +206,43 @@ describe( 'confirmation of a closing date already past', () => {
 	} );
 } );
 
+describe( 'confirmation of a cleared closing date or a past delivery close', () => {
+	it( 'asks when the closing date is cleared and the opening day is past', async () => {
+		document.body.innerHTML = `
+			<form id="f">
+				<input type="date" id="prc-opens" value="2026-11-01" />
+				<input type="date" value="2026-12-01" data-prc-confirm-before="2026-11-23"
+					data-prc-confirm-blank="prc-opens" data-prc-confirm-text="¿Fin pasado?" />
+			</form>`;
+		window.confirm = vi.fn( () => false );
+		await load();
+		const form = document.getElementById( 'f' );
+		form.querySelectorAll( 'input' )[ 1 ].value = '';
+
+		expect( submit( form ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( '¿Fin pasado?' );
+
+		document.getElementById( 'prc-opens' ).value = '2026-11-30';
+		window.confirm = vi.fn( () => false );
+		expect( submit( form ).defaultPrevented ).toBe( false );
+	} );
+
+	it( 'looks at every guarded field, not only the first one', async () => {
+		document.body.innerHTML = `
+			<form id="f">
+				<input type="date" value="2026-12-01" data-prc-confirm-before="2026-11-23" data-prc-confirm-text="¿Uno?" />
+				<input type="date" value="2026-12-15" data-prc-confirm-before="2026-11-23" data-prc-confirm-text="¿Entrega?" />
+			</form>`;
+		window.confirm = vi.fn( () => false );
+		await load();
+		const form = document.getElementById( 'f' );
+		form.querySelectorAll( 'input' )[ 1 ].value = '2026-11-15';
+
+		expect( submit( form ).defaultPrevented ).toBe( true );
+		expect( window.confirm ).toHaveBeenCalledWith( '¿Entrega?' );
+	} );
+} );
+
 describe( 'fields for school procedures', () => {
 	it( 'hides and disables centre options for teachers, then restores them for schools', async () => {
 		document.body.innerHTML = `

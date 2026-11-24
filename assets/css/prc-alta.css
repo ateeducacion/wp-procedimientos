@@ -155,6 +155,63 @@
   border-radius: 0;
 }
 
+/* --- la caja de cada formulario del taller (#129) -------------------------
+   Lo que hay dentro de la caja se guarda con su botón, que va dentro. La
+   primera banda hace de cabecera, de borde a borde; las siguientes siguen
+   separando secciones dentro del mismo formulario, sin cajas anidadas. */
+.prc-isla {
+  --prc-isla-aire: 16px;
+  padding: 0 var(--prc-isla-aire);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-isla + .prc-isla { margin-top: 32px; }
+/* «Preguntas» abre con su explicación, no con una banda. */
+.prc-isla--sin-cabecera { padding-top: var(--prc-isla-aire); }
+.prc-isla > .prc-seccion__titulo:first-child,
+.prc-isla:not(.prc-isla--sin-cabecera) > .prc-seccion-campos:first-of-type > .prc-seccion__titulo {
+  width: calc(100% + 2 * var(--prc-isla-aire));
+  margin: 0 calc(-1 * var(--prc-isla-aire)) 24px;
+  padding: 10px var(--prc-isla-aire);
+  border-top: 0;
+  border-radius: var(--prc-radio) var(--prc-radio) 0 0;
+}
+.prc-seccion-campos[id] { scroll-margin-top: 16px; }
+
+/* --- el índice de secciones de «Datos» y «Avanzado» (#129) ---------------
+   Una columna fija con enlaces a las anclas: no esconde nada. En pantallas
+   estrechas no se pinta y el panel ocupa todo el ancho. */
+.prc-indice { display: none; }
+@media (min-width: 992px) {
+  .prc-con-indice {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .prc-indice {
+    display: block;
+    position: sticky;
+    top: 16px;
+  }
+}
+.prc-indice ul { margin: 0; padding: 0; list-style: none; border-left: 2px solid var(--prc-c-linea); }
+.prc-indice a {
+  display: block;
+  margin-left: -2px;
+  padding: 6px 12px;
+  font-size: var(--prc-t-menudo, 14px);
+  color: var(--prc-c-texto);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.prc-indice a:hover { text-decoration: underline; }
+.prc-indice a[aria-current] {
+  font-weight: 700;
+  color: var(--prc-c-azul-alta, #006ece);
+  border-left-color: currentColor;
+}
+
 .prc-intro {
   margin: 0 0 18px;
   padding: 0;

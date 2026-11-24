@@ -12785,11 +12785,34 @@ final class PanelParts {
 
 
 
-	public static function section( string $rotulo, string $contenido ): string {
-		return '<fieldset class="prc-seccion-campos">'
+
+	public static function section( string $rotulo, string $contenido, string $id = '' ): string {
+		return '<fieldset class="prc-seccion-campos"' . ( '' === $id ? '' : ' id="' . esc_attr( $id ) . '"' ) . '>'
 			. '<legend class="prc-seccion__titulo">' . esc_html( $rotulo ) . '</legend>'
 			. $contenido
 			. '</fieldset>';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+	public static function indexed( array $secciones, string $panel ): string {
+		$enlaces = '';
+		foreach ( $secciones as $id => $rotulo ) {
+			$enlaces .= '<li><a href="#' . esc_attr( $id ) . '">' . esc_html( $rotulo ) . '</a></li>';
+		}
+		return '<div class="prc-con-indice">'
+			. '<nav class="prc-indice" aria-label="Secciones del panel" data-prc-indice><ul>' . $enlaces . '</ul></nav>'
+			. '<div class="prc-con-indice__cuerpo">' . $panel . '</div>'
+			. '</div>';
 	}
 
 
@@ -25162,11 +25185,19 @@ final class AdvancedPanelView {
 			'observe'   => array( self::class, 'observe_section' ),
 			'code'      => array( self::class, 'code_section' ),
 		);
+		$rotulos   = array(
+			'centres'   => array( ProcedureEditor::SECTION_CENTRES, 'Qué centros pueden solicitar' ),
+			'signature' => array( AdvancedPanel::SECTION_SIGNATURE, 'Firma electrónica' ),
+			'observe'   => array( ProcedureEditor::SECTION_OBSERVE, 'Acceso de consulta' ),
+			'code'      => array( ProcedureEditor::SECTION_CODE, 'Código adicional' ),
+		);
 		$out       = '';
+		$indice    = array();
 		foreach ( (array) $m['advanced'] as $seccion ) {
-			$out .= call_user_func( $secciones[ $seccion ], $m );
+			$out                              .= call_user_func( $secciones[ $seccion ], $m );
+			$indice[ $rotulos[ $seccion ][0] ] = $rotulos[ $seccion ][1];
 		}
-		return $out;
+		return PanelParts::indexed( $indice, $out );
 	}
 
 
@@ -25181,7 +25212,7 @@ final class AdvancedPanelView {
 		$op = ProcedureEditor::OP_CENTRES;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' );?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
@@ -25211,7 +25242,7 @@ final class AdvancedPanelView {
 		$op = AdvancedPanel::OP_SIGNATURE;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-firma-titulo">Firma electrónica</h2>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -25243,7 +25274,7 @@ final class AdvancedPanelView {
 
 
 	private static function observe_section( array $m ): string {
-		return '<section class="prc-seccion-campos" id="' . esc_attr( ProcedureEditor::SECTION_OBSERVE ) . '" aria-labelledby="prc-avanzado-consulta-titulo">'
+		return '<section class="prc-seccion-campos prc-isla" id="' . esc_attr( ProcedureEditor::SECTION_OBSERVE ) . '" aria-labelledby="prc-avanzado-consulta-titulo">'
 			. '<h2 class="prc-seccion__titulo" id="prc-avanzado-consulta-titulo">Acceso de consulta</h2>'
 			. ObserveView::settings( $m )
 			. '</section>';
@@ -25336,7 +25367,7 @@ final class AdvancedPanelView {
 		$op = ProcedureEditor::OP_CUSTOM_CODE;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CODE ); ?>" aria-labelledby="prc-avanzado-codigo-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_CODE ); ?>" aria-labelledby="prc-avanzado-codigo-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-codigo-titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
 			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>
@@ -25435,6 +25466,20 @@ final class ProcedureEditorView {
 
 
 
+	private const DATA_INDEX = array(
+		'prc-datos-generales'          => 'Ajustes generales',
+		'prc-datos-promociona'         => 'Promociona',
+		'prc-datos-informacion'        => 'Más información',
+		'prc-datos-diseno'             => 'Aspectos de diseño',
+		'prc-datos-plazos'             => 'Plazos',
+		'prc-datos-solicitud'          => 'La solicitud',
+		ProcedurePoster::SECTION       => 'Cartel',
+		ProcedureEditor::SECTION_LINKS => 'Enlaces',
+	);
+
+
+
+
 
 
 
@@ -25503,7 +25548,7 @@ final class ProcedureEditorView {
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
-			default => self::data_panel( $m ) . ( true === $m['nuevo'] ? '' : self::poster_section( $m ) . self::links_section( $m ) ),
+			default => true === $m['nuevo'] ? self::data_panel( $m ) : PanelParts::indexed( self::DATA_INDEX, self::data_panel( $m ) . self::poster_section( $m ) . self::links_section( $m ) ),
 		};
 	}
 
@@ -25768,21 +25813,21 @@ final class ProcedureEditorView {
 
 
 
-		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ) );
+		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ), 'prc-datos-generales' );
 		$secciones .= '<div class="prc-form__mitades">'
-			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ) )
-			. PanelParts::section( 'Más información', self::email_fields( $v ) )
+			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ), 'prc-datos-promociona' )
+			. PanelParts::section( 'Más información', self::email_fields( $v ), 'prc-datos-informacion' )
 			. '</div>';
-		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ) );
+		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ), 'prc-datos-diseno' );
 		if ( ! $nuevo ) {
-			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v, (string) $m['today'] ) );
-			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ) );
+			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v, (string) $m['today'] ), 'prc-datos-plazos' );
+			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), 'prc-datos-solicitud' );
 
 		}
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26268,7 +26313,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla prc-isla--sin-cabecera" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26518,7 +26563,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedurePoster::SECTION ); ?>" method="post" enctype="multipart/form-data" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla" id="<?php echo esc_attr( ProcedurePoster::SECTION ); ?>" method="post" enctype="multipart/form-data" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -26627,7 +26672,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedureEditor::SECTION_LINKS ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_LINKS ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -29747,7 +29792,7 @@ final class PeopleView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -37325,6 +37370,63 @@ final class App {
   border-radius: 0;
 }
 
+/* --- la caja de cada formulario del taller (#129) -------------------------
+   Lo que hay dentro de la caja se guarda con su botón, que va dentro. La
+   primera banda hace de cabecera, de borde a borde; las siguientes siguen
+   separando secciones dentro del mismo formulario, sin cajas anidadas. */
+.prc-isla {
+  --prc-isla-aire: 16px;
+  padding: 0 var(--prc-isla-aire);
+  border: 1px solid var(--prc-c-linea);
+  border-radius: var(--prc-radio);
+}
+.prc-isla + .prc-isla { margin-top: 32px; }
+/* «Preguntas» abre con su explicación, no con una banda. */
+.prc-isla--sin-cabecera { padding-top: var(--prc-isla-aire); }
+.prc-isla > .prc-seccion__titulo:first-child,
+.prc-isla:not(.prc-isla--sin-cabecera) > .prc-seccion-campos:first-of-type > .prc-seccion__titulo {
+  width: calc(100% + 2 * var(--prc-isla-aire));
+  margin: 0 calc(-1 * var(--prc-isla-aire)) 24px;
+  padding: 10px var(--prc-isla-aire);
+  border-top: 0;
+  border-radius: var(--prc-radio) var(--prc-radio) 0 0;
+}
+.prc-seccion-campos[id] { scroll-margin-top: 16px; }
+
+/* --- el índice de secciones de «Datos» y «Avanzado» (#129) ---------------
+   Una columna fija con enlaces a las anclas: no esconde nada. En pantallas
+   estrechas no se pinta y el panel ocupa todo el ancho. */
+.prc-indice { display: none; }
+@media (min-width: 992px) {
+  .prc-con-indice {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+  .prc-indice {
+    display: block;
+    position: sticky;
+    top: 16px;
+  }
+}
+.prc-indice ul { margin: 0; padding: 0; list-style: none; border-left: 2px solid var(--prc-c-linea); }
+.prc-indice a {
+  display: block;
+  margin-left: -2px;
+  padding: 6px 12px;
+  font-size: var(--prc-t-menudo, 14px);
+  color: var(--prc-c-texto);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+}
+.prc-indice a:hover { text-decoration: underline; }
+.prc-indice a[aria-current] {
+  font-weight: 700;
+  color: var(--prc-c-azul-alta, #006ece);
+  border-left-color: currentColor;
+}
+
 .prc-intro {
   margin: 0 0 18px;
   padding: 0;
@@ -41788,6 +41890,52 @@ body.prc-app .prc-btn-borrar {
 	document.addEventListener( \'drop\', function ( e ) {
 		highlight( e, false );
 		keepFilesOut( e );
+	} );
+	/*
+	 * El índice de secciones de «Datos» y «Avanzado» (#129): sin guion son
+	 * enlaces normales; con él, se marca la última sección que ha entrado en
+	 * la franja de arriba de la ventana, que es la que se está leyendo.
+	 */
+	document.addEventListener( \'DOMContentLoaded\', function () {
+		var indice = document.querySelector( \'[data-prc-indice]\' );
+		if ( ! indice || ! ( \'IntersectionObserver\' in window ) ) {
+			return;
+		}
+		var enlaces = Array.prototype.slice.call( indice.querySelectorAll( \'a[href^="#"]\' ) );
+		var vistas = {};
+		// Al pie de la página, la última sección no llega nunca a la franja
+		// de arriba: ahí se marca ella.
+		function alFondo() {
+			return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+		}
+		function marcar() {
+			var actual = alFondo() ? enlaces[ enlaces.length - 1 ] : enlaces.filter( function ( a ) {
+				return vistas[ a.hash.slice( 1 ) ];
+			} ).pop();
+			if ( ! actual ) {
+				return;
+			}
+			enlaces.forEach( function ( a ) {
+				if ( a === actual ) {
+					a.setAttribute( \'aria-current\', \'true\' );
+				} else {
+					a.removeAttribute( \'aria-current\' );
+				}
+			} );
+		}
+		var observador = new window.IntersectionObserver( function ( entradas ) {
+			entradas.forEach( function ( entrada ) {
+				vistas[ entrada.target.id ] = entrada.isIntersecting;
+			} );
+			marcar();
+		}, { rootMargin: \'0px 0px -60% 0px\' } );
+		window.addEventListener( \'scroll\', marcar, { passive: true } );
+		enlaces.forEach( function ( a ) {
+			var destino = document.getElementById( a.hash.slice( 1 ) );
+			if ( destino ) {
+				observador.observe( destino );
+			}
+		} );
 	} );
 }() );
 ',

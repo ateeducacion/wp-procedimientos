@@ -16,6 +16,7 @@ use Prc\PostType\ProcedurePostType;
 use Prc\PublicFront\AdvancedPanel;
 use Prc\PublicFront\ApplicationActionsPanel;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\ProcedurePoster;
 use Prc\PublicFront\View\ProcedureEditorView;
 use Prc\Taxonomy\ProcedureTaxonomies;
 
@@ -263,17 +264,51 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 		);
 		foreach ( $paneles as $panel ) {
 			$html = ProcedureEditorView::html( $this->modelo( $procedimiento, $panel ) );
-			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html, $panel );
+			$this->assertMatchesRegularExpression( '/<form class="prc-form prc-form--taller[^"]*"[^>]*data-prc-dirty-guard>/', $html, $panel );
 		}
 		// En «Avanzado», cada sección con su formulario: los centros y el
 		// código y la firma para quien gestiona; administración, además, la consulta.
-		$this->assertSame( 3, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', $html ) );
+		$this->assertSame( 3, preg_match_all( '/<form class="prc-form prc-form--taller[^"]*"[^>]*data-prc-dirty-guard>/', $html ) );
 		$this->acting_as( $this->administrator() );
 		$m = $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED );
-		$this->assertSame( 4, preg_match_all( '/<form class="prc-form prc-form--taller"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ) ) );
+		$this->assertSame( 4, preg_match_all( '/<form class="prc-form prc-form--taller[^"]*"[^>]*data-prc-dirty-guard>/', ProcedureEditorView::html( $m ) ) );
 		$this->acting_as( $uid );
 		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_PUBLISH ) );
 		$this->assertStringNotContainsString( 'data-prc-dirty-guard', $html, 'publicar es un botón, no un formulario que se rellena' );
+	}
+
+	/**
+	 * Each form of the workshop is a box, and «Datos» and «Avanzado» carry an
+	 * index whose every link lands on a section of the panel (#129).
+	 */
+	public function test_each_form_is_a_box_and_the_index_links_every_section() {
+		list( , $uid, $procedimiento ) = $this->mio();
+		$this->acting_as( $uid );
+
+		$datos = ProcedureEditorView::html( $this->modelo( $procedimiento ) );
+		$this->assertSame( 3, preg_match_all( '/<form class="[^"]*\bprc-isla\b/', $datos ), 'datos, cartel y enlaces' );
+		preg_match_all( '/<nav class="prc-indice"[^>]*>.*?<\/nav>/s', $datos, $indice );
+		$this->assertCount( 1, $indice[0] );
+		preg_match_all( '/href="#([^"]+)"/', $indice[0][0], $anclas );
+		$this->assertSame(
+			array( 'prc-datos-generales', 'prc-datos-promociona', 'prc-datos-informacion', 'prc-datos-diseno', 'prc-datos-plazos', 'prc-datos-solicitud', ProcedurePoster::SECTION, ProcedureEditor::SECTION_LINKS ),
+			$anclas[1]
+		);
+		foreach ( $anclas[1] as $ancla ) {
+			$this->assertStringContainsString( ' id="' . $ancla . '"', $datos, $ancla );
+		}
+
+		$avanzado = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_ADVANCED ) );
+		preg_match_all( '/<nav class="prc-indice"[^>]*>.*?<\/nav>/s', $avanzado, $indice );
+		preg_match_all( '/href="#([^"]+)"/', $indice[0][0], $anclas );
+		$this->assertNotEmpty( $anclas[1] );
+		foreach ( $anclas[1] as $ancla ) {
+			$this->assertMatchesRegularExpression( '/<section class="prc-seccion-campos prc-isla" id="' . $ancla . '"/', $avanzado, $ancla );
+		}
+
+		$preguntas = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) );
+		$this->assertStringNotContainsString( 'prc-indice', $preguntas, 'solo «Datos» y «Avanzado» llevan índice' );
+		$this->assertStringNotContainsString( 'prc-indice', ProcedureEditorView::html( ProcedureEditor::model() ), 'ni el alta' );
 	}
 
 	/** A manager's forged JavaScript is ignored while CSS is saved. */

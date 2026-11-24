@@ -37,11 +37,19 @@ final class AdvancedPanelView {
 			'observe'   => array( self::class, 'observe_section' ),
 			'code'      => array( self::class, 'code_section' ),
 		);
+		$rotulos   = array(
+			'centres'   => array( ProcedureEditor::SECTION_CENTRES, 'Qué centros pueden solicitar' ),
+			'signature' => array( AdvancedPanel::SECTION_SIGNATURE, 'Firma electrónica' ),
+			'observe'   => array( ProcedureEditor::SECTION_OBSERVE, 'Acceso de consulta' ),
+			'code'      => array( ProcedureEditor::SECTION_CODE, 'Código adicional' ),
+		);
 		$out       = '';
+		$indice    = array();
 		foreach ( (array) $m['advanced'] as $seccion ) {
-			$out .= call_user_func( $secciones[ $seccion ], $m );
+			$out                              .= call_user_func( $secciones[ $seccion ], $m );
+			$indice[ $rotulos[ $seccion ][0] ] = $rotulos[ $seccion ][1];
 		}
-		return $out;
+		return PanelParts::indexed( $indice, $out );
 	}
 
 	/**
@@ -56,7 +64,7 @@ final class AdvancedPanelView {
 		$op = ProcedureEditor::OP_CENTRES;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_CENTRES ); ?>" aria-labelledby="prc-avanzado-centros-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-centros-titulo">Qué centros pueden solicitar</h2>
 			<?php echo ProcedureEditorView::centre_warning( $m, 'catalogue' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
@@ -86,7 +94,7 @@ final class AdvancedPanelView {
 		$op = AdvancedPanel::OP_SIGNATURE;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( AdvancedPanel::SECTION_SIGNATURE ); ?>" aria-labelledby="prc-avanzado-firma-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-firma-titulo">Firma electrónica</h2>
 			<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 				<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
@@ -118,7 +126,7 @@ final class AdvancedPanelView {
 	 * @return string
 	 */
 	private static function observe_section( array $m ): string {
-		return '<section class="prc-seccion-campos" id="' . esc_attr( ProcedureEditor::SECTION_OBSERVE ) . '" aria-labelledby="prc-avanzado-consulta-titulo">'
+		return '<section class="prc-seccion-campos prc-isla" id="' . esc_attr( ProcedureEditor::SECTION_OBSERVE ) . '" aria-labelledby="prc-avanzado-consulta-titulo">'
 			. '<h2 class="prc-seccion__titulo" id="prc-avanzado-consulta-titulo">Acceso de consulta</h2>'
 			. ObserveView::settings( $m )
 			. '</section>';
@@ -211,7 +219,7 @@ final class AdvancedPanelView {
 		$op = ProcedureEditor::OP_CUSTOM_CODE;
 		ob_start();
 		?>
-		<section class="prc-seccion-campos" id="<?php echo esc_attr( ProcedureEditor::SECTION_CODE ); ?>" aria-labelledby="prc-avanzado-codigo-titulo">
+		<section class="prc-seccion-campos prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_CODE ); ?>" aria-labelledby="prc-avanzado-codigo-titulo">
 			<h2 class="prc-seccion__titulo" id="prc-avanzado-codigo-titulo">Código adicional</h2>
 			<p class="prc-intro">El CSS se aplica solo a la ficha pública de este procedimiento.</p>
 			<?php if ( true === ( $m['observe_status']['observable'] ?? false ) ) : ?>

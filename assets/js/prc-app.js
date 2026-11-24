@@ -1015,4 +1015,50 @@
 		highlight( e, false );
 		keepFilesOut( e );
 	} );
+	/*
+	 * El índice de secciones de «Datos» y «Avanzado» (#129): sin guion son
+	 * enlaces normales; con él, se marca la última sección que ha entrado en
+	 * la franja de arriba de la ventana, que es la que se está leyendo.
+	 */
+	document.addEventListener( 'DOMContentLoaded', function () {
+		var indice = document.querySelector( '[data-prc-indice]' );
+		if ( ! indice || ! ( 'IntersectionObserver' in window ) ) {
+			return;
+		}
+		var enlaces = Array.prototype.slice.call( indice.querySelectorAll( 'a[href^="#"]' ) );
+		var vistas = {};
+		// Al pie de la página, la última sección no llega nunca a la franja
+		// de arriba: ahí se marca ella.
+		function alFondo() {
+			return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+		}
+		function marcar() {
+			var actual = alFondo() ? enlaces[ enlaces.length - 1 ] : enlaces.filter( function ( a ) {
+				return vistas[ a.hash.slice( 1 ) ];
+			} ).pop();
+			if ( ! actual ) {
+				return;
+			}
+			enlaces.forEach( function ( a ) {
+				if ( a === actual ) {
+					a.setAttribute( 'aria-current', 'true' );
+				} else {
+					a.removeAttribute( 'aria-current' );
+				}
+			} );
+		}
+		var observador = new window.IntersectionObserver( function ( entradas ) {
+			entradas.forEach( function ( entrada ) {
+				vistas[ entrada.target.id ] = entrada.isIntersecting;
+			} );
+			marcar();
+		}, { rootMargin: '0px 0px -60% 0px' } );
+		window.addEventListener( 'scroll', marcar, { passive: true } );
+		enlaces.forEach( function ( a ) {
+			var destino = document.getElementById( a.hash.slice( 1 ) );
+			if ( destino ) {
+				observador.observe( destino );
+			}
+		} );
+	} );
 }() );

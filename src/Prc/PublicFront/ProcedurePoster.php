@@ -121,25 +121,37 @@ final class ProcedurePoster {
 	/**
 	 * The current poster, for the section: the image, its text and what the file is.
 	 *
-	 * La vista previa es grande (`large`, o el original si es menor): en el
-	 * taller se mira el cartel entero, no una miniatura.
+	 * The preview is big (`large`, or the original when smaller). Name and
+	 * size are those of the file that was uploaded, not of the copy that
+	 * WordPress scales down for big photos (`-scaled`).
 	 *
 	 * @param int $procedure_id Procedure post ID.
 	 * @return array{url:string, alt:string, name:string, width:int, height:int}
 	 */
 	public static function summary( int $procedure_id ): array {
-		$imagen = (int) get_post_thumbnail_id( $procedure_id );
-		if ( $imagen <= 0 ) {
+		$image = (int) get_post_thumbnail_id( $procedure_id );
+		if ( $image <= 0 ) {
 			return self::none();
 		}
-		$datos = wp_get_attachment_metadata( $imagen );
-		$datos = is_array( $datos ) ? $datos : array();
+		$meta   = wp_get_attachment_metadata( $image );
+		$meta   = is_array( $meta ) ? $meta : array();
+		$path   = (string) get_attached_file( $image );
+		$width  = (int) ( $meta['width'] ?? 0 );
+		$height = (int) ( $meta['height'] ?? 0 );
+		if ( ! empty( $meta['original_image'] ) ) {
+			$path = (string) wp_get_original_image_path( $image );
+			$size = '' !== $path && is_readable( $path ) ? wp_getimagesize( $path ) : false;
+			if ( is_array( $size ) ) {
+				$width  = (int) $size[0];
+				$height = (int) $size[1];
+			}
+		}
 		return array(
-			'url'    => (string) wp_get_attachment_image_url( $imagen, 'large' ),
-			'alt'    => (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ),
-			'name'   => wp_basename( (string) get_attached_file( $imagen ) ),
-			'width'  => (int) ( $datos['width'] ?? 0 ),
-			'height' => (int) ( $datos['height'] ?? 0 ),
+			'url'    => (string) wp_get_attachment_image_url( $image, 'large' ),
+			'alt'    => (string) get_post_meta( $image, '_wp_attachment_image_alt', true ),
+			'name'   => wp_basename( $path ),
+			'width'  => $width,
+			'height' => $height,
 		);
 	}
 

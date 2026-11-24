@@ -117,10 +117,13 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'id="' . ProcedurePoster::SECTION . '"', $html );
 		$this->assertStringContainsString( 'enctype="multipart/form-data"', $html );
 		$this->assertStringContainsString( 'value="' . ProcedurePoster::OP . '"', $html );
-		// Sin cartel, la zona de soltar: la propia entrada de fichero, extendida sobre ella.
+		// Sin cartel, la zona de soltar: una etiqueta de la propia entrada de fichero.
 		$this->assertStringContainsString( 'data-prc-cartel-estado="vacia"', $html );
+		$this->assertStringContainsString( '<label class="prc-cartel__vacio" for="' . ProcedurePoster::FIELD_FILE . '">', $html );
 		$this->assertStringContainsString( '<strong>Elija una imagen</strong> o arrástrela aquí', $html );
-		$this->assertMatchesRegularExpression( '/<input class="prc-cartel__fichero" type="file" id="' . ProcedurePoster::FIELD_FILE . '" name="' . ProcedurePoster::FIELD_FILE . '"/', $html );
+		$this->assertMatchesRegularExpression( '/<input class="prc-cartel__fichero" type="file" id="' . ProcedurePoster::FIELD_FILE . '" name="' . ProcedurePoster::FIELD_FILE . '"[^>]* autocomplete="off"/', $html );
+		// Los tipos y el peso, en la ayuda: se leen también con un cartel puesto.
+		$this->assertStringContainsString( 'Mejor en vertical, como un cartel. ' . ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho.', $html );
 		$this->assertStringContainsString( 'data-prc-cartel-error-tipo="' . esc_attr( ProcedurePoster::type_error() ) . '"', $html );
 		$this->assertStringContainsString( 'data-prc-cartel-max="' . ProcedurePoster::max_bytes() . '"', $html );
 		$this->assertStringNotContainsString( 'name="' . ProcedurePoster::FIELD_REMOVE . '"', $html );
@@ -142,7 +145,8 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 		$html = ProcedureEditorView::html( ProcedureEditor::model() );
 		$this->assertStringContainsString( (string) wp_get_attachment_image_url( $imagen, 'large' ), $html );
 		$this->assertStringContainsString( 'data-prc-cartel-estado="guardada"', $html );
-		$this->assertStringContainsString( 'name="' . ProcedurePoster::FIELD_REMOVE . '"', $html );
+		$this->assertStringContainsString( 'name="' . ProcedurePoster::FIELD_REMOVE . '" value="1" autocomplete="off"', $html );
+		$this->assertStringContainsString( 'title="Reemplazar la imagen"', $html );
 		$this->assertStringContainsString( 'aria-label="Quitar el cartel"', $html );
 		$this->assertStringContainsString( 'Reemplazar', $html );
 		$this->assertStringContainsString( 'Se quitará al guardar.', $html );
@@ -236,6 +240,34 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 
 		$this->assertNull( $this->enviar( $manager, $procedure, $this->png(), 'otro.png', array( ProcedurePoster::FIELD_REMOVE => '1' ) ) );
 		$this->assertSame( $imagen, (int) get_post_thumbnail_id( $procedure ) );
+	}
+
+	/**
+	 * De una foto grande, WordPress guarda una copia reducida («-scaled»); la
+	 * sección enseña el nombre y las medidas del fichero que se subió.
+	 */
+	public function test_a_scaled_photo_shows_the_name_and_size_that_were_uploaded() {
+		$area      = $this->area( 'Ámbito' );
+		$manager   = $this->manager( array( $area ) );
+		$procedure = $this->procedure( $manager, array( $area ) );
+		$threshold = static function () {
+			return 10;
+		};
+		add_filter( 'big_image_size_threshold', $threshold );
+		$canvas = imagecreatetruecolor( 40, 20 );
+		ob_start();
+		imagepng( $canvas );
+		$bytes = (string) ob_get_clean();
+
+		$this->assertNotNull( $this->enviar( $manager, $procedure, $bytes, 'foto.png' ) );
+		remove_filter( 'big_image_size_threshold', $threshold );
+		$image = (int) get_post_thumbnail_id( $procedure );
+		$this->assertStringContainsString( '-scaled', (string) get_attached_file( $image ) );
+
+		$poster = ProcedurePoster::summary( $procedure );
+		$this->assertSame( wp_basename( (string) wp_get_original_image_path( $image ) ), $poster['name'] );
+		$this->assertStringNotContainsString( '-scaled', $poster['name'] );
+		$this->assertSame( array( 40, 20 ), array( $poster['width'], $poster['height'] ) );
 	}
 
 	/**

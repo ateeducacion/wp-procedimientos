@@ -1239,10 +1239,11 @@ body.prc-app .prc-btn-borrar {
 }
 
 /* El cartel en «Datos» del taller (#126): una zona de soltar o la imagen
-   entera, con el aspa para quitar y «Reemplazar». La entrada de fichero es la
-   zona: sin guion se pulsa o se suelta encima igual. El estado lo lleva
-   `data-prc-cartel-estado` (vacia, guardada, nueva, quitada) y `--js` dice que
-   el guion está: sin él no hay aspa ni «Reemplazar», y queda la casilla. */
+   entera, con el aspa para quitar y «Reemplazar». Sin guion la zona es una
+   etiqueta de la entrada, que se ve dentro; con él, la entrada la cubre. El
+   estado lo lleva `data-prc-cartel-estado` (vacia, guardada, nueva, quitada)
+   y `--js` dice que el guion está: sin él no hay aspa ni «Reemplazar», y queda
+   la casilla. */
 .prc-cartel__marco {
   position: relative;
   margin-top: 10px;
@@ -1260,18 +1261,23 @@ body.prc-app .prc-btn-borrar {
   outline: 3px solid var(--prc-c-azul);
   outline-offset: 2px;
 }
-.prc-cartel__marco--encima {
+.prc-cartel[data-prc-cartel-estado] .prc-cartel__marco.prc-cartel__marco--encima {
   border-style: solid;
   border-color: var(--prc-c-azul);
   background-color: rgba(0, 123, 255, .12);
 }
-.prc-cartel--error .prc-cartel__marco {
+.prc-cartel.prc-cartel--error[data-prc-cartel-estado] .prc-cartel__marco {
   border-color: var(--prc-c-obligatorio);
   background-color: var(--prc-mal-fondo);
 }
 
-.prc-cartel__vacio {
+/* Las dos son `<label>`: más específicas que `.prc-form label`. */
+.prc-cartel .prc-cartel__vacio {
   display: flex;
+  margin: 0;
+  font-size: inherit;
+  font-weight: 400;
+  cursor: pointer;
   flex-direction: column;
   align-items: center;
   gap: 6px;
@@ -1292,11 +1298,14 @@ body.prc-app .prc-btn-borrar {
   background: var(--prc-c-fondo);
   color: var(--prc-c-azul-borde);
 }
-.prc-cartel__formatos { font-size: .875rem; color: var(--prc-c-medio); }
 
 /* La imagen grande y entera; el damero deja ver la transparencia de un PNG. */
-.prc-cartel__vista {
+.prc-cartel .prc-cartel__vista {
   position: relative;
+  display: block;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
   height: 240px;
   overflow: hidden;
   border-radius: 8px;
@@ -1342,6 +1351,7 @@ body.prc-app .prc-btn-borrar {
   opacity: 0;
   cursor: pointer;
 }
+.prc-cartel__fichero::file-selector-button { cursor: pointer; }
 
 /* «Reemplazar»: la propia entrada, que está debajo; esto solo lo rotula. */
 .prc-cartel__vista::after {
@@ -1404,8 +1414,11 @@ body.prc-app .prc-btn-borrar {
   transition: background-color .15s;
 }
 .prc-cartel__quitar:hover { background: #c82333; }
-.prc-cartel__quitar:focus-visible {
+/* Más específico que el anillo general de `.prc-app button:focus-visible`. */
+.prc-app .prc-cartel__quitar:focus-visible {
   outline: 3px solid #fff;
+  outline-offset: 0;
+  border-radius: 50%;
   box-shadow: 0 0 0 6px var(--prc-c-azul);
 }
 .prc-cartel--js[data-prc-cartel-estado="guardada"] .prc-cartel__quitar,
@@ -1433,7 +1446,11 @@ body.prc-app .prc-btn-borrar {
   cursor: pointer;
 }
 .prc-cartel__deshacer:hover { background: rgba(255, 255, 255, .15); }
-.prc-cartel__deshacer:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.prc-app .prc-cartel__deshacer:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  border-radius: var(--prc-radio);
+}
 
 .prc-cartel__datos,
 .prc-cartel__nota,

@@ -1260,22 +1260,45 @@ describe( 'the poster field of «Datos»', () => {
 				data-prc-cartel-error-tipo="El cartel tiene que ser una imagen JPEG, PNG o WebP."
 				data-prc-cartel-error-peso="El cartel ocupa más de 1 KB. Redúzcalo y vuelva a subirlo.">
 				<div class="prc-cartel__marco">
-					<div class="prc-cartel__vista"><img class="prc-cartel__img"${ saved ? ' src="http://x.test/cartel.png"' : '' } alt="" /></div>
-					<div class="prc-cartel__vacio"></div>
-					<input class="prc-cartel__fichero" type="file" id="prc_poster" name="prc_poster" />
-					<button class="prc-cartel__quitar" type="button" aria-label="Quitar el cartel"></button>
+					<label class="prc-cartel__vista" for="prc_poster"><img class="prc-cartel__img"${ saved ? ' src="http://x.test/cartel.png"' : '' } alt="" /></label>
+					<label class="prc-cartel__vacio" for="prc_poster"></label>
+					<input class="prc-cartel__fichero" type="file" id="prc_poster" name="prc_poster" autocomplete="off" />
+					<button class="prc-cartel__quitar" type="button" aria-label="Quitar el cartel" title="Quitar el cartel"></button>
 				</div>
 				<p class="prc-cartel__barra"><span>Se quitará al guardar.</span> <button class="prc-cartel__deshacer" type="button">Deshacer</button></p>
 				<p class="prc-cartel__datos" data-prc-cartel-guardado="${ saved ? 'cartel.png · 600 × 800 px' : '' }">${ saved ? 'cartel.png · 600 × 800 px' : '' }</p>
 				<p class="prc-cartel__nota">Se aplicará al guardar.</p>
 				<p class="prc-cartel__error" aria-live="polite"></p>
-				${ saved ? '<div class="prc-opcion prc-cartel__casilla"><input type="checkbox" id="prc_poster_remove" name="prc_poster_remove" value="1" /><label for="prc_poster_remove">Quitar el cartel</label></div>' : '' }
+				${ saved ? '<div class="prc-opcion prc-cartel__casilla"><input type="checkbox" id="prc_poster_remove" name="prc_poster_remove" value="1" autocomplete="off" /><label for="prc_poster_remove">Quitar el cartel</label></div>' : '' }
 			</div>
+			<input type="text" id="alt" name="prc_poster_alt" value="Cartel" />
 		</form>`;
 	}
 
 	const $ = ( selector ) => document.querySelector( selector );
 	const state = () => $( '[data-prc-cartel]' ).getAttribute( 'data-prc-cartel-estado' );
+	const dirty = () => $( '#f' ).hasAttribute( 'data-prc-sucio' );
+
+	/**
+	 * Put a file in the input as the browser does, without the change event.
+	 * jsdom cannot set `files`; clearing `value` empties it, as in a browser.
+	 *
+	 * @param {File|null} file The file, or null for none.
+	 */
+	function preset( file ) {
+		const input = $( '.prc-cartel__fichero' );
+		let files = file ? [ file ] : [];
+		Object.defineProperty( input, 'files', { get: () => files, configurable: true } );
+		Object.defineProperty( input, 'value', {
+			get: () => ( files.length ? 'C:\\fakepath\\' + files[ 0 ].name : '' ),
+			set: ( v ) => {
+				if ( '' === v ) {
+					files = [];
+				}
+			},
+			configurable: true,
+		} );
+	}
 
 	/**
 	 * Choose a file in the input, the way the browser does after a pick or a drop.
@@ -1283,9 +1306,22 @@ describe( 'the poster field of «Datos»', () => {
 	 * @param {File|null} file The file, or null to clear the choice.
 	 */
 	function choose( file ) {
-		const input = $( '.prc-cartel__fichero' );
-		Object.defineProperty( input, 'files', { value: file ? [ file ] : [], configurable: true } );
-		input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		preset( file );
+		$( '.prc-cartel__fichero' ).dispatchEvent( new Event( 'change', { bubbles: true } ) );
+	}
+
+	/**
+	 * A drag event that carries files, on a target.
+	 *
+	 * @param {string}  type   Event type.
+	 * @param {Element} target Where it happens.
+	 * @return {Event} The dispatched event.
+	 */
+	function drag( type, target ) {
+		const event = new Event( type, { bubbles: true, cancelable: true } );
+		event.dataTransfer = { types: [ 'Files' ], dropEffect: 'copy' };
+		target.dispatchEvent( event );
+		return event;
 	}
 
 	// Node trae su propio URL.createObjectURL, que no acepta un File de jsdom.
@@ -1304,7 +1340,7 @@ describe( 'the poster field of «Datos»', () => {
 		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--js' ) ).toBe( true );
 	} );
 
-	it( 'previews a chosen image at once, with its name and a note', async () => {
+	it( 'previews a chosen image at once, with its name, and the X says it discards it', async () => {
 		document.body.innerHTML = field( false );
 		await load();
 
@@ -1313,10 +1349,12 @@ describe( 'the poster field of «Datos»', () => {
 		expect( state() ).toBe( 'nueva' );
 		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'blob:cartel' );
 		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'nuevo.png' );
-		expect( $( '#f' ).hasAttribute( 'data-prc-sucio' ) ).toBe( true );
+		expect( $( '.prc-cartel__quitar' ).getAttribute( 'aria-label' ) ).toBe( 'Descartar la imagen elegida' );
+		expect( $( '.prc-cartel__quitar' ).getAttribute( 'title' ) ).toBe( 'Descartar la imagen elegida' );
+		expect( dirty() ).toBe( true );
 	} );
 
-	it( 'refuses another type or a file too big, and says why', async () => {
+	it( 'refuses another type or a file too big, says why, and is not left dirty', async () => {
 		document.body.innerHTML = field( false );
 		await load();
 
@@ -1325,6 +1363,7 @@ describe( 'the poster field of «Datos»', () => {
 		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--error' ) ).toBe( true );
 		expect( $( '.prc-cartel__error' ).textContent ).toBe( 'El cartel tiene que ser una imagen JPEG, PNG o WebP.' );
 		expect( $( '.prc-cartel__fichero' ).value ).toBe( '' );
+		expect( dirty() ).toBe( false );
 
 		choose( new File( [ 'x'.repeat( 2000 ) ], 'grande.png', { type: 'image/png' } ) );
 		expect( $( '.prc-cartel__error' ).textContent ).toBe( 'El cartel ocupa más de 1 KB. Redúzcalo y vuelva a subirlo.' );
@@ -1333,6 +1372,41 @@ describe( 'the poster field of «Datos»', () => {
 		expect( state() ).toBe( 'nueva' );
 		expect( $( '.prc-cartel__error' ).textContent ).toBe( '' );
 		expect( $( '[data-prc-cartel]' ).classList.contains( 'prc-cartel--error' ) ).toBe( false );
+	} );
+
+	it( 'a refused file keeps the form dirty when something else was changed', async () => {
+		document.body.innerHTML = field( false );
+		await load();
+		$( '#alt' ).value = 'Otro texto';
+		$( '#alt' ).dispatchEvent( new Event( 'input', { bubbles: true } ) );
+
+		choose( new File( [ 'x' ], 'cartel.pdf', { type: 'application/pdf' } ) );
+
+		expect( dirty() ).toBe( true );
+	} );
+
+	it( 'an image the browser cannot read is refused like another type', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+		choose( new File( [ 'x' ], 'roto.png', { type: 'image/png' } ) );
+
+		$( '.prc-cartel__img' ).dispatchEvent( new Event( 'error' ) );
+
+		expect( state() ).toBe( 'guardada' );
+		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'http://x.test/cartel.png' );
+		expect( $( '.prc-cartel__error' ).textContent ).toBe( 'El cartel tiene que ser una imagen JPEG, PNG o WebP.' );
+		expect( $( '.prc-cartel__fichero' ).value ).toBe( '' );
+		expect( dirty() ).toBe( false );
+	} );
+
+	it( 'a saved poster that fails to load is left alone', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+
+		$( '.prc-cartel__img' ).dispatchEvent( new Event( 'error' ) );
+
+		expect( state() ).toBe( 'guardada' );
+		expect( $( '.prc-cartel__error' ).textContent ).toBe( '' );
 	} );
 
 	it( 'the X ticks «Quitar el cartel», shows the undo bar and focuses «Deshacer»', async () => {
@@ -1344,10 +1418,10 @@ describe( 'the poster field of «Datos»', () => {
 		expect( state() ).toBe( 'quitada' );
 		expect( $( '#prc_poster_remove' ).checked ).toBe( true );
 		expect( document.activeElement ).toBe( $( '.prc-cartel__deshacer' ) );
-		expect( $( '#f' ).hasAttribute( 'data-prc-sucio' ) ).toBe( true );
+		expect( dirty() ).toBe( true );
 	} );
 
-	it( '«Deshacer» unticks it, brings the poster back and focuses the X', async () => {
+	it( '«Deshacer» unticks it, brings the poster back, focuses the X and is not a change', async () => {
 		document.body.innerHTML = field( true );
 		await load();
 		$( '.prc-cartel__quitar' ).click();
@@ -1358,6 +1432,8 @@ describe( 'the poster field of «Datos»', () => {
 		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
 		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'http://x.test/cartel.png' );
 		expect( document.activeElement ).toBe( $( '.prc-cartel__quitar' ) );
+		expect( $( '.prc-cartel__quitar' ).getAttribute( 'aria-label' ) ).toBe( 'Quitar el cartel' );
+		expect( dirty() ).toBe( false );
 	} );
 
 	it( 'choosing an image after removing replaces instead of removing', async () => {
@@ -1371,7 +1447,7 @@ describe( 'the poster field of «Datos»', () => {
 		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
 	} );
 
-	it( 'the X on a chosen image drops the choice and goes back to what was saved', async () => {
+	it( 'the X on a chosen image drops the choice, goes back to what was saved and is not a change', async () => {
 		document.body.innerHTML = field( true );
 		await load();
 		choose( new File( [ 'x' ], 'otro.jpg', { type: 'image/jpeg' } ) );
@@ -1383,7 +1459,9 @@ describe( 'the poster field of «Datos»', () => {
 		expect( $( '#prc_poster_remove' ).checked ).toBe( false );
 		expect( $( '.prc-cartel__img' ).getAttribute( 'src' ) ).toBe( 'http://x.test/cartel.png' );
 		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'cartel.png · 600 × 800 px' );
+		expect( $( '.prc-cartel__quitar' ).getAttribute( 'aria-label' ) ).toBe( 'Quitar el cartel' );
 		expect( document.activeElement ).toBe( $( '.prc-cartel__quitar' ) );
+		expect( dirty() ).toBe( false );
 	} );
 
 	it( 'the X on a chosen image with nothing saved goes back to the empty zone', async () => {
@@ -1396,16 +1474,51 @@ describe( 'the poster field of «Datos»', () => {
 		expect( state() ).toBe( 'vacia' );
 		expect( $( '.prc-cartel__img' ).hasAttribute( 'src' ) ).toBe( false );
 		expect( document.activeElement ).toBe( $( '.prc-cartel__fichero' ) );
+		expect( dirty() ).toBe( false );
 	} );
 
-	it( 'highlights the zone while a file is dragged over it', async () => {
+	it( 'paints what the browser restored: the box ticked shows the undo bar', async () => {
+		document.body.innerHTML = field( true );
+		$( '#prc_poster_remove' ).checked = true;
+		await load();
+
+		expect( state() ).toBe( 'quitada' );
+	} );
+
+	it( 'paints what the browser restored: a chosen file shows its preview', async () => {
+		document.body.innerHTML = field( true );
+		preset( new File( [ 'x' ], 'vuelta.png', { type: 'image/png' } ) );
+		await load();
+
+		expect( state() ).toBe( 'nueva' );
+		expect( $( '.prc-cartel__datos' ).textContent ).toBe( 'vuelta.png' );
+	} );
+
+	it( 'highlights the zone while a file is dragged over it, and lets it drop on the input', async () => {
 		document.body.innerHTML = field( false );
 		await load();
 		const marco = $( '.prc-cartel__marco' );
 
-		$( '.prc-cartel__fichero' ).dispatchEvent( new Event( 'dragenter', { bubbles: true } ) );
+		drag( 'dragenter', $( '.prc-cartel__fichero' ) );
 		expect( marco.classList.contains( 'prc-cartel__marco--encima' ) ).toBe( true );
-		$( '.prc-cartel__fichero' ).dispatchEvent( new Event( 'drop', { bubbles: true } ) );
+		expect( drag( 'dragover', $( '.prc-cartel__fichero' ) ).defaultPrevented ).toBe( false );
+		expect( drag( 'drop', $( '.prc-cartel__fichero' ) ).defaultPrevented ).toBe( false );
 		expect( marco.classList.contains( 'prc-cartel__marco--encima' ) ).toBe( false );
+	} );
+
+	it( 'a file dropped anywhere else does not open in the tab', async () => {
+		document.body.innerHTML = field( true );
+		await load();
+
+		const over = drag( 'dragover', $( '.prc-cartel__quitar' ) );
+		expect( over.defaultPrevented ).toBe( true );
+		expect( over.dataTransfer.dropEffect ).toBe( 'none' );
+		expect( drag( 'drop', document.body ).defaultPrevented ).toBe( true );
+
+		// Arrastrar texto no es asunto suyo.
+		const text = new Event( 'drop', { bubbles: true, cancelable: true } );
+		text.dataTransfer = { types: [ 'text/plain' ] };
+		document.body.dispatchEvent( text );
+		expect( text.defaultPrevented ).toBe( false );
 	} );
 } );

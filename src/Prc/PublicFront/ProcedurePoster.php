@@ -16,7 +16,9 @@ namespace Prc\PublicFront;
  * `ProcedureAccess::can_edit()` en {@see ProcedureEditor::handle()}.
  *
  * Al cambiarlo o quitarlo, la imagen anterior se queda en medios: un
- * duplicado comparte la misma (`ProcedureDuplicate`).
+ * duplicado comparte la misma (`ProcedureDuplicate`). Por eso el texto
+ * alternativo solo se escribe en una imagen que es de este procedimiento y de
+ * ningún otro: el de una compartida cambiaría también la ficha del otro.
  */
 final class ProcedurePoster {
 
@@ -43,9 +45,18 @@ final class ProcedurePoster {
 	public const FIELD_REMOVE = 'prc_poster_remove';
 
 	/**
-	 * The biggest image accepted, in bytes.
+	 * The biggest image accepted, in bytes, before the server's own limit.
 	 */
 	public const MAX_BYTES = 5 * MB_IN_BYTES;
+
+	/**
+	 * Names of the accepted types, for the messages.
+	 */
+	private const TYPE_NAMES = array(
+		'image/jpeg' => 'JPEG',
+		'image/png'  => 'PNG',
+		'image/webp' => 'WebP',
+	);
 
 	/**
 	 * What may be uploaded: extension pattern => MIME type.
@@ -55,6 +66,39 @@ final class ProcedurePoster {
 		'png'          => 'image/png',
 		'webp'         => 'image/webp',
 	);
+
+	/**
+	 * The biggest image accepted here: ours, or less if the server takes less.
+	 *
+	 * `wp_max_upload_size()` ya trae el límite de PHP y, en un multisitio, el
+	 * `fileupload_maxk` y la cuota que quedan del subsitio.
+	 *
+	 * @return int
+	 */
+	public static function max_bytes(): int {
+		$servidor = (int) wp_max_upload_size();
+		return $servidor > 0 ? min( self::MAX_BYTES, $servidor ) : self::MAX_BYTES;
+	}
+
+	/**
+	 * The accepted types that this site also allows: extension pattern => MIME type.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function mimes(): array {
+		return array_intersect( self::MIMES, get_allowed_mime_types() );
+	}
+
+	/**
+	 * What may be uploaded, for people: «JPEG, PNG o WebP».
+	 *
+	 * @return string
+	 */
+	public static function types_label(): string {
+		$nombres = array_values( array_intersect_key( self::TYPE_NAMES, array_flip( self::mimes() ) ) );
+		$ultimo  = array_pop( $nombres );
+		return array() === $nombres ? (string) $ultimo : implode( ', ', $nombres ) . ' o ' . $ultimo;
+	}
 
 	/**
 	 * The current poster, for the section.
@@ -81,13 +125,16 @@ final class ProcedurePoster {
 		$quitar = ! empty( $_POST[ self::FIELD_REMOVE ] );
 		$alt    = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::FIELD_ALT ] ?? '' ) ) );
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$fichero = self::uploaded();
+		if ( $quitar && null !== $fichero ) {
+			return 'Ha elegido una imagen y a la vez «Quitar el cartel». Haga solo una de las dos cosas.';
+		}
 		if ( $quitar ) {
 			delete_post_thumbnail( $procedure_id );
 			self::leave( $procedure_id );
 			return '';
 		}
 
-		$fichero = self::uploaded();
 		if ( null !== $fichero ) {
 			$imagen = self::store( $procedure_id, $fichero );
 			if ( is_string( $imagen ) ) {
@@ -99,9 +146,40 @@ final class ProcedurePoster {
 		if ( $imagen <= 0 ) {
 			return 'Elija una imagen para el cartel antes de guardar.';
 		}
-		update_post_meta( $imagen, '_wp_attachment_image_alt', $alt );
+		if ( (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ) !== $alt ) {
+			if ( ! self::owns( $procedure_id, $imagen ) ) {
+				return 'Esta imagen la comparte con otro procedimiento, y su texto alternativo cambiaría también allí. Para cambiarlo, vuelva a subir la imagen.';
+			}
+			update_post_meta( $imagen, '_wp_attachment_image_alt', $alt );
+		}
 		self::leave( $procedure_id );
 		return '';
+	}
+
+	/**
+	 * Whether the image hangs from this procedure and no other post uses it.
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @param int $imagen       Attachment ID.
+	 * @return bool
+	 */
+	private static function owns( int $procedure_id, int $imagen ): bool {
+		if ( (int) get_post_field( 'post_parent', $imagen ) !== $procedure_id ) {
+			return false;
+		}
+		$otros = get_posts(
+			array(
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'fields'           => 'ids',
+				'posts_per_page'   => 1,
+				'post__not_in'     => array( $procedure_id ),
+				'meta_key'         => '_thumbnail_id', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- solo al cambiar el texto alternativo.
+				'meta_value'       => (string) $imagen, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value -- ídem.
+				'suppress_filters' => true,
+			)
+		);
+		return array() === $otros;
 	}
 
 	/**
@@ -143,13 +221,14 @@ final class ProcedurePoster {
 		}
 		$nombre = '' !== (string) $tipo['proper_filename'] ? (string) $tipo['proper_filename'] : $fichero['name'];
 		$bytes  = file_get_contents( $fichero['tmp_name'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- el temporal de la subida, local.
-		$subido = wp_upload_bits( $nombre, null, is_string( $bytes ) ? $bytes : '' );
+		$subido = is_string( $bytes ) && '' !== $bytes ? wp_upload_bits( $nombre, null, $bytes ) : array( 'error' => true );
 		if ( ! empty( $subido['error'] ) ) {
 			return 'No se ha podido guardar el cartel. Vuelva a intentarlo.';
 		}
 		$imagen = wp_insert_attachment(
 			array(
-				'post_mime_type' => $tipo['type'],
+				'guid'           => $subido['url'],
+				'post_mime_type' => '' !== (string) ( $subido['type'] ?? '' ) ? $subido['type'] : $tipo['type'],
 				'post_title'     => sanitize_text_field( pathinfo( $nombre, PATHINFO_FILENAME ) ),
 				'post_status'    => 'inherit',
 			),
@@ -173,15 +252,16 @@ final class ProcedurePoster {
 	 * @return array{ext:string|false, type:string|false, proper_filename:string|false}|string
 	 */
 	private static function check( array $fichero ) {
-		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::MAX_BYTES ) {
-			return 'El cartel ocupa más de 5 MB. Redúzcalo y vuelva a subirlo.';
+		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::max_bytes() ) {
+			return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
 		}
 		if ( UPLOAD_ERR_OK !== $fichero['error'] || '' === $fichero['tmp_name'] || ! is_readable( $fichero['tmp_name'] ) ) {
 			return 'No se ha podido subir la imagen. Vuelva a intentarlo.';
 		}
-		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::MIMES );
-		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::MIMES, true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
-			return 'El cartel tiene que ser una imagen JPEG, PNG o WebP.';
+		// Solo los tipos que este sitio admite (en un multisitio, `upload_filetypes`): `wp_upload_bits()` rechazaría los demás.
+		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::mimes() );
+		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::mimes(), true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
+			return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
 		}
 		return $tipo;
 	}

@@ -16,7 +16,11 @@ use Prc\PublicFront\View\ProcedureEditorView;
  */
 class Test_Procedure_Poster extends WP_UnitTestCase {
 
-	use Prc_Fixtures;
+	// Con alias porque esta clase define su propio `tear_down()`: sin esto el
+	// de las fixtures no se llamaría y `$_FILES` se colaría al test siguiente.
+	use Prc_Fixtures {
+		tear_down as fixtures_tear_down;
+	}
 
 	/**
 	 * Temporary upload files to remove.
@@ -43,7 +47,8 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 				wp_delete_file( $tmp );
 			}
 		}
-		parent::tear_down();
+		$this->remove_added_uploads();
+		$this->fixtures_tear_down();
 	}
 
 	/**
@@ -174,5 +179,72 @@ class Test_Procedure_Poster extends WP_UnitTestCase {
 
 		$this->assertNull( $this->enviar( $ajeno, $procedure, $this->png() ) );
 		$this->assertSame( 0, (int) get_post_thumbnail_id( $procedure ) );
+	}
+
+	/**
+	 * Un duplicado comparte la imagen del original: cambiar ahí el texto
+	 * alternativo no toca la ficha del otro, y la sección lo dice.
+	 */
+	public function test_the_alt_text_of_a_shared_image_is_not_rewritten() {
+		$area     = $this->area( 'Ámbito' );
+		$manager  = $this->manager( array( $area ) );
+		$original = $this->procedure( $manager, array( $area ) );
+		$this->assertNotNull( $this->enviar( $manager, $original, $this->png(), 'cartel.png', array( ProcedurePoster::FIELD_ALT => 'Cartel de la red' ) ) );
+		$imagen = (int) get_post_thumbnail_id( $original );
+
+		$copia = $this->procedure( $manager, array( $area ) );
+		set_post_thumbnail( $copia, $imagen );
+		$this->assertNull( $this->enviar( $manager, $copia, null, '', array( ProcedurePoster::FIELD_ALT => 'Otro texto' ) ) );
+		$this->assertSame( 'Cartel de la red', get_post_meta( $imagen, '_wp_attachment_image_alt', true ) );
+
+		// Ni siquiera desde el original, mientras la copia la use.
+		$this->assertNull( $this->enviar( $manager, $original, null, '', array( ProcedurePoster::FIELD_ALT => 'Otro texto' ) ) );
+		$this->assertSame( 'Cartel de la red', get_post_meta( $imagen, '_wp_attachment_image_alt', true ) );
+
+		// Lo tecleado se repinta en el rechazo.
+		$_GET = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $original,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_DATA,
+		);
+		$this->assertStringContainsString( 'value="Otro texto"', ProcedureEditorView::html( ProcedureEditor::model() ) );
+
+		// Guardar sin cambiar el texto sí vale.
+		$this->assertNotNull( $this->enviar( $manager, $copia, null, '', array( ProcedurePoster::FIELD_ALT => 'Cartel de la red' ) ) );
+	}
+
+	/**
+	 * Elegir una imagen y marcar «Quitar el cartel» a la vez no hace ninguna de las dos.
+	 */
+	public function test_choosing_an_image_and_removing_at_once_is_refused() {
+		$area      = $this->area( 'Ámbito' );
+		$manager   = $this->manager( array( $area ) );
+		$procedure = $this->procedure( $manager, array( $area ) );
+		$this->assertNotNull( $this->enviar( $manager, $procedure, $this->png() ) );
+		$imagen = (int) get_post_thumbnail_id( $procedure );
+
+		$this->assertNull( $this->enviar( $manager, $procedure, $this->png(), 'otro.png', array( ProcedurePoster::FIELD_REMOVE => '1' ) ) );
+		$this->assertSame( $imagen, (int) get_post_thumbnail_id( $procedure ) );
+	}
+
+	/**
+	 * El límite es el menor entre el nuestro y el del servidor, y es el que se anuncia.
+	 */
+	public function test_the_size_limit_follows_the_server() {
+		$limite = static function () {
+			return MB_IN_BYTES;
+		};
+		add_filter( 'upload_size_limit', $limite );
+		$this->assertSame( MB_IN_BYTES, ProcedurePoster::max_bytes() );
+
+		$area      = $this->area( 'Ámbito' );
+		$manager   = $this->manager( array( $area ) );
+		$procedure = $this->procedure( $manager, array( $area ) );
+		$this->acting_as( $manager );
+		$_GET = array(
+			ProcedureEditor::ARG_PROCEDURE => (string) $procedure,
+			ProcedureEditor::ARG_PANEL     => ProcedureEditor::PANEL_DATA,
+		);
+		$this->assertStringContainsString( 'de 1 MB como mucho', ProcedureEditorView::html( ProcedureEditor::model() ) );
+		remove_filter( 'upload_size_limit', $limite );
 	}
 }

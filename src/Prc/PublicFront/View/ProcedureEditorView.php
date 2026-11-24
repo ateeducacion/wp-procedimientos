@@ -13,6 +13,7 @@ use Prc\Domain\QuestionPoints;
 use Prc\Meta\ProcedureMetaKeys;
 use Prc\PublicFront\Assets;
 use Prc\PublicFront\ProcedureEditor;
+use Prc\PublicFront\ProcedurePoster;
 use Prc\PublicFront\Shell;
 
 /**
@@ -99,7 +100,7 @@ final class ProcedureEditorView {
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
-			default => self::data_panel( $m ) . ( true === $m['nuevo'] ? '' : self::links_section( $m ) ),
+			default => self::data_panel( $m ) . ( true === $m['nuevo'] ? '' : self::poster_section( $m ) . self::links_section( $m ) ),
 		};
 	}
 
@@ -1067,6 +1068,56 @@ final class ProcedureEditorView {
 				<label for="prc-q-r-<?php echo esc_attr( (string) $i ); ?>">Obligatorio</label>
 			</div>
 		</fieldset>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	// ─── Cartel ────────────────────────────────────────────────────────────
+
+	/**
+	 * The «Cartel» section of «Datos»: upload, alternative text and remove (#126).
+	 *
+	 * @param array<string, mixed> $m Model.
+	 * @return string
+	 */
+	private static function poster_section( array $m ): string {
+		$cartel = (array) ( $m['poster'] ?? array() );
+		$url    = (string) ( $cartel['url'] ?? '' );
+		$op     = ProcedurePoster::OP;
+
+		ob_start();
+		?>
+		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedurePoster::SECTION ); ?>" method="post" enctype="multipart/form-data" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
+			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
+			<fieldset class="prc-seccion-campos">
+				<legend class="prc-seccion__titulo">Cartel</legend>
+				<p class="prc-intro">Es la imagen de la tarjeta en la portada y de la ficha pública. Sin cartel, la tarjeta lleva el logo del ámbito.</p>
+				<?php if ( '' !== $url ) : ?>
+					<p><img class="prc-cartel-actual" src="<?php echo esc_url( $url ); ?>" alt="" /></p>
+				<?php endif; ?>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>"><?php echo esc_html( '' !== $url ? 'Cambiar la imagen' : 'Imagen' ); ?></label>
+					<input class="prc-control" type="file" id="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" accept="image/jpeg,image/png,image/webp" />
+					<p class="prc-campo__ayuda">JPEG, PNG o WebP, de 5 MB como mucho. Mejor en vertical, como un cartel.</p>
+				</div>
+				<div class="prc-campo">
+					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>">Texto alternativo</label>
+					<input class="prc-control" type="text" id="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" value="<?php echo esc_attr( (string) ( $cartel['alt'] ?? '' ) ); ?>" />
+					<p class="prc-campo__ayuda">Lo que se lee en lugar de la imagen: lo que dice el cartel, en una frase.</p>
+				</div>
+				<?php if ( '' !== $url ) : ?>
+					<div class="prc-campo prc-campo--completo">
+						<div class="prc-opcion">
+							<input type="checkbox" id="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" value="1" />
+							<label for="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>">Quitar el cartel</label>
+						</div>
+					</div>
+				<?php endif; ?>
+			</fieldset>
+			<?php echo PanelParts::submit( 'Guardar el cartel' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+		</form>
 		<?php
 		return (string) ob_get_clean();
 	}

@@ -131,6 +131,7 @@ src/Prc/
 ├── PublicFront/Applications.php            Crear/editar/buscar solicitudes, revisión, CSV
 ├── PublicFront/ApplicationFiles.php        Documentos privados de una solicitud: política, almacén y descarga (ADR-0028)
 ├── PublicFront/LinkCopies.php              Copia privada del PDF de cada enlace (sección «Enlaces» de «Datos») y su descarga (ADR-0048)
+├── PublicFront/ProcedurePoster.php         El cartel desde «Datos»: sube la imagen a medios sin upload_files y la deja como destacada
 ├── PublicFront/ApplicationLog.php          Historial de la solicitud: quién, cuándo y qué (ADR-0041)
 ├── PublicFront/ApplicationOperations.php   Lo que escriben retirar, restaurar, la prórroga, la nota interna y en nombre de un centro
 ├── PublicFront/ApplicationHistory.php      Qué se anota en el historial, escuchando las acciones, y cómo se lee (ADR-0044)

@@ -1237,3 +1237,9 @@ body.prc-app .prc-btn-borrar {
 @media (prefers-reduced-motion: reduce) {
   .prc-app * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* El cartel actual en «Datos» del taller (#126). */
+.prc-cartel-actual {
+	max-width: 12rem;
+	height: auto;
+}

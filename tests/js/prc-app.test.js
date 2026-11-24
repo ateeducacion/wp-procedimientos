@@ -1522,3 +1522,71 @@ describe( 'the poster field of «Datos»', () => {
 		expect( text.defaultPrevented ).toBe( false );
 	} );
 } );
+
+describe( 'the section index of «Datos» and «Avanzado»', () => {
+	let fire;
+	let observed;
+
+	beforeEach( () => {
+		observed = [];
+		window.IntersectionObserver = class {
+			constructor( callback ) {
+				fire = ( entries ) => callback( entries );
+			}
+			observe( node ) {
+				observed.push( node.id );
+			}
+		};
+		// jsdom does not lay out: a page taller than the window, scrolled to the top.
+		Object.defineProperty( document.documentElement, 'scrollHeight', { configurable: true, value: 10000 } );
+		document.body.innerHTML = `
+			<nav data-prc-indice><ul>
+				<li><a href="#uno">Uno</a></li>
+				<li><a href="#dos">Dos</a></li>
+				<li><a href="#tres">Tres</a></li>
+			</ul></nav>
+			<fieldset id="uno"></fieldset><fieldset id="dos"></fieldset><form id="tres"></form>`;
+	} );
+
+	afterEach( () => {
+		delete window.IntersectionObserver;
+		delete document.documentElement.scrollHeight;
+	} );
+
+	const link = ( id ) => document.querySelector( `a[href="#${ id }"]` );
+	const at = ( id, isIntersecting ) => ( { target: document.getElementById( id ), isIntersecting } );
+
+	it( 'watches every section the index links to', async () => {
+		await load();
+		expect( observed ).toEqual( [ 'uno', 'dos', 'tres' ] );
+	} );
+
+	it( 'marks the last section that entered the top of the window, and only that one', async () => {
+		await load();
+		fire( [ at( 'uno', true ) ] );
+		expect( link( 'uno' ).getAttribute( 'aria-current' ) ).toBe( 'true' );
+
+		fire( [ at( 'dos', true ) ] );
+		expect( link( 'uno' ).hasAttribute( 'aria-current' ) ).toBe( false );
+		expect( link( 'dos' ).getAttribute( 'aria-current' ) ).toBe( 'true' );
+
+		fire( [ at( 'dos', false ) ] );
+		expect( link( 'uno' ).getAttribute( 'aria-current' ) ).toBe( 'true' );
+	} );
+
+	it( 'marks the last section at the foot of the page, which never reaches the top', async () => {
+		await load();
+		fire( [ at( 'dos', true ) ] );
+		Object.defineProperty( document.documentElement, 'scrollHeight', { configurable: true, value: window.innerHeight } );
+		window.dispatchEvent( new Event( 'scroll' ) );
+		expect( link( 'dos' ).hasAttribute( 'aria-current' ) ).toBe( false );
+		expect( link( 'tres' ).getAttribute( 'aria-current' ) ).toBe( 'true' );
+	} );
+
+	it( 'keeps the last mark while no section is in view', async () => {
+		await load();
+		fire( [ at( 'uno', true ) ] );
+		fire( [ at( 'uno', false ) ] );
+		expect( link( 'uno' ).getAttribute( 'aria-current' ) ).toBe( 'true' );
+	} );
+} );

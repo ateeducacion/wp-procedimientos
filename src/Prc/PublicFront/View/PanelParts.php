@@ -97,13 +97,36 @@ final class PanelParts {
 	 *
 	 * @param string $rotulo    Section label, in normal capitalisation.
 	 * @param string $contenido Already escaped markup of the fields.
+	 * @param string $id        Anchor for the section index, or empty.
 	 * @return string
 	 */
-	public static function section( string $rotulo, string $contenido ): string {
-		return '<fieldset class="prc-seccion-campos">'
+	public static function section( string $rotulo, string $contenido, string $id = '' ): string {
+		return '<fieldset class="prc-seccion-campos"' . ( '' === $id ? '' : ' id="' . esc_attr( $id ) . '"' ) . '>'
 			. '<legend class="prc-seccion__titulo">' . esc_html( $rotulo ) . '</legend>'
 			. $contenido
 			. '</fieldset>';
+	}
+
+	/**
+	 * A panel with its section index on the left (#129).
+	 *
+	 * Solo enlaces a anclas de la misma página: no esconde nada ni cambia lo
+	 * que se guarda. El guion resalta la sección a la vista; en el móvil, el
+	 * índice no se pinta.
+	 *
+	 * @param array<string, string> $secciones Anchor => label, in page order.
+	 * @param string                $panel     Already escaped markup of the panel.
+	 * @return string
+	 */
+	public static function indexed( array $secciones, string $panel ): string {
+		$enlaces = '';
+		foreach ( $secciones as $id => $rotulo ) {
+			$enlaces .= '<li><a href="#' . esc_attr( $id ) . '">' . esc_html( $rotulo ) . '</a></li>';
+		}
+		return '<div class="prc-con-indice">'
+			. '<nav class="prc-indice" aria-label="Secciones del panel" data-prc-indice><ul>' . $enlaces . '</ul></nav>'
+			. '<div class="prc-con-indice__cuerpo">' . $panel . '</div>'
+			. '</div>';
 	}
 
 	/**

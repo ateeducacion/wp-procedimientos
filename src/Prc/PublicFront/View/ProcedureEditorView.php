@@ -30,6 +30,20 @@ final class ProcedureEditorView {
 	private const NEW_QUESTIONS = 3;
 
 	/**
+	 * The index of «Datos»: anchor => label, in page order (#129).
+	 */
+	private const DATA_INDEX = array(
+		'prc-datos-generales'          => 'Ajustes generales',
+		'prc-datos-promociona'         => 'Promociona',
+		'prc-datos-informacion'        => 'Más información',
+		'prc-datos-diseno'             => 'Aspectos de diseño',
+		'prc-datos-plazos'             => 'Plazos',
+		'prc-datos-solicitud'          => 'La solicitud',
+		ProcedurePoster::SECTION       => 'Cartel',
+		ProcedureEditor::SECTION_LINKS => 'Enlaces',
+	);
+
+	/**
 	 * Paint the workshop.
 	 *
 	 * @param array<string, mixed> $m What ProcedureEditor::model() returned.
@@ -100,7 +114,7 @@ final class ProcedureEditorView {
 			ProcedureEditor::PANEL_PUBLISH => self::publish_panel( $m ),
 			ProcedureEditor::PANEL_PEOPLE => PeopleView::spec_panel( $m ),
 			ProcedureEditor::PANEL_ADVANCED => AdvancedPanelView::html( $m ),
-			default => self::data_panel( $m ) . ( true === $m['nuevo'] ? '' : self::poster_section( $m ) . self::links_section( $m ) ),
+			default => true === $m['nuevo'] ? self::data_panel( $m ) : PanelParts::indexed( self::DATA_INDEX, self::data_panel( $m ) . self::poster_section( $m ) . self::links_section( $m ) ),
 		};
 	}
 
@@ -365,21 +379,21 @@ final class ProcedureEditorView {
 
 		// Los cuatro rótulos son los literales del sistema que se sustituye: quien
 		// da de alta lleva años leyéndolos y pidió esta pantalla igual que aquella.
-		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ) );
+		$secciones  = PanelParts::section( 'Ajustes generales', self::general_fields( $m, $v, $listas, $nuevo ), 'prc-datos-generales' );
 		$secciones .= '<div class="prc-form__mitades">'
-			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ) )
-			. PanelParts::section( 'Más información', self::email_fields( $v ) )
+			. PanelParts::section( 'Promociona', self::area_field( $v, (array) ( $listas['area'] ?? array() ), (array) ( $m['foreign_areas'] ?? array() ) ), 'prc-datos-promociona' )
+			. PanelParts::section( 'Más información', self::email_fields( $v ), 'prc-datos-informacion' )
 			. '</div>';
-		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ) );
+		$secciones .= PanelParts::section( 'Aspectos de diseño', self::palette_field( $m, $v ), 'prc-datos-diseno' );
 		if ( ! $nuevo ) {
-			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v, (string) $m['today'] ) );
-			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ) );
+			$secciones .= PanelParts::section( 'Plazos', self::date_fields( $v, (string) $m['today'] ), 'prc-datos-plazos' );
+			$secciones .= PanelParts::section( 'La solicitud', self::request_fields( $v ), 'prc-datos-solicitud' );
 			// Qué centros pueden solicitar va en «Avanzado» (#80).
 		}
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla<?php echo $nuevo ? ' prc-form--alta' : ''; ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -865,7 +879,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla prc-isla--sin-cabecera" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1115,7 +1129,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedurePoster::SECTION ); ?>" method="post" enctype="multipart/form-data" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla" id="<?php echo esc_attr( ProcedurePoster::SECTION ); ?>" method="post" enctype="multipart/form-data" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />
@@ -1224,7 +1238,7 @@ final class ProcedureEditorView {
 
 		ob_start();
 		?>
-		<form class="prc-form prc-form--taller" id="<?php echo esc_attr( ProcedureEditor::SECTION_LINKS ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
+		<form class="prc-form prc-form--taller prc-isla" id="<?php echo esc_attr( ProcedureEditor::SECTION_LINKS ); ?>" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>" data-prc-dirty-guard>
 			<?php wp_nonce_field( ProcedureEditor::nonce_action( $op ), ProcedureEditor::nonce_name( $op ), false ); ?>
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_DO ); ?>" value="<?php echo esc_attr( $op ); ?>" />
 			<input type="hidden" name="<?php echo esc_attr( ProcedureEditor::FIELD_PROCEDURE ); ?>" value="<?php echo esc_attr( (string) (int) $m['procedure_id'] ); ?>" />

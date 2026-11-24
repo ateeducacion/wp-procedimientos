@@ -17,6 +17,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
 ### Cambiado
 
 - **Taller, «Campos adicionales»: lo ya contestado no se descoloca.** Con solicitudes que lo hayan contestado, un campo ya no se puede quitar —la casilla «Quitar este campo» no sale—, ni cambiar su «Entrega con plazo propio» si hay documentos entregados; una opción que alguien eligió no se quita ni cambia de texto, y una fila de una rejilla con cantidades no se quita. Cambiar los puntos de una opción ya elegida pide marcar «Aplicar el cambio de puntos a las solicitudes presentadas», porque cambia su puntuación. Títulos, indicaciones, orden, fechas y campos, opciones o filas nuevos se siguen editando hasta que el procedimiento es histórico (ADR-0051, #121)
+- **Taller: cada formulario, en su caja.** En «Datos», «Campos adicionales», «Participantes» y «Avanzado», cada formulario va en un recuadro con su título arriba y su botón dentro: lo que hay en el recuadro es lo que guarda ese botón. «Datos» y «Avanzado» llevan a la izquierda un índice con sus secciones, que marca la que se está viendo; en el móvil no sale. La solicitud de los centros no cambia (#129)
 
 ## [0.1.1] — 2026-11-24
 

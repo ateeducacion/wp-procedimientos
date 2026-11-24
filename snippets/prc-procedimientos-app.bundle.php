@@ -15115,6 +15115,8 @@ namespace Prc\PublicFront;
 
 
 
+
+
 if ( ! class_exists( 'Prc\PublicFront\ProcedurePoster', false ) ) {
 final class ProcedurePoster {
 
@@ -15148,11 +15150,53 @@ final class ProcedurePoster {
 
 
 
+	private const TYPE_NAMES = array(
+		'image/jpeg' => 'JPEG',
+		'image/png'  => 'PNG',
+		'image/webp' => 'WebP',
+	);
+
+
+
+
 	public const MIMES = array(
 		'jpg|jpeg|jpe' => 'image/jpeg',
 		'png'          => 'image/png',
 		'webp'         => 'image/webp',
 	);
+
+
+
+
+
+
+
+
+
+	public static function max_bytes(): int {
+		$servidor = (int) wp_max_upload_size();
+		return $servidor > 0 ? min( self::MAX_BYTES, $servidor ) : self::MAX_BYTES;
+	}
+
+
+
+
+
+
+	public static function mimes(): array {
+		return array_intersect( self::MIMES, get_allowed_mime_types() );
+	}
+
+
+
+
+
+
+	public static function types_label(): string {
+		$nombres = array_values( array_intersect_key( self::TYPE_NAMES, array_flip( self::mimes() ) ) );
+		$ultimo  = array_pop( $nombres );
+		return array() === $nombres ? (string) $ultimo : implode( ', ', $nombres ) . ' o ' . $ultimo;
+	}
 
 
 
@@ -15179,13 +15223,16 @@ final class ProcedurePoster {
 		$quitar = ! empty( $_POST[ self::FIELD_REMOVE ] );
 		$alt    = sanitize_text_field( wp_unslash( (string) ( $_POST[ self::FIELD_ALT ] ?? '' ) ) );
 
+		$fichero = self::uploaded();
+		if ( $quitar && null !== $fichero ) {
+			return 'Ha elegido una imagen y a la vez «Quitar el cartel». Haga solo una de las dos cosas.';
+		}
 		if ( $quitar ) {
 			delete_post_thumbnail( $procedure_id );
 			self::leave( $procedure_id );
 			return '';
 		}
 
-		$fichero = self::uploaded();
 		if ( null !== $fichero ) {
 			$imagen = self::store( $procedure_id, $fichero );
 			if ( is_string( $imagen ) ) {
@@ -15197,9 +15244,40 @@ final class ProcedurePoster {
 		if ( $imagen <= 0 ) {
 			return 'Elija una imagen para el cartel antes de guardar.';
 		}
-		update_post_meta( $imagen, '_wp_attachment_image_alt', $alt );
+		if ( (string) get_post_meta( $imagen, '_wp_attachment_image_alt', true ) !== $alt ) {
+			if ( ! self::owns( $procedure_id, $imagen ) ) {
+				return 'Esta imagen la comparte con otro procedimiento, y su texto alternativo cambiaría también allí. Para cambiarlo, vuelva a subir la imagen.';
+			}
+			update_post_meta( $imagen, '_wp_attachment_image_alt', $alt );
+		}
 		self::leave( $procedure_id );
 		return '';
+	}
+
+
+
+
+
+
+
+
+	private static function owns( int $procedure_id, int $imagen ): bool {
+		if ( (int) get_post_field( 'post_parent', $imagen ) !== $procedure_id ) {
+			return false;
+		}
+		$otros = get_posts(
+			array(
+				'post_type'        => 'any',
+				'post_status'      => 'any',
+				'fields'           => 'ids',
+				'posts_per_page'   => 1,
+				'post__not_in'     => array( $procedure_id ),
+				'meta_key'         => '_thumbnail_id',
+				'meta_value'       => (string) $imagen,
+				'suppress_filters' => true,
+			)
+		);
+		return array() === $otros;
 	}
 
 
@@ -15241,13 +15319,14 @@ final class ProcedurePoster {
 		}
 		$nombre = '' !== (string) $tipo['proper_filename'] ? (string) $tipo['proper_filename'] : $fichero['name'];
 		$bytes  = file_get_contents( $fichero['tmp_name'] );
-		$subido = wp_upload_bits( $nombre, null, is_string( $bytes ) ? $bytes : '' );
+		$subido = is_string( $bytes ) && '' !== $bytes ? wp_upload_bits( $nombre, null, $bytes ) : array( 'error' => true );
 		if ( ! empty( $subido['error'] ) ) {
 			return 'No se ha podido guardar el cartel. Vuelva a intentarlo.';
 		}
 		$imagen = wp_insert_attachment(
 			array(
-				'post_mime_type' => $tipo['type'],
+				'guid'           => $subido['url'],
+				'post_mime_type' => '' !== (string) ( $subido['type'] ?? '' ) ? $subido['type'] : $tipo['type'],
 				'post_title'     => sanitize_text_field( pathinfo( $nombre, PATHINFO_FILENAME ) ),
 				'post_status'    => 'inherit',
 			),
@@ -15271,15 +15350,16 @@ final class ProcedurePoster {
 
 
 	private static function check( array $fichero ) {
-		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::MAX_BYTES ) {
-			return 'El cartel ocupa más de 5 MB. Redúzcalo y vuelva a subirlo.';
+		if ( UPLOAD_ERR_INI_SIZE === $fichero['error'] || UPLOAD_ERR_FORM_SIZE === $fichero['error'] || $fichero['size'] > self::max_bytes() ) {
+			return 'El cartel ocupa más de ' . size_format( self::max_bytes() ) . '. Redúzcalo y vuelva a subirlo.';
 		}
 		if ( UPLOAD_ERR_OK !== $fichero['error'] || '' === $fichero['tmp_name'] || ! is_readable( $fichero['tmp_name'] ) ) {
 			return 'No se ha podido subir la imagen. Vuelva a intentarlo.';
 		}
-		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::MIMES );
-		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::MIMES, true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
-			return 'El cartel tiene que ser una imagen JPEG, PNG o WebP.';
+
+		$tipo = wp_check_filetype_and_ext( $fichero['tmp_name'], $fichero['name'], self::mimes() );
+		if ( empty( $tipo['type'] ) || ! in_array( $tipo['type'], self::mimes(), true ) || ! wp_getimagesize( $fichero['tmp_name'] ) ) {
+			return 'El cartel tiene que ser una imagen ' . self::types_label() . '.';
 		}
 		return $tipo;
 	}
@@ -26247,13 +26327,13 @@ final class ProcedureEditorView {
 				<?php endif; ?>
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>"><?php echo esc_html( '' !== $url ? 'Cambiar la imagen' : 'Imagen' ); ?></label>
-					<input class="prc-control" type="file" id="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" accept="image/jpeg,image/png,image/webp" />
-					<p class="prc-campo__ayuda">JPEG, PNG o WebP, de 5 MB como mucho. Mejor en vertical, como un cartel.</p>
+					<input class="prc-control" type="file" id="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" accept="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" />
+					<p class="prc-campo__ayuda"><?php echo esc_html( ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho. Mejor en vertical, como un cartel.' ); ?></p>
 				</div>
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>">Texto alternativo</label>
 					<input class="prc-control" type="text" id="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" value="<?php echo esc_attr( (string) ( $cartel['alt'] ?? '' ) ); ?>" />
-					<p class="prc-campo__ayuda">Lo que se lee en lugar de la imagen: lo que dice el cartel, en una frase.</p>
+					<p class="prc-campo__ayuda">Lo que se lee en lugar de la imagen: lo que dice el cartel, en una frase. Si cambia la imagen, revíselo.</p>
 				</div>
 				<?php if ( '' !== $url ) : ?>
 					<div class="prc-campo prc-campo--completo">
@@ -28125,7 +28205,7 @@ final class ProcedureEditor {
 		$m['view_label']     = ProcedureView::link_label( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
 		$m['link_copies']    = self::PANEL_DATA === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
-		$m['poster']         = ProcedurePoster::summary( $procedure_id );
+		$m['poster']         = self::poster( $procedure_id, (string) $m['panel'] );
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
@@ -28195,6 +28275,28 @@ final class ProcedureEditor {
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
 			'texto' => (string) ( self::DONE[ $hecho ] ?? '' ),
 		);
+	}
+
+
+
+
+
+
+
+
+	private static function poster( int $procedure_id, string $panel ): array {
+		if ( self::PANEL_DATA !== $panel ) {
+			return array(
+				'url' => '',
+				'alt' => '',
+			);
+		}
+		$cartel = ProcedurePoster::summary( $procedure_id );
+
+		if ( '' !== self::$rejected && isset( $_POST[ ProcedurePoster::FIELD_ALT ] ) ) {
+			$cartel['alt'] = self::field( ProcedurePoster::FIELD_ALT );
+		}
+		return $cartel;
 	}
 
 

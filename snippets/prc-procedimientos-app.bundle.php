@@ -6,7 +6,7 @@
  * Priority: 15
  *
  * @package Prc
- * @version 0.1.0
+ * @version 0.1.1
  */
 
 // phpcs:disable

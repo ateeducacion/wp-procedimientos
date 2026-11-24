@@ -204,6 +204,7 @@ final class ProcedureEditor {
 		self::OP_CENTRES,
 		AdvancedPanel::OP_SIGNATURE,
 		self::OP_LINKS,
+		ProcedurePoster::OP,
 		self::OP_REVIEW,
 		self::OP_BULK_REVIEW,
 		self::OP_EXPORT,
@@ -247,6 +248,7 @@ final class ProcedureEditor {
 		'consulta'     => 'Consulta de solicitudes guardada.',
 		'centros'      => 'Guardado qué centros pueden solicitar.',
 		'firma'        => 'Firma electrónica guardada.',
+		'cartel'       => 'Cartel guardado.',
 		'revisada'     => 'Solicitud revisada.',
 		'publicado'    => 'Procedimiento publicado: ya se ve en la portada y los centros pueden solicitar cuando abra el plazo.',
 		'borrador'     => 'Procedimiento devuelto a borrador: deja de verse públicamente y no admite solicitudes.',
@@ -522,8 +524,8 @@ final class ProcedureEditor {
 			self::save_data( $procedure_id, $user_id );
 			return;
 		}
-		if ( self::OP_CENTRES === $op ) {
-			self::$rejected = AdvancedPanel::save_centres( $procedure_id, self::submitted_data( $procedure_id ) );
+		if ( self::OP_CENTRES === $op || ProcedurePoster::OP === $op ) {
+			self::$rejected = self::OP_CENTRES === $op ? AdvancedPanel::save_centres( $procedure_id, self::submitted_data( $procedure_id ) ) : ProcedurePoster::save( $procedure_id );
 			return;
 		}
 		if ( self::PANEL_QUESTIONS === $op || self::OP_MOVE_QUESTION === $op ) {
@@ -1385,6 +1387,10 @@ final class ProcedureEditor {
 			'help_publish_url'        => Help::url( HelpContent::GUIDE_MANAGE, 'publicar' ),
 			'values'                  => array(),
 			'link_copies'             => array(),
+			'poster'                  => array(
+				'url' => '',
+				'alt' => '',
+			),
 			'terms'                   => array(
 				'area'   => array(),
 				'course' => array(),
@@ -1523,6 +1529,7 @@ final class ProcedureEditor {
 		$m['view_label']     = ProcedureView::link_label( $procedimiento );
 		$m['values']         = self::values( $procedure_id );
 		$m['link_copies']    = self::PANEL_DATA === $m['panel'] ? LinkCopies::summary( $procedure_id ) : array();
+		$m['poster']         = self::poster( $procedure_id, (string) $m['panel'] );
 		$m['terms']          = self::term_lists( $user_id );
 		$m['questions']      = Applications::questions( $procedure_id );
 		$m['people_spec']    = PeopleSpecPanel::model( $procedure_id, '' !== self::$rejected );
@@ -1592,6 +1599,28 @@ final class ProcedureEditor {
 			'tipo'  => isset( self::DONE[ $hecho ] ) ? 'ok' : '',
 			'texto' => (string) ( self::DONE[ $hecho ] ?? '' ),
 		);
+	}
+
+	/**
+	 * The poster of «Datos»; on a refused submit, with the alternative text that was typed.
+	 *
+	 * @param int    $procedure_id Procedure post ID.
+	 * @param string $panel        Panel being drawn; only «Datos» shows it.
+	 * @return array{url:string, alt:string}
+	 */
+	private static function poster( int $procedure_id, string $panel ): array {
+		if ( self::PANEL_DATA !== $panel ) {
+			return array(
+				'url' => '',
+				'alt' => '',
+			);
+		}
+		$cartel = ProcedurePoster::summary( $procedure_id );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- solo se repinta lo tecleado; handle() comprobó el nonce.
+		if ( '' !== self::$rejected && isset( $_POST[ ProcedurePoster::FIELD_ALT ] ) ) {
+			$cartel['alt'] = self::field( ProcedurePoster::FIELD_ALT );
+		}
+		return $cartel;
 	}
 
 	/**

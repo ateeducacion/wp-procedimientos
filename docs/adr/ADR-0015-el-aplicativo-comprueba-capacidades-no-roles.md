@@ -216,3 +216,24 @@ La ficha de usuario gana el campo «Zonas de consulta», editable solo por
 administración.
 
 Asistencia de IA: Claude Code, claude-opus-5-5.
+
+## Adenda — 2026-11-24 (#126)
+
+El cartel del procedimiento ya **no depende de `upload_files`**. Quien puede
+editar el procedimiento (`ProcedureAccess::can_edit()`) sube la imagen desde
+la sección «Cartel» de «Datos», y es el taller el que la guarda en medios y la
+deja como imagen destacada (`PublicFront/ProcedurePoster`). El rol de
+responsable del destino no necesita esa capacidad ni ver la biblioteca de
+medios, y el rol de conveniencia `prc_manager` la sigue trayendo solo por
+compatibilidad.
+
+Los límites de esa puerta son estrechos y están en el código: solo JPEG, PNG o
+WebP comprobados por su contenido, y solo los que el sitio admite; el tamaño
+como mucho el menor entre 5 MB y `wp_max_upload_size()`, que en un multisitio
+incluye la cuota del subsitio. El texto alternativo solo se escribe en una
+imagen que es del procedimiento y de nadie más, porque un duplicado la
+comparte. Un documento de una solicitud sigue sin ser un adjunto
+([ADR-0028](ADR-0028-los-adjuntos-de-una-solicitud-son-ficheros-privados.md)):
+el cartel es contenido público.
+
+Asistencia de IA: Claude Code, claude-opus-5-5.

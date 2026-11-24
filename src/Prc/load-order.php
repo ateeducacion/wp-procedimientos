@@ -57,6 +57,7 @@ return array(
 	'PublicFront/Applications.php',
 	'PublicFront/ApplicationFiles.php',
 	'PublicFront/LinkCopies.php',
+	'PublicFront/ProcedurePoster.php',
 	'PublicFront/ApplicationLog.php',
 	'PublicFront/ApplicationOperations.php',
 	'PublicFront/ApplicationHistory.php',

@@ -8,6 +8,12 @@ lee de la cabecera superior y la escribe en el `@version` del bundle.
 `make release` crea el tag y la release en GitHub; el despliegue de los snippets
 en el sitio de destino se hace después, con `npm run snippets`.
 
+## [0.1.2] — Sin publicar
+
+### Añadido
+
+- **Taller, «Datos»: el cartel del procedimiento.** Nueva sección «Cartel» para subir la imagen de la tarjeta de la portada y de la ficha pública (JPEG, PNG o WebP, hasta 5 MB), con su texto alternativo, y para quitarla. Quien gestiona no necesita permiso de subir a la biblioteca de medios: el taller guarda la imagen por su cuenta. Al cambiarla, la anterior se queda en medios (#126)
+
 ## [0.1.1] — 2026-11-24
 
 ### Añadido

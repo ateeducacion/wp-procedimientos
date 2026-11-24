@@ -2541,8 +2541,116 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Una fila renombrada en su línea sigue con sus cantidades; una borrada
-	 * dejando su línea en blanco deja de salir y su clave no se reutiliza.
+	 * Lo ya contestado no se descoloca (ADR-0051): un campo contestado no se
+	 * quita, ni con la casilla ni dejando el título en blanco; una opción
+	 * elegida no se quita ni cambia de texto, y sus puntos solo cambian
+	 * confirmándolo. Una opción nueva, una que nadie eligió y sus puntos, sí.
+	 */
+	public function test_answered_questions_and_chosen_options_are_not_lost() {
+		list( $uid, $procedimiento ) = $this->con_preguntas();
+		$this->application(
+			$procedimiento,
+			$this->school_head( 'C0001' ),
+			'',
+			array(
+				ApplicationMetaKeys::ANSWERS => array(
+					'q1' => 'tres',
+					'q3' => array( 'Radio' ),
+				),
+			)
+		);
+		$rechaza = function ( array $cambios, string $motivo ) use ( $uid, $procedimiento ): void {
+			$antes = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+			$this->assertNull( $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, $cambios ) ), $motivo );
+			$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), $motivo );
+			$this->assertStringContainsString( $motivo, $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+			$this->olvidar_rechazo();
+		};
+		$guarda  = function ( array $cambios, array $extra = array() ) use ( $uid, $procedimiento ): array {
+			$url = $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, $cambios ) + $extra );
+			$this->assertSame( 'preguntas', $this->query_arg( (string) $url, ProcedureEditor::ARG_NOTICE ) );
+			return get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+		};
+
+		$rechaza( array( 'remove' => array( 0 => '1' ) ), 'No se puede quitar «Grupos»' );
+		$rechaza( array( 'label' => array( 0 => '' ) ), 'No se puede quitar «Grupos»' );
+		$rechaza( array( 'choices' => array( 2 => 'Huerto | 3' ) ), 'falta una opción que ya han elegido' );
+		$rechaza( array( 'choices' => array( 2 => "Huerto | 3\nRadio escolar" ) ), 'falta una opción que ya han elegido' );
+
+		$q = $guarda( array( 'choices' => array( 2 => "Huerto | 5\nRadio\nTaller" ) ) );
+		$this->assertSame( array( 'Huerto', 'Radio', 'Taller' ), $q[2]['choices'], 'una nueva y los puntos de una que nadie eligió' );
+
+		$rechaza( array( 'choices' => array( 2 => "Huerto | 5\nRadio | 2\nTaller" ) ), 'cambian los puntos de opciones que ya han elegido' );
+		$q = $guarda( array( 'choices' => array( 2 => "Huerto | 5\nRadio | 2\nTaller" ) ), array( ProcedureEditor::FIELD_Q_POINTS_OK => '1' ) );
+		$this->assertSame( array( 5, 2, 0 ), $q[2]['points'], 'confirmado, cambia' );
+
+		$q = $guarda( array( 'choices' => array( 2 => "Radio | 2\nTaller" ) ) );
+		$this->assertSame( array( 'Radio', 'Taller' ), $q[2]['choices'], 'la que nadie eligió se quita' );
+
+		$html = ProcedureEditorView::html( $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS ) );
+		$this->assertStringNotContainsString( 'name="' . ProcedureEditor::FIELD_Q . 'remove[0]"', $html, 'la contestada no ofrece «Quitar»' );
+		$this->assertStringContainsString( 'Con respuestas: no se puede quitar.', $html );
+		$this->assertStringContainsString( 'name="' . ProcedureEditor::FIELD_Q_POINTS_OK . '"', $html, 'con «varias opciones» contestada, la casilla de los puntos' );
+	}
+
+	/**
+	 * Con documentos entregados, «Entrega con plazo propio» no cambia (ADR-0051).
+	 */
+	public function test_the_delivery_mode_of_a_file_question_with_documents_is_refused() {
+		list( , $uid, $procedimiento ) = $this->mio(
+			array(
+				ProcedureMetaKeys::QUESTIONS => array(
+					array(
+						'key'   => 'q1',
+						'label' => 'Proyecto',
+						'type'  => ProcedureQuestions::TYPE_FILE,
+					),
+				),
+			)
+		);
+		$this->application(
+			$procedimiento,
+			$this->school_head( 'C0001' ),
+			'',
+			array(
+				ApplicationMetaKeys::FILES => array(
+					'q1' => array(
+						'id'     => str_repeat( 'a', 32 ),
+						'stored' => 'ab/cd/' . str_repeat( 'b', 32 ) . '.pdf',
+						'sha256' => str_repeat( 'c', 64 ),
+						'name'   => 'proyecto.pdf',
+						'mime'   => 'application/pdf',
+						'size'   => 10,
+					),
+				),
+			)
+		);
+		$antes = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+
+		$this->assertNull(
+			$this->submit(
+				$uid,
+				ProcedureEditor::PANEL_QUESTIONS,
+				$procedimiento,
+				0,
+				$this->preguntas_tal_cual(
+					$procedimiento,
+					array(
+						'delivery'  => array( '1' ),
+						'opens_at'  => array( '2026-01-01' ),
+						'closes_at' => array( '2026-02-01' ),
+					)
+				)
+			)
+		);
+		$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertStringContainsString( 'No se puede cambiar «Entrega con plazo propio» en «Proyecto»', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+	}
+
+	/**
+	 * Una fila renombrada en su línea sigue con sus cantidades; una sin
+	 * cantidades, borrada dejando su línea en blanco, deja de salir y su
+	 * clave no se reutiliza. Una con cantidades no se borra (ADR-0051).
 	 */
 	public function test_renaming_and_removing_grid_rows_keeps_the_answers_in_place() {
 		list( $uid, $procedimiento ) = $this->con_preguntas();
@@ -2555,11 +2663,20 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 					'q2' => array(
 						'r1' => 3,
 						'r2' => 5,
-						'r3' => 7,
+						'r3' => '',
 					),
 				),
 			)
 		);
+
+		$antes = get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true );
+		$this->assertNull(
+			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'rows' => array( 1 => "Infantil\n\nSecundaria" ) ) ) ),
+			'la fila con cantidades no se quita'
+		);
+		$this->assertSame( $antes, get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ) );
+		$this->assertStringContainsString( 'falta una fila que ya tiene cantidades', $this->modelo( $procedimiento, ProcedureEditor::PANEL_QUESTIONS )['flash']['texto'] );
+		$this->olvidar_rechazo();
 
 		$this->assertNotNull(
 			$this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $this->preguntas_tal_cual( $procedimiento, array( 'rows' => array( 1 => "Infantil\nEducación Primaria\n" ) ) ) )
@@ -2677,16 +2794,17 @@ class Test_Procedure_Editor extends WP_UnitTestCase {
 	public function test_a_deleted_last_question_never_gives_its_key_away() {
 		list( $uid, $procedimiento ) = $this->con_preguntas();
 		$this->application( $procedimiento, $this->school_head( 'C0001' ), '', array( ApplicationMetaKeys::ANSWERS => array( 'q3' => array( 'Huerto' ) ) ) );
+		// Una pregunta contestada ya no se quita desde el taller (ADR-0051), pero
+		// las hay quitadas de antes, con sus respuestas guardadas.
+		update_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, array_slice( get_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS, true ), 0, 2 ) );
+		update_post_meta( $procedimiento, ProcedureMetaKeys::QUESTIONS_SEQ, 3 );
 
 		$campos = $this->preguntas_tal_cual(
 			$procedimiento,
 			array(
-				'key'   => array( 3 => '' ),
-				'label' => array(
-					2 => '',
-					3 => 'Grupos nuevos',
-				),
-				'type'  => array( 3 => ProcedureQuestions::TYPE_NUMBER ),
+				'key'   => array( 2 => '' ),
+				'label' => array( 2 => 'Grupos nuevos' ),
+				'type'  => array( 2 => ProcedureQuestions::TYPE_NUMBER ),
 			)
 		);
 		$url    = $this->submit( $uid, ProcedureEditor::PANEL_QUESTIONS, $procedimiento, 0, $campos );

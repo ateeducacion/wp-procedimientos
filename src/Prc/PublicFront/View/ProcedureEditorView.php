@@ -892,6 +892,7 @@ final class ProcedureEditorView {
 				</details>
 			<?php endif; ?>
 
+			<?php echo self::points_ok( $guardas, (array) ( $m['answers'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<?php echo PanelParts::submit( 'Guardar los campos' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
 		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
@@ -904,16 +905,40 @@ final class ProcedureEditorView {
 	}
 
 	/**
-	 * The «Subir» and «Bajar» buttons of one saved question, and its «Quitar».
+	 * The checkbox that confirms a change of points, when some «varias opciones» has answers.
 	 *
-	 * Secundarios: no compiten con «Guardar las preguntas».
+	 * Sin marcarla, cambiar los puntos de una opción ya elegida se rechaza
+	 * al guardar (ADR-0051).
 	 *
-	 * @param int                  $i     Row index.
-	 * @param array<string, mixed> $p     Question.
-	 * @param int                  $total Saved questions.
+	 * @param array<int, array<string, mixed>> $questions Saved questions.
+	 * @param array<string, int>               $answers   Question key => applications that answered it.
 	 * @return string
 	 */
-	private static function move_buttons( int $i, array $p, int $total ): string {
+	private static function points_ok( array $questions, array $answers ): string {
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::TYPE_MULTIPLE === ( $pregunta['type'] ?? '' ) && ! empty( $answers[ (string) $pregunta['key'] ] ) ) {
+				return '<div class="prc-campo prc-campo--completo"><span class="prc-opcion">'
+					. '<input type="checkbox" id="prc-q-points-ok" name="' . esc_attr( ProcedureEditor::FIELD_Q_POINTS_OK ) . '" value="1" aria-describedby="prc-q-points-ok-help" />'
+					. '<label for="prc-q-points-ok">' . esc_html( QuestionChanges::POINTS_OK_LABEL ) . '</label></span>'
+					. '<p class="prc-campo__ayuda" id="prc-q-points-ok-help">Solo hace falta si cambia los puntos de una opción que ya han elegido: la puntuación de esas solicitudes cambia con ellos.</p></div>';
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * The «Subir» and «Bajar» buttons of one saved question, and its «Quitar».
+	 *
+	 * Secundarios: no compiten con «Guardar las preguntas». Una contestada no
+	 * se quita (ADR-0051): en vez de la casilla, lo dice.
+	 *
+	 * @param int                  $i         Row index.
+	 * @param array<string, mixed> $p         Question.
+	 * @param int                  $total     Saved questions.
+	 * @param int                  $contestan Applications that answered it.
+	 * @return string
+	 */
+	private static function move_buttons( int $i, array $p, int $total, int $contestan = 0 ): string {
 		$botones = array(
 			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
 			QuestionChanges::MOVE_DOWN => array( 'Bajar', $i >= $total - 1 ),
@@ -930,9 +955,11 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
-			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
-			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar (lo ya contestado se conserva)</label></span>';
+		$quitar = $contestan > 0
+			? '<span class="prc-pregunta__quitar">Con respuestas: no se puede quitar.</span>'
+			: '<span class="prc-opcion prc-pregunta__quitar">'
+				. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+				. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar</label></span>';
 		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
@@ -970,7 +997,7 @@ final class ProcedureEditorView {
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
-			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco.</p>
+			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco (si ya tiene cantidades, no se quita).</p>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -1028,7 +1055,7 @@ final class ProcedureEditorView {
 		?>
 		<fieldset class="prc-seccion-campos prc-pregunta">
 			<legend class="prc-seccion__titulo"><?php echo esc_html( $rotulo ); ?></legend>
-			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
+			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total, $contestan ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">

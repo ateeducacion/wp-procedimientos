@@ -277,6 +277,35 @@ final class Applications {
 	}
 
 	/**
+	 * What the applications of the procedure used: the options chosen and the grid rows answered.
+	 *
+	 * Es lo que el taller no puede quitar de una pregunta contestada, ni,
+	 * en «varias opciones», cambiarle los puntos sin confirmarlo (ADR-0051).
+	 *
+	 * @param int $procedure_id Procedure post ID.
+	 * @return array<string, array<string, bool>> Question key => option text or row key => true.
+	 */
+	public static function used_values( int $procedure_id ): array {
+		$tipos = array_column( self::questions( $procedure_id ), 'type', 'key' );
+		$out   = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			foreach ( (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ] as $clave => $respuesta ) {
+				$tipo   = (string) ( $tipos[ (string) $clave ] ?? '' );
+				$dichas = array_filter( (array) $respuesta, array( ProcedureQuestions::class, 'is_answer' ) );
+				if ( ProcedureQuestions::TYPE_GRID === $tipo ) {
+					$dichas = array_keys( $dichas );
+				} elseif ( ! ProcedureQuestions::has_choices( $tipo ) ) {
+					continue;
+				}
+				foreach ( $dichas as $valor ) {
+					$out[ (string) $clave ][ (string) $valor ] = true;
+				}
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * How many applications of the procedure have answered each question.
 	 *
 	 * Lo que cuenta como respuesta es lo de {@see answered_keys()}. El taller

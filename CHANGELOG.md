@@ -14,6 +14,10 @@ en el sitio de destino se hace después, con `npm run snippets`.
 
 - **Taller, «Datos»: el cartel del procedimiento.** Nueva sección «Cartel» para subir la imagen de la tarjeta de la portada y de la ficha pública (JPEG, PNG o WebP, hasta 5 MB), con su texto alternativo, y para quitarla. Quien gestiona no necesita permiso de subir a la biblioteca de medios: el taller guarda la imagen por su cuenta. Al cambiarla, la anterior se queda en medios (#126)
 
+### Cambiado
+
+- **Taller, «Campos adicionales»: lo ya contestado no se descoloca.** Con solicitudes que lo hayan contestado, un campo ya no se puede quitar —la casilla «Quitar este campo» no sale—, ni cambiar su «Entrega con plazo propio» si hay documentos entregados; una opción que alguien eligió no se quita ni cambia de texto, y una fila de una rejilla con cantidades no se quita. Cambiar los puntos de una opción ya elegida pide marcar «Aplicar el cambio de puntos a las solicitudes presentadas», porque cambia su puntuación. Títulos, indicaciones, orden, fechas y campos, opciones o filas nuevos se siguen editando hasta que el procedimiento es histórico (ADR-0051, #121)
+
 ## [0.1.1] — 2026-11-24
 
 ### Añadido

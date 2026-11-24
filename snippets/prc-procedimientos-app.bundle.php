@@ -2046,11 +2046,18 @@ namespace Prc\Domain;
 
 
 
+
+
 if ( ! class_exists( 'Prc\Domain\QuestionChanges', false ) ) {
 final class QuestionChanges {
 
 	public const MOVE_UP   = 'up';
 	public const MOVE_DOWN = 'down';
+
+
+
+
+	public const POINTS_OK_LABEL = 'Aplicar el cambio de puntos a las solicitudes presentadas';
 
 
 
@@ -2091,24 +2098,107 @@ final class QuestionChanges {
 
 
 
-	public static function refusal( array $before, array $after, array $answered ): string {
-		$tipos     = array_column( $before, 'type', 'key' );
-		$cambiadas = array();
+
+
+
+
+
+
+	public static function refusal( array $before, array $after, array $answered, array $used = array(), bool $points_ok = false ): string {
 		foreach ( $after as $pregunta ) {
-			$key = (string) ( $pregunta['key'] ?? '' );
 
 			if ( isset( $pregunta['max'] ) && ( $pregunta['min'] ?? 0 ) > $pregunta['max'] ) {
 				return 'En «' . (string) $pregunta['label'] . '» el mínimo es mayor que el máximo. No se han guardado los campos.';
 			}
-			if ( isset( $tipos[ $key ] ) && $tipos[ $key ] !== $pregunta['type'] && ! empty( $answered[ $key ] ) ) {
-				$cambiadas[] = '«' . (string) $pregunta['label'] . '»';
+		}
+		$despues = array_column( $after, null, 'key' );
+		$motivos = array();
+		foreach ( $before as $antes ) {
+			$key = (string) ( $antes['key'] ?? '' );
+			if ( empty( $answered[ $key ] ) ) {
+				continue;
+			}
+			$ahora  = $despues[ $key ] ?? null;
+			$motivo = null === $ahora ? 'gone' : self::broken( $antes, $ahora, array_map( 'strval', array_keys( $used[ $key ] ?? array() ) ), $points_ok );
+			if ( '' !== $motivo ) {
+				$motivos[ $motivo ][] = '«' . (string) ( $ahora['label'] ?? $antes['label'] ?? '' ) . '»';
 			}
 		}
-		if ( array() === $cambiadas ) {
-			return '';
+		foreach ( array( 'type', 'gone', 'delivery', 'choices', 'rows', 'points' ) as $motivo ) {
+			if ( isset( $motivos[ $motivo ] ) ) {
+				return self::message( $motivo, $motivos[ $motivo ] );
+			}
 		}
-		return 'No se puede cambiar el tipo de ' . implode( ', ', $cambiadas )
-			. ': ya hay solicitudes que ' . ( count( $cambiadas ) > 1 ? 'los' : 'lo' ) . ' han contestado. Si necesita otro tipo, cree un campo nuevo. No se han guardado los campos.';
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+	private static function broken( array $before, array $after, array $used, bool $points_ok ): string {
+		$tipo = (string) ( $before['type'] ?? '' );
+		if ( (string) ( $after['type'] ?? '' ) !== $tipo ) {
+			return 'type';
+		}
+		if ( ProcedureQuestions::is_delivery( $before ) !== ProcedureQuestions::is_delivery( $after ) ) {
+			return 'delivery';
+		}
+		if ( ProcedureQuestions::has_choices( $tipo ) && array() !== array_diff( $used, array_map( 'strval', (array) ( $after['choices'] ?? array() ) ) ) ) {
+			return 'choices';
+		}
+		if ( ProcedureQuestions::TYPE_GRID === $tipo && array() !== array_diff( $used, array_map( 'strval', array_column( (array) ( $after['rows'] ?? array() ), 'key' ) ) ) ) {
+			return 'rows';
+		}
+		if ( ! $points_ok && ProcedureQuestions::TYPE_MULTIPLE === $tipo && self::points_of( $before, $used ) !== self::points_of( $after, $used ) ) {
+			return 'points';
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+	private static function points_of( array $question, array $options ): array {
+		$puntos = (array) ( $question['points'] ?? array() );
+		$out    = array();
+		foreach ( array_values( (array) ( $question['choices'] ?? array() ) ) as $i => $texto ) {
+			if ( in_array( (string) $texto, $options, true ) ) {
+				$out[ (string) $texto ] = (int) ( $puntos[ $i ] ?? 0 );
+			}
+		}
+		ksort( $out );
+		return $out;
+	}
+
+
+
+
+
+
+
+
+	private static function message( string $reason, array $labels ): string {
+		$lista  = implode( ', ', $labels );
+		$lo     = count( $labels ) > 1 ? 'los' : 'lo';
+		$textos = array(
+			'type'     => 'No se puede cambiar el tipo de ' . $lista . ': ya hay solicitudes que ' . $lo . ' han contestado. Si necesita otro tipo, cree un campo nuevo.',
+			'gone'     => 'No se puede quitar ' . $lista . ': ya hay solicitudes que ' . $lo . ' han contestado, y sus respuestas dejarían de verse. Corrija su título si hace falta.',
+			'delivery' => 'No se puede cambiar «Entrega con plazo propio» en ' . $lista . ': ya hay documentos entregados. Si necesita otra entrega, cree un campo nuevo.',
+			'choices'  => 'En ' . $lista . ' falta una opción que ya han elegido algunas solicitudes. Una opción elegida no se quita ni cambia de texto: déjela como estaba y, si hace falta, añada otra.',
+			'rows'     => 'En ' . $lista . ' falta una fila que ya tiene cantidades en alguna solicitud. Una fila con cantidades no se quita: para cambiar su nombre, escríbalo en su misma línea.',
+			'points'   => 'En ' . $lista . ' cambian los puntos de opciones que ya han elegido algunas solicitudes, y con ellos su puntuación. Si es lo que quiere, marque «' . self::POINTS_OK_LABEL . '» y guarde otra vez.',
+		);
+		return $textos[ $reason ] . ' No se han guardado los campos.';
 	}
 
 
@@ -13306,6 +13396,35 @@ final class Applications {
 
 
 
+	public static function used_values( int $procedure_id ): array {
+		$tipos = array_column( self::questions( $procedure_id ), 'type', 'key' );
+		$out   = array();
+		foreach ( self::for_procedure( $procedure_id ) as $solicitud ) {
+			foreach ( (array) self::meta( (int) $solicitud->ID )[ ApplicationMetaKeys::ANSWERS ] as $clave => $respuesta ) {
+				$tipo   = (string) ( $tipos[ (string) $clave ] ?? '' );
+				$dichas = array_filter( (array) $respuesta, array( ProcedureQuestions::class, 'is_answer' ) );
+				if ( ProcedureQuestions::TYPE_GRID === $tipo ) {
+					$dichas = array_keys( $dichas );
+				} elseif ( ! ProcedureQuestions::has_choices( $tipo ) ) {
+					continue;
+				}
+				foreach ( $dichas as $valor ) {
+					$out[ (string) $clave ][ (string) $valor ] = true;
+				}
+			}
+		}
+		return $out;
+	}
+
+
+
+
+
+
+
+
+
+
 
 
 	public static function answer_counts( int $procedure_id, bool $empty_too = false ): array {
@@ -20403,7 +20522,7 @@ final class HelpContent {
 				'html'  => '<p>Hasta 40 campos adicionales. Al final hay siempre un <strong>«Campo nuevo»</strong> vacío y, en <strong>«Añadir otro campo»</strong>, dos más: rellene los que necesite y pulse <strong>«Guardar los campos»</strong>. Los que deje sin título no se crean. Cada campo enseña solo las opciones de su tipo.</p>'
 					. '<p>Cada campo lleva <strong>Título</strong>, <strong>Tipo</strong>, <strong>Indicaciones</strong> (una línea de ayuda) y si es <strong>obligatorio</strong>. Los tipos:</p>'
 					. '<table><thead><tr><th scope="col">Tipo</th><th scope="col">Para qué</th><th scope="col">Qué más se rellena</th></tr></thead><tbody><tr><td>Respuesta libre</td><td>Un texto</td><td>Nada más</td></tr><tr><td>Una opción</td><td>Elegir una de una lista</td><td>«Opciones, una por línea»</td></tr><tr><td>Varias opciones</td><td>Marcar varias</td><td>Las opciones; una escrita «Texto &#124; 3» suma 3 puntos</td></tr><tr><td>Sí o no</td><td>Una casilla</td><td>Nada más</td></tr><tr><td>Número</td><td>Una cifra entera</td><td>Mínimo y máximo, si los hay</td></tr><tr><td>Fecha</td><td>Un día</td><td>Nada más</td></tr><tr><td>Cantidades por fila</td><td>Una tabla, por ejemplo el alumnado por nivel</td><td>«Filas, una por línea», hasta 30</td></tr><tr><td>Archivo</td><td>Un documento</td><td>Si quiere, «Entrega con plazo propio» y sus fechas</td></tr></tbody></table>'
-					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar un campo, marque <strong>«Quitar este campo»</strong> y guarde; lo ya contestado no se pierde.</li><li><strong>Con solicitudes presentadas</strong> el tipo ya no se puede cambiar, y bajo el título se dice cuántas lo han contestado. El título sí cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si el campo es otro, cree uno nuevo.</li></ul>',
+					. '<ul><li><strong>«Subir»</strong> y <strong>«Bajar»</strong> cambian el orden. Guarde antes lo que haya escrito.</li><li>Para quitar un campo, marque <strong>«Quitar este campo»</strong> y guarde.</li><li><strong>Con solicitudes presentadas</strong>, bajo el título se dice cuántas lo han contestado, y lo ya contestado no se descoloca: un campo contestado no se quita ni cambia de tipo ni de «Entrega con plazo propio»; una opción ya elegida no se quita ni cambia de texto, y una fila con cantidades no se quita. Sí puede corregir el título, las indicaciones y el orden, y añadir campos, opciones o filas. El título cambia, pero si le cambia el sentido, cambia lo que significan las respuestas ya dadas: si el campo es otro, cree uno nuevo.</li><li>Si cambia los <strong>puntos</strong> de una opción que ya han elegido, cambia la puntuación de esas solicitudes: marque <strong>«Aplicar el cambio de puntos a las solicitudes presentadas»</strong> para confirmarlo.</li></ul>',
 				'shots' => array(
 					array(
 						'caption' => 'pestaña «Campos adicionales» con un campo de «Una opción» y el «Campo nuevo»',
@@ -26120,6 +26239,7 @@ final class ProcedureEditorView {
 				</details>
 			<?php endif; ?>
 
+			<?php echo self::points_ok( $guardas, (array) ( $m['answers'] ?? array() ) );?>
 			<?php echo PanelParts::submit( 'Guardar los campos' );?>
 		</form>
 		<form id="prc-q-mover" method="post" action="<?php echo esc_url( '#' . Shell::NOTICE_ANCHOR ); ?>">
@@ -26141,7 +26261,31 @@ final class ProcedureEditorView {
 
 
 
-	private static function move_buttons( int $i, array $p, int $total ): string {
+	private static function points_ok( array $questions, array $answers ): string {
+		foreach ( $questions as $pregunta ) {
+			if ( ProcedureQuestions::TYPE_MULTIPLE === ( $pregunta['type'] ?? '' ) && ! empty( $answers[ (string) $pregunta['key'] ] ) ) {
+				return '<div class="prc-campo prc-campo--completo"><span class="prc-opcion">'
+					. '<input type="checkbox" id="prc-q-points-ok" name="' . esc_attr( ProcedureEditor::FIELD_Q_POINTS_OK ) . '" value="1" aria-describedby="prc-q-points-ok-help" />'
+					. '<label for="prc-q-points-ok">' . esc_html( QuestionChanges::POINTS_OK_LABEL ) . '</label></span>'
+					. '<p class="prc-campo__ayuda" id="prc-q-points-ok-help">Solo hace falta si cambia los puntos de una opción que ya han elegido: la puntuación de esas solicitudes cambia con ellos.</p></div>';
+			}
+		}
+		return '';
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+	private static function move_buttons( int $i, array $p, int $total, int $contestan = 0 ): string {
 		$botones = array(
 			QuestionChanges::MOVE_UP   => array( 'Subir', 0 === $i ),
 			QuestionChanges::MOVE_DOWN => array( 'Bajar', $i >= $total - 1 ),
@@ -26158,9 +26302,11 @@ final class ProcedureEditorView {
 				esc_html( $boton[0] )
 			);
 		}
-		$quitar = '<span class="prc-opcion prc-pregunta__quitar">'
-			. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
-			. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar (lo ya contestado se conserva)</label></span>';
+		$quitar = $contestan > 0
+			? '<span class="prc-pregunta__quitar">Con respuestas: no se puede quitar.</span>'
+			: '<span class="prc-opcion prc-pregunta__quitar">'
+				. '<input type="checkbox" id="prc-q-x-' . esc_attr( (string) $i ) . '" name="' . esc_attr( ProcedureEditor::FIELD_Q . 'remove[' . $i . ']' ) . '" value="1" />'
+				. '<label for="prc-q-x-' . esc_attr( (string) $i ) . '">Quitar este campo al guardar</label></span>';
 		return '<div class="prc-campo prc-pregunta__orden">' . $out . $quitar . '</div>';
 	}
 
@@ -26198,7 +26344,7 @@ final class ProcedureEditorView {
 			<label class="prc-campo__etiqueta" for="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>">Filas, una por línea</label>
 			<textarea class="prc-control" id="prc-q-rows-<?php echo esc_attr( (string) $i ); ?>" name="<?php echo esc_attr( $campo . 'rows' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" rows="3"
 				aria-describedby="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>"><?php echo esc_textarea( $filas ); ?></textarea>
-			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco.</p>
+			<p class="prc-campo__ayuda" id="prc-q-rows-help-<?php echo esc_attr( (string) $i ); ?>">Solo para «Cantidades por fila»: hasta <?php echo esc_html( (string) ProcedureQuestions::MAX_ROWS ); ?> filas, y en cada una se pide una cantidad. Para cambiar el nombre de una fila, escríbalo en su misma línea; para quitarla, deje su línea en blanco (si ya tiene cantidades, no se quita).</p>
 		</div>
 		<?php
 		return (string) ob_get_clean();
@@ -26256,7 +26402,7 @@ final class ProcedureEditorView {
 		?>
 		<fieldset class="prc-seccion-campos prc-pregunta">
 			<legend class="prc-seccion__titulo"><?php echo esc_html( $rotulo ); ?></legend>
-			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total );?>
+			<?php echo $nueva ? '' : self::move_buttons( $i, $p, $total, $contestan );?>
 			<input type="hidden" name="<?php echo esc_attr( $campo . 'key' ); ?>[<?php echo esc_attr( (string) $i ); ?>]" value="<?php echo esc_attr( (string) $p['key'] ); ?>" />
 			<div class="prc-seccion__cuerpo">
 				<div class="prc-campo prc-campo--medio">
@@ -26851,6 +26997,11 @@ final class ProcedureEditor {
 
 
 	public const FIELD_Q_MOVE = 'prc_q_move';
+
+
+
+
+	public const FIELD_Q_POINTS_OK = 'prc_q_points_ok';
 
 
 
@@ -27563,7 +27714,7 @@ final class ProcedureEditor {
 				return;
 			}
 		}
-		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ) );
+		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ), Applications::used_values( $procedure_id ), '' !== self::field( self::FIELD_Q_POINTS_OK ) );
 		if ( '' !== self::$rejected ) {
 			return;
 		}

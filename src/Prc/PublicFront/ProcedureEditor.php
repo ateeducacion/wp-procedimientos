@@ -177,6 +177,11 @@ final class ProcedureEditor {
 	public const FIELD_Q_MOVE = 'prc_q_move';
 
 	/**
+	 * Checkbox that confirms a change of points on options already chosen (ADR-0051).
+	 */
+	public const FIELD_Q_POINTS_OK = 'prc_q_points_ok';
+
+	/**
 	 * Fields of the export dialog (ADR-0039).
 	 *
 	 * «Todas las columnas», las columnas una a una, la forma (una fila por
@@ -887,7 +892,7 @@ final class ProcedureEditor {
 				return;
 			}
 		}
-		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ) );
+		self::$rejected = QuestionChanges::refusal( $antes, $questions, Applications::answered_keys( $procedure_id ), Applications::used_values( $procedure_id ), '' !== self::field( self::FIELD_Q_POINTS_OK ) );
 		if ( '' !== self::$rejected ) {
 			return;
 		}

@@ -12,7 +12,7 @@ en el sitio de destino se hace después, con `npm run snippets`.
 
 ### Añadido
 
-- **Taller, «Datos»: el cartel del procedimiento.** Nueva sección «Cartel» para subir la imagen de la tarjeta de la portada y de la ficha pública (JPEG, PNG o WebP, hasta 5 MB), con su texto alternativo, y para quitarla. Quien gestiona no necesita permiso de subir a la biblioteca de medios: el taller guarda la imagen por su cuenta. Al cambiarla, la anterior se queda en medios (#126)
+- **Taller, «Datos»: el cartel del procedimiento.** Nueva sección «Cartel» para subir la imagen de la tarjeta de la portada y de la ficha pública (JPEG, PNG o WebP, hasta 5 MB), con su texto alternativo, y para quitarla. Quien gestiona no necesita permiso de subir a la biblioteca de medios: el taller guarda la imagen por su cuenta. Al cambiarla, la anterior se queda en medios. El campo es una zona donde se pulsa o se suelta la imagen; ya puesta, se ve grande y entera, con un aspa para quitarla —con «Deshacer» hasta guardar— y «Reemplazar». La imagen elegida se ve al momento con su nombre y medidas, y un tipo o un peso que no valen se avisan antes de enviar. Sin JavaScript funciona igual, con la casilla «Quitar el cartel» (#126)
 
 ### Cambiado
 

@@ -766,4 +766,253 @@
 			}
 		} );
 	} );
+
+	/* --- 11. El cartel de «Datos»: vista previa, aspa y «Deshacer» ------- */
+
+	/*
+	 * `data-prc-cartel` en el campo. Sin guion ya funciona: la zona es una
+	 * etiqueta de la entrada de fichero y «Quitar el cartel» es una casilla.
+	 * Con guion, la entrada cubre la zona entera —pulsar o soltar en cualquier
+	 * punto—, la imagen elegida se ve al momento, el aspa marca esa misma
+	 * casilla (que se esconde) y «Deshacer» la desmarca. El servidor sigue
+	 * decidiendo: tipo, peso y qué se guarda.
+	 *
+	 * El estado va en `data-prc-cartel-estado` y lo pinta la hoja:
+	 *   vacia    — sin cartel: la zona de soltar.
+	 *   guardada — el cartel guardado, con el aspa y «Reemplazar».
+	 *   nueva    — una imagen elegida, aún sin guardar.
+	 *   quitada  — el guardado, marcado para quitar: la zona y «Deshacer».
+	 */
+	var POSTER_STATE = 'data-prc-cartel-estado';
+
+	function posterParts( root ) {
+		return {
+			root: root,
+			frame: root.querySelector( '.prc-cartel__marco' ),
+			img: root.querySelector( '.prc-cartel__img' ),
+			input: root.querySelector( '.prc-cartel__fichero' ),
+			remove: root.querySelector( '.prc-cartel__quitar' ),
+			undo: root.querySelector( '.prc-cartel__deshacer' ),
+			details: root.querySelector( '.prc-cartel__datos' ),
+			error: root.querySelector( '.prc-cartel__error' ),
+			checkbox: root.querySelector( '.prc-cartel__casilla input[type="checkbox"]' )
+		};
+	}
+
+	function posterState( p, state ) {
+		p.root.setAttribute( POSTER_STATE, state );
+		// El aspa dice lo que hace: sobre una imagen recién elegida, la descarta.
+		var label = 'nueva' === state ? 'Descartar la imagen elegida' : 'Quitar el cartel';
+		p.remove.setAttribute( 'aria-label', label );
+		p.remove.setAttribute( 'title', label );
+		p.input.setAttribute( 'title', 'guardada' === state || 'nueva' === state ? 'Reemplazar la imagen' : 'Elija una imagen o arrástrela aquí' );
+	}
+
+	function posterError( p, text ) {
+		p.error.textContent = text;
+		p.root.classList.toggle( 'prc-cartel--error', '' !== text );
+	}
+
+	// La vista previa anterior, si era de un fichero elegido, ya no se usa.
+	function releasePreview( p ) {
+		var src = p.img.getAttribute( 'src' ) || '';
+		if ( 0 === src.indexOf( 'blob:' ) && window.URL && URL.revokeObjectURL ) {
+			URL.revokeObjectURL( src );
+		}
+	}
+
+	// Vuelve a lo guardado: el cartel que había, o la zona vacía.
+	function showSavedPoster( p ) {
+		var original = p.root.getAttribute( 'data-prc-cartel-original' ) || '';
+		releasePreview( p );
+		if ( original ) {
+			p.img.setAttribute( 'src', original );
+		} else {
+			p.img.removeAttribute( 'src' );
+		}
+		p.details.textContent = p.details.getAttribute( 'data-prc-cartel-guardado' ) || '';
+		posterState( p, original ? 'guardada' : 'vacia' );
+	}
+
+	/*
+	 * Si el formulario vuelve a estar como se pintó —sin fichero, casillas y
+	 * textos como venían—, deja de estar «sucio» (sección 10): descartar una
+	 * elección o deshacer no es un cambio sin guardar.
+	 */
+	function forgetIfPristine( form ) {
+		if ( ! form ) {
+			return;
+		}
+		var changed = Array.prototype.some.call( form.elements, function ( el ) {
+			if ( 'file' === el.type ) {
+				return !! ( el.files && el.files.length );
+			}
+			if ( 'checkbox' === el.type || 'radio' === el.type ) {
+				return el.checked !== el.defaultChecked;
+			}
+			return 'value' in el && 'defaultValue' in el && el.value !== el.defaultValue;
+		} );
+		if ( ! changed ) {
+			form.removeAttribute( 'data-prc-sucio' );
+		}
+	}
+
+	function setRemove( p, remove ) {
+		if ( p.checkbox && p.checkbox.checked !== remove ) {
+			p.checkbox.checked = remove;
+			// Para el aviso de cambios sin guardar (sección 10).
+			p.checkbox.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		}
+	}
+
+	// Lo que el servidor rechazaría, dicho antes de enviar y con sus palabras.
+	function refusal( p, file ) {
+		var types = ( p.root.getAttribute( 'data-prc-cartel-tipos' ) || '' ).split( ',' );
+		var max = parseInt( p.root.getAttribute( 'data-prc-cartel-max' ), 10 ) || 0;
+		// Sin `type` (algunos sistemas no lo dan), decide el servidor.
+		if ( file.type && -1 === types.indexOf( file.type ) ) {
+			return p.root.getAttribute( 'data-prc-cartel-error-tipo' ) || '';
+		}
+		if ( max > 0 && file.size > max ) {
+			return p.root.getAttribute( 'data-prc-cartel-error-peso' ) || '';
+		}
+		return '';
+	}
+
+	// Rechazar lo elegido: el motivo, la entrada vacía y vuelta a lo de antes.
+	function refuseChoice( p, reason ) {
+		posterError( p, reason );
+		p.input.value = '';
+		if ( 'quitada' !== p.root.getAttribute( POSTER_STATE ) ) {
+			showSavedPoster( p );
+		}
+		forgetIfPristine( p.root.closest( 'form' ) );
+	}
+
+	function choosePoster( p ) {
+		var file = p.input.files && p.input.files[ 0 ];
+		var reason = file ? refusal( p, file ) : '';
+		if ( ! file || reason ) {
+			refuseChoice( p, reason );
+			return;
+		}
+		posterError( p, '' );
+		// Elegir otra imagen ya sustituye: quitar a la vez lo rechazaría el servidor.
+		setRemove( p, false );
+		releasePreview( p );
+		posterState( p, 'nueva' );
+		p.details.textContent = file.name;
+		if ( window.URL && URL.createObjectURL ) {
+			p.img.setAttribute( 'src', URL.createObjectURL( file ) );
+		}
+	}
+
+	function setUpPoster( root ) {
+		var p = posterParts( root );
+		root.setAttribute( 'data-prc-cartel-original', p.img.getAttribute( 'src' ) || '' );
+		root.classList.add( 'prc-cartel--js' );
+		p.img.addEventListener( 'load', function () {
+			var file = p.input.files && p.input.files[ 0 ];
+			// Las medidas de la imagen elegida, cuando el navegador la ha leído.
+			if ( 'nueva' === root.getAttribute( POSTER_STATE ) && file && p.img.naturalWidth ) {
+				p.details.textContent = file.name + ' · ' + p.img.naturalWidth + ' × ' + p.img.naturalHeight + ' px';
+			}
+		} );
+		p.img.addEventListener( 'error', function () {
+			// Pasa por imagen pero el navegador no la entiende: tampoco el servidor.
+			if ( 'nueva' === root.getAttribute( POSTER_STATE ) ) {
+				refuseChoice( p, root.getAttribute( 'data-prc-cartel-error-tipo' ) || '' );
+			}
+		} );
+		// Lo que el navegador devuelve al recargar o al volver atrás: la casilla
+		// marcada o un fichero elegido. Se pinta lo que se enviaría.
+		if ( p.input.files && p.input.files.length ) {
+			choosePoster( p );
+		} else if ( p.checkbox && p.checkbox.checked ) {
+			posterState( p, 'quitada' );
+		}
+	}
+
+	document.addEventListener( 'DOMContentLoaded', function () {
+		Array.prototype.forEach.call( document.querySelectorAll( '[data-prc-cartel]' ), setUpPoster );
+	} );
+
+	document.addEventListener( 'change', function ( e ) {
+		var root = e.target.matches && e.target.matches( '.prc-cartel__fichero' ) ? e.target.closest( '[data-prc-cartel]' ) : null;
+		if ( root ) {
+			choosePoster( posterParts( root ) );
+		}
+	} );
+
+	document.addEventListener( 'click', function ( e ) {
+		var button = e.target.closest ? e.target.closest( '.prc-cartel__quitar, .prc-cartel__deshacer' ) : null;
+		var root = button && button.closest( '[data-prc-cartel]' );
+		if ( ! root ) {
+			return;
+		}
+		var p = posterParts( root );
+		var form = root.closest( 'form' );
+		posterError( p, '' );
+		if ( button === p.undo ) {
+			setRemove( p, false );
+			showSavedPoster( p );
+			forgetIfPristine( form );
+			p.remove.focus();
+			return;
+		}
+		// El aspa sobre una imagen recién elegida solo descarta la elección.
+		if ( 'nueva' === root.getAttribute( POSTER_STATE ) ) {
+			p.input.value = '';
+			showSavedPoster( p );
+			forgetIfPristine( form );
+			( 'guardada' === root.getAttribute( POSTER_STATE ) ? p.remove : p.input ).focus();
+			return;
+		}
+		setRemove( p, true );
+		posterState( p, 'quitada' );
+		p.undo.focus();
+	} );
+
+	/*
+	 * Arrastrar: la zona se resalta y la entrada recibe el fichero. Soltarlo
+	 * en cualquier otro punto de la página —el aspa, el margen— abriría la
+	 * imagen en la pestaña y se perdería lo escrito: ahí no se suelta.
+	 */
+	function carriesFiles( e ) {
+		var types = e.dataTransfer && e.dataTransfer.types;
+		return !! types && -1 !== Array.prototype.indexOf.call( types, 'Files' );
+	}
+
+	function highlight( e, on ) {
+		var frame = e.target.closest ? e.target.closest( '[data-prc-cartel] .prc-cartel__marco' ) : null;
+		if ( frame && ( on || ! frame.contains( e.relatedTarget ) ) ) {
+			frame.classList.toggle( 'prc-cartel__marco--encima', on );
+		}
+	}
+
+	function keepFilesOut( e ) {
+		var target = e.target;
+		if ( ! carriesFiles( e ) || ( target.matches && target.matches( 'input[type="file"]' ) ) ) {
+			return;
+		}
+		e.preventDefault();
+		if ( e.dataTransfer ) {
+			e.dataTransfer.dropEffect = 'none';
+		}
+	}
+
+	document.addEventListener( 'dragenter', function ( e ) {
+		highlight( e, true );
+	} );
+	document.addEventListener( 'dragover', function ( e ) {
+		highlight( e, true );
+		keepFilesOut( e );
+	} );
+	document.addEventListener( 'dragleave', function ( e ) {
+		highlight( e, false );
+	} );
+	document.addEventListener( 'drop', function ( e ) {
+		highlight( e, false );
+		keepFilesOut( e );
+	} );
 }() );

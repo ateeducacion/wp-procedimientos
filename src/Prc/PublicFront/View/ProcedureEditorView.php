@@ -1104,12 +1104,13 @@ final class ProcedureEditorView {
 	/**
 	 * The «Cartel» section of «Datos»: upload, alternative text and remove (#126).
 	 *
+	 * A plain multipart form; the image field itself is poster_field().
+	 *
 	 * @param array<string, mixed> $m Model.
 	 * @return string
 	 */
 	private static function poster_section( array $m ): string {
-		$cartel = (array) ( $m['poster'] ?? array() );
-		$url    = (string) ( $cartel['url'] ?? '' );
+		$poster = (array) ( $m['poster'] ?? array() );
 		$op     = ProcedurePoster::OP;
 
 		ob_start();
@@ -1121,30 +1122,81 @@ final class ProcedureEditorView {
 			<fieldset class="prc-seccion-campos">
 				<legend class="prc-seccion__titulo">Cartel</legend>
 				<p class="prc-intro">Es la imagen de la tarjeta en la portada y de la ficha pública. Sin cartel, la tarjeta lleva el logo del ámbito.</p>
-				<?php if ( '' !== $url ) : ?>
-					<p><img class="prc-cartel-actual" src="<?php echo esc_url( $url ); ?>" alt="" /></p>
-				<?php endif; ?>
-				<div class="prc-campo">
-					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>"><?php echo esc_html( '' !== $url ? 'Cambiar la imagen' : 'Imagen' ); ?></label>
-					<input class="prc-control" type="file" id="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_FILE ); ?>" accept="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" />
-					<p class="prc-campo__ayuda"><?php echo esc_html( ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho. Mejor en vertical, como un cartel.' ); ?></p>
-				</div>
+				<?php echo self::poster_field( $poster ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 				<div class="prc-campo">
 					<label class="prc-campo__etiqueta" for="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>">Texto alternativo</label>
-					<input class="prc-control" type="text" id="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" value="<?php echo esc_attr( (string) ( $cartel['alt'] ?? '' ) ); ?>" />
+					<input class="prc-control" type="text" id="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_ALT ); ?>" value="<?php echo esc_attr( (string) ( $poster['alt'] ?? '' ) ); ?>" />
 					<p class="prc-campo__ayuda">Lo que se lee en lugar de la imagen: lo que dice el cartel, en una frase. Si cambia la imagen, revíselo.</p>
 				</div>
-				<?php if ( '' !== $url ) : ?>
-					<div class="prc-campo prc-campo--completo">
-						<div class="prc-opcion">
-							<input type="checkbox" id="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" name="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>" value="1" />
-							<label for="<?php echo esc_attr( ProcedurePoster::FIELD_REMOVE ); ?>">Quitar el cartel</label>
-						</div>
-					</div>
-				<?php endif; ?>
 			</fieldset>
 			<?php echo PanelParts::submit( 'Guardar el cartel' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- construido escapado. ?>
 		</form>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * The image field of «Cartel»: the drop zone, or the poster with its X and «Reemplazar».
+	 *
+	 * The state (`vacia`, `guardada`, `nueva`, `quitada`) lives in
+	 * `data-prc-cartel-estado` and the stylesheet draws it; the server only
+	 * paints the first two, the script (`prc-app.js`, section 11) the rest.
+	 *
+	 * @param array<string, mixed> $poster The poster, as ProcedurePoster::summary() gives it.
+	 * @return string
+	 */
+	private static function poster_field( array $poster ): string {
+		$url     = (string) ( $poster['url'] ?? '' );
+		$width   = (int) ( $poster['width'] ?? 0 );
+		$height  = (int) ( $poster['height'] ?? 0 );
+		$details = (string) ( $poster['name'] ?? '' );
+		if ( $width > 0 && $height > 0 ) {
+			$details .= ( '' !== $details ? ' · ' : '' ) . $width . ' × ' . $height . ' px';
+		}
+		$file   = ProcedurePoster::FIELD_FILE;
+		$remove = ProcedurePoster::FIELD_REMOVE;
+		// Sin guion, pulsar en cualquier punto de la zona abre el selector (las
+		// dos piezas son `<label for>`), y soltar funciona sobre la entrada,
+		// que se ve dentro. Con guion, la entrada cubre la zona entera y soltar
+		// funciona en cualquier punto; fuera de ella, el guion lo impide.
+		$title = '' !== $url ? 'Reemplazar la imagen' : 'Elija una imagen o arrástrela aquí';
+
+		ob_start();
+		?>
+		<div class="prc-campo prc-campo--completo prc-cartel" data-prc-cartel data-prc-cartel-estado="<?php echo esc_attr( '' !== $url ? 'guardada' : 'vacia' ); ?>" data-prc-cartel-tipos="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" data-prc-cartel-max="<?php echo esc_attr( (string) ProcedurePoster::max_bytes() ); ?>" data-prc-cartel-error-tipo="<?php echo esc_attr( ProcedurePoster::type_error() ); ?>" data-prc-cartel-error-peso="<?php echo esc_attr( ProcedurePoster::size_error() ); ?>">
+			<label class="prc-campo__etiqueta" id="prc-cartel-etiqueta" for="<?php echo esc_attr( $file ); ?>">Imagen</label>
+			<p class="prc-campo__ayuda" id="prc-cartel-ayuda"><?php echo esc_html( 'Mejor en vertical, como un cartel. ' . ProcedurePoster::types_label() . ', de ' . size_format( ProcedurePoster::max_bytes() ) . ' como mucho.' ); ?></p>
+			<div class="prc-cartel__marco">
+				<label class="prc-cartel__vista" for="<?php echo esc_attr( $file ); ?>">
+					<img class="prc-cartel__img"<?php echo '' !== $url ? ' src="' . esc_url( $url ) . '"' : ''; ?> alt="" />
+					<span class="prc-cartel__reemplazar" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+						Reemplazar
+					</span>
+				</label>
+				<label class="prc-cartel__vacio" for="<?php echo esc_attr( $file ); ?>">
+					<span class="prc-cartel__icono" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+					</span>
+					<span class="prc-cartel__texto"><strong>Elija una imagen</strong> o arrástrela aquí</span>
+				</label>
+				<input class="prc-cartel__fichero" type="file" id="<?php echo esc_attr( $file ); ?>" name="<?php echo esc_attr( $file ); ?>" accept="<?php echo esc_attr( implode( ',', ProcedurePoster::mimes() ) ); ?>" autocomplete="off" title="<?php echo esc_attr( $title ); ?>" aria-labelledby="prc-cartel-etiqueta" aria-describedby="prc-cartel-ayuda prc-cartel-error" />
+				<button class="prc-cartel__quitar" type="button" aria-label="Quitar el cartel" title="Quitar el cartel">
+					<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" focusable="false" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+				</button>
+			</div>
+			<p class="prc-cartel__barra"><span id="prc-cartel-quitado">Se quitará al guardar.</span> <button class="prc-cartel__deshacer" type="button" aria-describedby="prc-cartel-quitado">Deshacer</button></p>
+			<p class="prc-cartel__datos" data-prc-cartel-guardado="<?php echo esc_attr( $details ); ?>"><?php echo esc_html( $details ); ?></p>
+			<p class="prc-cartel__nota">Se aplicará al guardar.</p>
+			<p class="prc-cartel__error" id="prc-cartel-error" aria-live="polite"></p>
+			<?php if ( '' !== $url ) : ?>
+				<div class="prc-opcion prc-cartel__casilla">
+					<?php // autocomplete="off": el navegador no la devuelve marcada al recargar, con el cartel a la vista. ?>
+					<input type="checkbox" id="<?php echo esc_attr( $remove ); ?>" name="<?php echo esc_attr( $remove ); ?>" value="1" autocomplete="off" />
+					<label for="<?php echo esc_attr( $remove ); ?>">Quitar el cartel</label>
+				</div>
+			<?php endif; ?>
+		</div>
 		<?php
 		return (string) ob_get_clean();
 	}
